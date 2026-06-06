@@ -107,7 +107,7 @@ export default function CotizadorPage() {
     const num = nextCotNum(cots || [])
     const { data: user } = await supabase.auth.getUser()
     const { data: uDB } = await supabase.from('usuarios').select('id').eq('auth_id', user.user?.id).single()
-    const uid = uDB?.id || ''
+    const uid = (uDB as any)?.id || ''
     const presupuesto = [
       ...(subA > 0 ? [{ etapa: 'maritimo', tipo: 'flete', concepto: 'Flete marítimo y cargos naviero', usd: subA }] : []),
       ...(seg > 0 ? [{ etapa: 'maritimo', tipo: 'seguro', concepto: 'Seguro mercadería', usd: seg }] : []),
