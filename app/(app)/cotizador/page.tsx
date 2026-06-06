@@ -661,31 +661,51 @@ export default function CotizadorPage(){
                     const usd = calcGastoArg(g, cif, s.tcArs)
                     const arsEquiv = usd * s.tcArs
                     return (
-                      <div key={g.id} style={{display:'grid',gridTemplateColumns:'1.5fr 110px 80px 80px 80px 80px 80px',gap:'6px',alignItems:'center'}} className="mb-2">
-                        <input type="text" value={g.desc} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],desc:e.target.value};u('gastosArg',n)}} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]"/>
-                        <select value={g.tipoCalc} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],tipoCalc:e.target.value as any};u('gastosArg',n)}} className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white">
-                          <option value="pct_cif">% sobre CIF</option>
-                          <option value="fijo_usd">Fijo USD</option>
-                          <option value="fijo_ars">Fijo ARS</option>
-                        </select>
-                        <input type="text" inputMode="decimal" value={g.valor} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],valor:parseNum(e.target.value)};u('gastosArg',n)}} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono"/>
-                        {g.tipoCalc==='pct_cif'
-                          ?<input type="text" inputMode="decimal" value={g.pisoUsd} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],pisoUsd:parseNum(e.target.value)};u('gastosArg',n)}} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono"/>
-                          :<div className="text-center text-gray-300 text-[10px]">—</div>
-                        }
-                        {g.tipoCalc==='pct_cif'
-                          ?<input type="text" inputMode="decimal" value={g.techoUsd} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],techoUsd:parseNum(e.target.value)};u('gastosArg',n)}} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono" placeholder="0=sin techo"/>
-                          :<div className="text-center text-gray-300 text-[10px]">—</div>
-                        }
-                        <div className="text-right font-mono text-xs font-semibold text-[#052698]">USD {fmt(usd)}</div>
-                        <div className="text-right font-mono text-[10px] text-gray-500">ARS {Math.round(arsEquiv).toLocaleString('es-AR')}</div>
+                      <div key={g.id} className="mb-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 110px 90px 90px 90px',gap:'6px',alignItems:'center'}} className="mb-2">
+                          {/* Concepto */}
+                          <input
+                            type="text"
+                            value={g.desc}
+                            onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],desc:e.target.value};u('gastosArg',n)}}
+                            className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white"
+                            placeholder="Concepto"
+                          />
+                          {/* Tipo */}
+                          <select value={g.tipoCalc} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],tipoCalc:e.target.value as any};u('gastosArg',n)}} className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+                            <option value="pct_cif">% sobre CIF</option>
+                            <option value="fijo_usd">Fijo USD</option>
+                            <option value="fijo_ars">Fijo ARS</option>
+                          </select>
+                          {/* Valor */}
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-gray-400 flex-shrink-0">{g.tipoCalc==='pct_cif'?'%':g.tipoCalc==='fijo_ars'?'ARS':'USD'}</span>
+                            <input type="text" inputMode="decimal" value={g.valor||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],valor:parseNum(e.target.value)};u('gastosArg',n)}} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono bg-white"/>
+                          </div>
+                          {/* Piso */}
+                          {g.tipoCalc==='pct_cif'
+                            ?<div className="flex items-center gap-1"><span className="text-[10px] text-gray-400 flex-shrink-0">Piso</span><input type="text" inputMode="decimal" value={g.pisoUsd||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],pisoUsd:parseNum(e.target.value)};u('gastosArg',n)}} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono bg-white"/></div>
+                            :<div/>
+                          }
+                          {/* Techo */}
+                          {g.tipoCalc==='pct_cif'
+                            ?<div className="flex items-center gap-1"><span className="text-[10px] text-gray-400 flex-shrink-0">Techo</span><input type="text" inputMode="decimal" value={g.techoUsd||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],techoUsd:parseNum(e.target.value)};u('gastosArg',n)}} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono bg-white" /></div>
+                            :<div/>
+                          }
+                        </div>
+                        {/* Resultado + botón eliminar */}
+                        <div className="flex items-center justify-between">
+                          <button onClick={()=>u('gastosArg',s.gastosArg.filter((_,j)=>j!==i))} className="text-[10px] text-red-400 hover:text-red-600 transition-colors">🗑 Eliminar</button>
+                          <div className="text-right text-xs">
+                            <span className="font-mono font-semibold text-[#052698]">USD {fmt(usd)}</span>
+                            <span className="text-gray-300 mx-2">·</span>
+                            <span className="font-mono text-gray-500 text-[10px]">ARS {Math.round(arsEquiv).toLocaleString('es-AR')}</span>
+                          </div>
+                        </div>
                       </div>
                     )
                   })}
-                  <div className="flex gap-2 mt-1">
-                    <button onClick={()=>u('gastosArg',[...s.gastosArg,{id:Math.random().toString(36).slice(2),desc:'',tipoCalc:'fijo_usd',moneda:'USD',valor:0,pisoUsd:0,techoUsd:0,usd:0,ars:0}])} className="text-xs text-[#1168F8] hover:underline">+ Agregar</button>
-                    {s.gastosArg.length>0&&<button onClick={()=>u('gastosArg',s.gastosArg.slice(0,-1))} className="text-xs text-red-400 hover:underline">− Quitar último</button>}
-                  </div>
+                  <button onClick={()=>u('gastosArg',[...s.gastosArg,{id:Math.random().toString(36).slice(2),desc:'',tipoCalc:'fijo_usd',moneda:'USD',valor:0,pisoUsd:0,techoUsd:0,usd:0,ars:0}])} className="text-xs text-[#1168F8] hover:underline mt-1">+ Agregar gasto</button>
                   <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between text-xs">
                     <span className="text-gray-500">Subtotal gastos Argentina:</span>
                     <div className="text-right">
