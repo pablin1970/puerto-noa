@@ -270,9 +270,12 @@ export default function CotizadorPage(){
     ?(()=>{const ida=s.ftIda*nc,dev=s.ftDev*nc,rt=s.ftRt*nc;return rt>0&&rt<(ida+dev)?rt:ida+dev})()
     :s.ftCamion*s.nCamiones
   const subE=s.rowsE.reduce((t,r)=>t+r.cant*r.unitario,0)
+  const fee=s.feeCont*nc
+  const cif=totalFOB+subA+seg
+  const cifARS=cif*s.tcTrib
 
-  // Calcular gastos Argentina con lógica piso/techo
-  function calcGastoArg(g: GastoArg, cifUsd: number, tcArs: number): number {
+  // Calcular gastos Argentina con lógica piso/techo — DESPUÉS de cif
+  const calcGastoArg = (g: GastoArg, cifUsd: number, tcArs: number): number => {
     let usd = 0
     if(g.tipoCalc === 'pct_cif') {
       usd = cifUsd * g.valor / 100
@@ -280,15 +283,12 @@ export default function CotizadorPage(){
       if(g.techoUsd > 0 && usd > g.techoUsd) usd = g.techoUsd
     } else if(g.tipoCalc === 'fijo_usd') {
       usd = g.valor
-    } else { // fijo_ars
-      usd = g.valor / tcArs
+    } else {
+      usd = g.valor / (tcArs || 1)
     }
     return usd
   }
   const subGastosArg = s.gastosArg.reduce((t, g) => t + calcGastoArg(g, cif, s.tcArs), 0)
-  const fee=s.feeCont*nc
-  const cif=totalFOB+subA+seg
-  const cifARS=cif*s.tcTrib
 
   function calcTrib(cfg:TribCfg[],cifARS:number,derPct:number){
     const VA=cifARS; let base=VA
