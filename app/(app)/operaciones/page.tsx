@@ -205,19 +205,19 @@ function GastosTab({ opId, gastos, reload }: { opId: string; gastos: Gasto[]; re
     const monto = parseFloat(form.monto)
     const tc = parseFloat(form.tc) || 1
     const usd = form.moneda === 'USD' ? monto : monto / tc
-    await supabase.from('gastos').insert({ operacion_id: opId, fecha: form.fecha, etapa: form.etapa as EtapaGasto, concepto: form.concepto || 'Sin descripción', moneda: form.moneda as Moneda, monto, tc, usd, estado: form.estado as any, ref: form.ref, notas: form.notas })
+    await (supabase.from('gastos') as any).insert({ operacion_id: opId, fecha: form.fecha, etapa: form.etapa as EtapaGasto, concepto: form.concepto || 'Sin descripción', moneda: form.moneda as Moneda, monto, tc, usd, estado: form.estado as any, ref: form.ref, notas: form.notas })
     setForm(f => ({ ...f, monto: '', concepto: '', ref: '' }))
     reload()
   }
 
   async function togglePago(g: Gasto) {
-    await supabase.from('gastos').update({ estado: g.estado === 'pagado' ? 'pendiente' : 'pagado' }).eq('id', g.id)
+    await (((supabase.from('gastos') as any)) as any).update({ estado: g.estado === 'pagado' ? 'pendiente' : 'pagado' }).eq('id', g.id)
     reload()
   }
 
   async function eliminar(id: string) {
     if (!confirm('¿Eliminar?')) return
-    await supabase.from('gastos').delete().eq('id', id)
+    await (supabase.from('gastos') as any).delete().eq('id', id)
     reload()
   }
 
@@ -342,7 +342,7 @@ function CCTab({ opId, movs, reload }: { opId: string; movs: MovimientoCC[]; rel
     if (!form.monto) return
     const monto = parseFloat(form.monto), tc = parseFloat(form.tc) || 1
     const usd = form.moneda === 'USD' ? monto : monto / tc
-    await supabase.from('movimientos_cc').insert({ operacion_id: opId, tipo: form.tipo as any, concepto: form.concepto || 'Sin descripción', moneda: form.moneda as Moneda, monto, tc, usd, fecha: form.fecha, ref: form.ref })
+    await (supabase.from('movimientos_cc') as any).insert({ operacion_id: opId, tipo: form.tipo as any, concepto: form.concepto || 'Sin descripción', moneda: form.moneda as Moneda, monto, tc, usd, fecha: form.fecha, ref: form.ref })
     setForm(f => ({ ...f, monto: '', concepto: '', ref: '' }))
     reload()
   }
@@ -403,13 +403,13 @@ function MinutaTab({ opId, cotNum, cliente, minuta, reload }: { opId: string; co
 
   async function agregar() {
     if (!form.prov || !form.monto) { alert('Completá proveedor y monto.'); return }
-    await supabase.from('minuta_items').insert({ operacion_id: opId, proveedor: form.prov, concepto: form.concepto, moneda: form.moneda as Moneda, monto: parseFloat(form.monto), fecha_vto: form.fecha, banco: form.banco, cuenta: form.cuenta, swift: form.swift, notas: form.notas })
+    await (supabase.from('minuta_items') as any).insert({ operacion_id: opId, proveedor: form.prov, concepto: form.concepto, moneda: form.moneda as Moneda, monto: parseFloat(form.monto), fecha_vto: form.fecha, banco: form.banco, cuenta: form.cuenta, swift: form.swift, notas: form.notas })
     setForm({ prov: '', concepto: '', moneda: 'USD', monto: '', fecha: nowDate(), banco: '', cuenta: '', swift: '', notas: '' })
     reload()
   }
 
   async function eliminar(id: string) {
-    await supabase.from('minuta_items').delete().eq('id', id)
+    await (supabase.from('minuta_items') as any).delete().eq('id', id)
     reload()
   }
 
