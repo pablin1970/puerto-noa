@@ -19,17 +19,17 @@ export default function TarifasPage() {
   }
 
   async function addTarifa(tipo: 'maritima' | 'terrestre' | 'puerto') {
-    await supabase.from('tarifas').insert({ tipo, ruta: 'Nueva tarifa', valor: 0 } as TarifaInsert)
+    await (supabase.from('tarifas') as any).insert({ tipo, ruta: 'Nueva tarifa', valor: 0 } as TarifaInsert)
     loadData()
   }
 
   async function updateTarifa(id: string, field: string, value: string | number) {
-    await supabase.from('tarifas').update({ [field]: value }).eq('id', id)
+    await (((supabase.from('tarifas') as any)) as any).update({ [field]: value }).eq('id', id)
   }
 
   async function deleteTarifa(id: string) {
     if (!confirm('¿Eliminar esta tarifa?')) return
-    await supabase.from('tarifas').delete().eq('id', id)
+    await (supabase.from('tarifas') as any).delete().eq('id', id)
     loadData()
   }
 
