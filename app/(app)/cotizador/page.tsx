@@ -177,15 +177,15 @@ export default function CotizadorPage(){
     })
   },[])
   useEffect(()=>{loadTrib()},[s.regimen])
-  // Actualizar filas A cuando cambian contenedores o tarifas
+  // Actualizar filas A y transporte terrestre cuando cambian contenedores o tarifas
   useEffect(()=>{
     if(tarifas.length===0) return
     setS(p=>{
+      // Sección A — flete marítimo por tipo de contenedor
       const filasA = p.contenedores.map(c=>{
         const tarifa = tarifas.find(t=>t.tipo==='maritima' && t.tipo_contenedor===c.tipo)
         const precio = tarifa?.valor || 0
         const naviera = tarifa?.naviera || ''
-        // Buscar si ya existe una fila para este tipo para no resetear precio editado
         const existing = p.rowsA.find(r=>r.desc.includes(c.tipo))
         return {
           id: existing?.id || Math.random().toString(36).slice(2),
@@ -196,9 +196,23 @@ export default function CotizadorPage(){
           tipoCalc: 'fijo' as const
         }
       })
-      return {...p, rowsA: filasA}
+      // Transporte terrestre — buscar tarifa terrestre según destino NOA
+      const tarifaTerrestre = tarifas.find(t=>
+        t.tipo==='terrestre' && t.ruta.toLowerCase().includes(p.destinoNoa.toLowerCase())
+      ) || tarifas.find(t=>t.tipo==='terrestre')
+      const precioTerrestre = tarifaTerrestre?.valor || 0
+      const ncTotal = p.contenedores.reduce((s,c)=>s+c.cantidad,0) || 1
+      // Solo actualizar si no fue editado manualmente
+      const nuevoFtCamion = p.ftCamion === 0 ? precioTerrestre : p.ftCamion
+      const nuevoNCamiones = p.nCamiones === 1 ? ncTotal : p.nCamiones
+      return {
+        ...p,
+        rowsA: filasA,
+        ftCamion: nuevoFtCamion,
+        nCamiones: nuevoNCamiones,
+      }
     })
-  },[s.contenedores, tarifas])
+  },[s.contenedores, s.destinoNoa, tarifas])
 
   async function loadTrib(){
     const {data}=await supabase.from('tributos_config').select('*').eq('regimen',s.regimen).eq('aplica',true).order('orden')
