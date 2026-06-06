@@ -97,7 +97,7 @@ export default function CierrePage() {
           <h1 className="text-lg font-semibold text-gray-900">Liquidación y cierre</h1>
           <p className="text-xs text-gray-400 mt-0.5">Módulo 4 — Rendición y cierre de operación</p>
         </div>
-        <select value={selId} onChange={e => setSelId(e.target.value)} className="ml-auto px-3 py-2 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:border-[#1D9E75]">
+        <select value={selId} onChange={e => setSelId(e.target.value)} className="ml-auto px-3 py-2 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:border-[#1168F8]">
           {ops.map(o => <option key={o.id} value={o.id}>{o.cotizacion?.num} — {o.cotizacion?.cliente}</option>)}
         </select>
       </div>
@@ -105,14 +105,14 @@ export default function CierrePage() {
       {/* Tabs */}
       <div className="flex gap-2 mb-5 flex-wrap">
         {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tab === t.key ? 'bg-[#1D9E75] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{t.label}</button>
+          <button key={t.key} onClick={() => setTab(t.key)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tab === t.key ? 'bg-[#1168F8] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{t.label}</button>
         ))}
       </div>
 
       {tab === 'resultado' && (
         <div>
           <div className="grid grid-cols-3 gap-4 mb-5">
-            <div className="bg-[#E1F5EE] border border-[#5DCAA5] rounded-xl p-5"><div className="text-xs font-medium text-[#0F6E56] mb-1">Resultado operativo</div><div className="text-2xl font-semibold text-[#085041]">USD {fmt(resOp, 0)}</div><div className="text-[10px] text-[#0F6E56] mt-1">Fondos − gastos − fee</div></div>
+            <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-xl p-5"><div className="text-xs font-medium text-[#0a4fc4] mb-1">Resultado operativo</div><div className="text-2xl font-semibold text-[#052698]">USD {fmt(resOp, 0)}</div><div className="text-[10px] text-[#0a4fc4] mt-1">Fondos − gastos − fee</div></div>
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-5"><div className="text-xs font-medium text-blue-700 mb-1">Fee Puerto NOA cobrado</div><div className="text-2xl font-semibold text-blue-800">USD {fmt(feeReal, 0)}</div><div className="text-[10px] text-blue-600 mt-1">Presup.: USD {fmt(feePresup, 0)}</div></div>
             <div className={`border rounded-xl p-5 ${saldo >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}><div className={`text-xs font-medium mb-1 ${saldo >= 0 ? 'text-green-700' : 'text-red-700'}`}>Saldo cuenta cliente</div><div className={`text-2xl font-semibold ${saldo >= 0 ? 'text-green-800' : 'text-red-700'}`}>USD {fmt(saldo, 0)}</div><div className={`text-[10px] mt-1 ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>{saldo > 0 ? 'A devolver al cliente' : saldo < 0 ? 'A cobrar al cliente' : 'Exacto'}</div></div>
           </div>
@@ -130,7 +130,7 @@ export default function CierrePage() {
                   <span className={`font-mono font-medium ${r.color}`}>USD {fmt(Math.abs(r.v))}</span>
                 </div>
               ))}
-              <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[#085041] text-xs text-white font-medium">
+              <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[#052698] text-xs text-white font-medium">
                 <span className="w-4 font-bold">=</span>
                 <span className="flex-1">Saldo neto cuenta cliente</span>
                 <span className="font-mono">USD {fmt(saldo)}</span>
@@ -186,14 +186,14 @@ export default function CierrePage() {
             <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 transition-colors">🖨 Imprimir / PDF</button>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl p-8 text-sm" style={{ color: '#222' }}>
-            <div className="flex justify-between items-start mb-6 pb-4 border-b-2 border-[#1D9E75]">
+            <div className="flex justify-between items-start mb-6 pb-4 border-b-2 border-[#1168F8]">
               <div>
-                <div className="w-9 h-9 bg-[#1D9E75] rounded-lg flex items-center justify-center text-white font-bold text-xs mb-2">PN</div>
-                <div className="font-semibold text-[#085041] text-sm">Puerto NOA SpA</div>
+                <div className="w-9 h-9 bg-[#1168F8] rounded-lg flex items-center justify-center text-white font-bold text-xs mb-2">PN</div>
+                <div className="font-semibold text-[#052698] text-sm">Puerto NOA SpA</div>
                 <div className="text-[10px] text-gray-400">Servicios logísticos Norte Argentino</div>
               </div>
               <div className="text-right">
-                <div className="text-lg font-semibold text-[#085041]">Rendición de cuentas</div>
+                <div className="text-lg font-semibold text-[#052698]">Rendición de cuentas</div>
                 <div className="text-xs text-gray-500 mt-1">{cot.num} · {cot.cliente}</div>
                 <div className="text-[10px] text-gray-400 mt-0.5">{nowDate()}</div>
               </div>
@@ -202,14 +202,14 @@ export default function CierrePage() {
               <div className="bg-gray-50 rounded-lg p-3"><div className="text-gray-400 mb-0.5">Cliente</div><div className="font-medium">{cot.cliente}</div><div className="text-gray-400 mt-2 mb-0.5">CUIT</div><div>{cot.cuit || '—'}</div></div>
               <div className="bg-gray-50 rounded-lg p-3"><div className="text-gray-400 mb-0.5">Operación</div><div className="font-medium">{cot.origen} → {cot.destino_noa}</div><div className="text-gray-400 mt-2 mb-0.5">Contenedores / Mercadería</div><div>{Array.isArray(cot.tipo_contenedores) ? cot.tipo_contenedores.map((x: any) => `${x.cantidad}× ${x.tipo}`).join(', ') : '—'}</div></div>
             </div>
-            <div className="text-[10px] font-semibold text-[#085041] uppercase tracking-wider mb-2 border-b border-green-200 pb-1">Fondos recibidos del cliente</div>
-            <table className="w-full text-xs mb-3"><thead><tr className="bg-[#E1F5EE]"><th className="text-left p-2 text-[#085041] font-medium">Fecha</th><th className="text-left p-2 text-[#085041] font-medium">Concepto</th><th className="text-left p-2 text-[#085041] font-medium">Moneda</th><th className="text-right p-2 text-[#085041] font-medium">USD</th></tr></thead><tbody>{movs.filter(m => m.tipo === 'ingreso').map(m => <tr key={m.id} className="border-b border-gray-100"><td className="p-2">{m.fecha}</td><td className="p-2">{m.concepto}</td><td className="p-2">{m.moneda}</td><td className="p-2 text-right font-mono">USD {fmt(m.usd)}</td></tr>)}</tbody></table>
-            <div className="flex justify-between px-2 py-2 bg-[#E1F5EE] rounded text-xs font-medium text-[#085041] mb-4"><span>Total fondos recibidos</span><span>USD {fmt(totalIng)}</span></div>
-            <div className="text-[10px] font-semibold text-[#085041] uppercase tracking-wider mb-2 border-b border-green-200 pb-1">Gastos reales incurridos</div>
-            <table className="w-full text-xs mb-3"><thead><tr className="bg-[#E1F5EE]"><th className="text-left p-2 text-[#085041] font-medium">Fecha</th><th className="text-left p-2 text-[#085041] font-medium">Concepto</th><th className="text-left p-2 text-[#085041] font-medium">Moneda orig.</th><th className="text-right p-2 text-[#085041] font-medium">USD</th></tr></thead><tbody>{gastos.map(g => <tr key={g.id} className="border-b border-gray-100"><td className="p-2">{g.fecha}</td><td className="p-2">{g.concepto}</td><td className="p-2">{g.moneda !== 'USD' ? `${g.moneda} ${fmt(g.monto)}` : '—'}</td><td className="p-2 text-right font-mono">USD {fmt(g.usd)}</td></tr>)}</tbody></table>
+            <div className="text-[10px] font-semibold text-[#052698] uppercase tracking-wider mb-2 border-b border-green-200 pb-1">Fondos recibidos del cliente</div>
+            <table className="w-full text-xs mb-3"><thead><tr className="bg-[#EBF2FF]"><th className="text-left p-2 text-[#052698] font-medium">Fecha</th><th className="text-left p-2 text-[#052698] font-medium">Concepto</th><th className="text-left p-2 text-[#052698] font-medium">Moneda</th><th className="text-right p-2 text-[#052698] font-medium">USD</th></tr></thead><tbody>{movs.filter(m => m.tipo === 'ingreso').map(m => <tr key={m.id} className="border-b border-gray-100"><td className="p-2">{m.fecha}</td><td className="p-2">{m.concepto}</td><td className="p-2">{m.moneda}</td><td className="p-2 text-right font-mono">USD {fmt(m.usd)}</td></tr>)}</tbody></table>
+            <div className="flex justify-between px-2 py-2 bg-[#EBF2FF] rounded text-xs font-medium text-[#052698] mb-4"><span>Total fondos recibidos</span><span>USD {fmt(totalIng)}</span></div>
+            <div className="text-[10px] font-semibold text-[#052698] uppercase tracking-wider mb-2 border-b border-green-200 pb-1">Gastos reales incurridos</div>
+            <table className="w-full text-xs mb-3"><thead><tr className="bg-[#EBF2FF]"><th className="text-left p-2 text-[#052698] font-medium">Fecha</th><th className="text-left p-2 text-[#052698] font-medium">Concepto</th><th className="text-left p-2 text-[#052698] font-medium">Moneda orig.</th><th className="text-right p-2 text-[#052698] font-medium">USD</th></tr></thead><tbody>{gastos.map(g => <tr key={g.id} className="border-b border-gray-100"><td className="p-2">{g.fecha}</td><td className="p-2">{g.concepto}</td><td className="p-2">{g.moneda !== 'USD' ? `${g.moneda} ${fmt(g.monto)}` : '—'}</td><td className="p-2 text-right font-mono">USD {fmt(g.usd)}</td></tr>)}</tbody></table>
             <div className="flex justify-between px-2 py-2 bg-blue-50 rounded text-xs font-medium text-blue-700 mb-4"><span>Total gastos reales</span><span>USD {fmt(totalReal)}</span></div>
             {diff !== 0 && <div className={`flex justify-between px-2 py-2 rounded text-xs font-medium mb-2 ${diff > 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}><span>{diff > 0 ? '⚠ Gastos sobre presupuesto' : '✓ Ahorro vs. presupuesto'}</span><span>{diff > 0 ? '+ ' : ''}USD {fmt(diff)}</span></div>}
-            <div className={`flex justify-between px-3 py-3 rounded text-sm font-semibold ${saldo > 0 ? 'bg-[#085041] text-white' : saldo < 0 ? 'bg-red-700 text-white' : 'bg-gray-700 text-white'}`}><span>{saldo > 0 ? 'SALDO A DEVOLVER AL CLIENTE' : saldo < 0 ? 'SALDO A COBRAR AL CLIENTE' : 'SALDO EXACTO'}</span><span>USD {fmt(Math.abs(saldo))}</span></div>
+            <div className={`flex justify-between px-3 py-3 rounded text-sm font-semibold ${saldo > 0 ? 'bg-[#052698] text-white' : saldo < 0 ? 'bg-red-700 text-white' : 'bg-gray-700 text-white'}`}><span>{saldo > 0 ? 'SALDO A DEVOLVER AL CLIENTE' : saldo < 0 ? 'SALDO A COBRAR AL CLIENTE' : 'SALDO EXACTO'}</span><span>USD {fmt(Math.abs(saldo))}</span></div>
             <div className="grid grid-cols-2 gap-8 mt-8 pt-4 border-t border-gray-200 text-[10px] text-gray-400">
               <div className="text-center border-t border-gray-300 pt-2 mt-4">Firma Puerto NOA SpA</div>
               <div className="text-center border-t border-gray-300 pt-2 mt-4">Conformidad del cliente · {cot.cliente}</div>
@@ -223,7 +223,7 @@ export default function CierrePage() {
           <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 text-amber-700">🔒 Documento de uso interno exclusivo. No compartir con el cliente.</div>
           <div className="bg-white border border-gray-100 rounded-xl p-6">
             <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="bg-[#E1F5EE] rounded-xl p-4"><div className="text-[10px] font-medium text-[#0F6E56] mb-1">Fee cobrado</div><div className="text-xl font-semibold text-[#085041]">USD {fmt(feeReal)}</div><div className="text-[10px] text-[#0F6E56]">Presup.: USD {fmt(feePresup)}</div></div>
+              <div className="bg-[#EBF2FF] rounded-xl p-4"><div className="text-[10px] font-medium text-[#0a4fc4] mb-1">Fee cobrado</div><div className="text-xl font-semibold text-[#052698]">USD {fmt(feeReal)}</div><div className="text-[10px] text-[#0a4fc4]">Presup.: USD {fmt(feePresup)}</div></div>
               <div className="bg-blue-50 rounded-xl p-4"><div className="text-[10px] font-medium text-blue-700 mb-1">Resultado operativo</div><div className={`text-xl font-semibold ${resOp >= 0 ? 'text-blue-800' : 'text-red-700'}`}>USD {fmt(resOp)}</div><div className="text-[10px] text-blue-600">{resOp >= 0 ? 'Ganancia neta' : 'Pérdida neta'}</div></div>
               <div className={`rounded-xl p-4 ${saldo >= 0 ? 'bg-green-50' : 'bg-red-50'}`}><div className={`text-[10px] font-medium mb-1 ${saldo >= 0 ? 'text-green-700' : 'text-red-700'}`}>Saldo cliente</div><div className={`text-xl font-semibold ${saldo >= 0 ? 'text-green-800' : 'text-red-700'}`}>USD {fmt(saldo)}</div><div className={`text-[10px] ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>{saldo > 0 ? 'A devolver' : saldo < 0 ? 'A cobrar' : 'Exacto'}</div></div>
             </div>
@@ -273,7 +273,7 @@ export default function CierrePage() {
               {op.estado === 'cerrada' ? (
                 <button onClick={reabrirOp} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 transition-colors">🔓 Reabrir operación</button>
               ) : (
-                <button onClick={cerrarOp} className="flex items-center gap-1.5 px-4 py-2 bg-[#1D9E75] text-white rounded-lg text-xs font-medium hover:bg-[#0F6E56] transition-colors">✓ Cerrar operación</button>
+                <button onClick={cerrarOp} className="flex items-center gap-1.5 px-4 py-2 bg-[#1168F8] text-white rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors">✓ Cerrar operación</button>
               )}
             </div>
           </div>
