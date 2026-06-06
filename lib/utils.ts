@@ -104,9 +104,14 @@ export function nowStr() {
 
 export function nextCotNum(cotizaciones: { num: string }[]) {
   const year = new Date().getFullYear()
+  const prefix = `PNOA-${year}-`
   const nums = cotizaciones
-    .map(c => parseInt(c.num.split('-')[3] || '0'))
-    .filter(n => !isNaN(n))
+    .filter(c => c.num && c.num.startsWith(prefix))
+    .map(c => {
+      const part = c.num.replace(prefix, '')
+      const n = parseInt(part)
+      return isNaN(n) ? 0 : n
+    })
   const max = nums.length ? Math.max(...nums) : 0
-  return `PNOA-${year}-${String(max + 1).padStart(4, '0')}`
+  return `${prefix}${String(max + 1).padStart(4, '0')}`
 }
