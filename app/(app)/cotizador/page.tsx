@@ -36,7 +36,7 @@ interface CotState {
   cargaModo: 'fijo'|'m3'; cargaValor: number
   ftCamion: number; nCamiones: number; ftIda: number; ftDev: number; ftRt: number
   rowsE: ItemLog[]; gastosArg: GastoArg[]; feeCont: number
-  tcArs: number; tcClp: number; regimen: 'A'|'B'|'C'|'D'; tcTrib: number; derPct: number
+  tcClp: number; regimen: 'A'|'B'|'C'|'D'; tcTrib: number; derPct: number
 }
 
 const INIT: CotState = {
@@ -51,7 +51,7 @@ const INIT: CotState = {
   cargaModo:'fijo',cargaValor:0,
   ftCamion:0,nCamiones:1,ftIda:0,ftDev:0,ftRt:0,
   rowsE:[],gastosArg:[],feeCont:0,
-  tcArs:1000,tcClp:950,regimen:'A',tcTrib:1000,derPct:18,
+  tcClp:950,regimen:'A',tcTrib:1000,derPct:18,
 }
 
 const REG_L: Record<string,string> = {
@@ -275,7 +275,7 @@ export default function CotizadorPage(){
   const cifARS=cif*s.tcTrib
 
   // Calcular gastos Argentina con lógica piso/techo — DESPUÉS de cif
-  const calcGastoArg = (g: GastoArg, cifUsd: number, tcArs: number): number => {
+  const calcGastoArg = (g: GastoArg, cifUsd: number, tcTrib: number): number => {
     let usd = 0
     if(g.tipoCalc === 'pct_cif') {
       usd = cifUsd * g.valor / 100
@@ -284,11 +284,11 @@ export default function CotizadorPage(){
     } else if(g.tipoCalc === 'fijo_usd') {
       usd = g.valor
     } else {
-      usd = g.valor / (tcArs || 1)
+      usd = g.valor / (tc || 1)
     }
     return usd
   }
-  const subGastosArg = s.gastosArg.reduce((t, g) => t + calcGastoArg(g, cif, s.tcArs), 0)
+  const subGastosArg = s.gastosArg.reduce((t, g) => t + calcGastoArg(g, cif, s.tcTrib), 0)
 
   function calcTrib(cfg:TribCfg[],cifARS:number,derPct:number){
     const VA=cifARS; let base=VA
@@ -367,7 +367,7 @@ export default function CotizadorPage(){
         total_fob:totalFOB,total_logistico:totalLog,
         total_tributos_usd:totalTribUSD,total_tributos_ars:totalTribARS,
         total_landed:totalLanded,precio_arg_equiv:s.precioArgEquiv||null,
-        regimen:s.regimen,tc_ars:s.tcArs,derechos_pct:s.derPct,
+        regimen:s.regimen,tc_ars:s.tcTrib,derechos_pct:s.derPct,
         opcion_transporte:s.optTransp,validez:s.validez,estado:'borrador',
         ejecutivo_id:uid,creado_por:uid,modificado_por:uid,presupuesto,
       })
@@ -400,10 +400,13 @@ export default function CotizadorPage(){
         <button onClick={aplicarTarifas} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 transition-colors text-gray-600">⬇ Cargar tarifas base</button>
       </div>
 
-      <div className="flex gap-2 mb-5 flex-wrap">
+      <div className="flex gap-2 mb-5 flex-wrap items-center">
         {TABS.map(t=>(
           <button key={t.key} onClick={()=>setTab(t.key as Tab)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tab===t.key?'bg-[#1168F8] text-white':'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{t.label}</button>
         ))}
+        <div className="ml-auto flex items-center gap-2 text-[10px] text-gray-400">
+          <Image src="/logo.png" alt="Puertonoa" width={80} height={22} style={{objectFit:'contain',opacity:0.6}}/>
+        </div>
       </div>
 
       {/* ── EMBARQUE ── */}
@@ -518,7 +521,7 @@ export default function CotizadorPage(){
         <div className="space-y-4">
           <div className="flex gap-4 items-center px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-xs flex-wrap">
             <span className="font-medium text-gray-700">Tipos de cambio:</span>
-            <div className="flex items-center gap-2"><label className="text-gray-500">USD/ARS</label><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.tcArs} onChange={e=>u('tcArs',parseNum(e.target.value)||1000)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]"/></div>
+            <div className="flex items-center gap-2"><label className="text-gray-500">USD/ARS</label><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.tcTrib} onChange={e=>u('tcArs',parseNum(e.target.value)||1000)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]"/></div>
             <div className="flex items-center gap-2"><label className="text-gray-500">USD/CLP</label><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.tcClp} onChange={e=>u('tcClp',parseNum(e.target.value)||950)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]"/></div>
           </div>
 
@@ -658,8 +661,8 @@ export default function CotizadorPage(){
                     <div>Concepto</div><div>Tipo</div><div>Valor</div><div>Piso USD</div><div>Techo USD</div><div className="text-right">USD</div><div className="text-right">ARS</div>
                   </div>
                   {s.gastosArg.map((g,i)=>{
-                    const usd = calcGastoArg(g, cif, s.tcArs)
-                    const arsEquiv = usd * s.tcArs
+                    const usd = calcGastoArg(g, cif, s.tcTrib)
+                    const arsEquiv = usd * s.tcTrib
                     return (
                       <div key={g.id} className="mb-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
                         <div style={{display:'grid',gridTemplateColumns:'1fr 110px 90px 90px 90px',gap:'6px',alignItems:'center'}} className="mb-2">
@@ -710,7 +713,7 @@ export default function CotizadorPage(){
                     <span className="text-gray-500">Subtotal gastos Argentina:</span>
                     <div className="text-right">
                       <span className="font-mono font-semibold text-[#052698]">USD {fmt(subGastosArg)}</span>
-                      <span className="text-gray-400 ml-2 font-mono text-[10px]">ARS {Math.round(subGastosArg*s.tcArs).toLocaleString('es-AR')}</span>
+                      <span className="text-gray-400 ml-2 font-mono text-[10px]">ARS {Math.round(subGastosArg*s.tcTrib).toLocaleString('es-AR')}</span>
                     </div>
                   </div>
                 </div>
@@ -722,7 +725,7 @@ export default function CotizadorPage(){
             <div className="flex justify-end items-center gap-3 px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
               Subtotal sección F: <strong className="font-mono text-gray-800">USD {fmt(subE+subGastosArg)}</strong>
               <span className="text-gray-300">·</span>
-              <span className="font-mono text-[10px] text-gray-400">ARS {Math.round((subE+subGastosArg)*s.tcArs).toLocaleString('es-AR')}</span>
+              <span className="font-mono text-[10px] text-gray-400">ARS {Math.round((subE+subGastosArg)*s.tcTrib).toLocaleString('es-AR')}</span>
             </div>
           </div>
 
@@ -755,7 +758,7 @@ export default function CotizadorPage(){
           <Card title="Liquidación ARCA — Aduana Jujuy">
             <div className="grid grid-cols-4 gap-3 mb-4">
               <Field label="Régimen de importación"><select value={s.regimen} onChange={e=>u('regimen',e.target.value as any)} className={sel}>{Object.entries(REG_L).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></Field>
-              <Field label="TC ARS/USD (oficial al despacho)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.tcTrib} onChange={e=>u('tcTrib',parseNum(e.target.value)||1000)} className={inp}/></Field>
+              <Field label="TC oficial BNA (ARS/USD)"><div className="px-2.5 py-1.5 bg-[#EBF2FF] border border-[#93B8FC] rounded-lg text-xs font-mono text-right font-semibold text-[#052698]">ARS {fmt(s.tcTrib,0)}</div></Field>
               <Field label="Derechos importación % (NCM)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.derPct} step={0.5} onChange={e=>u('derPct',parseNum(e.target.value))} className={inp}/></Field>
               <Field label="NCM principal"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono">{s.productos.find(p=>p.ncm)?.ncm||'—'}</div></Field>
             </div>
@@ -824,7 +827,7 @@ export default function CotizadorPage(){
                   ...(s.optTransp==='A2'&&subAlm>0?[{sec:'D — Almacenaje',concepto:`${fmt(volAlm,2)} m³ × ${s.almDias} días`,v:subAlm}]:[]),
                   ...(subCarga>0?[{sec:'D — Carga al camión',concepto:s.cargaModo==='m3'?`${fmt(totalM3,2)} m³ × USD ${fmt(s.cargaValor)}`:'Importe fijo',v:subCarga}]:[]),
                   {sec:'E — Transporte terrestre',concepto:s.optTransp!=='B'?`${s.nCamiones} camión(es) × USD ${fmt(s.ftCamion)}`:`${PUERTOS_L[s.ptoChile]} → ${s.destinoNoa}`,v:subTransp},
-                  ...(subGastosArg>0?[{sec:'F — Gastos Argentina',concepto:`Despachante y honorarios · ARS ${Math.round(subGastosArg*s.tcArs).toLocaleString('es-AR')}`,v:subGastosArg}]:[]),
+                  ...(subGastosArg>0?[{sec:'F — Gastos Argentina',concepto:`Despachante y honorarios · ARS ${Math.round(subGastosArg*s.tcTrib).toLocaleString('es-AR')}`,v:subGastosArg}]:[]),
                   ...(subE>0?[{sec:'F — Gastos Argentina',concepto:'Otros gastos',v:subE}]:[]),
                   ...(fee>0?[{sec:'G — Fee Puerto NOA',concepto:`${nc} cont. × USD ${s.feeCont}`,v:fee}]:[]),
                   {sec:'Tributos ARCA',concepto:`Régimen ${s.regimen} · Base CIF Jama`,v:totalTribUSD},
@@ -877,6 +880,7 @@ export default function CotizadorPage(){
                 </div>
                 <div className="text-right">
                   <div className="font-mono font-semibold text-gray-800">USD {fmt(totalTribUSD,0)}</div>
+                  <div className="font-mono text-[10px] text-[#052698] font-medium">ARS {Math.round(totalTribARS).toLocaleString('es-AR')}</div>
                   <div className="text-[10px] text-gray-400 font-mono">{fmt(totalTribUSD/totalLanded*100,1)}% del total</div>
                 </div>
               </div>
@@ -916,11 +920,11 @@ export default function CotizadorPage(){
                   <div>
                     <div className="text-xs font-medium text-gray-700">Gastos Argentina (despachante y otros)</div>
                     <div className="text-[10px] text-gray-400 mt-0.5">
-                      TC ref. <span className="font-mono font-semibold text-gray-600">ARS {fmt(s.tcArs,0)}</span> por USD · Cotización del día del pago efectivo
+                      TC ref. <span className="font-mono font-semibold text-gray-600">ARS {fmt(s.tcTrib,0)}</span> por USD · Cotización del día del pago efectivo
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-mono font-semibold text-gray-800 text-base">ARS {Math.round((subE+subGastosArg)*s.tcArs).toLocaleString('es-AR')}</div>
+                    <div className="font-mono font-semibold text-gray-800 text-base">ARS {Math.round((subE+subGastosArg)*s.tcTrib).toLocaleString('es-AR')}</div>
                     <div className="text-[10px] text-gray-400 font-mono">≈ USD {fmt(subE+subGastosArg,0)}</div>
                   </div>
                 </div>
@@ -929,11 +933,29 @@ export default function CotizadorPage(){
               <div className="px-5 py-3 bg-gray-50 flex items-center justify-between">
                 <div className="text-xs font-semibold text-gray-700">Total estimado en pesos</div>
                 <div className="text-right">
-                  <div className="font-mono font-bold text-gray-900 text-base">ARS {Math.round(totalTribARS+(subE+subGastosArg)*s.tcArs).toLocaleString('es-AR')}</div>
+                  <div className="font-mono font-bold text-gray-900 text-base">ARS {Math.round(totalTribARS+(subE+subGastosArg)*s.tcTrib).toLocaleString('es-AR')}</div>
                   <div className="text-[10px] text-gray-400">Tributos + Gastos Argentina</div>
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* TC consolidado */}
+          <div className="bg-white border border-gray-100 rounded-xl px-5 py-3.5">
+            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Tipos de cambio aplicados en esta cotización</div>
+            <div className="flex flex-wrap gap-4 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500">TC oficial BNA (ARS/USD)</span>
+                <span className="font-mono font-semibold text-gray-800 bg-[#EBF2FF] px-2 py-0.5 rounded">ARS {fmt(s.tcTrib,0)}</span>
+                <span className="text-[10px] text-gray-400">para tributos y gastos locales</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500">CLP/USD</span>
+                <span className="font-mono font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded">CLP {fmt(s.tcClp,0)}</span>
+                <span className="text-[10px] text-gray-400">para gastos en Chile</span>
+              </div>
+            </div>
+            <div className="text-[10px] text-amber-600 mt-2">⚠ Valores de referencia a la fecha de cotización. Los pagos se realizarán al TC oficial del día efectivo.</div>
           </div>
 
           <div className="flex justify-between">
