@@ -1,16 +1,15 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
+  --brand: #1168F8;
+  --brand-dark: #052698;
+  --brand-mid: #1a5fd4;
+  --brand-light: #EBF2FF;
+  --brand-border: #93B8FC;
   --green: #1D9E75;
-  --green-dark: #085041;
-  --green-mid: #0F6E56;
-  --green-light: #E1F5EE;
-  --green-border: #5DCAA5;
-  --blue: #185FA5;
-  --blue-light: #E6F1FB;
   --red: #A32D2D;
   --red-light: #FCEBEB;
   --amber: #854F0B;
@@ -22,31 +21,26 @@
 * { box-sizing: border-box; }
 
 body {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
 }
 
 .font-mono { font-family: 'DM Mono', monospace; }
 
-/* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-/* Input base */
 input, select, textarea {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 12px;
 }
 
-/* Table hover */
 .tbl-row:hover { background: #f8fafc; }
 
-/* Print */
 @media print {
   .no-print { display: none !important; }
-  .print-only { display: block !important; }
   nav, aside, header { display: none !important; }
 }
