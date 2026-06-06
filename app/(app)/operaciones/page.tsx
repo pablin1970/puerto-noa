@@ -26,7 +26,7 @@ function OperacionesContent() {
     if (data && data.length) {
       setOps(data as any)
       const preferred = cotId ? data.find((o: any) => o.cotizacion_id === cotId) : null
-      setSelId(preferred ? preferred.id : data[0].id)
+      setSelId(preferred ? (preferred as any).id : (data[0] as any).id)
     }
     setLoading(false)
   }
