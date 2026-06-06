@@ -35,12 +35,12 @@ export default function RegistroPage() {
   }
 
   async function cambiarEstado(id: string, estado: EstadoCotizacion) {
-    await supabase.from('cotizaciones').update({ estado, updated_at: new Date().toISOString() }).eq('id', id)
+    await (((supabase.from('cotizaciones') as any)) as any).update({ estado, updated_at: new Date().toISOString() }).eq('id', id)
     // Si se acepta, crear operación si no existe
     if (estado === 'aceptada') {
       const { data: opExist } = await supabase.from('operaciones').select('id').eq('cotizacion_id', id).single()
       if (!opExist) {
-        await supabase.from('operaciones').insert({ cotizacion_id: id })
+        await (supabase.from('operaciones') as any).insert({ cotizacion_id: id })
       }
     }
     setModal(null)
