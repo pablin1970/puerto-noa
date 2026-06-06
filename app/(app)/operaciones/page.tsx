@@ -52,7 +52,7 @@ function OperacionesContent() {
         <select
           value={selId}
           onChange={e => setSelId(e.target.value)}
-          className="ml-auto px-3 py-2 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:border-[#1D9E75]"
+          className="ml-auto px-3 py-2 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:border-[#1168F8]"
         >
           {ops.map(o => <option key={o.id} value={o.id}>{o.cotizacion?.num} — {o.cotizacion?.cliente}</option>)}
         </select>
@@ -118,7 +118,7 @@ function OperacionDetail({
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tab === t.key ? 'bg-[#1D9E75] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tab === t.key ? 'bg-[#1168F8] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
             {t.label}
           </button>
@@ -145,7 +145,7 @@ function OperacionDetail({
               <span>Ejecución presupuestaria</span><span>{fmt(pct, 1)}%</span>
             </div>
             <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-4">
-              <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, background: pct > 110 ? '#A32D2D' : pct > 90 ? '#EF9F27' : '#1D9E75' }} />
+              <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, background: pct > 110 ? '#A32D2D' : pct > 90 ? '#EF9F27' : '#1168F8' }} />
             </div>
             <div className={`text-xs px-3 py-2 rounded-lg ${pct > 110 ? 'bg-red-50 text-red-700' : pct > 90 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
               {pct > 110 ? `⚠ Los costos reales superan el presupuesto en USD ${fmt(Math.abs(diff), 0)} (${fmt(pct, 1)}% ejecutado)` :
@@ -226,21 +226,21 @@ function GastosTab({ opId, gastos, reload }: { opId: string; gastos: Gasto[]; re
       <div className="bg-white border border-gray-100 rounded-xl p-5 mb-4">
         <h3 className="font-medium text-sm text-gray-900 mb-4">Cargar gasto real</h3>
         <div className="grid grid-cols-4 gap-3 mb-3">
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Etapa</label><select value={form.etapa} onChange={e => setForm(f => ({ ...f, etapa: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75] bg-white"><option value="maritimo">Flete marítimo</option><option value="chile">Puerto Chile</option><option value="terrestre">Transporte terrestre</option><option value="argentina">Argentina</option><option value="tributos">Tributos ARCA</option><option value="fee">Fee Puerto NOA</option><option value="otro">Otro</option></select></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Concepto / proveedor</label><input value={form.concepto} onChange={e => setForm(f => ({ ...f, concepto: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75]" placeholder="ej. Hellmann" /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Fecha</label><input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75]" /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Estado</label><select value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75] bg-white"><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></select></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Etapa</label><select value={form.etapa} onChange={e => setForm(f => ({ ...f, etapa: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white"><option value="maritimo">Flete marítimo</option><option value="chile">Puerto Chile</option><option value="terrestre">Transporte terrestre</option><option value="argentina">Argentina</option><option value="tributos">Tributos ARCA</option><option value="fee">Fee Puerto NOA</option><option value="otro">Otro</option></select></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Concepto / proveedor</label><input value={form.concepto} onChange={e => setForm(f => ({ ...f, concepto: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="ej. Hellmann" /></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Fecha</label><input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" /></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Estado</label><select value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white"><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></select></div>
         </div>
         <div className="grid grid-cols-4 gap-3 mb-3">
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Moneda</label><select value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75] bg-white"><option>USD</option><option>ARS</option><option>CLP</option><option>CNY</option></select></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Monto moneda local</label><input type="number" value={form.monto} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75] text-right" placeholder="0.00" /></div>
-          {form.moneda !== 'USD' && <div><label className="block text-[10px] text-gray-500 font-medium mb-1">TC (moneda/USD)</label><input type="number" value={form.tc} onChange={e => setForm(f => ({ ...f, tc: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75] text-right" placeholder="1000" /></div>}
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Moneda</label><select value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white"><option>USD</option><option>ARS</option><option>CLP</option><option>CNY</option></select></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Monto moneda local</label><input type="text" inputMode="decimal" value={form.monto} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right" placeholder="0.00" /></div>
+          {form.moneda !== 'USD' && <div><label className="block text-[10px] text-gray-500 font-medium mb-1">TC (moneda/USD)</label><input type="text" inputMode="decimal" value={form.tc} onChange={e => setForm(f => ({ ...f, tc: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right" placeholder="1000" /></div>}
           <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Equivalente USD</label><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right font-mono">{form.monto ? fmt(form.moneda === 'USD' ? parseFloat(form.monto) : parseFloat(form.monto) / (parseFloat(form.tc) || 1)) : '—'}</div></div>
         </div>
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">N° factura / ref.</label><input value={form.ref} onChange={e => setForm(f => ({ ...f, ref: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75]" placeholder="Nro. documento" /></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">N° factura / ref.</label><input value={form.ref} onChange={e => setForm(f => ({ ...f, ref: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="Nro. documento" /></div>
         </div>
-        <div className="flex justify-end"><button onClick={cargar} className="bg-[#1D9E75] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0F6E56] transition-colors">✓ Registrar gasto</button></div>
+        <div className="flex justify-end"><button onClick={cargar} className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors">✓ Registrar gasto</button></div>
       </div>
 
       <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
@@ -302,7 +302,7 @@ function ComparativoTab({ presup, gastos }: { presup: any[]; gastos: Gasto[] }) 
           <td className="px-4 py-2.5 font-mono text-xs text-right">USD {fmt(i.usd)}</td>
           <td className="px-4 py-2.5 font-mono text-xs text-right">{r > 0 ? `USD ${fmt(r)}` : '—'}</td>
           <td className={`px-4 py-2.5 font-mono text-xs text-right font-medium ${dv > 0 ? 'text-red-600' : dv < 0 ? 'text-green-700' : 'text-gray-400'}`}>{dv !== 0 ? `${dv > 0 ? '+ ' : ''}USD ${fmt(dv)}` : '—'}</td>
-          <td className="px-4 py-2.5 w-24"><div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${Math.min(i.usd > 0 && r ? r / i.usd * 100 : 0, 100)}%`, background: dv / i.usd > 0.1 ? '#A32D2D' : dv / i.usd > 0 ? '#EF9F27' : '#1D9E75' }} /></div></td>
+          <td className="px-4 py-2.5 w-24"><div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${Math.min(i.usd > 0 && r ? r / i.usd * 100 : 0, 100)}%`, background: dv / i.usd > 0.1 ? '#A32D2D' : dv / i.usd > 0 ? '#EF9F27' : '#1168F8' }} /></div></td>
         </tr>
       )
     })
@@ -354,24 +354,24 @@ function CCTab({ opId, movs, reload }: { opId: string; movs: MovimientoCC[]; rel
       <div className="bg-white border border-gray-100 rounded-xl p-5 mb-4">
         <h3 className="font-medium text-sm text-gray-900 mb-4">Registrar movimiento de fondos</h3>
         <div className="grid grid-cols-4 gap-3 mb-3">
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Tipo</label><select value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75] bg-white"><option value="ingreso">Ingreso (fondo cliente)</option><option value="egreso">Egreso (pago proveedor)</option></select></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Concepto</label><input value={form.concepto} onChange={e => setForm(f => ({ ...f, concepto: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75]" placeholder="ej. Anticipo operación" /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Fecha</label><input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75]" /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Moneda</label><select value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75] bg-white"><option>USD</option><option>ARS</option><option>CLP</option><option>CNY</option></select></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Tipo</label><select value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white"><option value="ingreso">Ingreso (fondo cliente)</option><option value="egreso">Egreso (pago proveedor)</option></select></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Concepto</label><input value={form.concepto} onChange={e => setForm(f => ({ ...f, concepto: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="ej. Anticipo operación" /></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Fecha</label><input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" /></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Moneda</label><select value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white"><option>USD</option><option>ARS</option><option>CLP</option><option>CNY</option></select></div>
         </div>
         <div className="grid grid-cols-4 gap-3 mb-4">
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Monto moneda local</label><input type="number" value={form.monto} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75] text-right" placeholder="0.00" /></div>
-          {form.moneda !== 'USD' && <div><label className="block text-[10px] text-gray-500 font-medium mb-1">TC</label><input type="number" value={form.tc} onChange={e => setForm(f => ({ ...f, tc: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75] text-right" placeholder="1000" /></div>}
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Monto moneda local</label><input type="text" inputMode="decimal" value={form.monto} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right" placeholder="0.00" /></div>
+          {form.moneda !== 'USD' && <div><label className="block text-[10px] text-gray-500 font-medium mb-1">TC</label><input type="text" inputMode="decimal" value={form.tc} onChange={e => setForm(f => ({ ...f, tc: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right" placeholder="1000" /></div>}
           <div><label className="block text-[10px] text-gray-500 font-medium mb-1">USD</label><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right font-mono">{form.monto ? fmt(form.moneda === 'USD' ? parseFloat(form.monto) : parseFloat(form.monto) / (parseFloat(form.tc) || 1)) : '—'}</div></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Ref. / comprobante</label><input value={form.ref} onChange={e => setForm(f => ({ ...f, ref: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75]" placeholder="N° transferencia" /></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Ref. / comprobante</label><input value={form.ref} onChange={e => setForm(f => ({ ...f, ref: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="N° transferencia" /></div>
         </div>
-        <div className="flex justify-end"><button onClick={cargar} className="bg-[#1D9E75] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0F6E56] transition-colors">✓ Registrar movimiento</button></div>
+        <div className="flex justify-end"><button onClick={cargar} className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors">✓ Registrar movimiento</button></div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-4">
         <div className="bg-green-50 border border-green-200 rounded-xl p-4"><div className="text-[10px] font-medium text-green-700 mb-1">Fondos recibidos</div><div className="text-xl font-semibold text-green-800">USD {fmt(totalIng)}</div></div>
         <div className="bg-red-50 border border-red-200 rounded-xl p-4"><div className="text-[10px] font-medium text-red-700 mb-1">Pagado a proveedores</div><div className="text-xl font-semibold text-red-700">USD {fmt(totalEg)}</div></div>
-        <div className={`border rounded-xl p-4 ${saldo >= 0 ? 'bg-[#E1F5EE] border-[#5DCAA5]' : 'bg-red-50 border-red-200'}`}><div className={`text-[10px] font-medium mb-1 ${saldo >= 0 ? 'text-[#085041]' : 'text-red-700'}`}>Saldo disponible</div><div className={`text-xl font-semibold ${saldo >= 0 ? 'text-[#085041]' : 'text-red-700'}`}>USD {fmt(saldo)}</div><div className={`text-[10px] mt-1 ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>{saldo < 0 ? '⚠ Solicitar fondos al cliente' : 'Fondos disponibles'}</div></div>
+        <div className={`border rounded-xl p-4 ${saldo >= 0 ? 'bg-[#EBF2FF] border-[#93B8FC]' : 'bg-red-50 border-red-200'}`}><div className={`text-[10px] font-medium mb-1 ${saldo >= 0 ? 'text-[#052698]' : 'text-red-700'}`}>Saldo disponible</div><div className={`text-xl font-semibold ${saldo >= 0 ? 'text-[#052698]' : 'text-red-700'}`}>USD {fmt(saldo)}</div><div className={`text-[10px] mt-1 ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>{saldo < 0 ? '⚠ Solicitar fondos al cliente' : 'Fondos disponibles'}</div></div>
       </div>
 
       <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
@@ -418,19 +418,19 @@ function MinutaTab({ opId, cotNum, cliente, minuta, reload }: { opId: string; co
       <div className="bg-white border border-gray-100 rounded-xl p-5 mb-4">
         <h3 className="font-medium text-sm text-gray-900 mb-4">Agregar ítem a la minuta</h3>
         <div className="grid grid-cols-4 gap-3 mb-3">
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Proveedor</label><input value={form.prov} onChange={e => setForm(f => ({ ...f, prov: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75]" placeholder="ej. Hellmann Logistics" /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Concepto</label><input value={form.concepto} onChange={e => setForm(f => ({ ...f, concepto: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75]" placeholder="ej. Flete marítimo" /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Moneda</label><select value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75] bg-white"><option>USD</option><option>ARS</option><option>CLP</option></select></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Monto</label><input type="number" value={form.monto} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75] text-right" placeholder="0.00" /></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Proveedor</label><input value={form.prov} onChange={e => setForm(f => ({ ...f, prov: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="ej. Hellmann Logistics" /></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Concepto</label><input value={form.concepto} onChange={e => setForm(f => ({ ...f, concepto: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="ej. Flete marítimo" /></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Moneda</label><select value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white"><option>USD</option><option>ARS</option><option>CLP</option></select></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Monto</label><input type="text" inputMode="decimal" value={form.monto} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right" placeholder="0.00" /></div>
         </div>
         <div className="grid grid-cols-4 gap-3 mb-4">
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Fecha vencimiento</label><input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75]" /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Banco / entidad</label><input value={form.banco} onChange={e => setForm(f => ({ ...f, banco: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75]" placeholder="ej. Banco BCI Chile" /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">N° cuenta / CBU / IBAN</label><input value={form.cuenta} onChange={e => setForm(f => ({ ...f, cuenta: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75]" /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Swift / CLABE / alias</label><input value={form.swift} onChange={e => setForm(f => ({ ...f, swift: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75]" /></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Fecha vencimiento</label><input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" /></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Banco / entidad</label><input value={form.banco} onChange={e => setForm(f => ({ ...f, banco: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="ej. Banco BCI Chile" /></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">N° cuenta / CBU / IBAN</label><input value={form.cuenta} onChange={e => setForm(f => ({ ...f, cuenta: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" /></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Swift / CLABE / alias</label><input value={form.swift} onChange={e => setForm(f => ({ ...f, swift: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" /></div>
         </div>
-        <div className="mb-4"><label className="block text-[10px] text-gray-500 font-medium mb-1">Notas / instrucciones</label><input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75]" placeholder="Referencia a incluir en la transferencia" /></div>
-        <div className="flex justify-end"><button onClick={agregar} className="bg-[#1D9E75] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0F6E56] transition-colors">+ Agregar a minuta</button></div>
+        <div className="mb-4"><label className="block text-[10px] text-gray-500 font-medium mb-1">Notas / instrucciones</label><input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="Referencia a incluir en la transferencia" /></div>
+        <div className="flex justify-end"><button onClick={agregar} className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors">+ Agregar a minuta</button></div>
       </div>
 
       <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
@@ -443,7 +443,7 @@ function MinutaTab({ opId, cotNum, cliente, minuta, reload }: { opId: string; co
             <div key={it.id} className="p-5">
               <div className="flex items-start justify-between mb-3">
                 <div><div className="font-semibold text-sm text-gray-900">{it.proveedor}</div><div className="text-xs text-gray-500 mt-0.5">{it.concepto}</div></div>
-                <div className="text-right"><div className="text-lg font-semibold text-[#085041]">{it.moneda} {fmt(it.monto)}</div><div className="text-[10px] text-gray-400 mt-0.5">Vence: {it.fecha_vto || '—'}</div></div>
+                <div className="text-right"><div className="text-lg font-semibold text-[#052698]">{it.moneda} {fmt(it.monto)}</div><div className="text-[10px] text-gray-400 mt-0.5">Vence: {it.fecha_vto || '—'}</div></div>
               </div>
               <div className="grid grid-cols-2 gap-3 text-xs border-t border-gray-100 pt-3">
                 <div><span className="text-gray-400">Banco: </span><span className="text-gray-700">{it.banco || '—'}</span></div>
