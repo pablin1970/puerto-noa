@@ -77,40 +77,61 @@ function SecCard({letter,label,sub,sub2,children}:{letter:string;label:string;su
   )
 }
 function LogRows({rows,onChange,withIva}:{rows:ItemLog[];onChange:(r:ItemLog[])=>void;withIva?:boolean}){
+  const cols = withIva ? '1fr 70px 110px 90px 28px' : '1fr 70px 110px 28px'
   return (
     <div>
       {/* Encabezados */}
       {rows.length>0&&(
-        <div className="grid gap-2 mb-1 text-[10px] text-gray-400 font-medium uppercase tracking-wide" style={{gridTemplateColumns:withIva?'2.5fr 80px 120px 85px 30px':'2.5fr 80px 120px 30px',gap:'7px'}}>
+        <div style={{display:'grid',gridTemplateColumns:cols,gap:'6px'}} className="mb-1 text-[10px] text-gray-400 font-medium uppercase tracking-wide">
           <div>Descripción</div>
-          <div className="text-right">Cantidad</div>
+          <div className="text-right">Cant.</div>
           <div className="text-right">Precio USD</div>
           {withIva&&<div>IVA Chile</div>}
           <div></div>
         </div>
       )}
       {rows.map((r,i)=>(
-        <div key={r.id} style={{display:'grid',gridTemplateColumns:withIva?'2.5fr 80px 120px 85px 30px':'2.5fr 80px 120px 30px',gap:'7px',alignItems:'center'}} className="mb-2">
-          <input value={r.desc} onChange={e=>{const n=[...rows];n[i]={...n[i],desc:e.target.value};onChange(n)}} className={inp} placeholder="Descripción del ítem"/>
-          <input type="text" inputMode="decimal" value={r.cant} onChange={e=>{const n=[...rows];n[i]={...n[i],cant:parseNum(e.target.value)||1};onChange(n)}} className={inp+' text-right'}/>
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] text-gray-400 flex-shrink-0">USD</span>
-            <input type="text" inputMode="decimal" value={r.unitario} onChange={e=>{const n=[...rows];n[i]={...n[i],unitario:parseNum(e.target.value)};onChange(n)}} className={inp+' text-right flex-1'}/>
-          </div>
-          {withIva&&<select value={r.ivaChile||'exento'} onChange={e=>{const n=[...rows];n[i]={...n[i],ivaChile:e.target.value as any};onChange(n)}} className={sel}><option value="exento">Exento</option><option value="gravado">Grav. 19%</option></select>}
+        <div key={r.id} style={{display:'grid',gridTemplateColumns:cols,gap:'6px',alignItems:'center'}} className="mb-2">
+          <input
+            value={r.desc}
+            onChange={e=>{const n=[...rows];n[i]={...n[i],desc:e.target.value};onChange(n)}}
+            className={inp}
+            placeholder="Descripción"
+          />
+          <input
+            type="text" inputMode="decimal"
+            value={r.cant}
+            onFocus={e=>e.target.select()}
+            onChange={e=>{const n=[...rows];n[i]={...n[i],cant:parseNum(e.target.value)||1};onChange(n)}}
+            className={inp+' text-right'}
+          />
+          <input
+            type="text" inputMode="decimal"
+            value={r.unitario}
+            onFocus={e=>e.target.select()}
+            onChange={e=>{const n=[...rows];n[i]={...n[i],unitario:parseNum(e.target.value)};onChange(n)}}
+            className={inp+' text-right'}
+            placeholder="0.00"
+          />
+          {withIva&&(
+            <select value={r.ivaChile||'exento'} onChange={e=>{const n=[...rows];n[i]={...n[i],ivaChile:e.target.value as any};onChange(n)}} className={sel}>
+              <option value="exento">Exento</option>
+              <option value="gravado">Grav. 19%</option>
+            </select>
+          )}
           <button onClick={()=>onChange(rows.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs">🗑</button>
         </div>
       ))}
-      {/* Subtotal por fila */}
-      {rows.length>0&&(
-        <div className="mt-2 pt-2 border-t border-gray-100 flex flex-wrap gap-3">
-          {rows.map((r,i)=>(
+      {/* Subtotales por fila */}
+      {rows.filter(r=>r.cant>0&&r.unitario>0).length>0&&(
+        <div className="mt-2 pt-2 border-t border-gray-100 flex flex-wrap gap-x-4 gap-y-1">
+          {rows.filter(r=>r.cant>0&&r.unitario>0).map((r,i)=>(
             <div key={r.id} className="text-[10px] text-gray-500">
               <span className="font-medium text-gray-700">{r.desc||`Ítem ${i+1}`}</span>
               <span className="mx-1 text-gray-300">·</span>
-              <span>{r.cant} × USD {fmt(r.unitario)}</span>
+              <span className="font-mono">{r.cant} × USD {fmt(r.unitario)}</span>
               <span className="mx-1 text-gray-300">=</span>
-              <span className="font-mono font-semibold text-gray-800">USD {fmt(r.cant*r.unitario)}</span>
+              <span className="font-mono font-semibold text-[#052698]">USD {fmt(r.cant*r.unitario)}</span>
             </div>
           ))}
         </div>
@@ -129,10 +150,10 @@ function DesconRows({rows,onChange,totalM3}:{rows:ItemLog[];onChange:(r:ItemLog[
             <option value="fijo">Fijo (USD)</option><option value="m3">Por m³</option>
           </select>
           {r.tipoCalc==='fijo'
-            ?<input type="text" inputMode="decimal" value={r.cant} onChange={e=>{const n=[...rows];n[i]={...n[i],cant:parseNum(e.target.value)||1};onChange(n)}} className={inp+' text-right'} placeholder="Cant."/>
+            ?<input type="text" inputMode="decimal" value={r.cant} onFocus={e=>e.target.select()} onChange={e=>{const n=[...rows];n[i]={...n[i],cant:parseNum(e.target.value)||1};onChange(n)}} className={inp+' text-right'} placeholder="Cant."/>
             :<div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right font-mono">{fmt(totalM3,2)} m³</div>
           }
-          <input type="text" inputMode="decimal" value={r.unitario} onChange={e=>{const n=[...rows];n[i]={...n[i],unitario:parseNum(e.target.value)};onChange(n)}} className={inp+' text-right'} placeholder={r.tipoCalc==='m3'?'USD/m³':'USD'}/>
+          <input type="text" inputMode="decimal" value={r.unitario} onFocus={e=>e.target.select()} onChange={e=>{const n=[...rows];n[i]={...n[i],unitario:parseNum(e.target.value)};onChange(n)}} className={inp+' text-right'} placeholder={r.tipoCalc==='m3'?'USD/m³':'USD'}/>
           <button onClick={()=>onChange(rows.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs pb-1">🗑</button>
         </div>
       ))}
@@ -327,7 +348,7 @@ export default function CotizadorPage(){
                     {Object.keys(CONT_CAPS).map(k=><option key={k}>{k}</option>)}
                   </select>
                   <span className="text-[#93B8FC] text-xs">×</span>
-                  <input type="text" inputMode="decimal" value={c.cantidad} min={1} onChange={e=>{const n=[...s.contenedores];n[i]={...n[i],cantidad:parseInt2(e.target.value)||1};u('contenedores',n)}} className="w-10 text-center text-xs border-0 bg-transparent focus:outline-none font-bold text-[#052698]"/>
+                  <input type="text" inputMode="decimal" value={c.cantidad} min={1} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.contenedores];n[i]={...n[i],cantidad:parseInt2(e.target.value)||1};u('contenedores',n)}} className="w-10 text-center text-xs border-0 bg-transparent focus:outline-none font-bold text-[#052698]"/>
                   {s.contenedores.length>1&&<button onClick={()=>u('contenedores',s.contenedores.filter((_,j)=>j!==i))} className="text-[#93B8FC] hover:text-red-400 text-xs">✕</button>}
                 </div>
               ))}
@@ -346,11 +367,11 @@ export default function CotizadorPage(){
                     <tr key={i} className="border-b border-gray-50">
                       <td className="px-2 py-1.5"><input value={p.descripcion} onChange={e=>{const n=[...s.productos];n[i]={...n[i],descripcion:e.target.value};u('productos',n)}} className={inp} placeholder="Producto"/></td>
                       <td className="px-2 py-1.5"><input value={p.ncm} onChange={e=>{const n=[...s.productos];n[i]={...n[i],ncm:e.target.value};u('productos',n)}} className={inp} placeholder="0000.00.00"/></td>
-                      <td className="px-2 py-1.5"><input type="text" inputMode="decimal" value={p.cantidad} min={0} onChange={e=>{const n=[...s.productos];const q=parseNum(e.target.value);n[i]={...n[i],cantidad:q,subtotal:q*n[i].precio_unit};u('productos',n)}} className={inp+' text-right w-16'}/></td>
-                      <td className="px-2 py-1.5"><input type="text" inputMode="decimal" value={p.precio_unit} min={0} step={0.01} onChange={e=>{const n=[...s.productos];const pu=parseNum(e.target.value);n[i]={...n[i],precio_unit:pu,subtotal:pu*n[i].cantidad};u('productos',n)}} className={inp+' text-right w-24'}/></td>
+                      <td className="px-2 py-1.5"><input type="text" inputMode="decimal" value={p.cantidad} onFocus={e=>e.target.select()} min={0} onChange={e=>{const n=[...s.productos];const q=parseNum(e.target.value);n[i]={...n[i],cantidad:q,subtotal:q*n[i].precio_unit};u('productos',n)}} className={inp+' text-right w-16'}/></td>
+                      <td className="px-2 py-1.5"><input type="text" inputMode="decimal" value={p.precio_unit} onFocus={e=>e.target.select()} min={0} step={0.01} onChange={e=>{const n=[...s.productos];const pu=parseNum(e.target.value);n[i]={...n[i],precio_unit:pu,subtotal:pu*n[i].cantidad};u('productos',n)}} className={inp+' text-right w-24'}/></td>
                       <td className="px-2 py-1.5"><div className="px-2 py-1 bg-[#EBF2FF] border border-[#93B8FC] rounded font-mono text-[11px] text-right w-24 text-[#052698]">{fmt(p.subtotal)}</div></td>
-                      <td className="px-2 py-1.5"><input type="text" inputMode="decimal" value={p.peso_unit} min={0} onChange={e=>{const n=[...s.productos];n[i]={...n[i],peso_unit:parseNum(e.target.value)};u('productos',n)}} className={inp+' text-right w-20'}/></td>
-                      <td className="px-2 py-1.5"><input type="text" inputMode="decimal" value={p.vol_unit} min={0} step={0.001} onChange={e=>{const n=[...s.productos];n[i]={...n[i],vol_unit:parseNum(e.target.value)};u('productos',n)}} className={inp+' text-right w-20'}/></td>
+                      <td className="px-2 py-1.5"><input type="text" inputMode="decimal" value={p.peso_unit} onFocus={e=>e.target.select()} min={0} onChange={e=>{const n=[...s.productos];n[i]={...n[i],peso_unit:parseNum(e.target.value)};u('productos',n)}} className={inp+' text-right w-20'}/></td>
+                      <td className="px-2 py-1.5"><input type="text" inputMode="decimal" value={p.vol_unit} onFocus={e=>e.target.select()} min={0} step={0.001} onChange={e=>{const n=[...s.productos];n[i]={...n[i],vol_unit:parseNum(e.target.value)};u('productos',n)}} className={inp+' text-right w-20'}/></td>
                       <td className="px-2 py-1.5"><select value={p.incoterm} onChange={e=>{const n=[...s.productos];n[i]={...n[i],incoterm:e.target.value};u('productos',n)}} className={sel+' w-20'}>{['FOB','EXW','CIF'].map(v=><option key={v}>{v}</option>)}</select></td>
                       <td className="px-2 py-1.5"><button onClick={()=>u('productos',s.productos.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs">🗑</button></td>
                     </tr>
@@ -378,14 +399,14 @@ export default function CotizadorPage(){
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <div className="text-xs font-medium text-gray-700 mb-3">Puesta a FOB (precio EXW)</div>
                 <div className="grid grid-cols-3 gap-3">
-                  <Field label="Transporte interno China (USD)"><input type="text" inputMode="decimal" value={s.exwTransp} onChange={e=>u('exwTransp',parseNum(e.target.value))} className={inp}/></Field>
-                  <Field label="Agente exportación (USD)"><input type="text" inputMode="decimal" value={s.exwAgente} onChange={e=>u('exwAgente',parseNum(e.target.value))} className={inp}/></Field>
-                  <Field label="Otros gastos origen (USD)"><input type="text" inputMode="decimal" value={s.exwOtros} onChange={e=>u('exwOtros',parseNum(e.target.value))} className={inp}/></Field>
+                  <Field label="Transporte interno China (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.exwTransp} onChange={e=>u('exwTransp',parseNum(e.target.value))} className={inp}/></Field>
+                  <Field label="Agente exportación (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.exwAgente} onChange={e=>u('exwAgente',parseNum(e.target.value))} className={inp}/></Field>
+                  <Field label="Otros gastos origen (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.exwOtros} onChange={e=>u('exwOtros',parseNum(e.target.value))} className={inp}/></Field>
                 </div>
               </div>
             )}
             <div className="mt-4 pt-4 border-t border-gray-100">
-              <Field label="Precio equivalente en Argentina (USD) · para comparativa"><input type="text" inputMode="decimal" value={s.precioArgEquiv||''} onChange={e=>u('precioArgEquiv',parseNum(e.target.value))} className={inp} placeholder="0.00"/></Field>
+              <Field label="Precio equivalente en Argentina (USD) · para comparativa"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.precioArgEquiv||''} onChange={e=>u('precioArgEquiv',parseNum(e.target.value))} className={inp} placeholder="0.00"/></Field>
             </div>
           </Card>
           <div className="flex justify-end"><button onClick={()=>setTab('logistica')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors">Logística →</button></div>
@@ -397,8 +418,8 @@ export default function CotizadorPage(){
         <div className="space-y-4">
           <div className="flex gap-4 items-center px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-xs flex-wrap">
             <span className="font-medium text-gray-700">Tipos de cambio:</span>
-            <div className="flex items-center gap-2"><label className="text-gray-500">USD/ARS</label><input type="text" inputMode="decimal" value={s.tcArs} onChange={e=>u('tcArs',parseNum(e.target.value)||1000)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]"/></div>
-            <div className="flex items-center gap-2"><label className="text-gray-500">USD/CLP</label><input type="text" inputMode="decimal" value={s.tcClp} onChange={e=>u('tcClp',parseNum(e.target.value)||950)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]"/></div>
+            <div className="flex items-center gap-2"><label className="text-gray-500">USD/ARS</label><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.tcArs} onChange={e=>u('tcArs',parseNum(e.target.value)||1000)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]"/></div>
+            <div className="flex items-center gap-2"><label className="text-gray-500">USD/CLP</label><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.tcClp} onChange={e=>u('tcClp',parseNum(e.target.value)||950)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]"/></div>
           </div>
 
           <SecCard letter="A" label="Flete marítimo internacional" sub="China → Puerto Chile" sub2={subA}>
@@ -408,7 +429,7 @@ export default function CotizadorPage(){
           <SecCard letter="B" label="Seguro de la mercadería" sub2={seg}>
             <div className="grid grid-cols-3 gap-3">
               <Field label="Modalidad"><select value={s.segModo} onChange={e=>u('segModo',e.target.value as any)} className={sel}><option value="pct">% sobre FOB + flete</option><option value="fijo">Monto fijo (USD)</option></select></Field>
-              <Field label={s.segModo==='pct'?'Tasa seguro (%)':'Monto fijo (USD)'}><input type="text" inputMode="decimal" value={s.segVal} step={0.1} onChange={e=>u('segVal',parseNum(e.target.value))} className={inp}/></Field>
+              <Field label={s.segModo==='pct'?'Tasa seguro (%)':'Monto fijo (USD)'}><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.segVal} step={0.1} onChange={e=>u('segVal',parseNum(e.target.value))} className={inp}/></Field>
               <Field label="Seguro calculado"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right font-mono">USD {fmt(seg)}</div></Field>
             </div>
           </SecCard>
@@ -448,13 +469,13 @@ export default function CotizadorPage(){
                           <div className="flex gap-1">
                             <select value={s.almModoVol} onChange={e=>u('almModoVol',e.target.value as any)} className={sel+' flex-shrink-0 w-20'}><option value="auto">Auto</option><option value="manual">Manual</option></select>
                             {s.almModoVol==='manual'
-                              ?<input type="text" inputMode="decimal" value={s.almVolM3} step={0.1} onChange={e=>u('almVolM3',parseNum(e.target.value))} className={inp} placeholder="m³"/>
+                              ?<input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almVolM3} step={0.1} onChange={e=>u('almVolM3',parseNum(e.target.value))} className={inp} placeholder="m³"/>
                               :<div className="px-2.5 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-mono flex-1 text-right">{fmt(totalM3,2)} m³</div>
                             }
                           </div>
                         </Field>
-                        <Field label="Costo por m³/día (USD)"><input type="text" inputMode="decimal" value={s.almCostoDia} step={0.01} onChange={e=>u('almCostoDia',parseNum(e.target.value))} className={inp}/></Field>
-                        <Field label="Días estimados"><input type="text" inputMode="decimal" value={s.almDias} min={1} onChange={e=>u('almDias',parseInt2(e.target.value)||0)} className={inp}/></Field>
+                        <Field label="Costo por m³/día (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almCostoDia} step={0.01} onChange={e=>u('almCostoDia',parseNum(e.target.value))} className={inp}/></Field>
+                        <Field label="Días estimados"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almDias} min={1} onChange={e=>u('almDias',parseInt2(e.target.value)||0)} className={inp}/></Field>
                         <Field label="Subtotal almacenaje"><div className="px-2.5 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-mono text-right font-semibold text-amber-800">USD {fmt(subAlm)}</div></Field>
                       </div>
                       {subAlm>0&&<div className="text-[10px] text-amber-600 bg-white/60 rounded px-3 py-1.5">{fmt(volAlm,2)} m³ × USD {fmt(s.almCostoDia)} × {s.almDias} día(s) = USD {fmt(subAlm)}</div>}
@@ -465,7 +486,7 @@ export default function CotizadorPage(){
                     <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Carga al camión</div>
                     <div className="grid grid-cols-4 gap-3">
                       <Field label="Modalidad cálculo"><select value={s.cargaModo} onChange={e=>u('cargaModo',e.target.value as any)} className={sel}><option value="fijo">Importe fijo (USD)</option><option value="m3">Por m³ (USD/m³)</option></select></Field>
-                      <Field label={s.cargaModo==='fijo'?'Importe fijo (USD)':'USD por m³'}><input type="text" inputMode="decimal" value={s.cargaValor} step={0.01} onChange={e=>u('cargaValor',parseNum(e.target.value))} className={inp}/></Field>
+                      <Field label={s.cargaModo==='fijo'?'Importe fijo (USD)':'USD por m³'}><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.cargaValor} step={0.01} onChange={e=>u('cargaValor',parseNum(e.target.value))} className={inp}/></Field>
                       {s.cargaModo==='m3'&&<Field label="m³ totales"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">{fmt(totalM3,2)}</div></Field>}
                       <Field label="Subtotal carga"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right font-semibold">USD {fmt(subCarga)}</div></Field>
                     </div>
@@ -482,9 +503,9 @@ export default function CotizadorPage(){
                 <div>
                   <div className="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg px-3 py-2 mb-3">El round trip (ida + devolución en un contrato) suele ser más económico. El sistema elige automáticamente.</div>
                   <div className="grid grid-cols-4 gap-3">
-                    <Field label="Flete ida (USD/cont)"><input type="text" inputMode="decimal" value={s.ftIda} onChange={e=>u('ftIda',parseNum(e.target.value))} className={inp}/></Field>
-                    <Field label="Devolución (USD/cont)"><input type="text" inputMode="decimal" value={s.ftDev} onChange={e=>u('ftDev',parseNum(e.target.value))} className={inp}/></Field>
-                    <Field label="Round trip disponible (USD/cont)"><input type="text" inputMode="decimal" value={s.ftRt} onChange={e=>u('ftRt',parseNum(e.target.value))} className={inp} placeholder="0 = no disponible"/></Field>
+                    <Field label="Flete ida (USD/cont)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftIda} onChange={e=>u('ftIda',parseNum(e.target.value))} className={inp}/></Field>
+                    <Field label="Devolución (USD/cont)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftDev} onChange={e=>u('ftDev',parseNum(e.target.value))} className={inp}/></Field>
+                    <Field label="Round trip disponible (USD/cont)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftRt} onChange={e=>u('ftRt',parseNum(e.target.value))} className={inp} placeholder="0 = no disponible"/></Field>
                     <Field label="Elegido (USD total)"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(subTransp)}</div></Field>
                   </div>
                   {s.ftRt>0&&s.ftRt<(s.ftIda+s.ftDev)*nc&&<p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mt-2">✓ Round trip USD {fmt(s.ftRt*nc)} más económico. Ahorro: USD {fmt((s.ftIda+s.ftDev)*nc-s.ftRt*nc)}</p>}
@@ -500,8 +521,8 @@ export default function CotizadorPage(){
             {s.optTransp!=='B'?(
               <div>
                 <div className="grid grid-cols-3 gap-3 mb-3">
-                  <Field label="Flete terrestre (USD/camión)"><input type="text" inputMode="decimal" value={s.ftCamion} onChange={e=>u('ftCamion',parseNum(e.target.value))} className={inp}/></Field>
-                  <Field label="N° camiones"><input type="text" inputMode="decimal" value={s.nCamiones} min={1} onChange={e=>u('nCamiones',parseInt2(e.target.value)||1)} className={inp}/></Field>
+                  <Field label="Flete terrestre (USD/camión)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftCamion} onChange={e=>u('ftCamion',parseNum(e.target.value))} className={inp}/></Field>
+                  <Field label="N° camiones"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.nCamiones} min={1} onChange={e=>u('nCamiones',parseInt2(e.target.value)||1)} className={inp}/></Field>
                   <Field label="Subtotal transporte"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(subTransp)}</div></Field>
                 </div>
                 {s.nCamiones>0&&s.ftCamion>0&&(
@@ -527,7 +548,7 @@ export default function CotizadorPage(){
 
           <SecCard letter="G" label="Fee Puerto NOA" sub2={fee}>
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Fee por contenedor (USD)"><input type="text" inputMode="decimal" value={s.feeCont} onChange={e=>u('feeCont',parseNum(e.target.value))} className={inp}/></Field>
+              <Field label="Fee por contenedor (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.feeCont} onChange={e=>u('feeCont',parseNum(e.target.value))} className={inp}/></Field>
               <Field label="N° contenedores"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right">{nc}</div></Field>
               <Field label="Fee total (USD)"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(fee)}</div></Field>
             </div>
@@ -554,8 +575,8 @@ export default function CotizadorPage(){
           <Card title="Liquidación ARCA — Aduana Jujuy">
             <div className="grid grid-cols-4 gap-3 mb-4">
               <Field label="Régimen de importación"><select value={s.regimen} onChange={e=>u('regimen',e.target.value as any)} className={sel}>{Object.entries(REG_L).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></Field>
-              <Field label="TC ARS/USD (oficial al despacho)"><input type="text" inputMode="decimal" value={s.tcTrib} onChange={e=>u('tcTrib',parseNum(e.target.value)||1000)} className={inp}/></Field>
-              <Field label="Derechos importación % (NCM)"><input type="text" inputMode="decimal" value={s.derPct} step={0.5} onChange={e=>u('derPct',parseNum(e.target.value))} className={inp}/></Field>
+              <Field label="TC ARS/USD (oficial al despacho)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.tcTrib} onChange={e=>u('tcTrib',parseNum(e.target.value)||1000)} className={inp}/></Field>
+              <Field label="Derechos importación % (NCM)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.derPct} step={0.5} onChange={e=>u('derPct',parseNum(e.target.value))} className={inp}/></Field>
               <Field label="NCM principal"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono">{s.productos.find(p=>p.ncm)?.ncm||'—'}</div></Field>
             </div>
             {tribCfg.length===0?(
