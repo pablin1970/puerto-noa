@@ -11,6 +11,7 @@ const NAV = [
   { href: null, label: 'MÓDULO 1', icon: null, section: true },
   { href: '/cotizador', label: 'Cotizador', icon: '✦' },
   { href: '/tarifas', label: 'Tarifas base', icon: '⚙' },
+  { href: '/tributos-config', label: 'Tributos ARCA', icon: '§', adminOnly: true },
   { href: null, label: 'MÓDULO 2', icon: null, section: true },
   { href: '/registro', label: 'Cotizaciones', icon: '☰' },
   { href: '/usuarios', label: 'Usuarios', icon: '◎' },
@@ -68,6 +69,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             )
             if (!item.href) return null
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
+            if ((item as any).adminOnly && user?.rol !== 'admin') return null
             return (
               <Link
                 key={item.href}
@@ -80,6 +82,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               >
                 <span className="text-sm w-4 text-center">{item.icon}</span>
                 {item.label}
+                {(item as any).adminOnly && <span className="ml-auto text-[8px] text-white/30 uppercase tracking-wide">Admin</span>}
               </Link>
             )
           })}
