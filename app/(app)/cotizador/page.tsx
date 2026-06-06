@@ -117,7 +117,7 @@ export default function CotizadorPage() {
       ...(totalTribUSD > 0 ? [{ etapa: 'tributos', tipo: 'tributos', concepto: `Tributos ARCA Régimen ${s.regimen}`, usd: totalTribUSD }] : []),
       ...(fee > 0 ? [{ etapa: 'fee', tipo: 'fee', concepto: 'Fee Puerto NOA', usd: fee }] : []),
     ]
-    await supabase.from('cotizaciones').insert({
+    await (supabase.from('cotizaciones') as any).insert({
       num, version: 1,
       cliente: s.cliente, cuit: s.cuit, email_cliente: s.email, telefono_cliente: s.telefono,
       origen: s.origen, puerto_chile: s.ptoChile, destino_noa: s.destinoNoa, incoterm: s.incoterm,
