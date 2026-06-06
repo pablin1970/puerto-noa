@@ -46,7 +46,7 @@ export default function UsuariosPage() {
       email_confirm: true,
     })
 
-    const { error: dbErr } = await supabase.from('usuarios').insert({
+    const { error: dbErr } = await (supabase.from('usuarios') as any).insert({
       auth_id: authData?.user?.id || null,
       nombre: form.nombre,
       email: form.email,
@@ -61,12 +61,12 @@ export default function UsuariosPage() {
   }
 
   async function toggleActivo(u: Usuario) {
-    await supabase.from('usuarios').update({ activo: !u.activo }).eq('id', u.id)
+    await (((supabase.from('usuarios') as any)) as any).update({ activo: !u.activo }).eq('id', u.id)
     loadData()
   }
 
   async function cambiarRol(u: Usuario, rol: Rol) {
-    await supabase.from('usuarios').update({ rol }).eq('id', u.id)
+    await (((supabase.from('usuarios') as any)) as any).update({ rol }).eq('id', u.id)
     loadData()
   }
 
