@@ -183,7 +183,7 @@ export default function TarifasPage() {
                       <div className="flex items-center gap-1">
                         <span className="text-[10px] text-gray-400">USD</span>
                         <input
-                          type="text" inputMode="decimal"
+                          type="text" inputMode="decimal" onFocus={(e)=>e.target.select()}
                           defaultValue={t.valor}
                           onBlur={e => updateTarifa(t, 'valor', parseFloat(e.target.value) || 0)}
                           className="w-24 px-2 py-1 border border-transparent rounded hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs text-right font-mono"
