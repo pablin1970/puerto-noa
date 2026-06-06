@@ -49,7 +49,7 @@ export default function RegistroPage() {
 
   const filtradas = cots.filter(c => {
     const b = buscar.toLowerCase()
-    const matchB = !b || c.cliente.toLowerCase().includes(b) || c.num.toLowerCase().includes(b) || (c.mercaderia || '').toLowerCase().includes(b)
+    const matchB = !b || c.cliente.toLowerCase().includes(b) || c.num.toLowerCase().includes(b) || c.notas.toLowerCase().includes(b)
     const matchE = !filtroEstado || c.estado === filtroEstado
     return matchB && matchE
   })
