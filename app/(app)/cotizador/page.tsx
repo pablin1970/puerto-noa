@@ -171,8 +171,34 @@ export default function CotizadorPage(){
   const supabase=createClient()
   const router=useRouter()
 
-  useEffect(()=>{supabase.from('tarifas').select('*').eq('activo',true).then(({data})=>{if(data)setTarifas(data as Tarifa[])})},[])
+  useEffect(()=>{
+    supabase.from('tarifas').select('*').eq('activo',true).then(({data})=>{
+      if(data) setTarifas(data as Tarifa[])
+    })
+  },[])
   useEffect(()=>{loadTrib()},[s.regimen])
+  // Actualizar filas A cuando cambian contenedores o tarifas
+  useEffect(()=>{
+    if(tarifas.length===0) return
+    setS(p=>{
+      const filasA = p.contenedores.map(c=>{
+        const tarifa = tarifas.find(t=>t.tipo==='maritima' && t.tipo_contenedor===c.tipo)
+        const precio = tarifa?.valor || 0
+        const naviera = tarifa?.naviera || ''
+        // Buscar si ya existe una fila para este tipo para no resetear precio editado
+        const existing = p.rowsA.find(r=>r.desc.includes(c.tipo))
+        return {
+          id: existing?.id || Math.random().toString(36).slice(2),
+          desc: `Flete marítimo ${c.tipo}${naviera?' ('+naviera+')':''}`,
+          cant: c.cantidad,
+          unitario: existing?.unitario ?? precio,
+          ivaChile: 'exento' as const,
+          tipoCalc: 'fijo' as const
+        }
+      })
+      return {...p, rowsA: filasA}
+    })
+  },[s.contenedores, tarifas])
 
   async function loadTrib(){
     const {data}=await supabase.from('tributos_config').select('*').eq('regimen',s.regimen).eq('aplica',true).order('orden')
@@ -253,36 +279,48 @@ export default function CotizadorPage(){
   async function guardar(){
     if(!s.cliente){alert('Ingresá el nombre del cliente.');return}
     setSaving(true)
-    const {data:cots}=await supabase.from('cotizaciones').select('num')
-    const num=nextCotNum(cots||[])
-    const {data:user}=await supabase.auth.getUser()
-    const {data:uDB}=await supabase.from('usuarios').select('id').eq('auth_id',user.user?.id).single()
-    const uid=(uDB as any)?.id||''
-    const presupuesto=[
-      ...(subA>0?[{etapa:'maritimo',tipo:'flete',concepto:'Flete marítimo y cargos naviero',usd:subA}]:[]),
-      ...(seg>0?[{etapa:'maritimo',tipo:'seguro',concepto:'Seguro mercadería',usd:seg}]:[]),
-      ...(subC>0?[{etapa:'chile',tipo:'servicios',concepto:'Gastos puerto Chile',usd:subC}]:[]),
-      ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidación (Opción ${s.optTransp})`,usd:subD}]:[]),
-      ...(subTransp>0?[{etapa:'terrestre',tipo:'flete',concepto:'Transporte terrestre',usd:subTransp}]:[]),
-      ...(subE>0?[{etapa:'argentina',tipo:'servicios',concepto:'Gastos Argentina',usd:subE}]:[]),
-      ...(totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Régimen ${s.regimen}`,usd:totalTribUSD}]:[]),
-      ...(fee>0?[{etapa:'fee',tipo:'fee',concepto:'Fee Puerto NOA',usd:fee}]:[]),
-    ]
-    await (supabase.from('cotizaciones') as any).insert({
-      num,version:1,
-      cliente:s.cliente,cuit:s.cuit,email_cliente:s.email,telefono_cliente:s.telefono,
-      origen:s.origen,puerto_chile:s.ptoChile,destino_noa:s.destinoNoa,incoterm:s.incoterm,
-      transito:s.transito,ref_naviero:s.refNaviero,notas:s.notas,
-      tipo_contenedores:s.contenedores,productos:s.productos,
-      total_fob:totalFOB,total_logistico:totalLog,
-      total_tributos_usd:totalTribUSD,total_tributos_ars:totalTribARS,
-      total_landed:totalLanded,precio_arg_equiv:s.precioArgEquiv||null,
-      regimen:s.regimen,tc_ars:s.tcArs,derechos_pct:s.derPct,
-      opcion_transporte:s.optTransp,validez:s.validez,estado:'borrador',
-      ejecutivo_id:uid,creado_por:uid,modificado_por:uid,presupuesto,
-    })
-    setSaving(false)
-    router.push('/registro')
+    try {
+      const {data:cots}=await supabase.from('cotizaciones').select('num')
+      const num=nextCotNum(cots||[])
+      const {data:user}=await supabase.auth.getUser()
+      if(!user.user){alert('Tu sesión expiró. Por favor ingresá nuevamente.');setSaving(false);return}
+      const {data:uDB}=await supabase.from('usuarios').select('id').eq('auth_id',user.user.id).single()
+      const uid=(uDB as any)?.id||''
+      const presupuesto=[
+        ...(subA>0?[{etapa:'maritimo',tipo:'flete',concepto:'Flete marítimo y cargos naviero',usd:subA}]:[]),
+        ...(seg>0?[{etapa:'maritimo',tipo:'seguro',concepto:'Seguro mercadería',usd:seg}]:[]),
+        ...(subC>0?[{etapa:'chile',tipo:'servicios',concepto:'Gastos puerto Chile',usd:subC}]:[]),
+        ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidación (Opción ${s.optTransp})`,usd:subD}]:[]),
+        ...(subTransp>0?[{etapa:'terrestre',tipo:'flete',concepto:'Transporte terrestre',usd:subTransp}]:[]),
+        ...(subE>0?[{etapa:'argentina',tipo:'servicios',concepto:'Gastos Argentina',usd:subE}]:[]),
+        ...(totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Régimen ${s.regimen}`,usd:totalTribUSD}]:[]),
+        ...(fee>0?[{etapa:'fee',tipo:'fee',concepto:'Fee Puerto NOA',usd:fee}]:[]),
+      ]
+      const {error}=await (supabase.from('cotizaciones') as any).insert({
+        num,version:1,
+        cliente:s.cliente,cuit:s.cuit,email_cliente:s.email,telefono_cliente:s.telefono,
+        origen:s.origen,puerto_chile:s.ptoChile,destino_noa:s.destinoNoa,incoterm:s.incoterm,
+        transito:s.transito,ref_naviero:s.refNaviero,notas:s.notas,
+        tipo_contenedores:s.contenedores,productos:s.productos,
+        total_fob:totalFOB,total_logistico:totalLog,
+        total_tributos_usd:totalTribUSD,total_tributos_ars:totalTribARS,
+        total_landed:totalLanded,precio_arg_equiv:s.precioArgEquiv||null,
+        regimen:s.regimen,tc_ars:s.tcArs,derechos_pct:s.derPct,
+        opcion_transporte:s.optTransp,validez:s.validez,estado:'borrador',
+        ejecutivo_id:uid,creado_por:uid,modificado_por:uid,presupuesto,
+      })
+      if(error){
+        console.error('Error guardando:', error)
+        alert('Error al guardar: '+error.message)
+        setSaving(false)
+        return
+      }
+      router.push('/registro')
+    } catch(e:any){
+      console.error('Error inesperado:', e)
+      alert('Error inesperado: '+e.message)
+      setSaving(false)
+    }
   }
 
   const TABS=[{key:'embarque',label:'Embarque'},{key:'logistica',label:'Logística'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as const
