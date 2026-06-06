@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import Image from 'next/image'
 import type { Usuario } from '@/types'
 
 const NAV = [
@@ -45,16 +46,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden">
       {/* SIDEBAR */}
-      <aside className="w-52 flex-shrink-0 flex flex-col" style={{ background: '#085041' }}>
+      <aside className="w-52 flex-shrink-0 flex flex-col" style={{ background: '#052698' }}>
         {/* Logo */}
-        <div className="px-4 py-4 border-b border-white/10 flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-[#1D9E75] rounded-lg flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-            PN
-          </div>
-          <div>
-            <div className="text-white font-semibold text-sm leading-tight">Puerto NOA</div>
-            <div className="text-white/50 text-[10px]">Sistema logístico</div>
-          </div>
+        <div className="px-4 py-4 border-b border-white/10 flex items-center justify-center">
+          <Image
+            src="/logo-white.png"
+            alt="Puertonoa"
+            width={140}
+            height={40}
+            style={{ objectFit: 'contain' }}
+          />
         </div>
 
         {/* Nav */}
@@ -73,8 +74,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 href={item.href}
                 className={`flex items-center gap-2 mx-2 px-3 py-2 rounded-lg text-xs font-medium transition-all mb-0.5 ${
                   active
-                    ? 'bg-[#1D9E75] text-white'
-                    : 'text-white/60 hover:text-white hover:bg-white/8'
+                    ? 'bg-[#1168F8] text-white'
+                    : 'text-white/60 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <span className="text-sm w-4 text-center">{item.icon}</span>
@@ -88,7 +89,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="px-3 py-3 border-t border-white/10">
           {user && (
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-full bg-[#1D9E75] flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+              <div className="w-7 h-7 rounded-full bg-[#1168F8] flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
                 {user.iniciales}
               </div>
               <div className="flex-1 min-w-0">
