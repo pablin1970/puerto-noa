@@ -304,8 +304,8 @@ export default function CotizadorPage(){
   const tributos=calcTrib(tribCfg,cifARS,s.derPct)
   const totalTribARS=tributos.reduce((t,r)=>t+r.imp,0)
   const totalTribUSD=totalTribARS/s.tcTrib
-  const totalLog=totalFOB+subA+seg+subC+subD+subTransp+subE+subGastosArg+fee
-  const totalLanded=totalLog+totalTribUSD
+  const totalLog=subA+seg+subC+subD+subTransp+subE+subGastosArg+fee
+  const totalLanded=totalFOB+totalLog+totalTribUSD
   const cap=calcCapacidad(s.contenedores,s.productos)
 
   function aplicarTarifas(){
