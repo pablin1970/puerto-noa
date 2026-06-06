@@ -284,7 +284,7 @@ export default function CotizadorPage(){
     } else if(g.tipoCalc === 'fijo_usd') {
       usd = g.valor
     } else {
-      usd = g.valor / (tcRef || 1)
+      usd = g.valor / (tcTrib || 1)
     }
     return usd
   }
