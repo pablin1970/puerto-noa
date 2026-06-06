@@ -10,6 +10,17 @@ type Tab = 'embarque' | 'logistica' | 'tributos' | 'resumen'
 type OptTransp = 'A1' | 'A2' | 'B'
 
 interface ItemLog { id: string; desc: string; cant: number; unitario: number; ivaChile?: 'exento'|'gravado'; tipoCalc?: 'fijo'|'m3' }
+interface GastoArg {
+  id: string
+  desc: string
+  tipoCalc: 'pct_cif' | 'fijo_usd' | 'fijo_ars'
+  moneda: 'USD' | 'ARS'
+  valor: number
+  pisoUsd: number
+  techoUsd: number
+  usd: number  // calculado
+  ars: number  // calculado
+}
 interface TribCfg { id: string; codigo: string; concepto: string; tipo: 'pct'|'fijo'; valor: number; aplica: boolean; orden: number }
 interface CotState {
   cliente: string; cuit: string; email: string; telefono: string
@@ -24,7 +35,7 @@ interface CotState {
   almModoVol: 'auto'|'manual'; almVolM3: number; almCostoDia: number; almDias: number
   cargaModo: 'fijo'|'m3'; cargaValor: number
   ftCamion: number; nCamiones: number; ftIda: number; ftDev: number; ftRt: number
-  rowsE: ItemLog[]; feeCont: number
+  rowsE: ItemLog[]; gastosArg: GastoArg[]; feeCont: number
   tcArs: number; tcClp: number; regimen: 'A'|'B'|'C'|'D'; tcTrib: number; derPct: number
 }
 
@@ -39,7 +50,7 @@ const INIT: CotState = {
   almModoVol:'auto',almVolM3:0,almCostoDia:0,almDias:0,
   cargaModo:'fijo',cargaValor:0,
   ftCamion:0,nCamiones:1,ftIda:0,ftDev:0,ftRt:0,
-  rowsE:[],feeCont:0,
+  rowsE:[],gastosArg:[],feeCont:0,
   tcArs:1000,tcClp:950,regimen:'A',tcTrib:1000,derPct:18,
 }
 
@@ -173,7 +184,27 @@ export default function CotizadorPage(){
 
   useEffect(()=>{
     supabase.from('tarifas').select('*').eq('activo',true).then(({data})=>{
-      if(data) setTarifas(data as Tarifa[])
+      if(data) {
+        setTarifas(data as Tarifa[])
+        // Pre-cargar gastos Argentina
+        const gastosArgTarifas = (data as any[]).filter((t:any) => t.tipo === 'argentina')
+        if(gastosArgTarifas.length > 0) {
+          setS(p => ({
+            ...p,
+            gastosArg: gastosArgTarifas.map((t:any) => ({
+              id: Math.random().toString(36).slice(2),
+              desc: t.ruta,
+              tipoCalc: t.tipo_calculo || 'fijo_usd',
+              moneda: t.moneda || 'USD',
+              valor: t.valor || 0,
+              pisoUsd: t.piso_usd || 0,
+              techoUsd: t.techo_usd || 0,
+              usd: 0,
+              ars: 0,
+            }))
+          }))
+        }
+      }
     })
   },[])
   useEffect(()=>{loadTrib()},[s.regimen])
@@ -239,6 +270,22 @@ export default function CotizadorPage(){
     ?(()=>{const ida=s.ftIda*nc,dev=s.ftDev*nc,rt=s.ftRt*nc;return rt>0&&rt<(ida+dev)?rt:ida+dev})()
     :s.ftCamion*s.nCamiones
   const subE=s.rowsE.reduce((t,r)=>t+r.cant*r.unitario,0)
+
+  // Calcular gastos Argentina con lógica piso/techo
+  function calcGastoArg(g: GastoArg, cifUsd: number, tcArs: number): number {
+    let usd = 0
+    if(g.tipoCalc === 'pct_cif') {
+      usd = cifUsd * g.valor / 100
+      if(g.pisoUsd > 0 && usd < g.pisoUsd) usd = g.pisoUsd
+      if(g.techoUsd > 0 && usd > g.techoUsd) usd = g.techoUsd
+    } else if(g.tipoCalc === 'fijo_usd') {
+      usd = g.valor
+    } else { // fijo_ars
+      usd = g.valor / tcArs
+    }
+    return usd
+  }
+  const subGastosArg = s.gastosArg.reduce((t, g) => t + calcGastoArg(g, cif, s.tcArs), 0)
   const fee=s.feeCont*nc
   const cif=totalFOB+subA+seg
   const cifARS=cif*s.tcTrib
@@ -257,7 +304,7 @@ export default function CotizadorPage(){
   const tributos=calcTrib(tribCfg,cifARS,s.derPct)
   const totalTribARS=tributos.reduce((t,r)=>t+r.imp,0)
   const totalTribUSD=totalTribARS/s.tcTrib
-  const totalLog=totalFOB+subA+seg+subC+subD+subTransp+subE+fee
+  const totalLog=totalFOB+subA+seg+subC+subD+subTransp+subE+subGastosArg+fee
   const totalLanded=totalLog+totalTribUSD
   const cap=calcCapacidad(s.contenedores,s.productos)
 
@@ -307,6 +354,7 @@ export default function CotizadorPage(){
         ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidación (Opción ${s.optTransp})`,usd:subD}]:[]),
         ...(subTransp>0?[{etapa:'terrestre',tipo:'flete',concepto:'Transporte terrestre',usd:subTransp}]:[]),
         ...(subE>0?[{etapa:'argentina',tipo:'servicios',concepto:'Gastos Argentina',usd:subE}]:[]),
+        ...(subGastosArg>0?[{etapa:'argentina',tipo:'gastos_arg',concepto:'Gastos Argentina (despachante y otros)',usd:subGastosArg}]:[]),
         ...(totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Régimen ${s.regimen}`,usd:totalTribUSD}]:[]),
         ...(fee>0?[{etapa:'fee',tipo:'fee',concepto:'Fee Puerto NOA',usd:fee}]:[]),
       ]
@@ -594,9 +642,69 @@ export default function CotizadorPage(){
             )}
           </SecCard>
 
-          <SecCard letter="F" label="Gastos en Argentina" sub="Despachante, almacenaje, traslado" sub2={subE}>
-            <LogRows rows={s.rowsE} onChange={r=>u('rowsE',r)}/>
-          </SecCard>
+          {/* F: Gastos Argentina */}
+          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1168F8] text-white text-[10px] font-bold">F</span>
+              <span className="font-medium text-sm text-gray-900">Gastos en Argentina</span>
+              <span className="text-[10px] text-gray-400">Despachante, desconsolidación, almacenaje, traslado</span>
+            </div>
+            <div className="px-5 py-4">
+              {/* Gastos con lógica especial (% CIF, piso, techo) */}
+              {s.gastosArg.length > 0 && (
+                <div className="mb-4">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Gastos pre-configurados</div>
+                  <div className="grid gap-2 mb-1 text-[10px] text-gray-400 font-medium uppercase tracking-wide" style={{display:'grid',gridTemplateColumns:'1.5fr 110px 80px 80px 80px 80px 80px',gap:'6px'}}>
+                    <div>Concepto</div><div>Tipo</div><div>Valor</div><div>Piso USD</div><div>Techo USD</div><div className="text-right">USD</div><div className="text-right">ARS</div>
+                  </div>
+                  {s.gastosArg.map((g,i)=>{
+                    const usd = calcGastoArg(g, cif, s.tcArs)
+                    const arsEquiv = usd * s.tcArs
+                    return (
+                      <div key={g.id} style={{display:'grid',gridTemplateColumns:'1.5fr 110px 80px 80px 80px 80px 80px',gap:'6px',alignItems:'center'}} className="mb-2">
+                        <input type="text" value={g.desc} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],desc:e.target.value};u('gastosArg',n)}} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]"/>
+                        <select value={g.tipoCalc} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],tipoCalc:e.target.value as any};u('gastosArg',n)}} className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+                          <option value="pct_cif">% sobre CIF</option>
+                          <option value="fijo_usd">Fijo USD</option>
+                          <option value="fijo_ars">Fijo ARS</option>
+                        </select>
+                        <input type="text" inputMode="decimal" value={g.valor} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],valor:parseNum(e.target.value)};u('gastosArg',n)}} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono"/>
+                        {g.tipoCalc==='pct_cif'
+                          ?<input type="text" inputMode="decimal" value={g.pisoUsd} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],pisoUsd:parseNum(e.target.value)};u('gastosArg',n)}} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono"/>
+                          :<div className="text-center text-gray-300 text-[10px]">—</div>
+                        }
+                        {g.tipoCalc==='pct_cif'
+                          ?<input type="text" inputMode="decimal" value={g.techoUsd} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],techoUsd:parseNum(e.target.value)};u('gastosArg',n)}} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono" placeholder="0=sin techo"/>
+                          :<div className="text-center text-gray-300 text-[10px]">—</div>
+                        }
+                        <div className="text-right font-mono text-xs font-semibold text-[#052698]">USD {fmt(usd)}</div>
+                        <div className="text-right font-mono text-[10px] text-gray-500">ARS {Math.round(arsEquiv).toLocaleString('es-AR')}</div>
+                      </div>
+                    )
+                  })}
+                  <div className="flex gap-2 mt-1">
+                    <button onClick={()=>u('gastosArg',[...s.gastosArg,{id:Math.random().toString(36).slice(2),desc:'',tipoCalc:'fijo_usd',moneda:'USD',valor:0,pisoUsd:0,techoUsd:0,usd:0,ars:0}])} className="text-xs text-[#1168F8] hover:underline">+ Agregar</button>
+                    {s.gastosArg.length>0&&<button onClick={()=>u('gastosArg',s.gastosArg.slice(0,-1))} className="text-xs text-red-400 hover:underline">− Quitar último</button>}
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between text-xs">
+                    <span className="text-gray-500">Subtotal gastos Argentina:</span>
+                    <div className="text-right">
+                      <span className="font-mono font-semibold text-[#052698]">USD {fmt(subGastosArg)}</span>
+                      <span className="text-gray-400 ml-2 font-mono text-[10px]">ARS {Math.round(subGastosArg*s.tcArs).toLocaleString('es-AR')}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Otros gastos adicionales */}
+              {s.rowsE.length > 0 && <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2 mt-3">Otros gastos adicionales</div>}
+              <LogRows rows={s.rowsE} onChange={r=>u('rowsE',r)}/>
+            </div>
+            <div className="flex justify-end items-center gap-3 px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
+              Subtotal sección F: <strong className="font-mono text-gray-800">USD {fmt(subE+subGastosArg)}</strong>
+              <span className="text-gray-300">·</span>
+              <span className="font-mono text-[10px] text-gray-400">ARS {Math.round((subE+subGastosArg)*s.tcArs).toLocaleString('es-AR')}</span>
+            </div>
+          </div>
 
           <SecCard letter="G" label="Fee Puerto NOA" sub2={fee}>
             <div className="grid grid-cols-3 gap-3">
@@ -696,7 +804,8 @@ export default function CotizadorPage(){
                   ...(s.optTransp==='A2'&&subAlm>0?[{sec:'D — Almacenaje',concepto:`${fmt(volAlm,2)} m³ × ${s.almDias} días`,v:subAlm}]:[]),
                   ...(subCarga>0?[{sec:'D — Carga al camión',concepto:s.cargaModo==='m3'?`${fmt(totalM3,2)} m³ × USD ${fmt(s.cargaValor)}`:'Importe fijo',v:subCarga}]:[]),
                   {sec:'E — Transporte terrestre',concepto:s.optTransp!=='B'?`${s.nCamiones} camión(es) × USD ${fmt(s.ftCamion)}`:`${PUERTOS_L[s.ptoChile]} → ${s.destinoNoa}`,v:subTransp},
-                  ...(subE>0?[{sec:'F — Gastos Argentina',concepto:'Despachante y otros',v:subE}]:[]),
+                  ...(subGastosArg>0?[{sec:'F — Gastos Argentina',concepto:`Despachante y honorarios · ARS ${Math.round(subGastosArg*s.tcArs).toLocaleString('es-AR')}`,v:subGastosArg}]:[]),
+                  ...(subE>0?[{sec:'F — Gastos Argentina',concepto:'Otros gastos',v:subE}]:[]),
                   ...(fee>0?[{sec:'G — Fee Puerto NOA',concepto:`${nc} cont. × USD ${s.feeCont}`,v:fee}]:[]),
                   {sec:'Tributos ARCA',concepto:`Régimen ${s.regimen} · Base CIF Jama`,v:totalTribUSD},
                 ].filter(r=>r.v>0).map((r,i)=>(
