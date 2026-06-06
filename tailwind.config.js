@@ -8,16 +8,16 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['DM Sans', 'sans-serif'],
+        sans: ['Inter', 'sans-serif'],
         mono: ['DM Mono', 'monospace'],
       },
       colors: {
-        green: {
-          DEFAULT: '#1D9E75',
-          dark: '#085041',
-          mid: '#0F6E56',
-          light: '#E1F5EE',
-          border: '#5DCAA5',
+        brand: {
+          DEFAULT: '#1168F8',
+          dark: '#052698',
+          mid: '#1a5fd4',
+          light: '#EBF2FF',
+          border: '#93B8FC',
         },
       },
     },
