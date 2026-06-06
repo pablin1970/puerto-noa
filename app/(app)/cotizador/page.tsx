@@ -823,16 +823,97 @@ export default function CotizadorPage(){
             </table>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white border border-gray-100 rounded-xl p-4"><div className="text-[10px] text-gray-400 mb-1">Total logístico (USD)</div><div className="text-xl font-semibold">USD {fmt(totalLog,0)}</div></div>
-            <div className="bg-white border border-gray-100 rounded-xl p-4"><div className="text-[10px] text-gray-400 mb-1">Tributos ARCA (USD ref.)</div><div className="text-xl font-semibold">USD {fmt(totalTribUSD,0)}</div></div>
-            <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-xl p-4"><div className="text-[10px] text-[#052698] mb-1">TOTAL LANDED</div><div className="text-2xl font-semibold text-[#1168F8]">USD {fmt(totalLanded,0)}</div><div className="text-[10px] text-[#1168F8] mt-1">USD {fmt(totalLanded/nc,0)} por contenedor</div></div>
+          {/* Resumen de totales reorganizado */}
+          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Composición del costo total</div>
+            <div className="p-4 space-y-2">
+              {/* Producto */}
+              <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg">
+                <div>
+                  <div className="text-xs font-medium text-gray-700">Valor mercadería China ({s.incoterm})</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">{s.productos.filter(p=>p.subtotal>0).length} producto(s) · {s.contenedores.map(c=>`${c.cantidad}× ${c.tipo}`).join(', ')}</div>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono font-semibold text-gray-800">USD {fmt(totalFOB,0)}</div>
+                  <div className="text-[10px] text-gray-400 font-mono">{fmt(totalFOB/totalLanded*100,1)}% del total</div>
+                </div>
+              </div>
+              {/* Logística */}
+              <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg">
+                <div>
+                  <div className="text-xs font-medium text-gray-700">Costos logísticos</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">Flete · Seguro · Puerto · Transporte · Gastos Argentina · Fee</div>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono font-semibold text-gray-800">USD {fmt(totalLog,0)}</div>
+                  <div className="text-[10px] text-gray-400 font-mono">{fmt(totalLog/totalLanded*100,1)}% del total</div>
+                </div>
+              </div>
+              {/* Tributos */}
+              <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg">
+                <div>
+                  <div className="text-xs font-medium text-gray-700">Tributos ARCA — Aduana Argentina</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">Régimen {s.regimen} · {REG_L[s.regimen]} · Base CIF Jama</div>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono font-semibold text-gray-800">USD {fmt(totalTribUSD,0)}</div>
+                  <div className="text-[10px] text-gray-400 font-mono">{fmt(totalTribUSD/totalLanded*100,1)}% del total</div>
+                </div>
+              </div>
+              {/* Total */}
+              <div className="flex items-center justify-between px-3 py-3 bg-[#052698] rounded-lg mt-1">
+                <div>
+                  <div className="text-xs font-semibold text-white">TOTAL LANDED EN DESTINO</div>
+                  <div className="text-[10px] text-blue-200 mt-0.5">USD {fmt(totalLanded/nc,0)} por contenedor · {nc} contenedor(es)</div>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono font-bold text-white text-xl">USD {fmt(totalLanded,0)}</div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="bg-white border border-gray-100 rounded-xl p-4">
-            <div className="text-[10px] font-medium text-gray-500 mb-2">Tributos a pagar en Aduana Argentina (ARS)</div>
-            <div className="text-2xl font-semibold">ARS {Math.round(totalTribARS).toLocaleString('es-AR')}</div>
-            <div className="text-[10px] text-gray-400 mt-1">Régimen {s.regimen} — {REG_L[s.regimen]} · TC ref. ARS {fmt(s.tcTrib,0)} · Se abona al TC oficial al momento del despacho</div>
+          {/* Tributos y gastos en ARS con TC */}
+          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Pagos en Argentina (ARS)</div>
+            <div className="divide-y divide-gray-50">
+              {/* Tributos aduana */}
+              <div className="px-5 py-3.5 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-medium text-gray-700">Tributos Aduana Argentina</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">
+                    Régimen {s.regimen} · TC ref. <span className="font-mono font-semibold text-gray-600">ARS {fmt(s.tcTrib,0)}</span> por USD · Se abona al TC oficial del día del despacho
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono font-semibold text-gray-800 text-base">ARS {Math.round(totalTribARS).toLocaleString('es-AR')}</div>
+                  <div className="text-[10px] text-gray-400 font-mono">≈ USD {fmt(totalTribUSD,0)}</div>
+                </div>
+              </div>
+              {/* Gastos Argentina */}
+              {(subE+subGastosArg)>0&&(
+                <div className="px-5 py-3.5 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-medium text-gray-700">Gastos Argentina (despachante y otros)</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">
+                      TC ref. <span className="font-mono font-semibold text-gray-600">ARS {fmt(s.tcArs,0)}</span> por USD · Cotización del día del pago efectivo
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono font-semibold text-gray-800 text-base">ARS {Math.round((subE+subGastosArg)*s.tcArs).toLocaleString('es-AR')}</div>
+                    <div className="text-[10px] text-gray-400 font-mono">≈ USD {fmt(subE+subGastosArg,0)}</div>
+                  </div>
+                </div>
+              )}
+              {/* Total ARS */}
+              <div className="px-5 py-3 bg-gray-50 flex items-center justify-between">
+                <div className="text-xs font-semibold text-gray-700">Total estimado en pesos</div>
+                <div className="text-right">
+                  <div className="font-mono font-bold text-gray-900 text-base">ARS {Math.round(totalTribARS+(subE+subGastosArg)*s.tcArs).toLocaleString('es-AR')}</div>
+                  <div className="text-[10px] text-gray-400">Tributos + Gastos Argentina</div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-between">
