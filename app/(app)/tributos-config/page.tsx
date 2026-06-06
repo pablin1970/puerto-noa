@@ -241,7 +241,7 @@ export default function TributosConfigPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 justify-end">
                         <input
-                          type="number"
+                          type="text" inputMode="decimal"
                           defaultValue={row.valor}
                           step={row.tipo === 'pct' ? 0.5 : 1}
                           onBlur={e => {
