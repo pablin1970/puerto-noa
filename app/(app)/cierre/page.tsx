@@ -28,7 +28,7 @@ export default function CierrePage() {
 
   async function loadOps() {
     const { data } = await supabase.from('operaciones').select('*, cotizacion:cotizaciones(*)').order('created_at', { ascending: false })
-    if (data?.length) { setOps(data as any); setSelId(data[0].id) }
+    if (data?.length) { setOps(data as any); setSelId((data[0] as any).id) }
     setLoading(false)
   }
 
