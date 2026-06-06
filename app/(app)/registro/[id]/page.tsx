@@ -29,10 +29,10 @@ export default function CotizacionDetailPage() {
   }, [id])
 
   async function cambiarEstado(estado: EstadoCotizacion) {
-    await supabase.from('cotizaciones').update({ estado, updated_at: new Date().toISOString() }).eq('id', id)
+    await (((supabase.from('cotizaciones') as any)) as any).update({ estado, updated_at: new Date().toISOString() }).eq('id', id)
     if (estado === 'aceptada') {
       const { data: opExist } = await supabase.from('operaciones').select('id').eq('cotizacion_id', id).single()
-      if (!opExist) await supabase.from('operaciones').insert({ cotizacion_id: id })
+      if (!opExist) await (supabase.from('operaciones') as any).insert({ cotizacion_id: id })
     }
     setCot(c => c ? { ...c, estado } : c)
   }
