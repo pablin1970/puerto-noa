@@ -127,7 +127,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
             <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Cotización</div>
             <div className="text-2xl font-bold font-mono text-[#052698]">{cot.num}</div>
             <div className="text-xs text-gray-500 mt-1">{fechaEmision}</div>
-            {cot.validez && <div className="text-[10px] text-amber-600 mt-1">Válida por {cot.validez}</div>}
+            {cot.validez && <div className="text-[10px] text-amber-600 mt-1 font-medium">Validez: {cot.validez}</div>}
             <div className={`inline-flex px-3 py-1 rounded-full text-[10px] font-semibold mt-2 ${ESTADO_CLS[cot.estado]}`}>{ESTADOS_L[cot.estado]}</div>
           </div>
         </div>
@@ -309,8 +309,8 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
               <Image src="/logo.png" alt="Puerto NOA SpA" width={100} height={30} style={{ objectFit: 'contain', opacity: 0.7 }} />
             </div>
             <div className="text-center text-[10px] text-gray-400">
-              <div>Esta cotización fue generada el {fechaEmision} y es válida por {cot.validez || '30 días'}.</div>
-              <div>Los valores están expresados en USD. Los pagos en ARS se realizan al TC BNA del día de cada pago.</div>
+              <div>Esta cotización fue generada el {fechaEmision}{cot.validez ? ` · Válida por ${cot.validez}` : ''}.</div>
+              <div>Los valores están expresados en USD. Los pagos en ARS se realizan al TC BNA del día efectivo de cada pago.</div>
             </div>
             <div className="text-right text-[10px] text-gray-400">
               <div className="font-mono font-medium text-gray-600">{cot.num}</div>
