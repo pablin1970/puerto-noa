@@ -1,12 +1,8 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-
-// Usar anon key — las políticas RLS permiten insertar a usuarios autenticados
-// El cron job usa la anon key con bypass via secret
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 const UMBRAL_CAMBIO = 0.001
 
@@ -32,9 +28,14 @@ async function fetchTC(moneda: string): Promise<{ valor: number; fuente: string 
 }
 
 export async function GET(request: Request) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
   const { searchParams } = new URL(request.url)
   const secret = searchParams.get('secret')
-  if (secret !== process.env.CRON_SECRET && secret !== 'puertonoa_cron_2026') {
+  if (secret !== 'puertonoa_cron_2026') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
