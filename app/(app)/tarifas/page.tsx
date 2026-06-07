@@ -89,7 +89,7 @@ export default function TarifasPage() {
   }
 
   const selCot = cots.find(c => c.id === selId)
-  const proveedores = [...new Set(cots.map(c => c.proveedor))].sort()
+  const proveedores = Array.from(new Set(cots.map(c => c.proveedor))).sort()
 
   const filtradas = cots.filter(c => {
     const matchP = !filtroProveedor || c.proveedor === filtroProveedor
@@ -597,8 +597,8 @@ function ComparativaView({ cots, onPreview }: any) {
     })
   })
 
-  const rutas = [...new Set(allItems.map(i => `${i.ruta_origen}→${i.ruta_destino}`).filter(Boolean))].sort()
-  const equipos = [...new Set(allItems.map(i => i.tipo_equipo).filter(Boolean))].sort()
+  const rutas = Array.from(new Set(allItems.map(i => `${i.ruta_origen}→${i.ruta_destino}`).filter(Boolean))).sort()
+  const equipos = Array.from(new Set(allItems.map(i => i.tipo_equipo).filter(Boolean))).sort()
 
   const filtrados = allItems.filter(i => {
     const matchR = !ruta || `${i.ruta_origen}→${i.ruta_destino}` === ruta
