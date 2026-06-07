@@ -134,10 +134,13 @@ export default function TributosConfigPage() {
   const totalAplicados = rows.filter(r => r.aplica).length
 
   return (
-    <div className="p-6">
-      <div className="mb-5">
-        <h1 className="text-lg font-semibold text-gray-900">Configuración de tributos ARCA</h1>
-        <p className="text-xs text-gray-400 mt-0.5">Solo Admin — Definición de tributos por régimen de importación</p>
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Tributos ARCA</h1>
+          <p className="text-xs text-gray-400 mt-0.5">Solo Admin — Configuración de tributos por régimen de importación</p>
+        </div>
+        <span className="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-[10px] font-bold">🔐 Admin</span>
       </div>
 
       {/* Tabs regímenes */}
@@ -146,19 +149,19 @@ export default function TributosConfigPage() {
           <button
             key={r.key}
             onClick={() => setRegimen(r.key)}
-            className={`px-4 py-2 rounded-lg text-xs font-medium transition-colors text-left ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-semibold transition-all text-left shadow-sm ${
               regimen === r.key
-                ? 'bg-[#1168F8] text-white'
+                ? 'bg-[#1168F8] text-white shadow-md'
                 : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
             }`}
           >
-            <div className="font-semibold">{r.label}</div>
+            <div className="font-bold">{r.label}</div>
             <div className={`text-[10px] mt-0.5 ${regimen === r.key ? 'text-blue-100' : 'text-gray-400'}`}>{r.sub}</div>
           </button>
         ))}
       </div>
 
-      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
         {/* Header tabla */}
         <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
           <div>
