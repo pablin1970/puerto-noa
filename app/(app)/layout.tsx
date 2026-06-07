@@ -46,12 +46,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [])
 
   async function loadTC() {
-    const { data } = await supabase.from('tipos_cambio').select('moneda, valor, fecha').order('fecha', { ascending: false }).order('created_at', { ascending: false })
+    const { data } = await supabase
+      .from('tipos_cambio_eventos')
+      .select('ars, clp, cny, fecha')
+      .order('created_at', { ascending: false })
+      .limit(20)
     if (data && data.length > 0) {
       const latest: TCWidget = { ARS: null, CLP: null, CNY: null, fecha: '' }
-      for (const moneda of ['ARS', 'CLP', 'CNY'] as const) {
-        const found = (data as any[]).find(t => t.moneda === moneda)
-        if (found) { latest[moneda] = found.valor; if (!latest.fecha) latest.fecha = found.fecha }
+      for (const ev of data as any[]) {
+        if (latest.ARS === null && ev.ars !== null) { latest.ARS = ev.ars; if (!latest.fecha) latest.fecha = ev.fecha }
+        if (latest.CLP === null && ev.clp !== null) latest.CLP = ev.clp
+        if (latest.CNY === null && ev.cny !== null) latest.CNY = ev.cny
+        if (latest.ARS !== null && latest.CLP !== null && latest.CNY !== null) break
       }
       setTc(latest)
     }
