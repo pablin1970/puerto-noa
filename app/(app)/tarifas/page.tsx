@@ -19,6 +19,13 @@ interface TarifaRow {
   moneda: string
   modificado_por: string
   updated_at: string
+  cotizacion_url?: string
+  cotizacion_nombre?: string
+  cotizacion_fecha?: string
+  operacion_ref?: string
+  subido_por?: string
+  subido_at?: string
+  cotizacion_ref_id?: string
 }
 
 interface AuditEntry {
@@ -36,6 +43,12 @@ export default function TarifasPage() {
   const [currentUser, setCurrentUser] = useState<{ id: string; nombre: string } | null>(null)
   const [histModal, setHistModal] = useState<{ id: string; ruta: string } | null>(null)
   const [histData, setHistData] = useState<AuditEntry[]>([])
+  const [cotModal, setCotModal] = useState<{ tarifa: TarifaRow; sugerencia?: TarifaRow } | null>(null)
+  const [cotFile, setCotFile] = useState<File | null>(null)
+  const [cotFecha, setCotFecha] = useState('')
+  const [cotOpRef, setCotOpRef] = useState('')
+  const [previewModal, setPreviewModal] = useState<{ url: string; nombre: string } | null>(null)
+  const [uploading, setUploading] = useState(false)
   const supabase = createClient()
 
   useEffect(() => { loadUser(); loadData() }, [])
@@ -51,6 +64,47 @@ export default function TarifasPage() {
     const { data } = await supabase.from('tarifas').select('*').order('tipo').order('ruta')
     if (data) setTarifas(data as TarifaRow[])
     setLoading(false)
+  }
+
+  async function uploadCotizacion(tarifaId: string, file: File, fecha: string, opRef: string) {
+    if (!currentUser) return
+    setUploading(true)
+    const ext = file.name.split('.').pop()
+    const path = `tarifas/${tarifaId}.${ext}`
+    await supabase.storage.from('comprobantes').upload(path, file, { upsert: true })
+    const { data } = supabase.storage.from('comprobantes').getPublicUrl(path)
+    if (data?.publicUrl) {
+      await (supabase.from('tarifas') as any).update({
+        cotizacion_url: data.publicUrl,
+        cotizacion_nombre: file.name,
+        cotizacion_fecha: fecha || null,
+        operacion_ref: opRef || null,
+        subido_por: currentUser.nombre,
+        subido_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', tarifaId)
+      // audit log
+      await (supabase.from('audit_log') as any).insert({
+        tabla: 'tarifas', registro_id: tarifaId, campo: 'cotizacion',
+        valor_anterior: '', valor_nuevo: file.name,
+        usuario_id: currentUser.id, usuario_nombre: currentUser.nombre,
+      })
+    }
+    setUploading(false)
+    setCotModal(null)
+    setCotFile(null)
+    setCotFecha('')
+    setCotOpRef('')
+    loadData()
+  }
+
+  function getSugerencia(t: TarifaRow): TarifaRow | undefined {
+    // Find most recent cotizacion for same service (tipo + ruta + tipo_contenedor)
+    return tarifas
+      .filter(x => x.id !== t.id && x.tipo === t.tipo && x.cotizacion_url &&
+        x.ruta.toLowerCase().includes(t.ruta.toLowerCase().split(' ')[0]) &&
+        x.tipo_contenedor === t.tipo_contenedor)
+      .sort((a, b) => new Date(b.subido_at || 0).getTime() - new Date(a.subido_at || 0).getTime())[0]
   }
 
   async function addTarifa(tipo: string, tipoCalculo = 'fijo_usd') {
@@ -138,6 +192,25 @@ export default function TarifasPage() {
               <td className="px-4 py-2.5"><InlineInput value={t.tipo_contenedor} onSave={v => updateTarifa(t, 'tipo_contenedor', v)} placeholder="ej. 40HC" /></td>
               <td className="px-4 py-2.5"><div className="flex items-center gap-1"><span className="text-[10px] text-gray-400">USD</span><InlineNum value={t.valor} onSave={v => updateTarifa(t, 'valor', v)} /></div></td>
               <td className="px-4 py-2.5"><InlineInput value={t.naviera} onSave={v => updateTarifa(t, 'naviera', v)} placeholder="Naviera" /></td>
+              <td className="px-4 py-2.5">
+                {t.cotizacion_url ? (
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => setPreviewModal({ url: t.cotizacion_url!, nombre: t.cotizacion_nombre || 'cotizacion' })}
+                      className="flex items-center gap-1 px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded text-[10px] hover:bg-[#93B8FC] transition-colors">
+                      📄 Ver
+                    </button>
+                    <div className="text-[9px] text-gray-400">
+                      {t.cotizacion_fecha && <div>{t.cotizacion_fecha}</div>}
+                      {t.operacion_ref && <div className="text-[#1168F8]">{t.operacion_ref}</div>}
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => { const sug = getSugerencia(t); setCotModal({ tarifa: t, sugerencia: sug }); setCotFecha(''); setCotOpRef(''); setCotFile(null) }}
+                    className="flex items-center gap-1 px-2 py-1 border border-dashed border-gray-200 rounded text-[10px] text-gray-400 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer transition-colors">
+                    📎 Adjuntar
+                  </button>
+                )}
+              </td>
               <td className="px-4 py-2.5"><AuditCell t={t} /></td>
               <td className="px-4 py-2.5"><Actions t={t} /></td>
             </tr>
@@ -155,6 +228,25 @@ export default function TarifasPage() {
               <td className="px-4 py-2.5"><InlineInput value={t.tipo_contenedor} onSave={v => updateTarifa(t, 'tipo_contenedor', v)} /></td>
               <td className="px-4 py-2.5"><div className="flex items-center gap-1"><span className="text-[10px] text-gray-400">USD</span><InlineNum value={t.valor} onSave={v => updateTarifa(t, 'valor', v)} /></div></td>
               <td className="px-4 py-2.5"><InlineInput value={t.obs} onSave={v => updateTarifa(t, 'obs', v)} placeholder="Opcional" /></td>
+              <td className="px-4 py-2.5">
+                {t.cotizacion_url ? (
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => setPreviewModal({ url: t.cotizacion_url!, nombre: t.cotizacion_nombre || 'cotizacion' })}
+                      className="flex items-center gap-1 px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded text-[10px] hover:bg-[#93B8FC] transition-colors">
+                      📄 Ver
+                    </button>
+                    <div className="text-[9px] text-gray-400">
+                      {t.cotizacion_fecha && <div>{t.cotizacion_fecha}</div>}
+                      {t.operacion_ref && <div className="text-[#1168F8]">{t.operacion_ref}</div>}
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => { const sug = getSugerencia(t); setCotModal({ tarifa: t, sugerencia: sug }); setCotFecha(''); setCotOpRef(''); setCotFile(null) }}
+                    className="flex items-center gap-1 px-2 py-1 border border-dashed border-gray-200 rounded text-[10px] text-gray-400 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer transition-colors">
+                    📎 Adjuntar
+                  </button>
+                )}
+              </td>
               <td className="px-4 py-2.5"><AuditCell t={t} /></td>
               <td className="px-4 py-2.5"><Actions t={t} /></td>
             </tr>
@@ -178,6 +270,25 @@ export default function TarifasPage() {
               </td>
               <td className="px-4 py-2.5"><div className="flex items-center gap-1"><span className="text-[10px] text-gray-400">USD</span><InlineNum value={t.valor} onSave={v => updateTarifa(t, 'valor', v)} /></div></td>
               <td className="px-4 py-2.5"><InlineInput value={t.obs} onSave={v => updateTarifa(t, 'obs', v)} placeholder="Opcional" /></td>
+              <td className="px-4 py-2.5">
+                {t.cotizacion_url ? (
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => setPreviewModal({ url: t.cotizacion_url!, nombre: t.cotizacion_nombre || 'cotizacion' })}
+                      className="flex items-center gap-1 px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded text-[10px] hover:bg-[#93B8FC] transition-colors">
+                      📄 Ver
+                    </button>
+                    <div className="text-[9px] text-gray-400">
+                      {t.cotizacion_fecha && <div>{t.cotizacion_fecha}</div>}
+                      {t.operacion_ref && <div className="text-[#1168F8]">{t.operacion_ref}</div>}
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => { const sug = getSugerencia(t); setCotModal({ tarifa: t, sugerencia: sug }); setCotFecha(''); setCotOpRef(''); setCotFile(null) }}
+                    className="flex items-center gap-1 px-2 py-1 border border-dashed border-gray-200 rounded text-[10px] text-gray-400 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer transition-colors">
+                    📎 Adjuntar
+                  </button>
+                )}
+              </td>
               <td className="px-4 py-2.5"><AuditCell t={t} /></td>
               <td className="px-4 py-2.5"><Actions t={t} /></td>
             </tr>
@@ -234,12 +345,121 @@ export default function TarifasPage() {
                 }
               </td>
               <td className="px-4 py-2.5"><InlineInput value={t.obs} onSave={v => updateTarifa(t, 'obs', v)} placeholder="Opcional" /></td>
+              <td className="px-4 py-2.5">
+                {t.cotizacion_url ? (
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => setPreviewModal({ url: t.cotizacion_url!, nombre: t.cotizacion_nombre || 'cotizacion' })}
+                      className="flex items-center gap-1 px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded text-[10px] hover:bg-[#93B8FC] transition-colors">
+                      📄 Ver
+                    </button>
+                    <div className="text-[9px] text-gray-400">
+                      {t.cotizacion_fecha && <div>{t.cotizacion_fecha}</div>}
+                      {t.operacion_ref && <div className="text-[#1168F8]">{t.operacion_ref}</div>}
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => { const sug = getSugerencia(t); setCotModal({ tarifa: t, sugerencia: sug }); setCotFecha(''); setCotOpRef(''); setCotFile(null) }}
+                    className="flex items-center gap-1 px-2 py-1 border border-dashed border-gray-200 rounded text-[10px] text-gray-400 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer transition-colors">
+                    📎 Adjuntar
+                  </button>
+                )}
+              </td>
               <td className="px-4 py-2.5"><AuditCell t={t} /></td>
               <td className="px-4 py-2.5"><Actions t={t} /></td>
             </tr>
           ))}
         </tbody>
       </Section>
+
+      {/* Modal cotizacion */}
+      {cotModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <span className="font-medium text-sm text-gray-900">Adjuntar cotización</span>
+                <span className="text-xs text-gray-400 ml-2">{cotModal.tarifa.ruta}</span>
+              </div>
+              <button onClick={() => setCotModal(null)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              {cotModal.sugerencia && (
+                <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-lg p-3 text-xs">
+                  <div className="font-medium text-[#052698] mb-1">📋 Cotización de referencia disponible</div>
+                  <div className="text-gray-600">{cotModal.sugerencia.cotizacion_nombre}</div>
+                  <div className="text-gray-400 mt-0.5">
+                    {cotModal.sugerencia.cotizacion_fecha} · {cotModal.sugerencia.subido_por}
+                    {cotModal.sugerencia.operacion_ref && ` · ${cotModal.sugerencia.operacion_ref}`}
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <button onClick={() => setPreviewModal({ url: cotModal.sugerencia!.cotizacion_url!, nombre: cotModal.sugerencia!.cotizacion_nombre || '' })}
+                      className="text-[#1168F8] hover:underline text-[10px]">👁 Ver referencia</button>
+                    <button onClick={async () => {
+                      await (supabase.from('tarifas') as any).update({
+                        cotizacion_ref_id: cotModal.sugerencia!.id,
+                        cotizacion_url: cotModal.sugerencia!.cotizacion_url,
+                        cotizacion_nombre: cotModal.sugerencia!.cotizacion_nombre,
+                        cotizacion_fecha: cotModal.sugerencia!.cotizacion_fecha,
+                        operacion_ref: cotModal.sugerencia!.operacion_ref,
+                        subido_por: currentUser?.nombre,
+                        subido_at: new Date().toISOString(),
+                      }).eq('id', cotModal.tarifa.id)
+                      setCotModal(null); loadData()
+                    }} className="text-[#1168F8] hover:underline text-[10px] font-medium">✓ Usar esta referencia</button>
+                  </div>
+                </div>
+              )}
+              <div>
+                <label className="block text-[10px] text-gray-500 font-medium mb-1">Archivo (PDF o imagen)</label>
+                <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg text-xs text-gray-500 hover:border-[#1168F8] cursor-pointer transition-colors">
+                  📎 {cotFile ? cotFile.name : 'Seleccionar archivo'}
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => setCotFile(e.target.files?.[0] || null)} />
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] text-gray-500 font-medium mb-1">Fecha de la cotización</label>
+                  <input type="date" value={cotFecha} onChange={e => setCotFecha(e.target.value)} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-gray-500 font-medium mb-1">Referencia operación/cliente</label>
+                  <input value={cotOpRef} onChange={e => setCotOpRef(e.target.value)} placeholder="ej. PNOA-2026-0001" className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" />
+                </div>
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-between">
+              <button onClick={() => setCotModal(null)} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Cancelar</button>
+              <button
+                disabled={!cotFile || uploading}
+                onClick={() => cotFile && uploadCotizacion(cotModal.tarifa.id, cotFile, cotFecha, cotOpRef)}
+                className="px-4 py-2 bg-[#1168F8] text-white rounded-lg text-xs font-medium hover:bg-[#0a4fc4] disabled:opacity-50">
+                {uploading ? 'Subiendo...' : '✓ Guardar cotización'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preview modal */}
+      {previewModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setPreviewModal(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <span className="font-medium text-sm text-gray-900 truncate">{previewModal.nombre}</span>
+              <div className="flex gap-2">
+                <a href={previewModal.url} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs hover:bg-[#0a4fc4]">🔗 Abrir</a>
+                <button onClick={() => setPreviewModal(null)} className="text-gray-400 hover:text-gray-600 text-xl px-1">×</button>
+              </div>
+            </div>
+            <div className="overflow-auto max-h-[75vh] p-2">
+              {previewModal.nombre.toLowerCase().endsWith('.pdf')
+                ? <iframe src={previewModal.url} className="w-full h-[70vh] border-0" title={previewModal.nombre} />
+                : <img src={previewModal.url} alt={previewModal.nombre} className="max-w-full mx-auto rounded" />
+              }
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700">
         💡 Los valores se guardan automáticamente al hacer click fuera del campo. Para gastos <strong>% sobre CIF</strong>: Techo 0 = sin techo máximo.
