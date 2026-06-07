@@ -86,42 +86,21 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
         @media print {
           body * { visibility: hidden; }
           #printable, #printable * { visibility: visible; }
-          #printable { position: absolute; left: 0; top: 0; width: 100%; }
           .no-print { display: none !important; }
-          @page { margin: 8mm 10mm; size: A4 portrait; }
-          #printable { font-size: 10px !important; }
-          #printable h1, #printable .text-2xl { font-size: 16px !important; }
-          #printable .text-xl { font-size: 14px !important; }
-          #printable .text-lg { font-size: 13px !important; }
-          #printable .text-sm { font-size: 11px !important; }
-          #printable .text-xs { font-size: 10px !important; }
-          #printable .text-\[10px\] { font-size: 8px !important; }
-          #printable .text-base { font-size: 11px !important; }
-          #printable .p-6 { padding: 6px !important; }
-          #printable .p-5 { padding: 5px !important; }
-          #printable .p-4 { padding: 4px !important; }
-          #printable .p-3 { padding: 3px !important; }
-          #printable .px-5 { padding-left: 5px !important; padding-right: 5px !important; }
-          #printable .px-4 { padding-left: 4px !important; padding-right: 4px !important; }
-          #printable .py-3\.5 { padding-top: 3px !important; padding-bottom: 3px !important; }
-          #printable .py-3 { padding-top: 3px !important; padding-bottom: 3px !important; }
-          #printable .py-2\.5 { padding-top: 2px !important; padding-bottom: 2px !important; }
-          #printable .py-2 { padding-top: 2px !important; padding-bottom: 2px !important; }
-          #printable .mb-6 { margin-bottom: 4px !important; }
-          #printable .mb-5 { margin-bottom: 4px !important; }
-          #printable .mb-4 { margin-bottom: 3px !important; }
-          #printable .mb-3 { margin-bottom: 2px !important; }
-          #printable .mb-2 { margin-bottom: 2px !important; }
-          #printable .gap-4 { gap: 4px !important; }
-          #printable .gap-3 { gap: 3px !important; }
-          #printable .space-y-2 > * + * { margin-top: 2px !important; }
-          #printable .space-y-1\.5 > * + * { margin-top: 1px !important; }
-          #printable .rounded-xl { border-radius: 4px !important; }
-          #printable .max-w-4xl { max-width: 100% !important; }
-          #printable img { max-height: 28px !important; }
-          #printable .border-b-2 { padding-bottom: 3px !important; margin-bottom: 4px !important; }
-          #printable .mt-6 { margin-top: 4px !important; }
-          #printable .pt-4 { padding-top: 3px !important; }
+          @page { margin: 0; size: A4 portrait; }
+
+          #printable {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 210mm;
+            max-height: 297mm;
+            overflow: hidden;
+            padding: 6mm 7mm !important;
+            transform-origin: top left;
+            transform: scale(0.78);
+            background: white;
+          }
         }
       `}</style>
 
