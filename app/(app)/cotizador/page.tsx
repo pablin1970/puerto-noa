@@ -199,6 +199,17 @@ export default function CotizadorPage(){
   const router=useRouter()
 
   useEffect(()=>{
+    // Load TC from system
+    supabase.from('tipos_cambio').select('moneda, valor').order('fecha', { ascending: false }).order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const ars = (data as any[]).find(t => t.moneda === 'ARS')?.valor
+          const clp = (data as any[]).find(t => t.moneda === 'CLP')?.valor
+          if (ars) setS(p => ({ ...p, tcArs: ars, tcTrib: ars }))
+          if (clp) setS(p => ({ ...p, tcClp: clp }))
+        }
+      })
+
     // Load cotizaciones de proveedores vigentes
     supabase.from('cotizaciones_proveedor')
       .select('*, items:cotizacion_proveedor_items(*), operacion:operaciones(cotizacion:cotizaciones(num,cliente))')
