@@ -310,7 +310,7 @@ export default function CotizadorPage(){
   const cap=calcCapacidad(s.contenedores,s.productos)
 
   function cargarSeccionA(){
-    const mar=tarifas.filter(t=>t.tipo==='maritima')
+    const mar=tarifas.filter(t=>(t.tipo as string)==='maritima')
     setS(p=>{
       const filasA = p.contenedores.map(c=>{
         const tarifa = mar.find(t=>t.tipo_contenedor===c.tipo)
@@ -328,7 +328,7 @@ export default function CotizadorPage(){
   }
 
   function cargarSeccionC(){
-    const pto=tarifas.filter(t=>t.tipo==='puerto')
+    const pto=tarifas.filter(t=>(t.tipo as string)==='puerto')
     setS(p=>({...p,
       rowsC: pto.map(t=>({
         id: Math.random().toString(36).slice(2),
@@ -342,7 +342,7 @@ export default function CotizadorPage(){
   }
 
   function cargarSeccionE(){
-    const ter=tarifas.find(t=>t.tipo==='terrestre' && t.ruta.toLowerCase().includes(s.destinoNoa.toLowerCase()))
+    const ter=tarifas.find(t=>(t.tipo as string)==='terrestre' && t.ruta.toLowerCase().includes(s.destinoNoa.toLowerCase()))
       || tarifas.find(t=>t.tipo==='terrestre')
     if(!ter) return
     const nc2=s.contenedores.reduce((t,c)=>t+c.cantidad,0)||1
@@ -350,7 +350,7 @@ export default function CotizadorPage(){
   }
 
   function cargarSeccionF(){
-    const arg=tarifas.filter(t=>t.tipo==='argentina')
+    const arg=tarifas.filter(t=>(t.tipo as string)==='argentina')
     if(!arg.length) return
     setS(p=>({...p,
       gastosArg: arg.map(t=>({
@@ -367,7 +367,7 @@ export default function CotizadorPage(){
   }
 
   function aplicarTarifas(){
-    const pto=tarifas.filter(t=>t.tipo==='puerto')
+    const pto=tarifas.filter(t=>(t.tipo as string)==='puerto')
     // Generar filas A basadas en contenedores seleccionados
     setS(p=>{
       const filasA = p.contenedores.map(c=>{
