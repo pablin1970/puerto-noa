@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase'
 import { fmt, ETAPAS_L, ETAPAS_ORD, nowDate, nowStr } from '@/lib/utils'
 import type { Cotizacion, Operacion, Gasto, MovimientoCC } from '@/types'
@@ -182,37 +183,132 @@ export default function CierrePage() {
 
       {tab === 'rendicion' && cot && (
         <div>
-          <div className="flex justify-end mb-3">
-            <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 transition-colors">🖨 Imprimir / PDF</button>
+          <style>{`
+            @media print {
+              body * { visibility: hidden; }
+              #rend-print, #rend-print * { visibility: visible; }
+              #rend-print { position: absolute; left: 0; top: 0; width: 100%; }
+              .no-print { display: none !important; }
+              @page { margin: 10mm 12mm; size: A4 portrait; }
+              #rend-print { font-size: 10px !important; }
+              #rend-print .text-sm { font-size: 11px !important; }
+              #rend-print .text-xs { font-size: 10px !important; }
+              #rend-print .text-lg { font-size: 13px !important; }
+              #rend-print .p-5 { padding: 5px !important; }
+              #rend-print .p-4 { padding: 4px !important; }
+              #rend-print .p-2 { padding: 2px !important; }
+              #rend-print .px-5 { padding-left: 5px !important; padding-right: 5px !important; }
+              #rend-print .mb-4 { margin-bottom: 4px !important; }
+              #rend-print .mb-5 { margin-bottom: 5px !important; }
+              #rend-print .gap-4 { gap: 4px !important; }
+              #rend-print img { max-height: 28px !important; }
+              #rend-print .mt-8 { margin-top: 8px !important; }
+            }
+          `}</style>
+
+          <div className="no-print flex justify-end mb-3">
+            <button onClick={() => window.print()} className="flex items-center gap-1.5 px-4 py-2 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF] transition-colors">🖨 Imprimir / PDF</button>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-8 text-sm" style={{ color: '#222' }}>
-            <div className="flex justify-between items-start mb-6 pb-4 border-b-2 border-[#1168F8]">
+
+          <div id="rend-print" className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            {/* Encabezado */}
+            <div className="flex items-start justify-between px-6 py-5 border-b-2 border-[#1168F8]">
               <div>
-                <div className="w-9 h-9 bg-[#1168F8] rounded-lg flex items-center justify-center text-white font-bold text-xs mb-2">PN</div>
-                <div className="font-semibold text-[#052698] text-sm">Puerto NOA SpA</div>
-                <div className="text-[10px] text-gray-400">Servicios logísticos Norte Argentino</div>
+                <Image src="/logo.png" alt="Puerto NOA SpA" width={150} height={44} style={{objectFit:'contain'}} />
+                <div className="text-[10px] text-gray-400 mt-1.5 leading-relaxed">
+                  Puerto NOA SpA — Servicios logísticos China → NOA Argentino<br/>
+                  San Salvador de Jujuy, Argentina
+                </div>
               </div>
               <div className="text-right">
-                <div className="text-lg font-semibold text-[#052698]">Rendición de cuentas</div>
-                <div className="text-xs text-gray-500 mt-1">{cot.num} · {cot.cliente}</div>
-                <div className="text-[10px] text-gray-400 mt-0.5">{nowDate()}</div>
+                <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Rendición de cuentas</div>
+                <div className="text-xl font-bold font-mono text-[#052698]">{cot.num}</div>
+                <div className="text-xs text-gray-500 mt-1">{nowDate()}</div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4 mb-5 text-xs">
-              <div className="bg-gray-50 rounded-lg p-3"><div className="text-gray-400 mb-0.5">Cliente</div><div className="font-medium">{cot.cliente}</div><div className="text-gray-400 mt-2 mb-0.5">CUIT</div><div>{cot.cuit || '—'}</div></div>
-              <div className="bg-gray-50 rounded-lg p-3"><div className="text-gray-400 mb-0.5">Operación</div><div className="font-medium">{cot.origen} → {cot.destino_noa}</div><div className="text-gray-400 mt-2 mb-0.5">Contenedores / Mercadería</div><div>{Array.isArray(cot.tipo_contenedores) ? cot.tipo_contenedores.map((x: any) => `${x.cantidad}× ${x.tipo}`).join(', ') : '—'}</div></div>
+
+            {/* Cliente y operación */}
+            <div className="grid grid-cols-2 gap-4 px-6 py-4 bg-[#EBF2FF] border-b border-[#93B8FC]">
+              <div>
+                <div className="text-[9px] text-[#052698] uppercase tracking-wider font-bold mb-1">Cliente</div>
+                <div className="font-semibold text-sm text-[#052698]">{cot.cliente}</div>
+                {cot.cuit && <div className="text-xs text-gray-500 mt-0.5">CUIT: {cot.cuit}</div>}
+              </div>
+              <div>
+                <div className="text-[9px] text-[#052698] uppercase tracking-wider font-bold mb-1">Operación</div>
+                <div className="text-xs text-gray-700">{cot.origen} → {cot.destino_noa}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{Array.isArray(cot.tipo_contenedores) ? cot.tipo_contenedores.map((x: any) => `${x.cantidad}× ${x.tipo}`).join(', ') : '—'}</div>
+              </div>
             </div>
-            <div className="text-[10px] font-semibold text-[#052698] uppercase tracking-wider mb-2 border-b border-green-200 pb-1">Fondos recibidos del cliente</div>
-            <table className="w-full text-xs mb-3"><thead><tr className="bg-[#EBF2FF]"><th className="text-left p-2 text-[#052698] font-medium">Fecha</th><th className="text-left p-2 text-[#052698] font-medium">Concepto</th><th className="text-left p-2 text-[#052698] font-medium">Moneda</th><th className="text-right p-2 text-[#052698] font-medium">USD</th></tr></thead><tbody>{movs.filter(m => m.tipo === 'ingreso').map(m => <tr key={m.id} className="border-b border-gray-100"><td className="p-2">{m.fecha}</td><td className="p-2">{m.concepto}</td><td className="p-2">{m.moneda}</td><td className="p-2 text-right font-mono">USD {fmt(m.usd)}</td></tr>)}</tbody></table>
-            <div className="flex justify-between px-2 py-2 bg-[#EBF2FF] rounded text-xs font-medium text-[#052698] mb-4"><span>Total fondos recibidos</span><span>USD {fmt(totalIng)}</span></div>
-            <div className="text-[10px] font-semibold text-[#052698] uppercase tracking-wider mb-2 border-b border-green-200 pb-1">Gastos reales incurridos</div>
-            <table className="w-full text-xs mb-3"><thead><tr className="bg-[#EBF2FF]"><th className="text-left p-2 text-[#052698] font-medium">Fecha</th><th className="text-left p-2 text-[#052698] font-medium">Concepto</th><th className="text-left p-2 text-[#052698] font-medium">Moneda orig.</th><th className="text-right p-2 text-[#052698] font-medium">USD</th></tr></thead><tbody>{gastos.map(g => <tr key={g.id} className="border-b border-gray-100"><td className="p-2">{g.fecha}</td><td className="p-2">{g.concepto}</td><td className="p-2">{g.moneda !== 'USD' ? `${g.moneda} ${fmt(g.monto)}` : '—'}</td><td className="p-2 text-right font-mono">USD {fmt(g.usd)}</td></tr>)}</tbody></table>
-            <div className="flex justify-between px-2 py-2 bg-blue-50 rounded text-xs font-medium text-blue-700 mb-4"><span>Total gastos reales</span><span>USD {fmt(totalReal)}</span></div>
-            {diff !== 0 && <div className={`flex justify-between px-2 py-2 rounded text-xs font-medium mb-2 ${diff > 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}><span>{diff > 0 ? '⚠ Gastos sobre presupuesto' : '✓ Ahorro vs. presupuesto'}</span><span>{diff > 0 ? '+ ' : ''}USD {fmt(diff)}</span></div>}
-            <div className={`flex justify-between px-3 py-3 rounded text-sm font-semibold ${saldo > 0 ? 'bg-[#052698] text-white' : saldo < 0 ? 'bg-red-700 text-white' : 'bg-gray-700 text-white'}`}><span>{saldo > 0 ? 'SALDO A DEVOLVER AL CLIENTE' : saldo < 0 ? 'SALDO A COBRAR AL CLIENTE' : 'SALDO EXACTO'}</span><span>USD {fmt(Math.abs(saldo))}</span></div>
-            <div className="grid grid-cols-2 gap-8 mt-8 pt-4 border-t border-gray-200 text-[10px] text-gray-400">
-              <div className="text-center border-t border-gray-300 pt-2 mt-4">Firma Puerto NOA SpA</div>
-              <div className="text-center border-t border-gray-300 pt-2 mt-4">Conformidad del cliente · {cot.cliente}</div>
+
+            <div className="px-6 py-4">
+              {/* Fondos recibidos */}
+              <div className="mb-4">
+                <div className="text-[10px] font-bold text-green-700 uppercase tracking-wider mb-2 pb-1 border-b border-green-200">Fondos recibidos del cliente</div>
+                <table className="w-full text-xs">
+                  <thead><tr className="bg-green-50"><th className="text-left p-2 text-green-800 font-semibold">Fecha</th><th className="text-left p-2 text-green-800 font-semibold">Concepto</th><th className="text-left p-2 text-green-800 font-semibold">Moneda</th><th className="text-right p-2 text-green-800 font-semibold">USD</th></tr></thead>
+                  <tbody>
+                    {movs.filter(m => m.tipo === 'ingreso').map(m => (
+                      <tr key={m.id} className="border-b border-gray-100">
+                        <td className="p-2 font-mono text-[10px] text-gray-500">{m.fecha}</td>
+                        <td className="p-2 text-gray-700">{m.concepto}</td>
+                        <td className="p-2 text-gray-500">{m.moneda !== 'USD' ? `${m.moneda} ${fmt(m.monto)}` : 'USD'}</td>
+                        <td className="p-2 text-right font-mono font-medium">USD {fmt(m.usd)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="flex justify-between px-2 py-2 bg-green-50 rounded text-xs font-semibold text-green-800 mt-1">
+                  <span>Total fondos recibidos</span><span className="font-mono">USD {fmt(totalIng)}</span>
+                </div>
+              </div>
+
+              {/* Gastos realizados */}
+              <div className="mb-4">
+                <div className="text-[10px] font-bold text-[#052698] uppercase tracking-wider mb-2 pb-1 border-b border-[#93B8FC]">Gastos realizados en la operación</div>
+                <table className="w-full text-xs">
+                  <thead><tr className="bg-[#EBF2FF]"><th className="text-left p-2 text-[#052698] font-semibold">Fecha</th><th className="text-left p-2 text-[#052698] font-semibold">Concepto / Proveedor</th><th className="text-left p-2 text-[#052698] font-semibold">Moneda orig.</th><th className="text-right p-2 text-[#052698] font-semibold">USD</th></tr></thead>
+                  <tbody>
+                    {gastos.filter(g => g.etapa !== 'fee').map(g => (
+                      <tr key={g.id} className="border-b border-gray-100">
+                        <td className="p-2 font-mono text-[10px] text-gray-500">{g.fecha}</td>
+                        <td className="p-2 text-gray-700">{g.concepto}</td>
+                        <td className="p-2 text-gray-500">{g.moneda !== 'USD' ? `${g.moneda} ${fmt(g.monto)}` : '—'}</td>
+                        <td className="p-2 text-right font-mono font-medium">USD {fmt(g.usd)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="flex justify-between px-2 py-2 bg-[#EBF2FF] rounded text-xs font-semibold text-[#052698] mt-1">
+                  <span>Total gastos realizados</span><span className="font-mono">USD {fmt(gastos.filter(g=>g.etapa!=='fee').reduce((s,g)=>s+g.usd,0))}</span>
+                </div>
+              </div>
+
+              {/* Resultado */}
+              <div className="space-y-2">
+                {diff !== 0 && (
+                  <div className={`flex justify-between px-3 py-2 rounded text-xs font-medium ${diff > 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+                    <span>{diff > 0 ? '⚠ Los gastos superaron el presupuesto original' : '✓ Ahorro respecto al presupuesto original'}</span>
+                    <span className="font-mono">{diff > 0 ? '+ ' : ''}USD {fmt(Math.abs(diff))}</span>
+                  </div>
+                )}
+                <div className={`flex justify-between px-4 py-3.5 rounded-lg text-sm font-bold ${saldo > 0 ? 'bg-[#052698] text-white' : saldo < 0 ? 'bg-red-600 text-white' : 'bg-gray-700 text-white'}`}>
+                  <span>{saldo > 0 ? 'SALDO A DEVOLVER AL CLIENTE' : saldo < 0 ? 'SALDO A COBRAR AL CLIENTE' : 'CUENTA CERRADA SIN SALDO'}</span>
+                  <span className="font-mono">USD {fmt(Math.abs(saldo))}</span>
+                </div>
+              </div>
+
+              {/* Firmas */}
+              <div className="grid grid-cols-2 gap-12 mt-8 pt-4 border-t border-gray-200 text-[10px] text-gray-400">
+                <div className="text-center"><div className="border-t border-gray-400 pt-2 mt-8">Firma y sello Puerto NOA SpA</div></div>
+                <div className="text-center"><div className="border-t border-gray-400 pt-2 mt-8">Conformidad del cliente — {cot.cliente}</div></div>
+              </div>
+            </div>
+
+            {/* Pie */}
+            <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 bg-gray-50">
+              <div className="text-[9px] text-gray-400">Puerto NOA SpA · Importaciones China → NOA Argentino · San Salvador de Jujuy</div>
+              <Image src="/logo.png" alt="Puerto NOA" width={70} height={20} style={{objectFit:'contain',opacity:0.5}} />
             </div>
           </div>
         </div>
