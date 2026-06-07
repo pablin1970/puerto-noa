@@ -520,7 +520,44 @@ function CCTab({ opId, movs, reload }: { opId: string; movs: MovimientoCC[]; rel
         <div className={`border rounded-xl p-4 ${saldo >= 0 ? 'bg-[#EBF2FF] border-[#93B8FC]' : 'bg-red-50 border-red-200'}`}><div className={`text-[10px] font-medium mb-1 ${saldo >= 0 ? 'text-[#052698]' : 'text-red-700'}`}>Saldo disponible</div><div className={`text-xl font-semibold ${saldo >= 0 ? 'text-[#052698]' : 'text-red-700'}`}>USD {fmt(saldo)}</div><div className={`text-[10px] mt-1 ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>{saldo < 0 ? '⚠ Solicitar fondos al cliente' : 'Fondos disponibles'}</div></div>
       </div>
 
-      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #cc-print, #cc-print * { visibility: visible; }
+          #cc-print { position: absolute; left: 0; top: 0; width: 100%; }
+          .no-print { display: none !important; }
+          @page { margin: 10mm 12mm; size: A4 portrait; }
+          #cc-print { font-size: 10px !important; }
+          #cc-print .text-xs { font-size: 10px !important; }
+          #cc-print .text-sm { font-size: 11px !important; }
+          #cc-print .px-5 { padding-left: 5px !important; padding-right: 5px !important; }
+          #cc-print .py-3 { padding-top: 3px !important; padding-bottom: 3px !important; }
+          #cc-print img { max-height: 28px !important; }
+        }
+      `}</style>
+
+      <div className="no-print flex justify-end mb-3">
+        <button onClick={() => window.print()} className="flex items-center gap-1.5 px-4 py-2 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF] transition-colors">🖨 Imprimir / PDF</button>
+      </div>
+
+      <div id="cc-print" className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        {/* Encabezado imprimible */}
+        <div className="flex items-start justify-between px-5 py-4 border-b-2 border-[#1168F8]">
+          <div>
+            <img src="/logo.png" alt="Puerto NOA SpA" style={{height:'32px',objectFit:'contain'}} />
+            <div className="text-[10px] text-gray-400 mt-1">Puerto NOA SpA — Cuenta corriente operación</div>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] text-gray-400 uppercase tracking-wider">Estado de cuenta</div>
+            <div className="text-xs font-mono font-bold text-[#052698] mt-0.5">{new Date().toLocaleDateString('es-AR', {day:'2-digit',month:'long',year:'numeric'})}</div>
+          </div>
+        </div>
+        {/* Resumen */}
+        <div className="grid grid-cols-3 gap-3 px-5 py-3 bg-gray-50 border-b border-gray-100">
+          <div className="text-center"><div className="text-[9px] text-gray-400 uppercase tracking-wide">Fondos recibidos</div><div className="font-mono font-bold text-green-700 text-sm">USD {fmt(totalIng)}</div></div>
+          <div className="text-center"><div className="text-[9px] text-gray-400 uppercase tracking-wide">Pagado a proveedores</div><div className="font-mono font-bold text-red-600 text-sm">USD {fmt(totalEg)}</div></div>
+          <div className="text-center"><div className="text-[9px] text-gray-400 uppercase tracking-wide">Saldo disponible</div><div className={`font-mono font-bold text-sm ${saldo >= 0 ? 'text-[#052698]' : 'text-red-600'}`}>USD {fmt(saldo)}</div></div>
+        </div>
         <div className="px-5 py-3.5 border-b border-gray-100"><span className="font-medium text-sm text-gray-900">Movimientos</span></div>
         <div>
           {movs.map(m => {
@@ -545,6 +582,11 @@ function CCTab({ opId, movs, reload }: { opId: string; movs: MovimientoCC[]; rel
             )
           })}
           {!movs.length && <div className="px-5 py-6 text-center text-gray-400 text-xs">Sin movimientos registrados.</div>}
+        </div>
+        {/* Pie imprimible */}
+        <div className="flex items-center justify-between px-5 py-2.5 border-t border-gray-100 bg-gray-50">
+          <div className="text-[9px] text-gray-400">Puerto NOA SpA — Documento interno / rendición al cliente</div>
+          <img src="/logo.png" alt="Puerto NOA" style={{height:'18px',objectFit:'contain',opacity:0.5}} />
         </div>
       </div>
 
@@ -576,6 +618,9 @@ function CCTab({ opId, movs, reload }: { opId: string; movs: MovimientoCC[]; rel
 function MinutaTab({ opId, cotNum, cliente, minuta, reload }: { opId: string; cotNum: string; cliente: string; minuta: MinutaItem[]; reload: () => void }) {
   const [form, setForm] = useState({ prov: '', concepto: '', moneda: 'USD', monto: '', fecha: nowDate(), banco: '', cuenta: '', swift: '', notas: '' })
   const supabase = createClient()
+  const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })
+  const totalUSD = minuta.filter(i => i.moneda === 'USD').reduce((s, i) => s + i.monto, 0)
+  const totalARS = minuta.filter(i => i.moneda === 'ARS').reduce((s, i) => s + i.monto, 0)
 
   async function agregar() {
     if (!form.prov || !form.monto) { alert('Completá proveedor y monto.'); return }
@@ -591,7 +636,33 @@ function MinutaTab({ opId, cotNum, cliente, minuta, reload }: { opId: string; co
 
   return (
     <div>
-      <div className="bg-white border border-gray-100 rounded-xl p-5 mb-4">
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #minuta-print, #minuta-print * { visibility: visible; }
+          #minuta-print { position: absolute; left: 0; top: 0; width: 100%; }
+          .no-print { display: none !important; }
+          @page { margin: 10mm 12mm; size: A4 portrait; }
+          #minuta-print { font-size: 10px !important; }
+          #minuta-print .text-sm { font-size: 11px !important; }
+          #minuta-print .text-xs { font-size: 10px !important; }
+          #minuta-print .text-lg { font-size: 13px !important; }
+          #minuta-print .text-xl { font-size: 14px !important; }
+          #minuta-print .text-2xl { font-size: 16px !important; }
+          #minuta-print .p-5 { padding: 5px !important; }
+          #minuta-print .p-4 { padding: 4px !important; }
+          #minuta-print .px-5 { padding-left: 5px !important; padding-right: 5px !important; }
+          #minuta-print .py-4 { padding-top: 4px !important; padding-bottom: 4px !important; }
+          #minuta-print .mb-4 { margin-bottom: 4px !important; }
+          #minuta-print .mb-3 { margin-bottom: 3px !important; }
+          #minuta-print .gap-4 { gap: 4px !important; }
+          #minuta-print .gap-3 { gap: 3px !important; }
+          #minuta-print img { max-height: 30px !important; }
+        }
+      `}</style>
+
+      {/* Formulario - no se imprime */}
+      <div className="no-print bg-white border border-gray-100 rounded-xl p-5 mb-4">
         <h3 className="font-medium text-sm text-gray-900 mb-4">Agregar ítem a la minuta</h3>
         <div className="grid grid-cols-4 gap-3 mb-3">
           <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Proveedor</label><input value={form.prov} onChange={e => setForm(f => ({ ...f, prov: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="ej. Hellmann Logistics" /></div>
@@ -601,7 +672,7 @@ function MinutaTab({ opId, cotNum, cliente, minuta, reload }: { opId: string; co
         </div>
         <div className="grid grid-cols-4 gap-3 mb-4">
           <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Fecha vencimiento</label><input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Banco / entidad</label><input value={form.banco} onChange={e => setForm(f => ({ ...f, banco: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="ej. Banco BCI Chile" /></div>
+          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Banco / entidad</label><input value={form.banco} onChange={e => setForm(f => ({ ...f, banco: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="ej. Banco BCI" /></div>
           <div><label className="block text-[10px] text-gray-500 font-medium mb-1">N° cuenta / CBU / IBAN</label><input value={form.cuenta} onChange={e => setForm(f => ({ ...f, cuenta: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" /></div>
           <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Swift / CLABE / alias</label><input value={form.swift} onChange={e => setForm(f => ({ ...f, swift: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" /></div>
         </div>
@@ -609,30 +680,89 @@ function MinutaTab({ opId, cotNum, cliente, minuta, reload }: { opId: string; co
         <div className="flex justify-end"><button onClick={agregar} className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors">+ Agregar a minuta</button></div>
       </div>
 
-      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
-          <div><span className="font-medium text-sm text-gray-900">Minuta de pago — {cotNum}</span><span className="text-xs text-gray-400 ml-2">{cliente}</span></div>
-          <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 transition-colors">🖨 Imprimir</button>
+      {/* Controles impresión - no se imprimen */}
+      <div className="no-print flex items-center justify-between mb-3">
+        <span className="text-xs text-gray-500">{minuta.length} ítem(s) · {totalUSD > 0 ? `USD ${fmt(totalUSD)}` : ''}{totalARS > 0 ? ` · ARS ${Math.round(totalARS).toLocaleString('es-AR')}` : ''}</span>
+        <button onClick={() => window.print()} className="flex items-center gap-1.5 px-4 py-2 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF] transition-colors">🖨 Imprimir / PDF</button>
+      </div>
+
+      {/* DOCUMENTO IMPRIMIBLE */}
+      <div id="minuta-print" className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        {/* Encabezado */}
+        <div className="flex items-start justify-between px-6 py-5 border-b-2 border-[#1168F8]">
+          <div>
+            <img src="/logo.png" alt="Puerto NOA SpA" style={{height:'36px',objectFit:'contain'}} />
+            <div className="mt-2 text-[10px] text-gray-400 leading-relaxed">
+              Puerto NOA SpA — Logística de importaciones China → NOA<br/>
+              San Salvador de Jujuy, Argentina
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Minuta de pago</div>
+            <div className="text-xl font-bold font-mono text-[#052698]">{cotNum}</div>
+            <div className="text-xs text-gray-500 mt-1">{fecha}</div>
+          </div>
         </div>
-        <div className="divide-y divide-gray-50">
-          {minuta.map(it => (
-            <div key={it.id} className="p-5">
+
+        {/* Cliente */}
+        <div className="px-6 py-4 bg-[#EBF2FF] border-b border-[#93B8FC]">
+          <div className="text-[10px] text-[#052698] uppercase tracking-wider font-bold mb-1">Estimado cliente</div>
+          <div className="text-sm font-semibold text-[#052698]">{cliente}</div>
+          <div className="text-xs text-[#1168F8] mt-1">
+            Le solicitamos efectuar las siguientes transferencias para continuar con el proceso de importación correspondiente a la operación {cotNum}.
+          </div>
+        </div>
+
+        {/* Items */}
+        <div className="divide-y divide-gray-100">
+          {minuta.map((it, idx) => (
+            <div key={it.id} className="px-6 py-4">
               <div className="flex items-start justify-between mb-3">
-                <div><div className="font-semibold text-sm text-gray-900">{it.proveedor}</div><div className="text-xs text-gray-500 mt-0.5">{it.concepto}</div></div>
-                <div className="text-right"><div className="text-lg font-semibold text-[#052698]">{it.moneda} {fmt(it.monto)}</div><div className="text-[10px] text-gray-400 mt-0.5">Vence: {it.fecha_vto || '—'}</div></div>
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full bg-[#1168F8] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">{idx+1}</div>
+                  <div>
+                    <div className="font-semibold text-sm text-gray-900">{it.proveedor}</div>
+                    <div className="text-xs text-gray-500">{it.concepto}</div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xl font-bold text-[#052698] font-mono">{it.moneda} {fmt(it.monto)}</div>
+                  {it.fecha_vto && <div className="text-[10px] text-amber-600 mt-0.5 font-medium">⏱ Vence: {it.fecha_vto}</div>}
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 text-xs border-t border-gray-100 pt-3">
-                <div><span className="text-gray-400">Banco: </span><span className="text-gray-700">{it.banco || '—'}</span></div>
-                <div><span className="text-gray-400">Cuenta/CBU: </span><span className="font-mono text-gray-700">{it.cuenta || '—'}</span></div>
-                <div><span className="text-gray-400">Swift/CLABE: </span><span className="font-mono text-gray-700">{it.swift || '—'}</span></div>
-                <div><span className="text-gray-400">Notas: </span><span className="text-gray-700">{it.notas || '—'}</span></div>
-              </div>
-              <div className="flex justify-end mt-2">
-                <button onClick={() => eliminar(it.id)} className="text-gray-400 hover:text-red-500 text-xs transition-colors">🗑 Quitar</button>
+              {(it.banco || it.cuenta || it.swift) && (
+                <div className="grid grid-cols-3 gap-3 bg-gray-50 rounded-lg p-3 text-xs">
+                  {it.banco && <div><div className="text-[9px] text-gray-400 uppercase tracking-wide mb-0.5">Banco / entidad</div><div className="font-medium text-gray-700">{it.banco}</div></div>}
+                  {it.cuenta && <div><div className="text-[9px] text-gray-400 uppercase tracking-wide mb-0.5">Cuenta / CBU / IBAN</div><div className="font-mono text-gray-700">{it.cuenta}</div></div>}
+                  {it.swift && <div><div className="text-[9px] text-gray-400 uppercase tracking-wide mb-0.5">Swift / CLABE / Alias</div><div className="font-mono text-gray-700">{it.swift}</div></div>}
+                </div>
+              )}
+              {it.notas && <div className="mt-2 text-[10px] text-amber-700 bg-amber-50 rounded px-3 py-1.5">📌 {it.notas}</div>}
+              <div className="no-print flex justify-end mt-2">
+                <button onClick={() => eliminar(it.id)} className="text-gray-400 hover:text-red-500 text-xs">🗑 Quitar</button>
               </div>
             </div>
           ))}
-          {!minuta.length && <div className="px-5 py-6 text-center text-gray-400 text-xs">Agregá ítems a la minuta para presentar al cliente.</div>}
+          {!minuta.length && <div className="px-6 py-8 text-center text-gray-400 text-xs">Agregá ítems a la minuta para presentar al cliente.</div>}
+        </div>
+
+        {/* Totales */}
+        {minuta.length > 0 && (
+          <div className="px-6 py-4 bg-gray-50 border-t-2 border-[#1168F8]">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold text-gray-700">TOTAL A TRANSFERIR</div>
+              <div className="text-right space-y-0.5">
+                {totalUSD > 0 && <div className="font-mono font-bold text-[#052698] text-base">USD {fmt(totalUSD)}</div>}
+                {totalARS > 0 && <div className="font-mono font-bold text-[#052698] text-base">ARS {Math.round(totalARS).toLocaleString('es-AR')}</div>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Pie */}
+        <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100">
+          <div className="text-[9px] text-gray-400">Ante cualquier consulta comuníquese con Puerto NOA SpA · San Salvador de Jujuy, Argentina</div>
+          <img src="/logo.png" alt="Puerto NOA" style={{height:'20px',objectFit:'contain',opacity:0.5}} />
         </div>
       </div>
     </div>
