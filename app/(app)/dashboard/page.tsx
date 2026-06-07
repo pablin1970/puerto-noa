@@ -292,7 +292,7 @@ export default function DashboardPage() {
               { label: 'Nuevo cotizador', icon: '✦', href: '/cotizador', color: 'bg-[#1168F8] text-white border-[#1168F8]' },
               { label: 'Tarifas base', icon: '📋', href: '/tarifas', color: 'bg-white text-gray-700 border-gray-200' },
               { label: 'Operaciones', icon: '🚢', href: '/operaciones', color: 'bg-white text-gray-700 border-gray-200' },
-              { label: 'Liquidación', icon: '✓', href: '/cierre', color: 'bg-white text-gray-700 border-gray-200' },
+              { label: 'Tipos de cambio', icon: '💱', href: '/tipos-cambio', color: 'bg-white text-gray-700 border-gray-200' },
             ].map(a => (
               <Link key={a.href} href={a.href}
                 className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border font-medium text-xs hover:shadow-sm transition-all ${a.color}`}>
