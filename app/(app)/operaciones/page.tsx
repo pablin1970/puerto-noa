@@ -323,16 +323,40 @@ function GastosTab({ opId, gastos, reload }: { opId: string; gastos: Gasto[]; re
                   <td className="px-4 py-3"><span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${g.estado === 'pagado' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>{g.estado === 'pagado' ? 'Pagado' : 'Pendiente'}</span></td>
                   <td className="px-4 py-3 text-[10px] text-gray-400">{g.ref || '—'}</td>
                   <td className="px-4 py-3">
-                    {(g as any).comprobante_url ? (
-                      <button onClick={() => verComprobante(g)} className="flex items-center gap-1 px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-[10px] hover:bg-[#93B8FC] transition-colors">
-                        📄 Ver
-                      </button>
-                    ) : (
-                      <label className="flex items-center gap-1 px-2 py-1 border border-dashed border-gray-200 rounded-lg text-[10px] text-gray-400 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer transition-colors">
-                        📎 Subir
-                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => { const f = e.target.files?.[0]; if(f) subirComprobante(g, f) }} />
-                      </label>
-                    )}
+                    <div className="flex flex-col gap-1">
+                      {/* Cotización */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] text-gray-400 w-12">Cotiz.</span>
+                        {(g as any).cotizacion_url ? (
+                          <button onClick={() => setPreviewModal({ url: (g as any).cotizacion_url, nombre: (g as any).cotizacion_nombre || 'cotizacion', tipo: (g as any).cotizacion_nombre?.endsWith('.pdf') ? 'pdf' : 'img' })}
+                            className="px-1.5 py-0.5 bg-[#EBF2FF] text-[#1168F8] rounded text-[9px] hover:bg-[#93B8FC]">📄 Ver</button>
+                        ) : (
+                          <label className="px-1.5 py-0.5 border border-dashed border-gray-200 rounded text-[9px] text-gray-400 hover:border-[#1168F8] cursor-pointer">
+                            📎
+                            <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={async e => {
+                              const f = e.target.files?.[0]; if(!f) return
+                              const ext = f.name.split('.').pop()
+                              const path = `gastos/cot_${g.id}.${ext}`
+                              await supabase.storage.from('comprobantes').upload(path, f, { upsert: true })
+                              const { data } = supabase.storage.from('comprobantes').getPublicUrl(path)
+                              if(data?.publicUrl) { await (supabase.from('gastos') as any).update({ cotizacion_url: data.publicUrl, cotizacion_nombre: f.name }).eq('id', g.id); reload() }
+                            }} />
+                          </label>
+                        )}
+                      </div>
+                      {/* Factura */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] text-gray-400 w-12">Factura</span>
+                        {(g as any).comprobante_url ? (
+                          <button onClick={() => verComprobante(g)} className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded text-[9px] hover:bg-green-100">📄 Ver</button>
+                        ) : (
+                          <label className="px-1.5 py-0.5 border border-dashed border-gray-200 rounded text-[9px] text-gray-400 hover:border-green-500 cursor-pointer">
+                            📎
+                            <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => { const f = e.target.files?.[0]; if(f) subirComprobante(g, f) }} />
+                          </label>
+                        )}
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5">
