@@ -571,7 +571,7 @@ function CCTab({ opId, movs, reload }: { opId: string; movs: MovimientoCC[]; rel
       <div className="no-print flex justify-end mb-3">
         <button onClick={() => {
                 const t = document.title
-                document.title = `Minuta_Pago_${cotNum}`
+                document.title = `Minuta_Pago_${opId}`
                 window.print()
                 document.title = t
               }} className="flex items-center gap-1.5 px-4 py-2 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF] transition-colors">🖨 Imprimir / PDF</button>
@@ -722,7 +722,7 @@ function MinutaTab({ opId, cotNum, cliente, minuta, reload }: { opId: string; co
         <span className="text-xs text-gray-500">{minuta.length} ítem(s) · {totalUSD > 0 ? `USD ${fmt(totalUSD)}` : ''}{totalARS > 0 ? ` · ARS ${Math.round(totalARS).toLocaleString('es-AR')}` : ''}</span>
         <button onClick={() => {
                 const t = document.title
-                document.title = `Minuta_Pago_${cotNum}`
+                document.title = `Minuta_Pago_${opId}`
                 window.print()
                 document.title = t
               }} className="flex items-center gap-1.5 px-4 py-2 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF] transition-colors">🖨 Imprimir / PDF</button>
