@@ -107,9 +107,18 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
           #printable, #printable * { visibility: visible; }
           #printable { position: absolute; left: 0; top: 0; width: 100%; }
           .no-print { display: none !important; }
-          @page { margin: 12mm 14mm; size: A4 portrait; }
+          @page { margin: 10mm 12mm; size: A4 portrait; }
           .page-break { page-break-before: always; }
           #printable * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          /* Evitar corte de tablas */
+          .cost-table { page-break-inside: avoid; }
+          .merch-table { page-break-inside: avoid; }
+          /* Reducir espacios en página 1 para que entre todo */
+          .p1-section { margin-bottom: 8px !important; }
+          .p1-header { margin-bottom: 8px !important; padding-bottom: 8px !important; }
+          .p1-grid { gap: 8px !important; }
+          .p1-cell { padding: 4px 10px !important; }
+          .p1-row { padding-top: 4px !important; padding-bottom: 4px !important; }
         }
       `}</style>
 
@@ -163,7 +172,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
         <div className="bg-white p-8 min-h-screen flex flex-col">
 
           {/* ENCABEZADO P1 */}
-          <div className="flex items-start justify-between pb-5 mb-6" style={{borderBottom: '3px solid #1168F8'}}>
+          <div className="flex items-start justify-between pb-5 mb-6 p1-header" style={{borderBottom: '3px solid #1168F8'}}>
             <div>
               <Image src="/logo.png" alt="Puerto NOA SpA" width={180} height={52} style={{objectFit:'contain'}} />
               <div className="mt-2 text-[11px] text-gray-400 leading-relaxed">
@@ -187,7 +196,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
           </div>
 
           {/* CLIENTE + RUTA */}
-          <div className="grid grid-cols-2 gap-5 mb-6">
+          <div className="grid grid-cols-2 gap-5 mb-6 p1-grid">
             <div className="rounded-xl overflow-hidden" style={{border:'1px solid #e5e7eb'}}>
               <div className="px-4 py-2.5 font-bold text-[11px] uppercase tracking-widest" style={{background:'#1168F8',color:'white'}}>
                 Datos del cliente
@@ -230,7 +239,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
           </div>
 
           {/* MERCADERÍA */}
-          <div className="rounded-xl overflow-hidden mb-6" style={{border:'1px solid #e5e7eb'}}>
+          <div className="rounded-xl overflow-hidden mb-6 merch-table" style={{border:'1px solid #e5e7eb'}}>
             <div className="px-5 py-3 flex items-center justify-between" style={{background:'#052698'}}>
               <span className="font-bold text-sm text-white">Mercadería importada</span>
               <span className="text-blue-200 text-xs">{contenedores.map((c:any)=>`${c.cantidad}× ${c.tipo}`).join(' + ')} · {nc} contenedor(es)</span>
@@ -248,15 +257,15 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
               <tbody>
                 {productos.map((p:any, i:number) => (
                   <tr key={i} style={{borderBottom:'1px solid #f1f5f9'}}>
-                    <td className="px-5 py-3 font-medium text-gray-800">{p.descripcion}</td>
-                    <td className="px-4 py-3 text-center font-mono text-gray-500 text-[10px]">{p.ncm||'—'}</td>
-                    <td className="px-4 py-3 text-right text-gray-600">{p.cantidad}</td>
-                    <td className="px-4 py-3 text-right font-mono text-gray-600">{fmt(p.precio_unit||0)}</td>
-                    <td className="px-5 py-3 text-right font-mono font-bold text-gray-800">USD {fmt(p.subtotal)}</td>
+                    <td className="px-5 py-2 font-medium text-gray-800">{p.descripcion}</td>
+                    <td className="px-4 py-2 text-center font-mono text-gray-500 text-[10px]">{p.ncm||'—'}</td>
+                    <td className="px-4 py-2 text-right text-gray-600">{p.cantidad}</td>
+                    <td className="px-4 py-2 text-right font-mono text-gray-600">{fmt(p.precio_unit||0)}</td>
+                    <td className="px-5 py-2 text-right font-mono font-bold text-gray-800">USD {fmt(p.subtotal)}</td>
                   </tr>
                 ))}
                 {/* Espacio extra para productos adicionales */}
-                {productos.length < 4 && Array.from({length: 4-productos.length}).map((_,i)=>(
+                {productos.length < 3 && Array.from({length: 3-productos.length}).map((_,i)=>(
                   <tr key={`empty-${i}`} style={{borderBottom:'1px solid #f8fafc'}}>
                     <td className="px-5 py-2.5 text-gray-200 text-[10px]">—</td>
                     <td colSpan={4}></td>
@@ -273,7 +282,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
           </div>
 
           {/* ESTRUCTURA DE COSTOS */}
-          <div className="rounded-xl overflow-hidden mb-6 flex-1" style={{border:'1px solid #e5e7eb'}}>
+          <div className="rounded-xl overflow-hidden mb-4 cost-table" style={{border:'1px solid #e5e7eb'}}>
             <div className="px-5 py-3" style={{background:'#f8fafc',borderBottom:'1px solid #e5e7eb'}}>
               <div className="font-bold text-sm text-gray-900">Estructura de costos hasta {cot.destino_noa}</div>
               <div className="text-[10px] text-gray-400 mt-0.5">Valores en USD a tipo de cambio de referencia · Régimen {regimen}</div>
