@@ -1,57 +1,70 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt } from '@/lib/utils'
 
-interface TarifaRow {
+interface CotProv {
   id: string
-  tipo: string
-  ruta: string
-  tipo_contenedor: string
+  proveedor: string
+  referencia: string
+  fecha: string
+  tipo: 'generica' | 'especifica'
+  operacion_id: string | null
+  archivo_url: string | null
+  archivo_nombre: string | null
+  estado: 'vigente' | 'vencida'
+  notas: string
+  creado_por: string
+  created_at: string
+  items?: CotProvItem[]
+  operacion?: { cotizacion?: { num: string; cliente: string } }
+}
+
+interface CotProvItem {
+  id: string
+  cotizacion_id: string
+  tipo_servicio: string
+  descripcion: string
+  ruta_origen: string
+  ruta_destino: string
+  tipo_equipo: string
+  moneda: string
   valor: number
-  naviera: string
-  iva_chile: string
-  obs: string
-  activo: boolean
   tipo_calculo: string
   piso_usd: number
   techo_usd: number
-  moneda: string
-  modificado_por: string
-  updated_at: string
-  cotizacion_url?: string
-  cotizacion_nombre?: string
-  cotizacion_fecha?: string
-  operacion_ref?: string
-  subido_por?: string
-  subido_at?: string
-  cotizacion_ref_id?: string
+  notas: string
+  orden: number
 }
 
-interface AuditEntry {
-  id: string
-  campo: string
-  valor_anterior: string
-  valor_nuevo: string
-  usuario_nombre: string
-  created_at: string
+const TIPOS_SERVICIO: Record<string, string> = {
+  maritima: '🚢 Flete marítimo',
+  terrestre: '🚛 Flete terrestre',
+  puerto: '⚓ Gastos puerto Chile',
+  argentina: '🇦🇷 Gastos Argentina',
+  otro: '📋 Otro',
+}
+
+const TIPO_CALCULO_L: Record<string, string> = {
+  fijo_usd: 'Fijo USD',
+  fijo_ars: 'Fijo ARS',
+  pct_cif: '% sobre CIF',
 }
 
 export default function TarifasPage() {
-  const [tarifas, setTarifas] = useState<TarifaRow[]>([])
+  const supabase = useMemo(() => createClient(), [])
+  const [cots, setCots] = useState<CotProv[]>([])
   const [loading, setLoading] = useState(true)
+  const [selId, setSelId] = useState<string | null>(null)
+  const [view, setView] = useState<'lista' | 'detalle' | 'nueva' | 'comparativa'>('lista')
+  const [filtroProveedor, setFiltroProveedor] = useState('')
+  const [filtroTipo, setFiltroTipo] = useState('')
+  const [filtroEstado, setFiltroEstado] = useState('vigente')
   const [currentUser, setCurrentUser] = useState<{ id: string; nombre: string } | null>(null)
-  const [histModal, setHistModal] = useState<{ id: string; ruta: string } | null>(null)
-  const [histData, setHistData] = useState<AuditEntry[]>([])
-  const [cotModal, setCotModal] = useState<{ tarifa: TarifaRow; sugerencia?: TarifaRow } | null>(null)
-  const [cotFile, setCotFile] = useState<File | null>(null)
-  const [cotFecha, setCotFecha] = useState('')
-  const [cotOpRef, setCotOpRef] = useState('')
   const [previewModal, setPreviewModal] = useState<{ url: string; nombre: string } | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const supabase = createClient()
+  const [ops, setOps] = useState<any[]>([])
 
-  useEffect(() => { loadUser(); loadData() }, [])
+  useEffect(() => { loadUser(); loadData(); loadOps() }, [])
 
   async function loadUser() {
     const { data: auth } = await supabase.auth.getUser()
@@ -60,390 +73,94 @@ export default function TarifasPage() {
     if (u) setCurrentUser(u as any)
   }
 
+  async function loadOps() {
+    const { data } = await supabase.from('operaciones').select('id, cotizacion:cotizaciones(num, cliente)').order('created_at', { ascending: false })
+    if (data) setOps(data as any[])
+  }
+
   async function loadData() {
-    const { data } = await supabase.from('tarifas').select('*').order('tipo').order('ruta')
-    if (data) setTarifas(data as TarifaRow[])
+    setLoading(true)
+    const { data } = await supabase
+      .from('cotizaciones_proveedor')
+      .select('*, items:cotizacion_proveedor_items(*), operacion:operaciones(cotizacion:cotizaciones(num,cliente))')
+      .order('fecha', { ascending: false })
+    if (data) setCots(data as CotProv[])
     setLoading(false)
   }
 
-  async function uploadCotizacion(tarifaId: string, file: File, fecha: string, opRef: string) {
-    if (!currentUser) return
-    setUploading(true)
-    const ext = file.name.split('.').pop()
-    const path = `tarifas/${tarifaId}.${ext}`
-    await supabase.storage.from('comprobantes').upload(path, file, { upsert: true })
-    const { data } = supabase.storage.from('comprobantes').getPublicUrl(path)
-    if (data?.publicUrl) {
-      await (supabase.from('tarifas') as any).update({
-        cotizacion_url: data.publicUrl,
-        cotizacion_nombre: file.name,
-        cotizacion_fecha: fecha || null,
-        operacion_ref: opRef || null,
-        subido_por: currentUser.nombre,
-        subido_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq('id', tarifaId)
-      // audit log
-      await (supabase.from('audit_log') as any).insert({
-        tabla: 'tarifas', registro_id: tarifaId, campo: 'cotizacion',
-        valor_anterior: '', valor_nuevo: file.name,
-        usuario_id: currentUser.id, usuario_nombre: currentUser.nombre,
-      })
-    }
-    setUploading(false)
-    setCotModal(null)
-    setCotFile(null)
-    setCotFecha('')
-    setCotOpRef('')
-    loadData()
-  }
+  const selCot = cots.find(c => c.id === selId)
+  const proveedores = [...new Set(cots.map(c => c.proveedor))].sort()
 
-  function getSugerencia(t: TarifaRow): TarifaRow | undefined {
-    // Find most recent cotizacion for same service (tipo + ruta + tipo_contenedor)
-    return tarifas
-      .filter(x => x.id !== t.id && x.tipo === t.tipo && x.cotizacion_url &&
-        x.ruta.toLowerCase().includes(t.ruta.toLowerCase().split(' ')[0]) &&
-        x.tipo_contenedor === t.tipo_contenedor)
-      .sort((a, b) => new Date(b.subido_at || 0).getTime() - new Date(a.subido_at || 0).getTime())[0]
-  }
+  const filtradas = cots.filter(c => {
+    const matchP = !filtroProveedor || c.proveedor === filtroProveedor
+    const matchT = !filtroTipo || c.tipo === filtroTipo
+    const matchE = !filtroEstado || c.estado === filtroEstado
+    return matchP && matchT && matchE
+  })
 
-  async function addTarifa(tipo: string, tipoCalculo = 'fijo_usd') {
-    if (!currentUser) return
-    await (supabase.from('tarifas') as any).insert({
-      tipo, ruta: 'Nueva tarifa', valor: 0,
-      tipo_calculo: tipoCalculo, piso_usd: 0, techo_usd: 0, moneda: 'USD',
-      modificado_por: currentUser.nombre, modificado_por_id: currentUser.id,
-    })
-    loadData()
-  }
-
-  async function updateTarifa(tarifa: TarifaRow, field: string, value: any) {
-    if (!currentUser) return
-    const oldVal = (tarifa as any)[field]
-    if (String(oldVal) === String(value)) return
-    await (supabase.from('tarifas') as any).update({
-      [field]: value,
-      modificado_por: currentUser.nombre,
-      modificado_por_id: currentUser.id,
-      updated_at: new Date().toISOString(),
-    }).eq('id', tarifa.id)
-    await (supabase.from('audit_log') as any).insert({
-      tabla: 'tarifas', registro_id: tarifa.id, campo: field,
-      valor_anterior: String(oldVal), valor_nuevo: String(value),
-      usuario_id: currentUser.id, usuario_nombre: currentUser.nombre,
-    })
-    loadData()
-  }
-
-  async function deleteTarifa(id: string) {
-    if (!confirm('¿Eliminar esta tarifa?')) return
-    await supabase.from('tarifas').delete().eq('id', id)
-    loadData()
-  }
-
-  async function loadHistory(id: string) {
-    const { data } = await supabase.from('audit_log').select('*')
-      .eq('tabla', 'tarifas').eq('registro_id', id).order('created_at', { ascending: false })
-    if (data) setHistData(data as AuditEntry[])
-  }
-
-  const maritimas = tarifas.filter(t => t.tipo === 'maritima')
-  const terrestres = tarifas.filter(t => t.tipo === 'terrestre')
-  const puerto = tarifas.filter(t => t.tipo === 'puerto')
-  const argentina = tarifas.filter(t => t.tipo === 'argentina')
-
-  const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'
-
-  function AuditCell({ t }: { t: TarifaRow }) {
-    return (
-      <div className="text-[10px] text-gray-400">
-        {t.modificado_por ? (
-          <><span className="font-medium text-gray-600">{t.modificado_por}</span><span className="mx-1">·</span><span>{fmtDate(t.updated_at)}</span></>
-        ) : <span className="text-gray-300">—</span>}
-      </div>
-    )
-  }
-
-  function Actions({ t }: { t: TarifaRow }) {
-    return (
-      <div className="flex gap-1.5">
-        <button onClick={async () => { setHistModal({ id: t.id, ruta: t.ruta }); await loadHistory(t.id) }}
-          className="p-1.5 border border-gray-200 rounded-md hover:bg-gray-100 text-gray-400 text-[10px]" title="Ver historial">📋</button>
-        <button onClick={() => deleteTarifa(t.id)}
-          className="p-1.5 border border-gray-200 rounded-md hover:bg-red-50 text-gray-400 hover:text-red-500 text-[10px]" title="Eliminar">🗑</button>
-      </div>
-    )
-  }
+  function openDetalle(id: string) { setSelId(id); setView('detalle') }
 
   return (
     <div className="p-6">
-      <div className="mb-5">
-        <h1 className="text-lg font-semibold text-gray-900">Tarifas base</h1>
-        <p className="text-xs text-gray-400 mt-0.5">Módulo 1 — Valores de referencia para el cotizador</p>
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold text-gray-900">Tarifas base</h1>
+          <p className="text-xs text-gray-400 mt-0.5">Cotizaciones de proveedores · Fletes · Servicios</p>
+        </div>
+        <div className="flex gap-2">
+          {view !== 'lista' && (
+            <button onClick={() => setView('lista')} className="px-3 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 transition-colors">← Volver</button>
+          )}
+          {view === 'lista' && (
+            <>
+              <button onClick={() => setView('comparativa')} className="px-3 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 text-gray-600 transition-colors">📊 Comparativa</button>
+              <button onClick={() => setView('nueva')} className="px-4 py-2 bg-[#1168F8] text-white rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors">+ Nueva cotización</button>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* FLETES MARÍTIMOS */}
-      <Section title="Fletes marítimos (USD/contenedor)" onAdd={() => addTarifa('maritima')} loading={loading} empty={maritimas.length === 0} onAddEmpty={() => addTarifa('maritima')}>
-        <thead><tr className="bg-gray-50 border-b border-gray-100">{['Ruta','Tipo cont.','USD','Naviera','Última modif.',''].map(h=><th key={h} className="text-left px-4 py-2 text-[10px] font-medium text-gray-400 uppercase tracking-wide">{h}</th>)}</tr></thead>
-        <tbody>
-          {maritimas.map(t => (
-            <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50">
-              <td className="px-4 py-2.5"><InlineInput value={t.ruta} onSave={v => updateTarifa(t, 'ruta', v)} /></td>
-              <td className="px-4 py-2.5"><InlineInput value={t.tipo_contenedor} onSave={v => updateTarifa(t, 'tipo_contenedor', v)} placeholder="ej. 40HC" /></td>
-              <td className="px-4 py-2.5"><div className="flex items-center gap-1"><span className="text-[10px] text-gray-400">USD</span><InlineNum value={t.valor} onSave={v => updateTarifa(t, 'valor', v)} /></div></td>
-              <td className="px-4 py-2.5"><InlineInput value={t.naviera} onSave={v => updateTarifa(t, 'naviera', v)} placeholder="Naviera" /></td>
-              <td className="px-4 py-2.5">
-                {t.cotizacion_url ? (
-                  <div className="flex items-center gap-1.5">
-                    <button onClick={() => setPreviewModal({ url: t.cotizacion_url!, nombre: t.cotizacion_nombre || 'cotizacion' })}
-                      className="flex items-center gap-1 px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded text-[10px] hover:bg-[#93B8FC] transition-colors">
-                      📄 Ver
-                    </button>
-                    <div className="text-[9px] text-gray-400">
-                      {t.cotizacion_fecha && <div>{t.cotizacion_fecha}</div>}
-                      {t.operacion_ref && <div className="text-[#1168F8]">{t.operacion_ref}</div>}
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={() => { const sug = getSugerencia(t); setCotModal({ tarifa: t, sugerencia: sug }); setCotFecha(''); setCotOpRef(''); setCotFile(null) }}
-                    className="flex items-center gap-1 px-2 py-1 border border-dashed border-gray-200 rounded text-[10px] text-gray-400 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer transition-colors">
-                    📎 Adjuntar
-                  </button>
-                )}
-              </td>
-              <td className="px-4 py-2.5"><AuditCell t={t} /></td>
-              <td className="px-4 py-2.5"><Actions t={t} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </Section>
-
-      {/* FLETES TERRESTRES */}
-      <Section title="Fletes terrestres Chile → NOA (USD/camión)" onAdd={() => addTarifa('terrestre')} loading={loading} empty={terrestres.length === 0} onAddEmpty={() => addTarifa('terrestre')}>
-        <thead><tr className="bg-gray-50 border-b border-gray-100">{['Ruta','Tipo','USD','Observaciones','Última modif.',''].map(h=><th key={h} className="text-left px-4 py-2 text-[10px] font-medium text-gray-400 uppercase tracking-wide">{h}</th>)}</tr></thead>
-        <tbody>
-          {terrestres.map(t => (
-            <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50">
-              <td className="px-4 py-2.5"><InlineInput value={t.ruta} onSave={v => updateTarifa(t, 'ruta', v)} /></td>
-              <td className="px-4 py-2.5"><InlineInput value={t.tipo_contenedor} onSave={v => updateTarifa(t, 'tipo_contenedor', v)} /></td>
-              <td className="px-4 py-2.5"><div className="flex items-center gap-1"><span className="text-[10px] text-gray-400">USD</span><InlineNum value={t.valor} onSave={v => updateTarifa(t, 'valor', v)} /></div></td>
-              <td className="px-4 py-2.5"><InlineInput value={t.obs} onSave={v => updateTarifa(t, 'obs', v)} placeholder="Opcional" /></td>
-              <td className="px-4 py-2.5">
-                {t.cotizacion_url ? (
-                  <div className="flex items-center gap-1.5">
-                    <button onClick={() => setPreviewModal({ url: t.cotizacion_url!, nombre: t.cotizacion_nombre || 'cotizacion' })}
-                      className="flex items-center gap-1 px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded text-[10px] hover:bg-[#93B8FC] transition-colors">
-                      📄 Ver
-                    </button>
-                    <div className="text-[9px] text-gray-400">
-                      {t.cotizacion_fecha && <div>{t.cotizacion_fecha}</div>}
-                      {t.operacion_ref && <div className="text-[#1168F8]">{t.operacion_ref}</div>}
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={() => { const sug = getSugerencia(t); setCotModal({ tarifa: t, sugerencia: sug }); setCotFecha(''); setCotOpRef(''); setCotFile(null) }}
-                    className="flex items-center gap-1 px-2 py-1 border border-dashed border-gray-200 rounded text-[10px] text-gray-400 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer transition-colors">
-                    📎 Adjuntar
-                  </button>
-                )}
-              </td>
-              <td className="px-4 py-2.5"><AuditCell t={t} /></td>
-              <td className="px-4 py-2.5"><Actions t={t} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </Section>
-
-      {/* GASTOS PUERTO CHILE */}
-      <Section title="Gastos puerto Chile (USD/contenedor)" onAdd={() => addTarifa('puerto')} loading={loading} empty={puerto.length === 0} onAddEmpty={() => addTarifa('puerto')}>
-        <thead><tr className="bg-gray-50 border-b border-gray-100">{['Descripción','IVA Chile','USD','Observaciones','Última modif.',''].map(h=><th key={h} className="text-left px-4 py-2 text-[10px] font-medium text-gray-400 uppercase tracking-wide">{h}</th>)}</tr></thead>
-        <tbody>
-          {puerto.map(t => (
-            <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50">
-              <td className="px-4 py-2.5"><InlineInput value={t.ruta} onSave={v => updateTarifa(t, 'ruta', v)} /></td>
-              <td className="px-4 py-2.5">
-                <select defaultValue={t.iva_chile || 'exento'} onBlur={e => updateTarifa(t, 'iva_chile', e.target.value)}
-                  className="px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white">
-                  <option value="exento">Exento</option>
-                  <option value="gravado">Gravado 19%</option>
-                </select>
-              </td>
-              <td className="px-4 py-2.5"><div className="flex items-center gap-1"><span className="text-[10px] text-gray-400">USD</span><InlineNum value={t.valor} onSave={v => updateTarifa(t, 'valor', v)} /></div></td>
-              <td className="px-4 py-2.5"><InlineInput value={t.obs} onSave={v => updateTarifa(t, 'obs', v)} placeholder="Opcional" /></td>
-              <td className="px-4 py-2.5">
-                {t.cotizacion_url ? (
-                  <div className="flex items-center gap-1.5">
-                    <button onClick={() => setPreviewModal({ url: t.cotizacion_url!, nombre: t.cotizacion_nombre || 'cotizacion' })}
-                      className="flex items-center gap-1 px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded text-[10px] hover:bg-[#93B8FC] transition-colors">
-                      📄 Ver
-                    </button>
-                    <div className="text-[9px] text-gray-400">
-                      {t.cotizacion_fecha && <div>{t.cotizacion_fecha}</div>}
-                      {t.operacion_ref && <div className="text-[#1168F8]">{t.operacion_ref}</div>}
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={() => { const sug = getSugerencia(t); setCotModal({ tarifa: t, sugerencia: sug }); setCotFecha(''); setCotOpRef(''); setCotFile(null) }}
-                    className="flex items-center gap-1 px-2 py-1 border border-dashed border-gray-200 rounded text-[10px] text-gray-400 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer transition-colors">
-                    📎 Adjuntar
-                  </button>
-                )}
-              </td>
-              <td className="px-4 py-2.5"><AuditCell t={t} /></td>
-              <td className="px-4 py-2.5"><Actions t={t} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </Section>
-
-      {/* GASTOS ARGENTINA */}
-      <Section title="Gastos en Argentina" onAdd={() => addTarifa('argentina', 'fijo_usd')} loading={loading} empty={argentina.length === 0} onAddEmpty={() => addTarifa('argentina', 'fijo_usd')}>
-        <thead>
-          <tr className="bg-gray-50 border-b border-gray-100">
-            {['Concepto','Tipo cálculo','Moneda','Valor','Piso USD','Techo USD','Observaciones','Última modif.',''].map(h =>
-              <th key={h} className="text-left px-4 py-2 text-[10px] font-medium text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {argentina.map(t => (
-            <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50">
-              <td className="px-4 py-2.5 min-w-48"><InlineInput value={t.ruta} onSave={v => updateTarifa(t, 'ruta', v)} /></td>
-              <td className="px-4 py-2.5">
-                <select defaultValue={t.tipo_calculo || 'fijo_usd'}
-                  onBlur={e => updateTarifa(t, 'tipo_calculo', e.target.value)}
-                  className="px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white whitespace-nowrap">
-                  <option value="pct_cif">% sobre CIF</option>
-                  <option value="fijo_usd">Fijo USD</option>
-                  <option value="fijo_ars">Fijo ARS</option>
-                </select>
-              </td>
-              <td className="px-4 py-2.5">
-                <select defaultValue={t.moneda || 'USD'}
-                  onBlur={e => updateTarifa(t, 'moneda', e.target.value)}
-                  className="px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white">
-                  <option value="USD">USD</option>
-                  <option value="ARS">ARS</option>
-                </select>
-              </td>
-              <td className="px-4 py-2.5">
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-gray-400">{(t.tipo_calculo || 'fijo_usd') === 'pct_cif' ? '%' : (t.moneda || 'USD')}</span>
-                  <InlineNum value={t.valor} onSave={v => updateTarifa(t, 'valor', v)} />
-                </div>
-              </td>
-              <td className="px-4 py-2.5">
-                {(t.tipo_calculo || 'fijo_usd') === 'pct_cif'
-                  ? <div className="flex items-center gap-1"><span className="text-[10px] text-gray-400">USD</span><InlineNum value={t.piso_usd || 0} onSave={v => updateTarifa(t, 'piso_usd', v)} /></div>
-                  : <span className="text-[10px] text-gray-300">—</span>
-                }
-              </td>
-              <td className="px-4 py-2.5">
-                {(t.tipo_calculo || 'fijo_usd') === 'pct_cif'
-                  ? <div className="flex items-center gap-1"><span className="text-[10px] text-gray-400">USD</span><InlineNum value={t.techo_usd || 0} onSave={v => updateTarifa(t, 'techo_usd', v)} placeholder="0=sin techo" /></div>
-                  : <span className="text-[10px] text-gray-300">—</span>
-                }
-              </td>
-              <td className="px-4 py-2.5"><InlineInput value={t.obs} onSave={v => updateTarifa(t, 'obs', v)} placeholder="Opcional" /></td>
-              <td className="px-4 py-2.5">
-                {t.cotizacion_url ? (
-                  <div className="flex items-center gap-1.5">
-                    <button onClick={() => setPreviewModal({ url: t.cotizacion_url!, nombre: t.cotizacion_nombre || 'cotizacion' })}
-                      className="flex items-center gap-1 px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded text-[10px] hover:bg-[#93B8FC] transition-colors">
-                      📄 Ver
-                    </button>
-                    <div className="text-[9px] text-gray-400">
-                      {t.cotizacion_fecha && <div>{t.cotizacion_fecha}</div>}
-                      {t.operacion_ref && <div className="text-[#1168F8]">{t.operacion_ref}</div>}
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={() => { const sug = getSugerencia(t); setCotModal({ tarifa: t, sugerencia: sug }); setCotFecha(''); setCotOpRef(''); setCotFile(null) }}
-                    className="flex items-center gap-1 px-2 py-1 border border-dashed border-gray-200 rounded text-[10px] text-gray-400 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer transition-colors">
-                    📎 Adjuntar
-                  </button>
-                )}
-              </td>
-              <td className="px-4 py-2.5"><AuditCell t={t} /></td>
-              <td className="px-4 py-2.5"><Actions t={t} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </Section>
-
-      {/* Modal cotizacion */}
-      {cotModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <div>
-                <span className="font-medium text-sm text-gray-900">Adjuntar cotización</span>
-                <span className="text-xs text-gray-400 ml-2">{cotModal.tarifa.ruta}</span>
-              </div>
-              <button onClick={() => setCotModal(null)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
-            </div>
-            <div className="px-5 py-4 space-y-3">
-              {cotModal.sugerencia && (
-                <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-lg p-3 text-xs">
-                  <div className="font-medium text-[#052698] mb-1">📋 Cotización de referencia disponible</div>
-                  <div className="text-gray-600">{cotModal.sugerencia.cotizacion_nombre}</div>
-                  <div className="text-gray-400 mt-0.5">
-                    {cotModal.sugerencia.cotizacion_fecha} · {cotModal.sugerencia.subido_por}
-                    {cotModal.sugerencia.operacion_ref && ` · ${cotModal.sugerencia.operacion_ref}`}
-                  </div>
-                  <div className="flex gap-2 mt-2">
-                    <button onClick={() => setPreviewModal({ url: cotModal.sugerencia!.cotizacion_url!, nombre: cotModal.sugerencia!.cotizacion_nombre || '' })}
-                      className="text-[#1168F8] hover:underline text-[10px]">👁 Ver referencia</button>
-                    <button onClick={async () => {
-                      await (supabase.from('tarifas') as any).update({
-                        cotizacion_ref_id: cotModal.sugerencia!.id,
-                        cotizacion_url: cotModal.sugerencia!.cotizacion_url,
-                        cotizacion_nombre: cotModal.sugerencia!.cotizacion_nombre,
-                        cotizacion_fecha: cotModal.sugerencia!.cotizacion_fecha,
-                        operacion_ref: cotModal.sugerencia!.operacion_ref,
-                        subido_por: currentUser?.nombre,
-                        subido_at: new Date().toISOString(),
-                      }).eq('id', cotModal.tarifa.id)
-                      setCotModal(null); loadData()
-                    }} className="text-[#1168F8] hover:underline text-[10px] font-medium">✓ Usar esta referencia</button>
-                  </div>
-                </div>
-              )}
-              <div>
-                <label className="block text-[10px] text-gray-500 font-medium mb-1">Archivo (PDF o imagen)</label>
-                <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg text-xs text-gray-500 hover:border-[#1168F8] cursor-pointer transition-colors">
-                  📎 {cotFile ? cotFile.name : 'Seleccionar archivo'}
-                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => setCotFile(e.target.files?.[0] || null)} />
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] text-gray-500 font-medium mb-1">Fecha de la cotización</label>
-                  <input type="date" value={cotFecha} onChange={e => setCotFecha(e.target.value)} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-gray-500 font-medium mb-1">Referencia operación/cliente</label>
-                  <input value={cotOpRef} onChange={e => setCotOpRef(e.target.value)} placeholder="ej. PNOA-2026-0001" className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" />
-                </div>
-              </div>
-            </div>
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-between">
-              <button onClick={() => setCotModal(null)} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Cancelar</button>
-              <button
-                disabled={!cotFile || uploading}
-                onClick={() => cotFile && uploadCotizacion(cotModal.tarifa.id, cotFile, cotFecha, cotOpRef)}
-                className="px-4 py-2 bg-[#1168F8] text-white rounded-lg text-xs font-medium hover:bg-[#0a4fc4] disabled:opacity-50">
-                {uploading ? 'Subiendo...' : '✓ Guardar cotización'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {view === 'lista' && (
+        <ListaView
+          cots={filtradas} loading={loading}
+          filtroProveedor={filtroProveedor} setFiltroProveedor={setFiltroProveedor}
+          filtroTipo={filtroTipo} setFiltroTipo={setFiltroTipo}
+          filtroEstado={filtroEstado} setFiltroEstado={setFiltroEstado}
+          proveedores={proveedores}
+          onOpen={openDetalle}
+          onToggleEstado={async (id, estado) => {
+            await (supabase.from('cotizaciones_proveedor') as any).update({ estado }).eq('id', id)
+            loadData()
+          }}
+        />
       )}
 
-      {/* Preview modal */}
+      {view === 'detalle' && selCot && (
+        <DetalleView
+          cot={selCot} supabase={supabase} currentUser={currentUser}
+          onReload={loadData} onPreview={setPreviewModal}
+        />
+      )}
+
+      {view === 'nueva' && (
+        <NuevaView
+          supabase={supabase} currentUser={currentUser} ops={ops}
+          onSave={async (cot) => {
+            const { data } = await (supabase.from('cotizaciones_proveedor') as any).insert(cot).select('id').single()
+            await loadData()
+            if (data) { setSelId(data.id); setView('detalle') }
+          }}
+          onCancel={() => setView('lista')}
+        />
+      )}
+
+      {view === 'comparativa' && (
+        <ComparativaView cots={cots} onPreview={setPreviewModal} />
+      )}
+
       {previewModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setPreviewModal(null)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
               <span className="font-medium text-sm text-gray-900 truncate">{previewModal.nombre}</span>
               <div className="flex gap-2">
@@ -451,113 +168,522 @@ export default function TarifasPage() {
                 <button onClick={() => setPreviewModal(null)} className="text-gray-400 hover:text-gray-600 text-xl px-1">×</button>
               </div>
             </div>
-            <div className="overflow-auto max-h-[75vh] p-2">
+            <div className="overflow-auto max-h-[80vh] p-2">
               {previewModal.nombre.toLowerCase().endsWith('.pdf')
-                ? <iframe src={previewModal.url} className="w-full h-[70vh] border-0" title={previewModal.nombre} />
+                ? <iframe src={previewModal.url} className="w-full h-[75vh] border-0" title={previewModal.nombre} />
                 : <img src={previewModal.url} alt={previewModal.nombre} className="max-w-full mx-auto rounded" />
               }
             </div>
           </div>
         </div>
       )}
+    </div>
+  )
+}
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700">
-        💡 Los valores se guardan automáticamente al hacer click fuera del campo. Para gastos <strong>% sobre CIF</strong>: Techo 0 = sin techo máximo.
+// ── LISTA ──────────────────────────────────────────────────────
+function ListaView({ cots, loading, filtroProveedor, setFiltroProveedor, filtroTipo, setFiltroTipo, filtroEstado, setFiltroEstado, proveedores, onOpen, onToggleEstado }: any) {
+  const sel = 'px-3 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:border-[#1168F8]'
+  return (
+    <div>
+      {/* Filtros */}
+      <div className="flex gap-3 mb-4 flex-wrap items-center">
+        <select value={filtroProveedor} onChange={e => setFiltroProveedor(e.target.value)} className={sel}>
+          <option value="">Todos los proveedores</option>
+          {proveedores.map((p: string) => <option key={p}>{p}</option>)}
+        </select>
+        <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} className={sel}>
+          <option value="">Genérica + Específica</option>
+          <option value="generica">Solo genéricas</option>
+          <option value="especifica">Solo específicas</option>
+        </select>
+        <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} className={sel}>
+          <option value="vigente">Vigentes</option>
+          <option value="vencida">Vencidas</option>
+          <option value="">Todas</option>
+        </select>
+        <span className="text-xs text-gray-400 ml-auto">{cots.length} cotización(es)</span>
       </div>
 
-      {/* Modal historial */}
-      {histModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <div>
-                <span className="font-medium text-sm text-gray-900">Historial de cambios</span>
-                <span className="text-xs text-gray-400 ml-2">{histModal.ruta}</span>
-              </div>
-              <button onClick={() => { setHistModal(null); setHistData([]) }} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
-            </div>
-            <div className="max-h-80 overflow-y-auto">
-              {histData.length ? (
-                <div className="divide-y divide-gray-50">
-                  {histData.map(h => (
-                    <div key={h.id} className="px-5 py-3 text-xs">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-gray-800">{h.usuario_nombre}</span>
-                        <span className="text-gray-400 text-[10px]">{new Date(h.created_at).toLocaleString('es-AR')}</span>
+      {loading ? (
+        <div className="p-8 text-center text-gray-400 text-sm">Cargando...</div>
+      ) : cots.length === 0 ? (
+        <div className="bg-white border border-gray-100 rounded-xl p-12 text-center">
+          <div className="text-3xl mb-3">📋</div>
+          <div className="text-gray-500 text-sm mb-1">Sin cotizaciones de proveedores</div>
+          <div className="text-gray-400 text-xs">Hacé click en "Nueva cotización" para cargar la primera</div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {cots.map((c: CotProv) => {
+            const itemCount = c.items?.length || 0
+            const opRef = (c.operacion as any)?.cotizacion
+            return (
+              <div key={c.id} className={`bg-white border rounded-xl p-4 hover:border-[#1168F8] transition-colors cursor-pointer ${c.estado === 'vencida' ? 'opacity-60 border-gray-100' : 'border-gray-100'}`}
+                onClick={() => onOpen(c.id)}>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${c.estado === 'vigente' ? 'bg-[#1168F8]' : 'bg-gray-300'}`}>
+                      {c.proveedor.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-sm text-gray-900">{c.proveedor}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {c.referencia && <span className="font-mono mr-2">{c.referencia}</span>}
+                        <span>{c.fecha}</span>
                       </div>
-                      <div className="text-gray-500">
-                        Campo <span className="font-mono text-gray-700">{h.campo}</span>:{' '}
-                        <span className="line-through text-red-400">{h.valor_anterior}</span>
-                        <span className="mx-1 text-gray-300">→</span>
-                        <span className="text-green-700 font-medium">{h.valor_nuevo}</span>
+                      <div className="flex gap-2 mt-1.5 flex-wrap">
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${c.tipo === 'generica' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>
+                          {c.tipo === 'generica' ? '📋 Genérica' : '🎯 Específica'}
+                        </span>
+                        {opRef && <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#EBF2FF] text-[#052698]">{opRef.num} · {opRef.cliente}</span>}
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${c.estado === 'vigente' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {c.estado === 'vigente' ? '✓ Vigente' : 'Vencida'}
+                        </span>
+                        {itemCount > 0 && <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600">{itemCount} ítem(s)</span>}
                       </div>
                     </div>
-                  ))}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {c.archivo_url && (
+                      <span className="text-[10px] text-[#1168F8] flex items-center gap-1">📄 PDF</span>
+                    )}
+                    <button
+                      onClick={e => { e.stopPropagation(); onToggleEstado(c.id, c.estado === 'vigente' ? 'vencida' : 'vigente') }}
+                      className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] text-gray-500 hover:bg-gray-50 transition-colors"
+                    >
+                      {c.estado === 'vigente' ? 'Vencer' : 'Reactivar'}
+                    </button>
+                  </div>
                 </div>
-              ) : (
-                <div className="px-5 py-8 text-center text-gray-400 text-sm">Sin historial.</div>
-              )}
-            </div>
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-end">
-              <button onClick={() => { setHistModal(null); setHistData([]) }} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Cerrar</button>
-            </div>
-          </div>
+                {c.notas && <div className="mt-2 text-[10px] text-amber-700 bg-amber-50 rounded px-2.5 py-1.5">📌 {c.notas}</div>}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
 
-function Section({ title, onAdd, loading, empty, onAddEmpty, children }: {
-  title: string; onAdd: () => void; loading: boolean; empty: boolean; onAddEmpty: () => void; children: React.ReactNode
-}) {
+// ── DETALLE ────────────────────────────────────────────────────
+function DetalleView({ cot, supabase, currentUser, onReload, onPreview }: any) {
+  const [items, setItems] = useState<CotProvItem[]>(cot.items || [])
+  const [form, setForm] = useState({ tipo_servicio: 'maritima', descripcion: '', ruta_origen: '', ruta_destino: '', tipo_equipo: '', moneda: 'USD', valor: '', tipo_calculo: 'fijo_usd', piso_usd: '', techo_usd: '', notas: '' })
+  const [uploading, setUploading] = useState(false)
+  const inp = 'w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+  const opRef = (cot.operacion as any)?.cotizacion
+
+  async function addItem() {
+    if (!form.descripcion || !form.valor) return
+    const { data } = await (supabase.from('cotizacion_proveedor_items') as any).insert({
+      cotizacion_id: cot.id,
+      tipo_servicio: form.tipo_servicio,
+      descripcion: form.descripcion,
+      ruta_origen: form.ruta_origen,
+      ruta_destino: form.ruta_destino,
+      tipo_equipo: form.tipo_equipo,
+      moneda: form.moneda,
+      valor: parseFloat(form.valor.replace(',', '.')) || 0,
+      tipo_calculo: form.tipo_calculo,
+      piso_usd: parseFloat(form.piso_usd.replace(',', '.')) || 0,
+      techo_usd: parseFloat(form.techo_usd.replace(',', '.')) || 0,
+      notas: form.notas,
+      orden: items.length,
+    }).select('*').single()
+    if (data) setItems(p => [...p, data as CotProvItem])
+    setForm(f => ({ ...f, descripcion: '', ruta_origen: '', ruta_destino: '', tipo_equipo: '', valor: '', piso_usd: '', techo_usd: '', notas: '' }))
+  }
+
+  async function deleteItem(id: string) {
+    if (!confirm('¿Eliminar este ítem?')) return
+    await supabase.from('cotizacion_proveedor_items').delete().eq('id', id)
+    setItems(p => p.filter(i => i.id !== id))
+  }
+
+  async function uploadPDF(file: File) {
+    if (!currentUser) return
+    setUploading(true)
+    const ext = file.name.split('.').pop()
+    const path = `cotizaciones_proveedor/${cot.id}.${ext}`
+    await supabase.storage.from('comprobantes').upload(path, file, { upsert: true })
+    const { data } = supabase.storage.from('comprobantes').getPublicUrl(path)
+    if (data?.publicUrl) {
+      await (supabase.from('cotizaciones_proveedor') as any).update({ archivo_url: data.publicUrl, archivo_nombre: file.name }).eq('id', cot.id)
+      onReload()
+    }
+    setUploading(false)
+  }
+
+  async function updateItem(id: string, field: string, value: any) {
+    await (supabase.from('cotizacion_proveedor_items') as any).update({ [field]: value }).eq('id', id)
+    setItems(p => p.map(i => i.id === id ? { ...i, [field]: value } : i))
+  }
+
+  // Group items by tipo_servicio
+  const grouped = items.reduce((acc: Record<string, CotProvItem[]>, item) => {
+    if (!acc[item.tipo_servicio]) acc[item.tipo_servicio] = []
+    acc[item.tipo_servicio].push(item)
+    return acc
+  }, {})
+
   return (
-    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-4">
-      <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
-        <span className="font-medium text-sm text-gray-900">{title}</span>
-        <button onClick={onAdd} className="text-xs text-[#1168F8] hover:underline">+ Agregar</button>
+    <div className="space-y-4">
+      {/* Header cotización */}
+      <div className="bg-white border border-gray-100 rounded-xl p-5">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-lg font-bold text-gray-900">{cot.proveedor}</span>
+              <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${cot.tipo === 'generica' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>
+                {cot.tipo === 'generica' ? '📋 Genérica' : '🎯 Específica'}
+              </span>
+              <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${cot.estado === 'vigente' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                {cot.estado === 'vigente' ? '✓ Vigente' : 'Vencida'}
+              </span>
+            </div>
+            <div className="text-xs text-gray-500">
+              {cot.referencia && <span className="font-mono mr-3">{cot.referencia}</span>}
+              <span>Fecha: {cot.fecha}</span>
+              {opRef && <span className="ml-3 text-[#1168F8]">Operación: {opRef.num} · {opRef.cliente}</span>}
+            </div>
+            {cot.notas && <div className="text-xs text-amber-700 mt-1">📌 {cot.notas}</div>}
+          </div>
+          {/* PDF */}
+          <div className="flex-shrink-0">
+            {cot.archivo_url ? (
+              <div className="flex items-center gap-2">
+                <button onClick={() => onPreview({ url: cot.archivo_url, nombre: cot.archivo_nombre || 'cotizacion.pdf' })}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC] transition-colors">
+                  📄 Ver PDF
+                </button>
+                <label className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-50 cursor-pointer transition-colors">
+                  🔄 Reemplazar
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadPDF(f) }} />
+                </label>
+              </div>
+            ) : (
+              <label className={`flex items-center gap-1.5 px-3 py-2 border-2 border-dashed border-[#93B8FC] rounded-lg text-xs text-[#1168F8] hover:bg-[#EBF2FF] cursor-pointer transition-colors ${uploading ? 'opacity-60' : ''}`}>
+                📎 {uploading ? 'Subiendo...' : 'Adjuntar PDF cotización'}
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadPDF(f) }} disabled={uploading} />
+              </label>
+            )}
+          </div>
+        </div>
       </div>
-      {loading ? (
-        <div className="p-4 text-center text-gray-400 text-xs">Cargando...</div>
-      ) : empty ? (
-        <div className="px-4 py-4 text-center text-gray-400 text-xs">
-          Sin tarifas. <button onClick={onAddEmpty} className="text-[#1168F8] hover:underline">Agregar una →</button>
+
+      {/* Items agrupados por tipo */}
+      {Object.entries(TIPOS_SERVICIO).map(([tipo, label]) => {
+        const group = grouped[tipo] || []
+        if (!group.length) return null
+        const total = group.reduce((s, i) => s + i.valor, 0)
+        return (
+          <div key={tipo} className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+            <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+              <span className="font-medium text-sm text-gray-900">{label}</span>
+              <span className="text-xs text-gray-400 font-mono">{group.length} ítem(s)</span>
+            </div>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Descripción', 'Ruta', 'Equipo', 'Tipo cálculo', 'Valor', 'Piso USD', 'Notas', ''].map(h =>
+                    <th key={h} className="text-left px-4 py-2 text-[10px] font-medium text-gray-400 uppercase tracking-wide">{h}</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {group.map(item => (
+                  <tr key={item.id} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="px-4 py-2.5">
+                      <input defaultValue={item.descripcion} onBlur={e => updateItem(item.id, 'descripcion', e.target.value)}
+                        className="w-full px-2 py-1 border border-transparent rounded hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs" />
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-1 text-[10px]">
+                        <input defaultValue={item.ruta_origen} onBlur={e => updateItem(item.id, 'ruta_origen', e.target.value)}
+                          className="w-16 px-1.5 py-1 border border-transparent rounded hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs" placeholder="Origen" />
+                        <span className="text-gray-300">→</span>
+                        <input defaultValue={item.ruta_destino} onBlur={e => updateItem(item.id, 'ruta_destino', e.target.value)}
+                          className="w-16 px-1.5 py-1 border border-transparent rounded hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs" placeholder="Destino" />
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <input defaultValue={item.tipo_equipo} onBlur={e => updateItem(item.id, 'tipo_equipo', e.target.value)}
+                        className="w-16 px-2 py-1 border border-transparent rounded hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs font-mono" placeholder="40HC" />
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <select defaultValue={item.tipo_calculo} onBlur={e => updateItem(item.id, 'tipo_calculo', e.target.value)}
+                        className="px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+                        {Object.entries(TIPO_CALCULO_L).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-gray-400">{item.moneda}</span>
+                        <input type="text" inputMode="decimal" defaultValue={item.valor} onFocus={e => e.target.select()}
+                          onBlur={e => updateItem(item.id, 'valor', parseFloat(e.target.value.replace(',', '.')) || 0)}
+                          className="w-20 px-2 py-1 border border-transparent rounded hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs text-right font-mono" />
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {item.tipo_calculo === 'pct_cif' ? (
+                        <input type="text" inputMode="decimal" defaultValue={item.piso_usd} onFocus={e => e.target.select()}
+                          onBlur={e => updateItem(item.id, 'piso_usd', parseFloat(e.target.value.replace(',', '.')) || 0)}
+                          className="w-16 px-2 py-1 border border-transparent rounded hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs text-right font-mono" />
+                      ) : <span className="text-gray-300 text-[10px]">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <input defaultValue={item.notas} onBlur={e => updateItem(item.id, 'notas', e.target.value)}
+                        className="w-full px-2 py-1 border border-transparent rounded hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs text-gray-400" placeholder="Opcional" />
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <button onClick={() => deleteItem(item.id)} className="p-1 text-gray-400 hover:text-red-500 transition-colors text-xs">🗑</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-[#EBF2FF]">
+                  <td colSpan={4} className="px-4 py-2 text-[10px] font-semibold text-[#052698]">Subtotal {label}</td>
+                  <td className="px-4 py-2 font-mono font-semibold text-[#052698] text-right">{fmt(total)}</td>
+                  <td colSpan={3}></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )
+      })}
+
+      {/* Agregar ítem */}
+      <div className="bg-white border border-gray-100 rounded-xl p-5">
+        <h3 className="font-medium text-sm text-gray-900 mb-3">+ Agregar ítem a esta cotización</h3>
+        <div className="grid grid-cols-4 gap-3 mb-3">
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Tipo de servicio</label>
+            <select value={form.tipo_servicio} onChange={e => setForm(f => ({ ...f, tipo_servicio: e.target.value }))}
+              className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+              {Object.entries(TIPOS_SERVICIO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Descripción</label>
+            <input value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} className={inp} placeholder="ej. Flete marítimo FCL" />
+          </div>
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Equipo / tipo</label>
+            <input value={form.tipo_equipo} onChange={e => setForm(f => ({ ...f, tipo_equipo: e.target.value }))} className={inp} placeholder="ej. 40HC" />
+          </div>
+        </div>
+        <div className="grid grid-cols-5 gap-3 mb-3">
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Origen</label>
+            <input value={form.ruta_origen} onChange={e => setForm(f => ({ ...f, ruta_origen: e.target.value }))} className={inp} placeholder="ej. Iquique" />
+          </div>
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Destino</label>
+            <input value={form.ruta_destino} onChange={e => setForm(f => ({ ...f, ruta_destino: e.target.value }))} className={inp} placeholder="ej. Jujuy" />
+          </div>
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Tipo cálculo</label>
+            <select value={form.tipo_calculo} onChange={e => setForm(f => ({ ...f, tipo_calculo: e.target.value }))}
+              className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+              {Object.entries(TIPO_CALCULO_L).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Moneda / Valor</label>
+            <div className="flex gap-1">
+              <select value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value }))}
+                className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+                <option>USD</option><option>ARS</option><option>CLP</option>
+              </select>
+              <input type="text" inputMode="decimal" value={form.valor} onFocus={e => e.target.select()} onChange={e => setForm(f => ({ ...f, valor: e.target.value }))} className={inp + ' text-right'} placeholder="0.00" />
+            </div>
+          </div>
+          {form.tipo_calculo === 'pct_cif' && (
+            <div>
+              <label className="block text-[10px] text-gray-500 font-medium mb-1">Piso USD</label>
+              <input type="text" inputMode="decimal" value={form.piso_usd} onFocus={e => e.target.select()} onChange={e => setForm(f => ({ ...f, piso_usd: e.target.value }))} className={inp + ' text-right'} placeholder="0" />
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end">
+          <button onClick={addItem} className="px-4 py-2 bg-[#1168F8] text-white rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors">+ Agregar ítem</button>
+        </div>
+      </div>
+
+      <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
+        💡 Los cambios en los ítems se guardan automáticamente al hacer click fuera del campo.
+        {cot.creado_por && <span className="ml-2 text-gray-400">Creado por {cot.creado_por} · {cot.created_at?.slice(0, 10)}</span>}
+      </div>
+    </div>
+  )
+}
+
+// ── NUEVA COTIZACIÓN ───────────────────────────────────────────
+function NuevaView({ supabase, currentUser, ops, onSave, onCancel }: any) {
+  const [form, setForm] = useState({ proveedor: '', referencia: '', fecha: new Date().toISOString().slice(0, 10), tipo: 'generica', operacion_id: '', notas: '' })
+  const inp = 'w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-xl p-6 max-w-xl">
+      <h2 className="font-semibold text-sm text-gray-900 mb-4">Nueva cotización de proveedor</h2>
+      <div className="space-y-3">
+        <div>
+          <label className="block text-[10px] text-gray-500 font-medium mb-1">Proveedor *</label>
+          <input value={form.proveedor} onChange={e => setForm(f => ({ ...f, proveedor: e.target.value }))} className={inp} placeholder="ej. Hellmann Worldwide Logistics" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">N° referencia / cotización</label>
+            <input value={form.referencia} onChange={e => setForm(f => ({ ...f, referencia: e.target.value }))} className={inp} placeholder="ej. HWL-2026-AR-001" />
+          </div>
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Fecha de la cotización *</label>
+            <input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} className={inp} />
+          </div>
+        </div>
+        <div>
+          <label className="block text-[10px] text-gray-500 font-medium mb-1">Tipo</label>
+          <div className="grid grid-cols-2 gap-2">
+            {[{ k: 'generica', label: '📋 Genérica', sub: 'Tarifa general del proveedor' }, { k: 'especifica', label: '🎯 Específica', sub: 'Para una operación en particular' }].map(o => (
+              <button key={o.k} onClick={() => setForm(f => ({ ...f, tipo: o.k, operacion_id: o.k === 'generica' ? '' : f.operacion_id }))}
+                className={`px-3 py-2.5 rounded-lg border text-left transition-colors ${form.tipo === o.k ? 'border-[#1168F8] bg-[#EBF2FF] text-[#052698]' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                <div className="text-xs font-semibold">{o.label}</div>
+                <div className="text-[10px] opacity-70 mt-0.5">{o.sub}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+        {form.tipo === 'especifica' && (
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Operación vinculada</label>
+            <select value={form.operacion_id} onChange={e => setForm(f => ({ ...f, operacion_id: e.target.value }))}
+              className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+              <option value="">Seleccionar operación...</option>
+              {ops.map((o: any) => <option key={o.id} value={o.id}>{o.cotizacion?.num} · {o.cotizacion?.cliente}</option>)}
+            </select>
+          </div>
+        )}
+        <div>
+          <label className="block text-[10px] text-gray-500 font-medium mb-1">Notas</label>
+          <input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} className={inp} placeholder="Observaciones generales" />
+        </div>
+      </div>
+      <div className="flex justify-between mt-5">
+        <button onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 transition-colors">Cancelar</button>
+        <button
+          disabled={!form.proveedor || !form.fecha}
+          onClick={() => onSave({ proveedor: form.proveedor, referencia: form.referencia || null, fecha: form.fecha, tipo: form.tipo, operacion_id: form.operacion_id || null, notas: form.notas || null, estado: 'vigente', creado_por: currentUser?.nombre || '', creado_por_id: currentUser?.id || null })}
+          className="px-4 py-2 bg-[#1168F8] text-white rounded-lg text-xs font-medium hover:bg-[#0a4fc4] disabled:opacity-50 transition-colors">
+          Crear cotización →
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── COMPARATIVA ────────────────────────────────────────────────
+function ComparativaView({ cots, onPreview }: any) {
+  const [tipoServicio, setTipoServicio] = useState('maritima')
+  const [ruta, setRuta] = useState('')
+  const [equipo, setEquipo] = useState('')
+
+  // Get all items of selected tipo
+  const allItems: Array<CotProvItem & { proveedor: string; fecha: string; estado: string; cotizacion_id: string; archivo_url?: string; archivo_nombre?: string }> = []
+  cots.forEach((c: CotProv) => {
+    (c.items || []).filter((i: CotProvItem) => i.tipo_servicio === tipoServicio).forEach((i: CotProvItem) => {
+      allItems.push({ ...i, proveedor: c.proveedor, fecha: c.fecha, estado: c.estado, cotizacion_id: c.id, archivo_url: c.archivo_url || undefined, archivo_nombre: c.archivo_nombre || undefined })
+    })
+  })
+
+  const rutas = [...new Set(allItems.map(i => `${i.ruta_origen}→${i.ruta_destino}`).filter(Boolean))].sort()
+  const equipos = [...new Set(allItems.map(i => i.tipo_equipo).filter(Boolean))].sort()
+
+  const filtrados = allItems.filter(i => {
+    const matchR = !ruta || `${i.ruta_origen}→${i.ruta_destino}` === ruta
+    const matchE = !equipo || i.tipo_equipo === equipo
+    return matchR && matchE
+  }).sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+
+  const sel = 'px-3 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:border-[#1168F8]'
+
+  return (
+    <div>
+      <div className="flex gap-3 mb-4 flex-wrap items-center">
+        <select value={tipoServicio} onChange={e => setTipoServicio(e.target.value)} className={sel}>
+          {Object.entries(TIPOS_SERVICIO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <select value={ruta} onChange={e => setRuta(e.target.value)} className={sel}>
+          <option value="">Todas las rutas</option>
+          {rutas.map(r => <option key={r}>{r}</option>)}
+        </select>
+        <select value={equipo} onChange={e => setEquipo(e.target.value)} className={sel}>
+          <option value="">Todos los equipos</option>
+          {equipos.map(e => <option key={e}>{e}</option>)}
+        </select>
+        <span className="text-xs text-gray-400 ml-auto">{filtrados.length} cotización(es) encontradas</span>
+      </div>
+
+      {filtrados.length === 0 ? (
+        <div className="bg-white border border-gray-100 rounded-xl p-8 text-center text-gray-400 text-sm">
+          Sin cotizaciones para los filtros seleccionados.
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">
+            Comparativa de precios — {TIPOS_SERVICIO[tipoServicio]}
+          </div>
           <table className="w-full text-xs">
-            {children}
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                {['Proveedor', 'Fecha', 'Ruta', 'Equipo', 'Descripción', 'Tipo', 'Precio', 'Estado', 'Ref.'].map(h =>
+                  <th key={h} className="text-left px-4 py-2.5 text-[10px] font-medium text-gray-400 uppercase tracking-wide">{h}</th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.map((item, idx) => {
+                const isMin = item.valor === Math.min(...filtrados.map(i => i.valor))
+                const isMax = item.valor === Math.max(...filtrados.map(i => i.valor))
+                return (
+                  <tr key={item.id + idx} className={`border-b border-gray-50 hover:bg-gray-50 ${item.estado === 'vencida' ? 'opacity-50' : ''}`}>
+                    <td className="px-4 py-3 font-medium text-gray-800">{item.proveedor}</td>
+                    <td className="px-4 py-3 font-mono text-[10px] text-gray-500">{item.fecha}</td>
+                    <td className="px-4 py-3 text-gray-600 text-[10px]">{item.ruta_origen && `${item.ruta_origen} → ${item.ruta_destino}`}</td>
+                    <td className="px-4 py-3 font-mono text-gray-600">{item.tipo_equipo || '—'}</td>
+                    <td className="px-4 py-3 text-gray-700">{item.descripcion}</td>
+                    <td className="px-4 py-3 text-[10px] text-gray-500">{TIPO_CALCULO_L[item.tipo_calculo]}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`font-mono font-semibold ${isMin ? 'text-green-700' : isMax ? 'text-red-600' : 'text-gray-800'}`}>
+                          {item.moneda} {fmt(item.valor)}
+                        </span>
+                        {isMin && filtrados.length > 1 && <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Menor</span>}
+                        {isMax && filtrados.length > 1 && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-medium">Mayor</span>}
+                      </div>
+                      {item.piso_usd > 0 && <div className="text-[9px] text-gray-400 mt-0.5">Piso: USD {fmt(item.piso_usd)}</div>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${item.estado === 'vigente' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {item.estado === 'vigente' ? '✓' : '✗'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {item.archivo_url && (
+                        <button onClick={() => onPreview({ url: item.archivo_url, nombre: item.archivo_nombre || 'cotizacion.pdf' })}
+                          className="px-2 py-0.5 bg-[#EBF2FF] text-[#1168F8] rounded text-[10px] hover:bg-[#93B8FC] transition-colors">
+                          📄 PDF
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
           </table>
         </div>
       )}
     </div>
-  )
-}
-
-function InlineInput({ value, onSave, placeholder }: { value: string; onSave: (v: string) => void; placeholder?: string }) {
-  return (
-    <input
-      defaultValue={value}
-      onBlur={e => onSave(e.target.value)}
-      className="w-full px-2 py-1 border border-transparent rounded hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs"
-      placeholder={placeholder}
-    />
-  )
-}
-
-function InlineNum({ value, onSave, placeholder }: { value: number; onSave: (v: number) => void; placeholder?: string }) {
-  return (
-    <input
-      type="text"
-      inputMode="decimal"
-      defaultValue={value}
-      onFocus={e => e.target.select()}
-      onBlur={e => {
-        const n = parseFloat(e.target.value.replace(',', '.').replace(/[^0-9.-]/g, ''))
-        onSave(isNaN(n) ? 0 : n)
-      }}
-      className="w-24 px-2 py-1 border border-transparent rounded hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs text-right font-mono"
-      placeholder={placeholder || '0'}
-    />
   )
 }
