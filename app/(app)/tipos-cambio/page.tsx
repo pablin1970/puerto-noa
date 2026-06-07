@@ -33,7 +33,34 @@ export default function TiposCambioPage() {
   const [filtroDesde, setFiltroDesde] = useState('')
   const [filtroHasta, setFiltroHasta] = useState('')
 
-  useEffect(() => { loadUser(); loadData() }, [])
+  useEffect(() => { 
+    loadUser()
+    loadData().then(() => {
+      // Auto-actualizar si algún TC tiene más de 1 día
+      checkAutoUpdate()
+    })
+  }, [])
+
+  async function checkAutoUpdate() {
+    const { data } = await supabase
+      .from('tipos_cambio')
+      .select('moneda, fecha')
+      .order('fecha', { ascending: false })
+      .order('created_at', { ascending: false })
+    
+    if (!data) return
+    const hoy = new Date().toISOString().slice(0, 10)
+    const monedas = ['ARS', 'CLP', 'CNY']
+    
+    for (const moneda of monedas) {
+      const latest = (data as any[]).find(t => t.moneda === moneda)
+      const fechaUltimo = latest?.fecha || ''
+      // Si no tiene TC hoy, actualizar automáticamente
+      if (fechaUltimo < hoy) {
+        await actualizarDesdeAPI(moneda)
+      }
+    }
+  }
 
   async function loadUser() {
     const { data: auth } = await supabase.auth.getUser()
@@ -265,4 +292,3 @@ export default function TiposCambioPage() {
     </div>
   )
 }
-
