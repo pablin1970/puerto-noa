@@ -5,7 +5,7 @@ import { fmt, ETAPAS_L, ETAPAS_ORD, nowDate, nowStr } from '@/lib/utils'
 import type { Cotizacion, Operacion, Gasto, MovimientoCC, MinutaItem, EtapaGasto, Moneda } from '@/types'
 import { useSearchParams } from 'next/navigation'
 
-type Tab = 'resumen' | 'gastos' | 'comparativo' | 'cc' | 'minuta'
+type Tab = 'resumen' | 'gastos' | 'comparativo' | 'cc' | 'minuta' | 'documentos'
 
 function OperacionesContent() {
   const searchParams = useSearchParams()
@@ -75,6 +75,7 @@ function OperacionDetail({
   const [gastos, setGastos] = useState<Gasto[]>([])
   const [movs, setMovs] = useState<MovimientoCC[]>([])
   const [minuta, setMinuta] = useState<MinutaItem[]>([])
+  const [docs, setDocs] = useState<any[]>([])
   const [loadingDetail, setLoadingDetail] = useState(true)
   const supabase = createClient()
 
@@ -82,14 +83,16 @@ function OperacionDetail({
 
   async function loadDetail() {
     setLoadingDetail(true)
-    const [g, m, mi] = await Promise.all([
+    const [g, m, mi, d] = await Promise.all([
       supabase.from('gastos').select('*').eq('operacion_id', op.id).order('fecha'),
       supabase.from('movimientos_cc').select('*').eq('operacion_id', op.id).order('fecha'),
       supabase.from('minuta_items').select('*').eq('operacion_id', op.id),
+      supabase.from('operacion_documentos').select('*').eq('operacion_id', op.id).order('created_at'),
     ])
     if (g.data) setGastos(g.data as Gasto[])
     if (m.data) setMovs(m.data as MovimientoCC[])
     if (mi.data) setMinuta(mi.data as MinutaItem[])
+    if (d.data) setDocs(d.data as any[])
     setLoadingDetail(false)
   }
 
@@ -108,6 +111,7 @@ function OperacionDetail({
     { key: 'comparativo', label: 'Presup. vs. Real' },
     { key: 'cc', label: 'Cuenta corriente' },
     { key: 'minuta', label: 'Minuta de pago' },
+    { key: 'documentos', label: '📁 Documentos' },
   ]
 
   return (
@@ -191,6 +195,10 @@ function OperacionDetail({
 
       {tab === 'minuta' && (
         <MinutaTab opId={op.id} cotNum={cot.num || ''} cliente={cot.cliente} minuta={minuta} reload={loadDetail} />
+      )}
+
+      {tab === 'documentos' && (
+        <DocumentosTab opId={op.id} docs={docs} reload={loadDetail} />
       )}
     </>
   )
@@ -798,5 +806,194 @@ export default function OperacionesPage() {
     <Suspense fallback={<div className="p-8 text-gray-400">Cargando...</div>}>
       <OperacionesContent />
     </Suspense>
+  )
+}
+
+// ── DOCUMENTOS TAB ─────────────────────────────────────────────
+const TIPOS_DOC = [
+  { key: 'bl', label: 'BL — Bill of Lading' },
+  { key: 'packing', label: 'Packing List' },
+  { key: 'crt', label: 'CRT — Carta de Porte' },
+  { key: 'liquidacion', label: 'Liquidación de impuestos (SIM)' },
+  { key: 'otro', label: 'Otro (definir nombre)' },
+]
+
+function DocumentosTab({ opId, docs, reload }: { opId: string; docs: any[]; reload: () => void }) {
+  const supabase = createClient()
+  const [form, setForm] = useState({ tipo: 'bl', nombre_custom: '', referencia: '', fecha: '', notas: '' })
+  const [uploading, setUploading] = useState(false)
+  const [previewModal, setPreviewModal] = useState<{ url: string; nombre: string; tipo: string } | null>(null)
+  const [currentUser, setCurrentUser] = useState<{ id: string; nombre: string } | null>(null)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) return
+      supabase.from('usuarios').select('id, nombre').eq('auth_id', data.user.id).single().then(({ data: u }) => {
+        if (u) setCurrentUser(u as any)
+      })
+    })
+  }, [])
+
+  async function subirDocumento(file: File) {
+    if (!currentUser) return
+    setUploading(true)
+    // First create the doc record
+    const { data: docData } = await (supabase.from('operacion_documentos') as any).insert({
+      operacion_id: opId,
+      tipo: form.tipo,
+      nombre_custom: form.tipo === 'otro' ? form.nombre_custom : null,
+      referencia: form.referencia || null,
+      fecha: form.fecha || null,
+      notas: form.notas || null,
+      subido_por: currentUser.nombre,
+      subido_por_id: currentUser.id,
+      archivo_nombre: file.name,
+    }).select('id').single()
+
+    if (docData) {
+      const ext = file.name.split('.').pop()
+      const path = `documentos/${opId}/${docData.id}.${ext}`
+      await supabase.storage.from('comprobantes').upload(path, file, { upsert: true })
+      const { data: urlData } = supabase.storage.from('comprobantes').getPublicUrl(path)
+      if (urlData?.publicUrl) {
+        await (supabase.from('operacion_documentos') as any).update({ archivo_url: urlData.publicUrl }).eq('id', docData.id)
+      }
+    }
+    setForm({ tipo: 'bl', nombre_custom: '', referencia: '', fecha: '', notas: '' })
+    setUploading(false)
+    reload()
+  }
+
+  async function eliminar(id: string) {
+    if (!confirm('¿Eliminar este documento?')) return
+    await supabase.from('operacion_documentos').delete().eq('id', id)
+    reload()
+  }
+
+  const inp = 'w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]'
+
+  // Group docs by tipo
+  const grouped = docs.reduce((acc: Record<string, any[]>, d) => {
+    const key = d.tipo === 'otro' ? (d.nombre_custom || 'Otro') : d.tipo
+    if (!acc[key]) acc[key] = []
+    acc[key].push(d)
+    return acc
+  }, {})
+
+  const getLabel = (tipo: string, nombre_custom?: string) => {
+    if (tipo === 'otro') return nombre_custom || 'Otro'
+    return TIPOS_DOC.find(t => t.key === tipo)?.label || tipo
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Formulario carga */}
+      <div className="bg-white border border-gray-100 rounded-xl p-5">
+        <h3 className="font-medium text-sm text-gray-900 mb-4">Agregar documento a la operación</h3>
+        <div className="grid grid-cols-4 gap-3 mb-3">
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Tipo de documento</label>
+            <select value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}
+              className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+              {TIPOS_DOC.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+            </select>
+          </div>
+          {form.tipo === 'otro' && (
+            <div>
+              <label className="block text-[10px] text-gray-500 font-medium mb-1">Nombre del documento *</label>
+              <input value={form.nombre_custom} onChange={e => setForm(f => ({ ...f, nombre_custom: e.target.value }))} className={inp} placeholder="ej. Certificado de origen" />
+            </div>
+          )}
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">N° referencia</label>
+            <input value={form.referencia} onChange={e => setForm(f => ({ ...f, referencia: e.target.value }))} className={inp} placeholder="ej. HLBU1234567" />
+          </div>
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Fecha del documento</label>
+            <input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} className={inp} />
+          </div>
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Notas</label>
+            <input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} className={inp} placeholder="Opcional" />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <label className={`flex items-center gap-2 px-4 py-2 border-2 border-dashed border-[#93B8FC] rounded-lg text-xs text-[#1168F8] hover:bg-[#EBF2FF] cursor-pointer transition-colors ${uploading ? 'opacity-60' : ''}`}>
+            📎 {uploading ? 'Subiendo...' : 'Seleccionar y subir archivo (PDF / imagen)'}
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden"
+              disabled={uploading || (form.tipo === 'otro' && !form.nombre_custom)}
+              onChange={e => { const f = e.target.files?.[0]; if (f) subirDocumento(f) }} />
+          </label>
+          {form.tipo === 'otro' && !form.nombre_custom && (
+            <span className="text-[10px] text-amber-600">⚠ Ingresá el nombre del documento primero</span>
+          )}
+        </div>
+      </div>
+
+      {/* Lista de documentos agrupados */}
+      {Object.keys(grouped).length === 0 ? (
+        <div className="bg-white border border-gray-100 rounded-xl p-8 text-center text-gray-400 text-sm">
+          Sin documentos cargados aún.
+        </div>
+      ) : (
+        Object.entries(grouped).map(([key, items]) => (
+          <div key={key} className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+            <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+              <span className="font-medium text-sm text-gray-900">{getLabel(items[0].tipo, items[0].nombre_custom)}</span>
+              <span className="text-xs text-gray-400">{items.length} archivo(s)</span>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {items.map((doc: any) => (
+                <div key={doc.id} className="flex items-center gap-4 px-5 py-3 text-xs">
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-800">{doc.archivo_nombre}</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5 flex gap-3">
+                      {doc.referencia && <span className="font-mono">Ref: {doc.referencia}</span>}
+                      {doc.fecha && <span>Fecha: {doc.fecha}</span>}
+                      {doc.subido_por && <span>Subido por: {doc.subido_por}</span>}
+                      <span>{new Date(doc.created_at).toLocaleDateString('es-AR')}</span>
+                    </div>
+                    {doc.notas && <div className="text-[10px] text-amber-600 mt-0.5">📌 {doc.notas}</div>}
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    {doc.archivo_url && (
+                      <button onClick={() => setPreviewModal({ url: doc.archivo_url, nombre: doc.archivo_nombre, tipo: doc.archivo_nombre?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'img' })}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-[10px] hover:bg-[#93B8FC] transition-colors font-medium">
+                        📄 Ver
+                      </button>
+                    )}
+                    <button onClick={() => eliminar(doc.id)}
+                      className="p-1.5 border border-gray-200 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors text-[10px]">
+                      🗑
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
+
+      {/* Preview modal */}
+      {previewModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setPreviewModal(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <span className="font-medium text-sm text-gray-900 truncate">{previewModal.nombre}</span>
+              <div className="flex gap-2">
+                <a href={previewModal.url} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs hover:bg-[#0a4fc4]">🔗 Abrir</a>
+                <button onClick={() => setPreviewModal(null)} className="text-gray-400 hover:text-gray-600 text-xl px-1">×</button>
+              </div>
+            </div>
+            <div className="overflow-auto max-h-[80vh] p-2">
+              {previewModal.tipo === 'pdf'
+                ? <iframe src={previewModal.url} className="w-full h-[75vh] border-0" title={previewModal.nombre} />
+                : <img src={previewModal.url} alt={previewModal.nombre} className="max-w-full mx-auto rounded" />
+              }
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
