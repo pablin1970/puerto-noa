@@ -86,7 +86,7 @@ export default function TiposCambioPage() {
     setLoading(false)
   }
 
-  async function guardarTC(moneda: string, valor: number, fuente: 'manual' | 'automatico', apiFuente?: string) {
+  async function guardarTC(moneda: string, valor: number, fuente: 'manual' | 'automatico' | 'forzado', apiFuente?: string) {
     if (!valor || isNaN(valor) || valor <= 0) return
     setGuardando(g => ({ ...g, [moneda]: true }))
     await (supabase.from('tipos_cambio') as any).insert({
@@ -100,7 +100,7 @@ export default function TiposCambioPage() {
     setGuardando(g => ({ ...g, [moneda]: false }))
   }
 
-  async function actualizarDesdeAPI(moneda: string) {
+  async function actualizarDesdeAPI(moneda: string, tipofuente: 'automatico' | 'forzado' = 'automatico') {
     setActualizando(a => ({ ...a, [moneda]: true }))
     try {
       let valor: number | null = null
@@ -119,7 +119,7 @@ export default function TiposCambioPage() {
       }
       if (valor && valor > 0) {
         setEditando(e => ({ ...e, [moneda]: String(Math.round(moneda === 'CNY' ? valor! * 10000 : valor!) / (moneda === 'CNY' ? 10000 : 1)) }))
-        await guardarTC(moneda, valor, 'automatico', fuente)
+        await guardarTC(moneda, valor, tipofuente, fuente)
       } else {
         alert(`No se pudo obtener TC de ${moneda} desde la API. Ingresalo manualmente.`)
       }
@@ -178,7 +178,7 @@ export default function TiposCambioPage() {
                   {vig ? fmt(vig.valor, moneda === 'CNY' ? 4 : 0) : '—'}
                 </div>
                 <div className="text-[10px] text-gray-400 mb-4">
-                  {vig ? `${vig.fuente === 'automatico' ? '🤖 Auto' : '✏️ Manual'} · ${vig.api_fuente || ''} · ${vig.fecha}` : 'Sin datos aún'}
+                  {vig ? `${vig.fuente === 'automatico' ? '🤖 Cron' : vig.fuente === 'forzado' ? '⚡ Forzado' : '✏️ Manual'} · ${vig.api_fuente || ''} · ${vig.fecha}` : 'Sin datos aún'}
                 </div>
                 <div className="flex items-center gap-2 mb-3">
                   <input
@@ -195,7 +195,7 @@ export default function TiposCambioPage() {
                     {isGuard ? '...' : '✓ Guardar'}
                   </button>
                 </div>
-                <button disabled={isAct} onClick={() => actualizarDesdeAPI(moneda)}
+                <button disabled={isAct} onClick={() => actualizarDesdeAPI(moneda, 'forzado')}
                   className="w-full flex items-center justify-center gap-2 py-2.5 border-2 rounded-xl text-xs font-bold transition-all hover:opacity-80"
                   style={{ borderColor: info.color, color: isAct ? '#9ca3af' : info.color, borderStyle: 'solid' }}>
                   {isAct ? <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⟳</span> Consultando...</> : <><span>🔄</span> Actualizar desde {info.banco.split('—')[0].trim()}</>}
@@ -269,8 +269,8 @@ export default function TiposCambioPage() {
                       ) : <span className="text-gray-200">—</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${t.fuente === 'automatico' ? 'bg-blue-50 text-[#1168F8]' : 'bg-gray-100 text-gray-600'}`}>
-                        {t.fuente === 'automatico' ? '🤖 Auto' : '✏️ Manual'}
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${t.fuente === 'automatico' ? 'bg-blue-50 text-[#1168F8]' : t.fuente === 'forzado' ? 'bg-purple-50 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {t.fuente === 'automatico' ? '🤖 Cron' : t.fuente === 'forzado' ? '⚡ Forzado' : '✏️ Manual'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-400 text-[10px] max-w-36 truncate">{t.api_fuente || '—'}</td>
