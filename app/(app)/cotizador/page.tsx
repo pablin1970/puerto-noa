@@ -26,7 +26,7 @@ interface CotState {
   cliente: string; cuit: string; email: string; telefono: string
   despachante: string; ivaCondicion: string; validez: string
   origen: string; ptoChile: string; destinoNoa: string; incoterm: string
-  transito: string; refNaviero: string; notas: string
+  transito: string; refNaviero: string; cotProvId: string; cotProvLabel: string; notas: string
   contenedores: ContenedorCot[]; productos: ProductoCot[]
   exwTransp: number; exwAgente: number; exwOtros: number; precioArgEquiv: number
   rowsA: ItemLog[]; segModo: 'pct'|'fijo'; segVal: number
@@ -178,12 +178,21 @@ export default function CotizadorPage(){
   const [s,setS]=useState<CotState>(INIT)
   const [tab,setTab]=useState<Tab>('embarque')
   const [tarifas,setTarifas]=useState<Tarifa[]>([])
+  const [cotNavieras,setCotNavieras]=useState<any[]>([])
   const [tribCfg,setTribCfg]=useState<TribCfg[]>([])
   const [saving,setSaving]=useState(false)
   const supabase=createClient()
   const router=useRouter()
 
   useEffect(()=>{
+    // Load cotizaciones navieras
+    supabase.from('cotizaciones_proveedor')
+      .select('*, items:cotizacion_proveedor_items(*), operacion:operaciones(cotizacion:cotizaciones(num,cliente))')
+      .eq('estado','vigente')
+      .order('fecha',{ascending:false})
+      .then(({data})=>{
+        if(data) setCotNavieras(data.filter((c:any)=>c.items?.some((i:any)=>i.tipo_servicio==='maritima')))
+      })
     supabase.from('tarifas').select('*').eq('activo',true).then(({data})=>{
       if(data) {
         setTarifas(data as Tarifa[])
@@ -308,6 +317,30 @@ export default function CotizadorPage(){
   const totalLog=subA+seg+subC+subD+subTransp+subE+subGastosArg+fee
   const totalLanded=totalFOB+totalLog+totalTribUSD
   const cap=calcCapacidad(s.contenedores,s.productos)
+
+  function aplicarCotNaviera(cotId: string) {
+    const cot = cotNavieras.find((c:any) => c.id === cotId)
+    if (!cot) return
+    const opRef = (cot.operacion as any)?.cotizacion
+    const label = cot.tipo === 'especifica' && opRef
+      ? `Cotiz. específica ${opRef.num} · ${cot.proveedor} · ${cot.fecha}`
+      : `Cotiz. genérica · ${cot.proveedor} · ${cot.fecha}`
+    setS(p => {
+      const filasA = p.contenedores.map(c => {
+        const item = cot.items?.find((i:any) => i.tipo_servicio === 'maritima' && i.tipo_equipo === c.tipo)
+          || cot.items?.find((i:any) => i.tipo_servicio === 'maritima')
+        return {
+          id: Math.random().toString(36).slice(2),
+          desc: `${item?.descripcion || 'Flete marítimo'} ${c.tipo} · ${label}`,
+          cant: c.cantidad,
+          unitario: item?.valor || 0,
+          ivaChile: 'exento' as const,
+          tipoCalc: 'fijo' as const
+        }
+      })
+      return { ...p, cotProvId: cotId, cotProvLabel: label, rowsA: filasA }
+    })
+  }
 
   function cargarSeccionA(){
     const mar=tarifas.filter(t=>(t.tipo as string)==='maritima')
@@ -493,7 +526,51 @@ export default function CotizadorPage(){
             </div>
             <div className="grid grid-cols-3 gap-3">
               <Field label="Tránsito estimado"><input value={s.transito} onChange={e=>u('transito',e.target.value)} className={inp}/></Field>
-              <Field label="Ref. cotiz. naviero"><input value={s.refNaviero} onChange={e=>u('refNaviero',e.target.value)} className={inp} placeholder="ej. Q-AR-DR... (Hellmann)"/></Field>
+              <Field label="Cotización naviero">
+                {cotNavieras.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <select
+                      value={s.cotProvId}
+                      onChange={e => {
+                        if (e.target.value === '__manual__') {
+                          u('cotProvId', '')
+                        } else if (e.target.value) {
+                          aplicarCotNaviera(e.target.value)
+                        } else {
+                          u('cotProvId', '')
+                        }
+                      }}
+                      className={sel}
+                    >
+                      <option value="">— Seleccionar cotización —</option>
+                      {cotNavieras.filter((c:any)=>c.tipo==='especifica').length>0 && (
+                        <optgroup label="🎯 Específicas para esta operación">
+                          {cotNavieras.filter((c:any)=>c.tipo==='especifica').map((c:any)=>{
+                            const op=(c.operacion as any)?.cotizacion
+                            return <option key={c.id} value={c.id}>{c.proveedor} · {c.fecha}{op?` · ${op.num}`:''}</option>
+                          })}
+                        </optgroup>
+                      )}
+                      <optgroup label="📋 Genéricas vigentes">
+                        {cotNavieras.filter((c:any)=>c.tipo==='generica').map((c:any)=>(
+                          <option key={c.id} value={c.id}>{c.proveedor} · {c.referencia||c.fecha}</option>
+                        ))}
+                      </optgroup>
+                      <option value="__manual__">✏ Ingresar manualmente</option>
+                    </select>
+                    {(!s.cotProvId || s.cotProvId === '__manual__') && (
+                      <input value={s.refNaviero} onChange={e=>u('refNaviero',e.target.value)} className={inp} placeholder="ej. Q-AR-DR... (Hellmann)"/>
+                    )}
+                    {s.cotProvId && s.cotProvId !== '__manual__' && (
+                      <div className="text-[10px] text-[#1168F8] bg-[#EBF2FF] px-2.5 py-1.5 rounded-lg">
+                        ✓ {s.cotProvLabel} — precios cargados en sección A
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <input value={s.refNaviero} onChange={e=>u('refNaviero',e.target.value)} className={inp} placeholder="ej. Q-AR-DR... (Hellmann)"/>
+                )}
+              </Field>
             </div>
           </Card>
 
