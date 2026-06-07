@@ -140,7 +140,12 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
           {cot.estado === 'aceptada' && (
             <button onClick={() => router.push(`/operaciones?cot=${cot.id}`)} className="flex items-center gap-1 px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">🚢 Ver operación</button>
           )}
-          <button onClick={() => window.print()} className="flex items-center gap-1.5 px-4 py-1.5 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF] transition-colors">🖨 Imprimir / PDF</button>
+          <button onClick={() => {
+            const titulo = document.title
+            document.title = `Cotizacion_${cot.num}_${cot.cliente.replace(/\s+/g,'-')}`
+            window.print()
+            document.title = titulo
+          }} className="flex items-center gap-1.5 px-4 py-1.5 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF] transition-colors">🖨 Imprimir / PDF</button>
         </div>
       </div>
 
@@ -316,16 +321,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
           </div>
         </div>
 
-        {/* TC DE REFERENCIA */}
-        {tcRef > 0 && (
-          <div className="border border-gray-200 rounded-xl px-5 py-3 mb-5 bg-gray-50">
-            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Tipos de cambio de referencia a la fecha de cotización</div>
-            <div className="flex gap-6 text-xs">
-              <div><span className="text-gray-500">TC oficial BNA (ARS/USD): </span><span className="font-mono font-semibold text-gray-800">ARS {fmt(tcRef, 0)}</span><span className="text-gray-400 ml-1">— para tributos y gastos locales</span></div>
-            </div>
-            <div className="text-[10px] text-amber-600 mt-1.5">⚠ Los pagos en pesos se realizarán al tipo de cambio oficial BNA vigente en la fecha efectiva de cada pago.</div>
-          </div>
-        )}
+
 
         {/* NOTAS */}
         {cot.notas && (
