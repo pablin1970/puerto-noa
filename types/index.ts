@@ -63,6 +63,7 @@ export interface ProductoCot {
   peso_unit: number
   vol_unit: number
   incoterm: string
+  proformaId?: string
 }
 
 export interface ContenedorCot {
