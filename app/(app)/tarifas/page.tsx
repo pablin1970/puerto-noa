@@ -101,20 +101,20 @@ export default function TarifasPage() {
   function openDetalle(id: string) { setSelId(id); setView('detalle') }
 
   return (
-    <div className="p-6">
-      <div className="mb-5 flex items-center justify-between">
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">Tarifas base</h1>
+          <h1 className="text-xl font-bold text-gray-900">Tarifas base</h1>
           <p className="text-xs text-gray-400 mt-0.5">Cotizaciones de proveedores · Fletes · Servicios</p>
         </div>
         <div className="flex gap-2">
           {view !== 'lista' && (
-            <button onClick={() => setView('lista')} className="px-3 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 transition-colors">← Volver</button>
+            <button onClick={() => setView('lista')} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-100 transition-colors shadow-sm">← Volver</button>
           )}
           {view === 'lista' && (
             <>
-              <button onClick={() => setView('comparativa')} className="px-3 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 text-gray-600 transition-colors">📊 Comparativa</button>
-              <button onClick={() => setView('nueva')} className="px-4 py-2 bg-[#1168F8] text-white rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors">+ Nueva cotización</button>
+              <button onClick={() => setView('comparativa')} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-100 text-gray-600 transition-colors shadow-sm">📊 Comparativa</button>
+              <button onClick={() => setView('nueva')} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] transition-colors shadow-sm">+ Nueva cotización</button>
             </>
           )}
         </div>
