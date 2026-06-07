@@ -811,6 +811,7 @@ export default function OperacionesPage() {
 
 // ── DOCUMENTOS TAB ─────────────────────────────────────────────
 const TIPOS_DOC = [
+  { key: 'proforma', label: 'Proforma del proveedor' },
   { key: 'bl', label: 'BL — Bill of Lading' },
   { key: 'packing', label: 'Packing List' },
   { key: 'crt', label: 'CRT — Carta de Porte' },
