@@ -50,12 +50,34 @@ export default function RegistroPage() {
   }
 
   async function cambiarEstado(id: string, estado: EstadoCotizacion) {
-    await (((supabase.from('cotizaciones') as any)) as any).update({ estado, updated_at: new Date().toISOString() }).eq('id', id)
-    // Si se acepta, crear operación si no existe
+    await (supabase.from('cotizaciones') as any).update({ estado, updated_at: new Date().toISOString() }).eq('id', id)
     if (estado === 'aceptada') {
+      // Crear operación si no existe
       const { data: opExist } = await supabase.from('operaciones').select('id').eq('cotizacion_id', id).single()
+      let opId = opExist?.id
       if (!opExist) {
-        await (supabase.from('operaciones') as any).insert({ cotizacion_id: id })
+        const { data: newOp } = await (supabase.from('operaciones') as any).insert({ cotizacion_id: id }).select('id').single()
+        opId = newOp?.id
+      }
+      // Copiar proformas a documentos de la operación
+      if (opId) {
+        const { data: cot } = await supabase.from('cotizaciones').select('*').eq('id', id).single()
+        const proformas = (cot as any)?.proformas || []
+        for (const pf of proformas) {
+          if (pf.archivo_url) {
+            await (supabase.from('operacion_documentos') as any).insert({
+              operacion_id: opId,
+              tipo: 'proforma',
+              nombre_custom: `Proforma ${pf.numero || pf.proveedor}`,
+              referencia: pf.numero || null,
+              fecha: pf.fecha || null,
+              archivo_url: pf.archivo_url,
+              archivo_nombre: pf.archivo_nombre || 'proforma.pdf',
+              notas: `Proveedor: ${pf.proveedor}`,
+              subido_por: 'Sistema (cotización aceptada)',
+            })
+          }
+        }
       }
     }
     setModal(null)
