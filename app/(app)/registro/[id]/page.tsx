@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { fmt, ESTADOS_L, PUERTOS_L } from '@/lib/utils'
 import type { Cotizacion, EstadoCotizacion } from '@/types'
@@ -25,20 +25,28 @@ const ETAPA_L: Record<string, string> = {
 }
 
 export default function CotizacionDetailPage({ params }: { params: { id: string } }) {
-  const { id } = params
+  const rawId = params?.id
+  const [id, setId] = useState<string>(rawId || '')
   const [cot, setCot] = useState<Cotizacion | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
   const router = useRouter()
 
   useEffect(() => {
-    if (!id) return
-    supabase.from('cotizaciones').select('*').eq('id', id).single().then(({ data, error }) => {
+    // Get id from params, URL, or window.location as fallback
+    let cotId = rawId || id
+    if (!cotId && typeof window !== 'undefined') {
+      const parts = window.location.pathname.split('/')
+      cotId = parts[parts.length - 1]
+      if (cotId) setId(cotId)
+    }
+    if (!cotId) return
+    supabase.from('cotizaciones').select('*').eq('id', cotId).single().then(({ data, error }) => {
       if (error) console.error('Error cargando cotización:', error)
       if (data) setCot(data as Cotizacion)
       setLoading(false)
     })
-  }, [id])
+  }, [rawId, id])
 
   async function cambiarEstado(estado: EstadoCotizacion) {
     await (supabase.from('cotizaciones') as any).update({ estado, updated_at: new Date().toISOString() }).eq('id', id)
