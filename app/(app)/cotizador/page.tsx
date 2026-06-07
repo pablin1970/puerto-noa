@@ -43,7 +43,7 @@ interface CotState {
 
 const INIT: CotState = {
   cliente:'',cuit:'',email:'',telefono:'',despachante:'',ivaCondicion:'Responsable Inscripto',validez:'',
-  origen:'Dalian, China (CNDAG)',ptoChile:'IQQ',destinoNoa:'Jujuy',incoterm:'FOB',transito:'44-46 días',refNaviero:'',cotProvId:'',cotProvLabel:'',notas:'',
+  origen:'Dalian, China (CNDAG)',ptoChile:'IQQ',destinoNoa:'Jujuy',incoterm:'FOB',transito:'44-46 días',refNaviero:'',cotProvId:'',cotProvLabel:'',cotTranspId:'',cotTranspLabel:'',cotArgId:'',cotArgLabel:'',notas:'',
   contenedores:[{tipo:'40HC',cantidad:1}],
   productos:[{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:'FOB'}],
   exwTransp:0,exwAgente:0,exwOtros:0,precioArgEquiv:0,
