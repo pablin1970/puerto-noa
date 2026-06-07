@@ -936,7 +936,7 @@ function DocumentosTab({ opId, docs, reload }: { opId: string; docs: any[]; relo
           Sin documentos cargados aún.
         </div>
       ) : (
-        Object.entries(grouped).map(([key, items]) => (
+        Object.entries(grouped).map(([key, items]: [string, any[]]) => (
           <div key={key} className="bg-white border border-gray-100 rounded-xl overflow-hidden">
             <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
               <span className="font-medium text-sm text-gray-900">{getLabel(items[0].tipo, items[0].nombre_custom)}</span>
