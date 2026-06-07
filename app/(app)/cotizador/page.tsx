@@ -82,11 +82,11 @@ function Field({label,children}:{label:string;children:React.ReactNode}){
   return <div><label className="block text-[10px] font-medium text-gray-500 mb-1">{label}</label>{children}</div>
 }
 function Card({title,children}:{title:string;children:React.ReactNode}){
-  return <div className="bg-white border border-gray-100 rounded-xl overflow-hidden"><div className="px-5 py-3 border-b border-gray-100 bg-gray-50 font-medium text-sm text-gray-900">{title}</div><div className="px-5 py-4">{children}</div></div>
+  return <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm"><div className="px-5 py-3 border-b border-gray-100 bg-gray-50 font-medium text-sm text-gray-900">{title}</div><div className="px-5 py-4">{children}</div></div>
 }
 function SecCard({letter,label,sub,sub2,children,loadBtn}:{letter:string;label:string;sub?:string;sub2:number;children:React.ReactNode;loadBtn?:React.ReactNode}){
   return (
-    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+    <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
       <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
         <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1168F8] text-white text-[10px] font-bold">{letter}</span>
         <span className="font-medium text-sm text-gray-900">{label}</span>
@@ -545,18 +545,20 @@ export default function CotizadorPage(){
   const TABS=[{key:'embarque',label:'Embarque'},{key:'logistica',label:'Logística'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as const
 
   return (
-    <div className="p-6">
+    <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-5 flex items-center gap-4">
-        <Image src="/logo.png" alt="Puertonoa" width={140} height={40} style={{objectFit:'contain'}}/>
+        <div className="bg-white border border-gray-100 rounded-2xl px-4 py-2.5 shadow-sm">
+          <Image src="/logo.png" alt="Puertonoa" width={130} height={38} style={{objectFit:'contain'}}/>
+        </div>
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">Nueva cotización</h1>
+          <h1 className="text-xl font-bold text-gray-900">Nueva cotización</h1>
           <p className="text-xs text-gray-400 mt-0.5">Módulo 1 — Cotizador logístico China → NOA</p>
         </div>
       </div>
 
       <div className="flex gap-2 mb-5 flex-wrap items-center">
         {TABS.map(t=>(
-          <button key={t.key} onClick={()=>setTab(t.key as Tab)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tab===t.key?'bg-[#1168F8] text-white':'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{t.label}</button>
+          <button key={t.key} onClick={()=>setTab(t.key as Tab)} className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm ${tab===t.key?'bg-[#1168F8] text-white shadow-md':'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{t.label}</button>
         ))}
         <div className="ml-auto flex items-center gap-2 text-[10px] text-gray-400">
           <Image src="/logo.png" alt="Puertonoa" width={80} height={22} style={{objectFit:'contain',opacity:0.6}}/>
@@ -812,7 +814,7 @@ export default function CotizadorPage(){
           </SecCard>
 
           {/* D — Modalidad de transporte */}
-          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1168F8] text-white text-[10px] font-bold">D</span>
               <span className="font-medium text-sm text-gray-900">Modalidad de transporte desde Chile</span>
@@ -917,7 +919,7 @@ export default function CotizadorPage(){
           </SecCard>
 
           {/* F: Gastos Argentina */}
-          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1168F8] text-white text-[10px] font-bold">F</span>
               <span className="font-medium text-sm text-gray-900">Gastos en Argentina</span>
@@ -1107,7 +1109,7 @@ export default function CotizadorPage(){
           </div>
           {s.precioArgEquiv>0&&(()=>{const d=s.precioArgEquiv-totalLanded;return <div className={`text-xs px-4 py-3 rounded-xl text-center font-medium ${d>0?'bg-[#EBF2FF] text-[#052698] border border-[#93B8FC]':'bg-red-50 text-red-700 border border-red-200'}`}>{d>0?`✓ Importar desde China es USD ${fmt(Math.abs(d),0)} más económico (${Math.round(Math.abs(d)/s.precioArgEquiv*100)}% de ahorro)`:`✗ Importar desde China resulta USD ${fmt(Math.abs(d),0)} más caro que el precio local`}</div>})()}
 
-          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Desglose completo de costos</div>
             <table className="w-full text-xs">
               <thead><tr className="bg-gray-50"><th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Sección</th><th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Concepto</th><th className="text-right px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase tracking-wide">USD</th></tr></thead>
@@ -1142,7 +1144,7 @@ export default function CotizadorPage(){
           </div>
 
           {/* Resumen de totales reorganizado */}
-          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Composición del costo total</div>
             <div className="p-4 space-y-2">
               {/* Producto */}
@@ -1193,7 +1195,7 @@ export default function CotizadorPage(){
           </div>
 
           {/* Tributos y gastos en ARS con TC */}
-          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Pagos en Argentina (ARS)</div>
             <div className="divide-y divide-gray-50">
               {/* Tributos aduana */}
