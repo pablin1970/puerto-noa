@@ -26,7 +26,9 @@ interface CotState {
   cliente: string; cuit: string; email: string; telefono: string
   despachante: string; ivaCondicion: string; validez: string
   origen: string; ptoChile: string; destinoNoa: string; incoterm: string
-  transito: string; refNaviero: string; cotProvId: string; cotProvLabel: string; notas: string
+  transito: string; refNaviero: string; cotProvId: string; cotProvLabel: string
+  cotTranspId: string; cotTranspLabel: string
+  cotArgId: string; cotArgLabel: string; notas: string
   contenedores: ContenedorCot[]; productos: ProductoCot[]
   exwTransp: number; exwAgente: number; exwOtros: number; precioArgEquiv: number
   rowsA: ItemLog[]; segModo: 'pct'|'fijo'; segVal: number
@@ -179,19 +181,25 @@ export default function CotizadorPage(){
   const [tab,setTab]=useState<Tab>('embarque')
   const [tarifas,setTarifas]=useState<Tarifa[]>([])
   const [cotNavieras,setCotNavieras]=useState<any[]>([])
+  const [cotTransporte,setCotTransporte]=useState<any[]>([])
+  const [cotArgentina,setCotArgentina]=useState<any[]>([])
   const [tribCfg,setTribCfg]=useState<TribCfg[]>([])
   const [saving,setSaving]=useState(false)
   const supabase=createClient()
   const router=useRouter()
 
   useEffect(()=>{
-    // Load cotizaciones navieras
+    // Load cotizaciones de proveedores vigentes
     supabase.from('cotizaciones_proveedor')
       .select('*, items:cotizacion_proveedor_items(*), operacion:operaciones(cotizacion:cotizaciones(num,cliente))')
       .eq('estado','vigente')
       .order('fecha',{ascending:false})
       .then(({data})=>{
-        if(data) setCotNavieras(data.filter((c:any)=>c.items?.some((i:any)=>i.tipo_servicio==='maritima')))
+        if(data){
+          setCotNavieras(data.filter((c:any)=>c.items?.some((i:any)=>i.tipo_servicio==='maritima')))
+          setCotTransporte(data.filter((c:any)=>c.items?.some((i:any)=>i.tipo_servicio==='terrestre')))
+          setCotArgentina(data.filter((c:any)=>c.items?.some((i:any)=>i.tipo_servicio==='argentina')))
+        }
       })
     supabase.from('tarifas').select('*').eq('activo',true).then(({data})=>{
       if(data) {
@@ -340,6 +348,53 @@ export default function CotizadorPage(){
       })
       return { ...p, cotProvId: cotId, cotProvLabel: label, rowsA: filasA }
     })
+  }
+
+  function aplicarCotTransporte(cotId: string) {
+    const cot = cotTransporte.find((c:any) => c.id === cotId)
+    if (!cot) return
+    const opRef = (cot.operacion as any)?.cotizacion
+    const label = cot.tipo === 'especifica' && opRef
+      ? `Cotiz. específica ${opRef.num} · ${cot.proveedor} · ${cot.fecha}`
+      : `Cotiz. genérica · ${cot.proveedor} · ${cot.fecha}`
+    const ncTotal = s.contenedores.reduce((t,c)=>t+c.cantidad,0)||1
+    const item = cot.items?.find((i:any) =>
+      i.tipo_servicio === 'terrestre' &&
+      i.ruta_destino?.toLowerCase().includes(s.destinoNoa.toLowerCase())
+    ) || cot.items?.find((i:any) => i.tipo_servicio === 'terrestre')
+    setS(p => ({
+      ...p,
+      cotTranspId: cotId,
+      cotTranspLabel: label,
+      ftCamion: item?.valor || p.ftCamion,
+      nCamiones: ncTotal,
+    }))
+  }
+
+  function aplicarCotArgentina(cotId: string) {
+    const cot = cotArgentina.find((c:any) => c.id === cotId)
+    if (!cot) return
+    const opRef = (cot.operacion as any)?.cotizacion
+    const label = cot.tipo === 'especifica' && opRef
+      ? `Cotiz. específica ${opRef.num} · ${cot.proveedor} · ${cot.fecha}`
+      : `Cotiz. genérica · ${cot.proveedor} · ${cot.fecha}`
+    const items = cot.items?.filter((i:any) => i.tipo_servicio === 'argentina') || []
+    if (!items.length) return
+    setS(p => ({
+      ...p,
+      cotArgId: cotId,
+      cotArgLabel: label,
+      gastosArg: items.map((i:any) => ({
+        id: Math.random().toString(36).slice(2),
+        desc: `${i.descripcion} · ${label}`,
+        tipoCalc: (i.tipo_calculo||'fijo_usd') as 'pct_cif'|'fijo_usd'|'fijo_ars',
+        moneda: (i.moneda||'USD') as 'USD'|'ARS',
+        valor: i.valor||0,
+        pisoUsd: i.piso_usd||0,
+        techoUsd: i.techo_usd||0,
+        usd: 0, ars: 0,
+      }))
+    }))
   }
 
   function cargarSeccionA(){
@@ -782,13 +837,36 @@ export default function CotizadorPage(){
 
           {/* F: Gastos Argentina */}
           <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1168F8] text-white text-[10px] font-bold">F</span>
               <span className="font-medium text-sm text-gray-900">Gastos en Argentina</span>
               <span className="text-[10px] text-gray-400">Despachante, desconsolidación, almacenaje, traslado</span>
-              <button onClick={cargarSeccionF} className="ml-auto text-[10px] text-[#1168F8] hover:underline flex items-center gap-1">⬇ Cargar tarifa base</button>
+              <div className="ml-auto flex items-center gap-2">
+                {cotArgentina.length>0&&(
+                  <select value={s.cotArgId} onChange={e=>e.target.value?aplicarCotArgentina(e.target.value):u('cotArgId','')}
+                    className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]">
+                    <option value="">— Cotización proveedor —</option>
+                    {cotArgentina.filter((c:any)=>c.tipo==='especifica').length>0&&(
+                      <optgroup label="🎯 Específicas">
+                        {cotArgentina.filter((c:any)=>c.tipo==='especifica').map((c:any)=>{
+                          const op=(c.operacion as any)?.cotizacion
+                          return <option key={c.id} value={c.id}>{c.proveedor} · {c.fecha}{op?` · ${op.num}`:''}</option>
+                        })}
+                      </optgroup>
+                    )}
+                    <optgroup label="📋 Genéricas">
+                      {cotArgentina.filter((c:any)=>c.tipo==='generica').map((c:any)=>(
+                        <option key={c.id} value={c.id}>{c.proveedor} · {c.referencia||c.fecha}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                )}
+                <button onClick={cargarSeccionF} className="text-[10px] text-[#1168F8] hover:underline flex items-center gap-1">⬇ Tarifa base</button>
+              </div>
             </div>
             <div className="px-5 py-4">
+              {/* Badge cotización Argentina */}
+              {s.cotArgId&&<div className="text-[10px] text-[#1168F8] bg-[#EBF2FF] px-2.5 py-1.5 rounded-lg mb-3">✓ {s.cotArgLabel}</div>}
               {/* Gastos con lógica especial (% CIF, piso, techo) */}
               {s.gastosArg.length > 0 && (
                 <div className="mb-4">
