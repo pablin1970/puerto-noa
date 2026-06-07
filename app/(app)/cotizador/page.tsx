@@ -10,6 +10,15 @@ type Tab = 'embarque' | 'logistica' | 'tributos' | 'resumen'
 type OptTransp = 'A1' | 'A2' | 'B'
 
 interface ItemLog { id: string; desc: string; cant: number; unitario: number; ivaChile?: 'exento'|'gravado'; tipoCalc?: 'fijo'|'m3' }
+interface Proforma {
+  id: string
+  numero: string
+  proveedor: string
+  fecha: string
+  archivo_url?: string
+  archivo_nombre?: string
+}
+
 interface GastoArg {
   id: string
   desc: string
@@ -31,6 +40,7 @@ interface CotState {
   cotArgId: string; cotArgLabel: string; notas: string
   contenedores: ContenedorCot[]; productos: ProductoCot[]
   exwTransp: number; exwAgente: number; exwOtros: number; precioArgEquiv: number
+  proformas: Proforma[]
   rowsA: ItemLog[]; segModo: 'pct'|'fijo'; segVal: number
   rowsC: ItemLog[]
   optTransp: OptTransp; rowsDescon: ItemLog[]
@@ -46,7 +56,7 @@ const INIT: CotState = {
   origen:'Dalian, China (CNDAG)',ptoChile:'IQQ',destinoNoa:'Jujuy',incoterm:'FOB',transito:'44-46 días',refNaviero:'',cotProvId:'',cotProvLabel:'',cotTranspId:'',cotTranspLabel:'',cotArgId:'',cotArgLabel:'',notas:'',
   contenedores:[{tipo:'40HC',cantidad:1}],
   productos:[{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:'FOB'}],
-  exwTransp:0,exwAgente:0,exwOtros:0,precioArgEquiv:0,
+  exwTransp:0,exwAgente:0,exwOtros:0,precioArgEquiv:0,proformas:[],
   rowsA:[],segModo:'pct',segVal:0.5,rowsC:[],
   optTransp:'A1',rowsDescon:[],
   almModoVol:'auto',almVolM3:0,almCostoDia:0,almDias:0,
@@ -510,6 +520,7 @@ export default function CotizadorPage(){
         origen:s.origen,puerto_chile:s.ptoChile,destino_noa:s.destinoNoa,incoterm:s.incoterm,
         transito:s.transito,ref_naviero:s.refNaviero,notas:s.notas,
         tipo_contenedores:s.contenedores,productos:s.productos,
+        proformas:s.proformas,
         total_fob:totalFOB,total_logistico:totalLog,
         total_tributos_usd:totalTribUSD,total_tributos_ars:totalTribARS,
         total_landed:totalLanded,precio_arg_equiv:s.precioArgEquiv||null,
@@ -669,7 +680,7 @@ export default function CotizadorPage(){
                 </tbody>
               </table>
             </div>
-            <button onClick={()=>u('productos',[...s.productos,{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:s.incoterm}])} className="text-xs text-[#1168F8] hover:underline">+ Agregar producto</button>
+            <button onClick={()=>u('productos',[...s.productos,{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:s.incoterm,proformaId:''}])} className="text-xs text-[#1168F8] hover:underline">+ Agregar producto</button>
             <div className="grid grid-cols-4 gap-3 mt-4">
               {[{label:'Total FOB/EXW (USD)',value:`USD ${fmt(totalFOB)}`},{label:'Peso total',value:`${fmt(cap.totalKg,0)} kg`},{label:'Volumen total',value:`${fmt(cap.totalM3,2)} m³`},{label:'Productos',value:String(s.productos.length)}].map(it=>(
                 <div key={it.label} className="bg-gray-50 border border-gray-100 rounded-lg p-3"><div className="text-[10px] text-gray-400 mb-1">{it.label}</div><div className="font-semibold text-sm text-gray-800">{it.value}</div></div>
@@ -695,6 +706,76 @@ export default function CotizadorPage(){
                 </div>
               </div>
             )}
+            {/* PROFORMAS */}
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs font-medium text-gray-700">Proformas del proveedor</div>
+                <button onClick={()=>u('proformas',[...s.proformas,{id:Math.random().toString(36).slice(2),numero:'',proveedor:'',fecha:new Date().toISOString().slice(0,10)}])}
+                  className="text-xs text-[#1168F8] hover:underline">+ Agregar proforma</button>
+              </div>
+              {s.proformas.length===0 ? (
+                <div className="text-[10px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">Sin proformas adjuntas. Las proformas son el documento base de la importación.</div>
+              ) : (
+                <div className="space-y-2">
+                  {s.proformas.map((pf,pi)=>(
+                    <div key={pf.id} className="flex items-center gap-2 p-3 bg-[#EBF2FF] border border-[#93B8FC] rounded-lg">
+                      <div className="grid grid-cols-3 gap-2 flex-1">
+                        <input value={pf.numero} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],numero:e.target.value};u('proformas',n)}}
+                          className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="N° proforma"/>
+                        <input value={pf.proveedor} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],proveedor:e.target.value};u('proformas',n)}}
+                          className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Proveedor chino"/>
+                        <input type="date" value={pf.fecha} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],fecha:e.target.value};u('proformas',n)}}
+                          className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white"/>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {pf.archivo_url ? (
+                          <a href={pf.archivo_url} target="_blank" rel="noreferrer"
+                            className="px-2 py-1 bg-white text-[#1168F8] rounded text-[10px] border border-[#93B8FC] hover:bg-[#93B8FC] transition-colors">📄 Ver</a>
+                        ) : (
+                          <label className="px-2 py-1 border border-dashed border-[#93B8FC] rounded text-[10px] text-[#1168F8] hover:bg-white cursor-pointer transition-colors">
+                            📎 PDF
+                            <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={async e=>{
+                              const f=e.target.files?.[0]; if(!f) return
+                              const { data:auth } = await createClient().auth.getUser()
+                              if(!auth.user) return
+                              const ext=f.name.split('.').pop()
+                              const path=`proformas/${pf.id}.${ext}`
+                              const sb=createClient()
+                              await sb.storage.from('comprobantes').upload(path,f,{upsert:true})
+                              const {data:urlData}=sb.storage.from('comprobantes').getPublicUrl(path)
+                              if(urlData?.publicUrl){const n=[...s.proformas];n[pi]={...n[pi],archivo_url:urlData.publicUrl,archivo_nombre:f.name};u('proformas',n)}
+                            }}/>
+                          </label>
+                        )}
+                        <button onClick={()=>u('proformas',s.proformas.filter((_,j)=>j!==pi))}
+                          className="text-[#93B8FC] hover:text-red-500 text-xs transition-colors">✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Referencia de proforma en cada producto */}
+              {s.proformas.length>0&&s.productos.some(p=>p.subtotal>0)&&(
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <div className="text-[10px] font-medium text-gray-500 mb-2">Referencia de proforma por producto</div>
+                  <div className="space-y-1">
+                    {s.productos.filter(p=>p.descripcion).map((p,pi)=>(
+                      <div key={pi} className="flex items-center gap-2 text-xs">
+                        <span className="text-gray-600 flex-1 truncate">{p.descripcion||`Producto ${pi+1}`}</span>
+                        <select value={(p as any).proformaId||''} onChange={e=>{const n=[...s.productos];(n[pi] as any).proformaId=e.target.value;u('productos',n)}}
+                          className="px-2 py-1 border border-gray-200 rounded text-[10px] focus:outline-none focus:border-[#1168F8] bg-white">
+                          <option value="">Sin proforma asignada</option>
+                          {s.proformas.map(pf=>(
+                            <option key={pf.id} value={pf.id}>{pf.numero||'Sin número'} · {pf.proveedor} · {pf.fecha}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="mt-4 pt-4 border-t border-gray-100">
               <Field label="Precio equivalente en Argentina (USD) · para comparativa"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.precioArgEquiv||''} onChange={e=>u('precioArgEquiv',parseNum(e.target.value))} className={inp} placeholder="0.00"/></Field>
             </div>
