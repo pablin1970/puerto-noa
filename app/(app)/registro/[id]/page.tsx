@@ -30,9 +30,9 @@ const CONDICIONES = [
 
 function DocHeader({ cot, fechaEmision, pagina, total }: { cot: any, fechaEmision: string, pagina: number, total: number }) {
   if (pagina === 1) return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', paddingBottom: '12px', marginBottom: '14px', borderBottom: '3px solid #1168F8' }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', paddingBottom: '8px', marginBottom: '10px', borderBottom: '3px solid #1168F8' }}>
       <div>
-        <Image src="/logo.png" alt="Puerto NOA SpA" width={170} height={50} style={{ objectFit: 'contain' }} />
+        <Image src="/logo.png" alt="Puerto NOA SpA" width={150} height={44} style={{ objectFit: 'contain' }} />
         <div style={{ marginTop: '6px', fontSize: '10px', color: '#9ca3af', lineHeight: '1.5' }}>
           Puerto NOA SpA — Logística de importaciones China → NOA<br />
           Paso de Jama · San Salvador de Jujuy, Argentina
@@ -40,7 +40,7 @@ function DocHeader({ cot, fechaEmision, pagina, total }: { cot: any, fechaEmisio
       </div>
       <div style={{ textAlign: 'right' }}>
         <div style={{ fontSize: '9px', fontWeight: 700, color: '#9ca3af', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '2px' }}>Cotización</div>
-        <div style={{ fontSize: '28px', fontWeight: 900, fontFamily: 'monospace', color: '#052698', letterSpacing: '-1px' }}>{cot.num}</div>
+        <div style={{ fontSize: '24px', fontWeight: 900, fontFamily: 'monospace', color: '#052698', letterSpacing: '-1px' }}>{cot.num}</div>
         <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>{fechaEmision}</div>
         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', marginTop: '6px', flexWrap: 'wrap' }}>
           {cot.validez && (
@@ -159,9 +159,9 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
   const TOTAL_PAGS = 2
 
   // Shared cell style
-  const th = { padding: '6px 10px', fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.5px', color: '#9ca3af', background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }
-  const td = { padding: '7px 10px', fontSize: '11px', borderBottom: '1px solid #f1f5f9' }
-  const tdGray = { ...td, fontSize: '10px', color: '#6b7280' }
+  const th = { padding: '4px 8px', fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.5px', color: '#9ca3af', background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }
+  const td = { padding: '5px 8px', fontSize: '10.5px', borderBottom: '1px solid #f1f5f9' }
+  const tdGray = { ...td, fontSize: '9.5px', color: '#6b7280' }
 
   return (
     <>
@@ -228,10 +228,10 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
           <DocHeader cot={cot} fechaEmision={fechaEmision} pagina={1} total={TOTAL_PAGS} />
 
           {/* Cliente + Ruta */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
             <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
               <div style={{ padding: '7px 14px', background: '#1168F8', color: 'white', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase' }}>Datos del cliente</div>
-              <div style={{ padding: '12px 14px' }}>
+              <div style={{ padding: '8px 12px' }}>
                 {[
                   { l: 'Razón social', v: cot.cliente, bold: true },
                   { l: 'CUIT', v: cot.cuit, mono: true },
@@ -239,7 +239,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
                   { l: 'Teléfono', v: cot.telefono_cliente },
                   { l: 'Despachante', v: (cot as any).despachante },
                 ].filter(r => r.v).map(r => (
-                  <div key={r.l} style={{ display: 'flex', gap: '10px', marginBottom: '5px', fontSize: '11px' }}>
+                  <div key={r.l} style={{ display: 'flex', gap: '10px', marginBottom: '3px', fontSize: '10.5px' }}>
                     <span style={{ color: '#9ca3af', width: '90px', flexShrink: 0 }}>{r.l}</span>
                     <span style={{ fontWeight: r.bold ? 700 : 400, color: r.bold ? '#111827' : '#374151', fontFamily: r.mono ? 'monospace' : 'inherit' }}>{r.v}</span>
                   </div>
@@ -248,7 +248,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
             </div>
             <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
               <div style={{ padding: '7px 14px', background: '#052698', color: 'white', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase' }}>Ruta de importación</div>
-              <div style={{ padding: '12px 14px' }}>
+              <div style={{ padding: '8px 12px' }}>
                 {[
                   { l: 'Origen', v: cot.origen },
                   { l: 'Puerto Chile', v: PUERTOS_L[cot.puerto_chile || ''] || cot.puerto_chile },
@@ -257,7 +257,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
                   { l: 'Tránsito est.', v: cot.transito },
                   { l: 'Modalidad', v: `Opción ${(cot as any).opcion_transporte || 'A1'} · ${(cot as any).opcion_transporte === 'B' ? 'Contenedor completo' : 'Desconsolidado'}` },
                 ].filter(r => r.v).map(r => (
-                  <div key={r.l} style={{ display: 'flex', gap: '10px', marginBottom: '5px', fontSize: '11px' }}>
+                  <div key={r.l} style={{ display: 'flex', gap: '10px', marginBottom: '3px', fontSize: '10.5px' }}>
                     <span style={{ color: '#9ca3af', width: '100px', flexShrink: 0 }}>{r.l}</span>
                     <span style={{ fontWeight: r.bold ? 700 : 400, color: r.blue ? '#1168F8' : '#374151' }}>{r.v}</span>
                   </div>
@@ -267,8 +267,8 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
           </div>
 
           {/* Mercadería */}
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden', marginBottom: '14px' }}>
-            <div style={{ padding: '8px 14px', background: '#052698', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden', marginBottom: '10px' }}>
+            <div style={{ padding: '6px 12px', background: '#052698', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontWeight: 700, fontSize: '12px' }}>Mercadería importada</span>
               <span style={{ fontSize: '10px', color: '#bfdbfe' }}>{contenedores.map((c: any) => `${c.cantidad}× ${c.tipo}`).join(' + ')} · {nc} contenedor(es)</span>
             </div>
@@ -309,8 +309,8 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
           </div>
 
           {/* Estructura de costos */}
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden', marginBottom: '12px', flex: 1 }}>
-            <div style={{ padding: '8px 14px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden', marginBottom: '8px' }}>
+            <div style={{ padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
               <div style={{ fontWeight: 700, fontSize: '12px', color: '#111827' }}>Estructura de costos hasta {cot.destino_noa}</div>
               <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '2px' }}>Valores en USD a tipo de cambio de referencia · Régimen {regimen}</div>
             </div>
@@ -352,9 +352,9 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
               </tbody>
               <tfoot>
                 <tr style={{ background: '#052698' }}>
-                  <td colSpan={2} style={{ padding: '10px', fontWeight: 900, color: 'white', fontSize: '12px' }}>TOTAL LANDED EN {(cot.destino_noa || 'DESTINO').toUpperCase()}</td>
-                  <td style={{ padding: '10px', textAlign: 'right', fontWeight: 900, color: 'white', fontSize: '14px', fontFamily: 'monospace' }}>USD {fmt(totalLanded, 0)}</td>
-                  <td style={{ padding: '10px', textAlign: 'right', color: '#93c5fd', fontSize: '11px', fontWeight: 700 }}>100%</td>
+                  <td colSpan={2} style={{ padding: '7px 8px', fontWeight: 900, color: 'white', fontSize: '11px' }}>TOTAL LANDED EN {(cot.destino_noa || 'DESTINO').toUpperCase()}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 900, color: 'white', fontSize: '13px', fontFamily: 'monospace' }}>USD {fmt(totalLanded, 0)}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right', color: '#93c5fd', fontSize: '11px', fontWeight: 700 }}>100%</td>
                 </tr>
                 {nc > 0 && (
                   <tr style={{ background: '#EBF2FF' }}>
