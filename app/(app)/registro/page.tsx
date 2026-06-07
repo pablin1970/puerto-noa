@@ -54,7 +54,7 @@ export default function RegistroPage() {
     if (estado === 'aceptada') {
       // Crear operación si no existe
       const { data: opExist } = await supabase.from('operaciones').select('id').eq('cotizacion_id', id).single()
-      let opId = opExist?.id
+      let opId = (opExist as any)?.id
       if (!opExist) {
         const { data: newOp } = await (supabase.from('operaciones') as any).insert({ cotizacion_id: id }).select('id').single()
         opId = newOp?.id
