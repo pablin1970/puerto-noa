@@ -14,6 +14,7 @@ const NAV = [
   { href: '/tributos-config', label: 'Tributos ARCA', icon: '§', adminOnly: true },
   { href: null, label: 'MÓDULO 2', icon: null, section: true },
   { href: '/registro', label: 'Cotizaciones', icon: '☰' },
+  { href: '/clientes', label: 'Clientes / Proveed.', icon: '🏢' },
   { href: '/usuarios', label: 'Usuarios', icon: '◎' },
   { href: null, label: 'MÓDULO 3', icon: null, section: true },
   { href: '/operaciones', label: 'Operaciones', icon: '⟳' },
