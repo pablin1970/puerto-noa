@@ -84,7 +84,7 @@ export default function ClientesPage() {
     return matchB && matchT && matchP
   })
 
-  const paises = [...new Set(terceros.map(t => t.pais))].sort()
+  const paises = Array.from(new Set(terceros.map(t => t.pais))).sort()
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
