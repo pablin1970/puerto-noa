@@ -72,13 +72,14 @@ function Field({label,children}:{label:string;children:React.ReactNode}){
 function Card({title,children}:{title:string;children:React.ReactNode}){
   return <div className="bg-white border border-gray-100 rounded-xl overflow-hidden"><div className="px-5 py-3 border-b border-gray-100 bg-gray-50 font-medium text-sm text-gray-900">{title}</div><div className="px-5 py-4">{children}</div></div>
 }
-function SecCard({letter,label,sub,sub2,children}:{letter:string;label:string;sub?:string;sub2:number;children:React.ReactNode}){
+function SecCard({letter,label,sub,sub2,children,loadBtn}:{letter:string;label:string;sub?:string;sub2:number;children:React.ReactNode;loadBtn?:React.ReactNode}){
   return (
     <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
       <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
         <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1168F8] text-white text-[10px] font-bold">{letter}</span>
         <span className="font-medium text-sm text-gray-900">{label}</span>
         {sub&&<span className="text-[10px] text-gray-400">{sub}</span>}
+        {loadBtn&&<div className="ml-auto">{loadBtn}</div>}
       </div>
       <div className="px-5 py-4">{children}</div>
       <div className="flex justify-end items-center gap-2 px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
@@ -308,6 +309,63 @@ export default function CotizadorPage(){
   const totalLanded=totalFOB+totalLog+totalTribUSD
   const cap=calcCapacidad(s.contenedores,s.productos)
 
+  function cargarSeccionA(){
+    const mar=tarifas.filter(t=>t.tipo==='maritima')
+    setS(p=>{
+      const filasA = p.contenedores.map(c=>{
+        const tarifa = mar.find(t=>t.tipo_contenedor===c.tipo)
+        return {
+          id: Math.random().toString(36).slice(2),
+          desc: `Flete marítimo ${c.tipo}${tarifa?.naviera?' ('+tarifa.naviera+')':''}`,
+          cant: c.cantidad,
+          unitario: tarifa?.valor || 0,
+          ivaChile: 'exento' as const,
+          tipoCalc: 'fijo' as const
+        }
+      })
+      return {...p, rowsA: filasA}
+    })
+  }
+
+  function cargarSeccionC(){
+    const pto=tarifas.filter(t=>t.tipo==='puerto')
+    setS(p=>({...p,
+      rowsC: pto.map(t=>({
+        id: Math.random().toString(36).slice(2),
+        desc: t.ruta,
+        cant: p.contenedores.reduce((s,c)=>s+c.cantidad,0)||1,
+        unitario: t.valor,
+        ivaChile: (t.iva_chile||'exento') as 'exento'|'gravado',
+        tipoCalc: 'fijo' as const
+      }))
+    }))
+  }
+
+  function cargarSeccionE(){
+    const ter=tarifas.find(t=>t.tipo==='terrestre' && t.ruta.toLowerCase().includes(s.destinoNoa.toLowerCase()))
+      || tarifas.find(t=>t.tipo==='terrestre')
+    if(!ter) return
+    const nc2=s.contenedores.reduce((t,c)=>t+c.cantidad,0)||1
+    setS(p=>({...p, ftCamion: ter.valor, nCamiones: nc2}))
+  }
+
+  function cargarSeccionF(){
+    const arg=tarifas.filter(t=>t.tipo==='argentina')
+    if(!arg.length) return
+    setS(p=>({...p,
+      gastosArg: arg.map(t=>({
+        id: Math.random().toString(36).slice(2),
+        desc: t.ruta,
+        tipoCalc: (t.tipo_calculo||'fijo_usd') as 'pct_cif'|'fijo_usd'|'fijo_ars',
+        moneda: (t.moneda||'USD') as 'USD'|'ARS',
+        valor: t.valor||0,
+        pisoUsd: (t as any).piso_usd||0,
+        techoUsd: (t as any).techo_usd||0,
+        usd: 0, ars: 0
+      }))
+    }))
+  }
+
   function aplicarTarifas(){
     const pto=tarifas.filter(t=>t.tipo==='puerto')
     // Generar filas A basadas en contenedores seleccionados
@@ -389,15 +447,12 @@ export default function CotizadorPage(){
 
   return (
     <div className="p-6">
-      <div className="mb-5 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Image src="/logo.png" alt="Puertonoa" width={140} height={40} style={{objectFit:'contain'}}/>
-          <div>
-            <h1 className="text-lg font-semibold text-gray-900">Nueva cotización</h1>
-            <p className="text-xs text-gray-400 mt-0.5">Módulo 1 — Cotizador logístico China → NOA</p>
-          </div>
+      <div className="mb-5 flex items-center gap-4">
+        <Image src="/logo.png" alt="Puertonoa" width={140} height={40} style={{objectFit:'contain'}}/>
+        <div>
+          <h1 className="text-lg font-semibold text-gray-900">Nueva cotización</h1>
+          <p className="text-xs text-gray-400 mt-0.5">Módulo 1 — Cotizador logístico China → NOA</p>
         </div>
-        <button onClick={aplicarTarifas} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 transition-colors text-gray-600">⬇ Cargar tarifas base</button>
       </div>
 
       <div className="flex gap-2 mb-5 flex-wrap items-center">
@@ -525,7 +580,8 @@ export default function CotizadorPage(){
             <div className="flex items-center gap-2"><label className="text-gray-500">USD/CLP</label><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.tcClp} onChange={e=>u('tcClp',parseNum(e.target.value)||950)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]"/></div>
           </div>
 
-          <SecCard letter="A" label="Flete marítimo internacional" sub="China → Puerto Chile" sub2={subA}>
+          <SecCard letter="A" label="Flete marítimo internacional" sub="China → Puerto Chile" sub2={subA}
+            loadBtn={<button onClick={cargarSeccionA} className="text-[10px] text-[#1168F8] hover:underline flex items-center gap-1">⬇ Cargar tarifa base</button>}>
             <LogRows rows={s.rowsA} onChange={r=>u('rowsA',r)}/>
           </SecCard>
 
@@ -537,7 +593,8 @@ export default function CotizadorPage(){
             </div>
           </SecCard>
 
-          <SecCard letter="C" label="Gastos en puerto Chile" sub="THC, handling, manipulación · IVA Chile discriminado" sub2={subC}>
+          <SecCard letter="C" label="Gastos en puerto Chile" sub="THC, handling, manipulación · IVA Chile discriminado" sub2={subC}
+            loadBtn={<button onClick={cargarSeccionC} className="text-[10px] text-[#1168F8] hover:underline flex items-center gap-1">⬇ Cargar tarifa base</button>}>
             <LogRows rows={s.rowsC} onChange={r=>u('rowsC',r)} withIva/>
           </SecCard>
 
@@ -620,7 +677,8 @@ export default function CotizadorPage(){
             </div>
           </div>
 
-          <SecCard letter="E" label="Transporte terrestre Chile → NOA" sub2={subTransp}>
+          <SecCard letter="E" label="Transporte terrestre Chile → NOA" sub2={subTransp}
+            loadBtn={s.optTransp!=='B'?<button onClick={cargarSeccionE} className="text-[10px] text-[#1168F8] hover:underline flex items-center gap-1">⬇ Cargar tarifa base</button>:undefined}>
             {s.optTransp!=='B'?(
               <div>
                 <div className="grid grid-cols-3 gap-3 mb-3">
@@ -651,6 +709,7 @@ export default function CotizadorPage(){
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1168F8] text-white text-[10px] font-bold">F</span>
               <span className="font-medium text-sm text-gray-900">Gastos en Argentina</span>
               <span className="text-[10px] text-gray-400">Despachante, desconsolidación, almacenaje, traslado</span>
+              <button onClick={cargarSeccionF} className="ml-auto text-[10px] text-[#1168F8] hover:underline flex items-center gap-1">⬇ Cargar tarifa base</button>
             </div>
             <div className="px-5 py-4">
               {/* Gastos con lógica especial (% CIF, piso, techo) */}
