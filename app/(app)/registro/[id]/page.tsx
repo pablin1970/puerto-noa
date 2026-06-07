@@ -156,7 +156,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
   const hayComparativa = precioArg > 0
   const ahorro = precioArg - totalLanded
   const fechaEmision = cot.created_at ? new Date(cot.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' }) : ''
-  const TOTAL_PAGS = 3
+  const TOTAL_PAGS = 2
 
   // Shared cell style
   const th = { padding: '6px 10px', fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.5px', color: '#9ca3af', background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }
@@ -463,23 +463,15 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
             </div>
           )}
 
-          <div style={{ flex: 1 }}></div>
-          <DocFooter cot={cot} fechaEmision={fechaEmision} pagina={2} total={TOTAL_PAGS} />
-        </div>
-
-        {/* ══ PÁGINA 3: Condiciones y firma ══ */}
-        <div className="doc-page bg-white">
-          <DocHeader cot={cot} fechaEmision={fechaEmision} pagina={3} total={TOTAL_PAGS} />
-
           {/* Condiciones generales */}
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden', marginBottom: '20px' }}>
-            <div style={{ padding: '8px 16px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb', fontWeight: 700, fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '1px' }}>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden', marginBottom: '14px' }}>
+            <div style={{ padding: '7px 16px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb', fontWeight: 700, fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '1px' }}>
               Condiciones generales
             </div>
-            <div style={{ padding: '16px 18px' }}>
+            <div style={{ padding: '12px 18px' }}>
               <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                 {CONDICIONES.map((c, i) => (
-                  <li key={i} style={{ display: 'flex', gap: '10px', marginBottom: '12px', fontSize: '11px', color: '#6b7280', lineHeight: 1.5 }}>
+                  <li key={i} style={{ display: 'flex', gap: '10px', marginBottom: '8px', fontSize: '10.5px', color: '#6b7280', lineHeight: 1.4 }}>
                     <span style={{ color: '#1168F8', fontWeight: 700, flexShrink: 0, width: '16px' }}>{i + 1}.</span>
                     <span>{c}</span>
                   </li>
@@ -489,26 +481,26 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
           </div>
 
           {/* Firma */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-            <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '20px' }}>
-              <div style={{ fontWeight: 700, fontSize: '10px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '40px' }}>Por Puerto NOA SpA</div>
-              <div style={{ borderBottom: '1px solid #9ca3af', marginBottom: '10px' }}></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '14px' }}>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '16px' }}>
+              <div style={{ fontWeight: 700, fontSize: '10px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '32px' }}>Por Puerto NOA SpA</div>
+              <div style={{ borderBottom: '1px solid #9ca3af', marginBottom: '8px' }}></div>
               <div style={{ fontWeight: 700, fontSize: '12px', color: '#111827' }}>{ejecutivo?.nombre || '_____________________________'}</div>
               <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '2px' }}>{ejecutivo ? (ejecutivo.rol === 'admin' ? 'Dirección' : 'Ejecutivo de operaciones') : 'Cargo'}</div>
-              {ejecutivo?.email && <div style={{ fontSize: '10px', color: '#1168F8', marginTop: '4px' }}>{ejecutivo.email}</div>}
+              {ejecutivo?.email && <div style={{ fontSize: '10px', color: '#1168F8', marginTop: '3px' }}>{ejecutivo.email}</div>}
               {(ejecutivo as any)?.telefono && <div style={{ fontSize: '10px', color: '#6b7280' }}>{(ejecutivo as any).telefono}</div>}
             </div>
-            <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '20px' }}>
-              <div style={{ fontWeight: 700, fontSize: '10px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '40px' }}>Aceptación del cliente</div>
-              <div style={{ borderBottom: '1px solid #9ca3af', marginBottom: '10px' }}></div>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '16px' }}>
+              <div style={{ fontWeight: 700, fontSize: '10px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '32px' }}>Aceptación del cliente</div>
+              <div style={{ borderBottom: '1px solid #9ca3af', marginBottom: '8px' }}></div>
               <div style={{ fontWeight: 700, fontSize: '12px', color: '#111827' }}>{cot.cliente}</div>
               {cot.cuit && <div style={{ fontSize: '10px', color: '#9ca3af', fontFamily: 'monospace', marginTop: '2px' }}>CUIT: {cot.cuit}</div>}
-              <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '4px' }}>Fecha: ___/___/______</div>
+              <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '3px' }}>Fecha: ___/___/______</div>
             </div>
           </div>
 
           <div style={{ flex: 1 }}></div>
-          <DocFooter cot={cot} fechaEmision={fechaEmision} pagina={3} total={TOTAL_PAGS} />
+          <DocFooter cot={cot} fechaEmision={fechaEmision} pagina={2} total={TOTAL_PAGS} />
         </div>
 
       </div>
