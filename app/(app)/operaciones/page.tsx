@@ -198,16 +198,66 @@ function OperacionDetail({
 
 function GastosTab({ opId, gastos, reload }: { opId: string; gastos: Gasto[]; reload: () => void }) {
   const [form, setForm] = useState({ etapa: 'maritimo', concepto: '', fecha: nowDate(), estado: 'pendiente', moneda: 'USD', monto: '', tc: '', ref: '', notas: '' })
+  const [compFile, setCompFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [previewModal, setPreviewModal] = useState<{ url: string; nombre: string; tipo: string } | null>(null)
   const supabase = createClient()
+
+  async function uploadComprobante(gastoId: string, file: File): Promise<string | null> {
+    const ext = file.name.split('.').pop()
+    const path = `gastos/${gastoId}.${ext}`
+    const { error } = await supabase.storage.from('comprobantes').upload(path, file, { upsert: true })
+    if (error) { console.error('Error subiendo comprobante:', error); return null }
+    const { data } = supabase.storage.from('comprobantes').getPublicUrl(path)
+    return data?.publicUrl || null
+  }
 
   async function cargar() {
     if (!form.monto) return
+    setUploading(true)
     const monto = parseFloat(form.monto)
     const tc = parseFloat(form.tc) || 1
     const usd = form.moneda === 'USD' ? monto : monto / tc
-    await (supabase.from('gastos') as any).insert({ operacion_id: opId, fecha: form.fecha, etapa: form.etapa as EtapaGasto, concepto: form.concepto || 'Sin descripción', moneda: form.moneda as Moneda, monto, tc, usd, estado: form.estado as any, ref: form.ref, notas: form.notas })
+    const { data: gastoData } = await (supabase.from('gastos') as any).insert({ 
+      operacion_id: opId, fecha: form.fecha, etapa: form.etapa as EtapaGasto, 
+      concepto: form.concepto || 'Sin descripción', moneda: form.moneda as Moneda, 
+      monto, tc, usd, estado: form.estado as any, ref: form.ref, notas: form.notas 
+    }).select('id').single()
+    
+    if (gastoData && compFile) {
+      const url = await uploadComprobante(gastoData.id, compFile)
+      if (url) {
+        await (supabase.from('gastos') as any).update({ 
+          comprobante_url: url, 
+          comprobante_nombre: compFile.name 
+        }).eq('id', gastoData.id)
+      }
+    }
     setForm(f => ({ ...f, monto: '', concepto: '', ref: '' }))
+    setCompFile(null)
+    setUploading(false)
     reload()
+  }
+
+  async function subirComprobante(g: Gasto, file: File) {
+    const ext = file.name.split('.').pop()
+    const path = `gastos/${g.id}.${ext}`
+    await supabase.storage.from('comprobantes').upload(path, file, { upsert: true })
+    const { data } = supabase.storage.from('comprobantes').getPublicUrl(path)
+    if (data?.publicUrl) {
+      await (supabase.from('gastos') as any).update({ 
+        comprobante_url: data.publicUrl, 
+        comprobante_nombre: file.name 
+      }).eq('id', g.id)
+      reload()
+    }
+  }
+
+  async function verComprobante(g: Gasto) {
+    if (!(g as any).comprobante_url) return
+    const nombre = (g as any).comprobante_nombre || 'comprobante'
+    const esPdf = nombre.toLowerCase().endsWith('.pdf')
+    setPreviewModal({ url: (g as any).comprobante_url, nombre, tipo: esPdf ? 'pdf' : 'img' })
   }
 
   async function togglePago(g: Gasto) {
@@ -237,10 +287,20 @@ function GastosTab({ opId, gastos, reload }: { opId: string; gastos: Gasto[]; re
           {form.moneda !== 'USD' && <div><label className="block text-[10px] text-gray-500 font-medium mb-1">TC (moneda/USD)</label><input type="text" inputMode="decimal" onFocus={(e)=>e.target.select()} value={form.tc} onChange={e => setForm(f => ({ ...f, tc: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right" placeholder="1000" /></div>}
           <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Equivalente USD</label><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right font-mono">{form.monto ? fmt(form.moneda === 'USD' ? parseFloat(form.monto) : parseFloat(form.monto) / (parseFloat(form.tc) || 1)) : '—'}</div></div>
         </div>
-        <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="grid grid-cols-2 gap-3 mb-3">
           <div><label className="block text-[10px] text-gray-500 font-medium mb-1">N° factura / ref.</label><input value={form.ref} onChange={e => setForm(f => ({ ...f, ref: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="Nro. documento" /></div>
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Comprobante (PDF o imagen)</label>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-gray-300 rounded-lg text-xs text-gray-500 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer transition-colors">
+                📎 {compFile ? compFile.name : 'Adjuntar archivo'}
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => setCompFile(e.target.files?.[0] || null)} />
+              </label>
+              {compFile && <button onClick={() => setCompFile(null)} className="text-gray-400 hover:text-red-500 text-xs">✕</button>}
+            </div>
+          </div>
         </div>
-        <div className="flex justify-end"><button onClick={cargar} className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors">✓ Registrar gasto</button></div>
+        <div className="flex justify-end"><button onClick={cargar} disabled={uploading} className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors disabled:opacity-60">{uploading ? 'Guardando...' : '✓ Registrar gasto'}</button></div>
       </div>
 
       <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
@@ -250,7 +310,7 @@ function GastosTab({ opId, gastos, reload }: { opId: string; gastos: Gasto[]; re
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="text-left px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Fecha</th><th className="text-left px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Etapa</th><th className="text-left px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Concepto</th><th className="text-right px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Monto local</th><th className="text-right px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">TC</th><th className="text-right px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">USD</th><th className="px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Estado</th><th className="px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Ref.</th><th className="px-4 py-2"></th></tr></thead>
+            <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="text-left px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Fecha</th><th className="text-left px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Etapa</th><th className="text-left px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Concepto</th><th className="text-right px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Monto local</th><th className="text-right px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">TC</th><th className="text-right px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">USD</th><th className="px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Estado</th><th className="px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Ref.</th><th className="px-4 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Comprobante</th><th className="px-4 py-2"></th></tr></thead>
             <tbody>
               {gastos.map(g => (
                 <tr key={g.id} className="border-b border-gray-50 hover:bg-gray-50">
@@ -263,6 +323,18 @@ function GastosTab({ opId, gastos, reload }: { opId: string; gastos: Gasto[]; re
                   <td className="px-4 py-3"><span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${g.estado === 'pagado' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>{g.estado === 'pagado' ? 'Pagado' : 'Pendiente'}</span></td>
                   <td className="px-4 py-3 text-[10px] text-gray-400">{g.ref || '—'}</td>
                   <td className="px-4 py-3">
+                    {(g as any).comprobante_url ? (
+                      <button onClick={() => verComprobante(g)} className="flex items-center gap-1 px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-[10px] hover:bg-[#93B8FC] transition-colors">
+                        📄 Ver
+                      </button>
+                    ) : (
+                      <label className="flex items-center gap-1 px-2 py-1 border border-dashed border-gray-200 rounded-lg text-[10px] text-gray-400 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer transition-colors">
+                        📎 Subir
+                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => { const f = e.target.files?.[0]; if(f) subirComprobante(g, f) }} />
+                      </label>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
                     <div className="flex gap-1.5">
                       <button onClick={() => togglePago(g)} className="p-1.5 border border-gray-200 rounded-md hover:bg-gray-100 text-gray-500 transition-colors text-[10px]">{g.estado === 'pagado' ? '○' : '✓'}</button>
                       <button onClick={() => eliminar(g.id)} className="p-1.5 border border-gray-200 rounded-md hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors text-[10px]">🗑</button>
@@ -270,11 +342,33 @@ function GastosTab({ opId, gastos, reload }: { opId: string; gastos: Gasto[]; re
                   </td>
                 </tr>
               ))}
-              {!gastos.length && <tr><td colSpan={9} className="px-4 py-6 text-center text-gray-400">Sin gastos registrados aún.</td></tr>}
+              {!gastos.length && <tr><td colSpan={10} className="px-4 py-6 text-center text-gray-400">Sin gastos registrados aún.</td></tr>}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Modal preview comprobante */}
+      {previewModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setPreviewModal(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <span className="font-medium text-sm text-gray-900 truncate">{previewModal.nombre}</span>
+              <div className="flex gap-2">
+                <a href={previewModal.url} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs hover:bg-[#0a4fc4]">🔗 Abrir en nueva pestaña</a>
+                <button onClick={() => setPreviewModal(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
+              </div>
+            </div>
+            <div className="overflow-auto max-h-[75vh] p-2">
+              {previewModal.tipo === 'pdf' ? (
+                <iframe src={previewModal.url} className="w-full h-[70vh] border-0" title={previewModal.nombre} />
+              ) : (
+                <img src={previewModal.url} alt={previewModal.nombre} className="max-w-full mx-auto rounded" />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -333,18 +427,58 @@ function ComparativoTab({ presup, gastos }: { presup: any[]; gastos: Gasto[] }) 
 
 function CCTab({ opId, movs, reload }: { opId: string; movs: MovimientoCC[]; reload: () => void }) {
   const [form, setForm] = useState({ tipo: 'ingreso', concepto: '', moneda: 'USD', monto: '', tc: '', fecha: nowDate(), ref: '' })
+  const [compFile, setCompFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [previewModal, setPreviewModal] = useState<{ url: string; nombre: string; tipo: string } | null>(null)
   const supabase = createClient()
   const totalIng = movs.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + m.usd, 0)
   const totalEg = movs.filter(m => m.tipo === 'egreso').reduce((s, m) => s + m.usd, 0)
   const saldo = totalIng - totalEg
 
+  async function uploadComp(movId: string, file: File): Promise<string | null> {
+    const ext = file.name.split('.').pop()
+    const path = `movimientos/${movId}.${ext}`
+    const { error } = await supabase.storage.from('comprobantes').upload(path, file, { upsert: true })
+    if (error) { console.error('Error subiendo comprobante:', error); return null }
+    const { data } = supabase.storage.from('comprobantes').getPublicUrl(path)
+    return data?.publicUrl || null
+  }
+
   async function cargar() {
     if (!form.monto) return
+    setUploading(true)
     const monto = parseFloat(form.monto), tc = parseFloat(form.tc) || 1
     const usd = form.moneda === 'USD' ? monto : monto / tc
-    await (supabase.from('movimientos_cc') as any).insert({ operacion_id: opId, tipo: form.tipo as any, concepto: form.concepto || 'Sin descripción', moneda: form.moneda as Moneda, monto, tc, usd, fecha: form.fecha, ref: form.ref })
+    const { data: movData } = await (supabase.from('movimientos_cc') as any).insert({ 
+      operacion_id: opId, tipo: form.tipo as any, concepto: form.concepto || 'Sin descripción', 
+      moneda: form.moneda as Moneda, monto, tc, usd, fecha: form.fecha, ref: form.ref 
+    }).select('id').single()
+    if (movData && compFile) {
+      const url = await uploadComp(movData.id, compFile)
+      if (url) await (supabase.from('movimientos_cc') as any).update({ comprobante_url: url, comprobante_nombre: compFile.name }).eq('id', movData.id)
+    }
     setForm(f => ({ ...f, monto: '', concepto: '', ref: '' }))
+    setCompFile(null)
+    setUploading(false)
     reload()
+  }
+
+  async function subirComp(m: MovimientoCC, file: File) {
+    const ext = file.name.split('.').pop()
+    const path = `movimientos/${m.id}.${ext}`
+    await supabase.storage.from('comprobantes').upload(path, file, { upsert: true })
+    const { data } = supabase.storage.from('comprobantes').getPublicUrl(path)
+    if (data?.publicUrl) {
+      await (supabase.from('movimientos_cc') as any).update({ comprobante_url: data.publicUrl, comprobante_nombre: file.name }).eq('id', m.id)
+      reload()
+    }
+  }
+
+  function verComp(m: MovimientoCC) {
+    const url = (m as any).comprobante_url
+    const nombre = (m as any).comprobante_nombre || 'comprobante'
+    if (!url) return
+    setPreviewModal({ url, nombre, tipo: nombre.toLowerCase().endsWith('.pdf') ? 'pdf' : 'img' })
   }
 
   let saldoAcum = 0
@@ -365,7 +499,19 @@ function CCTab({ opId, movs, reload }: { opId: string; movs: MovimientoCC[]; rel
           <div><label className="block text-[10px] text-gray-500 font-medium mb-1">USD</label><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right font-mono">{form.monto ? fmt(form.moneda === 'USD' ? parseFloat(form.monto) : parseFloat(form.monto) / (parseFloat(form.tc) || 1)) : '—'}</div></div>
           <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Ref. / comprobante</label><input value={form.ref} onChange={e => setForm(f => ({ ...f, ref: e.target.value }))} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="N° transferencia" /></div>
         </div>
-        <div className="flex justify-end"><button onClick={cargar} className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors">✓ Registrar movimiento</button></div>
+        <div className="grid grid-cols-2 gap-3 mb-3 mt-1">
+          <div>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Comprobante (PDF o imagen)</label>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-gray-300 rounded-lg text-xs text-gray-500 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer transition-colors">
+                📎 {compFile ? compFile.name : 'Adjuntar archivo'}
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => setCompFile(e.target.files?.[0] || null)} />
+              </label>
+              {compFile && <button onClick={() => setCompFile(null)} className="text-gray-400 hover:text-red-500 text-xs">✕</button>}
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end"><button onClick={cargar} disabled={uploading} className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors disabled:opacity-60">{uploading ? 'Guardando...' : '✓ Registrar movimiento'}</button></div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-4">
@@ -387,12 +533,42 @@ function CCTab({ opId, movs, reload }: { opId: string; movs: MovimientoCC[]; rel
                 <span className="text-[10px] text-gray-400">{m.moneda !== 'USD' ? `${m.moneda} ${fmt(m.monto)} · TC ${fmt(m.tc, 0)} · ` : ''}{m.ref || ''}</span>
                 <span className={`font-mono font-medium min-w-24 text-right ${m.tipo === 'ingreso' ? 'text-green-700' : 'text-red-600'}`}>{m.tipo === 'ingreso' ? '+' : '−'} USD {fmt(m.usd)}</span>
                 <span className={`font-mono text-[10px] min-w-24 text-right ${saldoAcum >= 0 ? 'text-green-700' : 'text-red-600'}`}>= USD {fmt(saldoAcum)}</span>
+                {(m as any).comprobante_url ? (
+                  <button onClick={() => verComp(m)} className="flex items-center gap-1 px-2 py-0.5 bg-[#EBF2FF] text-[#1168F8] rounded text-[10px] hover:bg-[#93B8FC] transition-colors">📄 Ver</button>
+                ) : (
+                  <label className="flex items-center gap-1 px-2 py-0.5 border border-dashed border-gray-200 rounded text-[10px] text-gray-400 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer transition-colors">
+                    📎
+                    <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => { const f = e.target.files?.[0]; if(f) subirComp(m, f) }} />
+                  </label>
+                )}
               </div>
             )
           })}
           {!movs.length && <div className="px-5 py-6 text-center text-gray-400 text-xs">Sin movimientos registrados.</div>}
         </div>
       </div>
+
+      {/* Modal preview */}
+      {previewModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setPreviewModal(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <span className="font-medium text-sm text-gray-900 truncate">{previewModal.nombre}</span>
+              <div className="flex gap-2">
+                <a href={previewModal.url} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs hover:bg-[#0a4fc4]">🔗 Abrir en nueva pestaña</a>
+                <button onClick={() => setPreviewModal(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
+              </div>
+            </div>
+            <div className="overflow-auto max-h-[75vh] p-2">
+              {previewModal.tipo === 'pdf' ? (
+                <iframe src={previewModal.url} className="w-full h-[70vh] border-0" title={previewModal.nombre} />
+              ) : (
+                <img src={previewModal.url} alt={previewModal.nombre} className="max-w-full mx-auto rounded" />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
