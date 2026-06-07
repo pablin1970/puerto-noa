@@ -356,8 +356,8 @@ export default function CotizadorPage(){
       gastosArg: arg.map(t=>({
         id: Math.random().toString(36).slice(2),
         desc: t.ruta,
-        tipoCalc: (t.tipo_calculo||'fijo_usd') as 'pct_cif'|'fijo_usd'|'fijo_ars',
-        moneda: (t.moneda||'USD') as 'USD'|'ARS',
+        tipoCalc: ((t as any).tipo_calculo||'fijo_usd') as 'pct_cif'|'fijo_usd'|'fijo_ars',
+        moneda: ((t as any).moneda||'USD') as 'USD'|'ARS',
         valor: t.valor||0,
         pisoUsd: (t as any).piso_usd||0,
         techoUsd: (t as any).techo_usd||0,
