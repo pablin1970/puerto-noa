@@ -24,7 +24,7 @@ export type Moneda = 'USD' | 'ARS' | 'CLP' | 'CNY'
 export type TipoMovCC = 'ingreso' | 'egreso'
 export type Regimen = 'A' | 'B'
 export type OpcionTransporte = 'desconsolidar' | 'contenedor'
-export type TipoTarifa = 'maritima' | 'terrestre' | 'puerto'
+export type TipoTarifa = 'maritima' | 'terrestre' | 'puerto' | 'argentina'
 
 export type EtapaGasto =
   | 'china' | 'maritimo' | 'chile' | 'terrestre'
