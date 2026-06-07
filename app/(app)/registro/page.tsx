@@ -1,199 +1,309 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { fmt, ESTADOS_L, nowDate } from '@/lib/utils'
+import { fmt, ESTADOS_L, PUERTOS_L } from '@/lib/utils'
 import type { Cotizacion, EstadoCotizacion } from '@/types'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 
 const ESTADO_CLS: Record<string, string> = {
   borrador: 'bg-gray-100 text-gray-600',
-  enviada: 'bg-blue-50 text-blue-700',
+  enviada: 'bg-blue-50 text-[#1168F8]',
   aceptada: 'bg-green-50 text-green-700',
   rechazada: 'bg-red-50 text-red-700',
   vencida: 'bg-amber-50 text-amber-700',
 }
 
-export default function RegistroPage() {
-  const [cots, setCots] = useState<Cotizacion[]>([])
+const ETAPA_L: Record<string, string> = {
+  maritimo: 'Flete marítimo',
+  chile: 'Gastos Chile',
+  terrestre: 'Transporte',
+  argentina: 'Gastos Argentina',
+  tributos: 'Tributos ARCA',
+  fee: 'Fee Puerto NOA',
+}
+
+export default function CotizacionDetailPage() {
+  const { id } = useParams<{ id: string }>()
+  const [cot, setCot] = useState<Cotizacion | null>(null)
   const [loading, setLoading] = useState(true)
-  const [buscar, setBuscar] = useState('')
-  const [filtroEstado, setFiltroEstado] = useState('')
-  const [modal, setModal] = useState<{ type: string; cot?: Cotizacion } | null>(null)
   const supabase = createClient()
   const router = useRouter()
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    supabase.from('cotizaciones').select('*').eq('id', id).single().then(({ data }) => {
+      if (data) setCot(data as Cotizacion)
+      setLoading(false)
+    })
+  }, [id])
 
-  async function loadData() {
-    const { data } = await supabase
-      .from('cotizaciones')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (data) setCots(data as Cotizacion[])
-    setLoading(false)
-  }
-
-  async function cambiarEstado(id: string, estado: EstadoCotizacion) {
-    await (((supabase.from('cotizaciones') as any)) as any).update({ estado, updated_at: new Date().toISOString() }).eq('id', id)
-    // Si se acepta, crear operación si no existe
+  async function cambiarEstado(estado: EstadoCotizacion) {
+    await (supabase.from('cotizaciones') as any).update({ estado, updated_at: new Date().toISOString() }).eq('id', id)
     if (estado === 'aceptada') {
       const { data: opExist } = await supabase.from('operaciones').select('id').eq('cotizacion_id', id).single()
-      if (!opExist) {
-        await (supabase.from('operaciones') as any).insert({ cotizacion_id: id })
-      }
+      if (!opExist) await (supabase.from('operaciones') as any).insert({ cotizacion_id: id })
     }
-    setModal(null)
-    loadData()
+    setCot(c => c ? { ...c, estado } : c)
   }
 
-  const filtradas = cots.filter(c => {
-    const b = buscar.toLowerCase()
-    const matchB = !b || c.cliente.toLowerCase().includes(b) || c.num.toLowerCase().includes(b) || c.notas.toLowerCase().includes(b)
-    const matchE = !filtroEstado || c.estado === filtroEstado
-    return matchB && matchE
-  })
+  if (loading) return <div className="p-8 text-gray-400 text-sm">Cargando...</div>
+  if (!cot) return <div className="p-8 text-gray-400 text-sm">Cotización no encontrada.</div>
 
-  const stats = {
-    total: cots.length,
-    borrador: cots.filter(c => c.estado === 'borrador').length,
-    enviada: cots.filter(c => c.estado === 'enviada').length,
-    aceptada: cots.filter(c => c.estado === 'aceptada').length,
-    totalUSD: cots.reduce((s, c) => s + (c.total_landed || 0), 0),
-  }
+  const presup = Array.isArray(cot.presupuesto) ? cot.presupuesto : []
+  const productos = Array.isArray(cot.productos) ? cot.productos.filter((p: any) => p.subtotal > 0) : []
+  const contenedores = Array.isArray(cot.tipo_contenedores) ? cot.tipo_contenedores : []
+  const nc = contenedores.reduce((t: number, c: any) => t + (c.cantidad || 0), 0)
+  const totalFOB = cot.total_fob || 0
+  const totalLog = cot.total_logistico || 0
+  const totalTribUSD = cot.total_tributos_usd || 0
+  const totalTribARS = cot.total_tributos_ars || 0
+  const totalLanded = cot.total_landed || 0
+  const tcRef = cot.tc_ars || 0
+  const regimen = (cot as any).regimen || 'A'
+  const fechaEmision = cot.created_at ? new Date(cot.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' }) : ''
 
   return (
-    <div className="p-6">
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold text-gray-900">Registro de cotizaciones</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Módulo 2 — Historial y gestión</p>
+    <>
+      {/* ── ESTILOS IMPRIMIR ── */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #printable, #printable * { visibility: visible; }
+          #printable { position: absolute; left: 0; top: 0; width: 100%; }
+          .no-print { display: none !important; }
+          @page { margin: 15mm 12mm; size: A4; }
+        }
+      `}</style>
+
+      {/* ── CONTROLES (no se imprimen) ── */}
+      <div className="no-print p-4 bg-white border-b border-gray-100 flex items-center justify-between sticky top-0 z-10">
+        <div className="flex items-center gap-3">
+          <Link href="/registro" className="text-xs text-gray-400 hover:text-gray-600">← Cotizaciones</Link>
+          <span className="font-mono font-semibold text-gray-800">{cot.num}</span>
+          <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${ESTADO_CLS[cot.estado]}`}>{ESTADOS_L[cot.estado]}</span>
         </div>
-        <Link href="/cotizador" className="flex items-center gap-1.5 bg-[#1D9E75] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0F6E56] transition-colors">
-          + Nueva cotización
-        </Link>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400 mr-2">Cambiar estado:</span>
+          {(['enviada','aceptada','rechazada','vencida'] as EstadoCotizacion[]).filter(e => e !== cot.estado).map(e => (
+            <button key={e} onClick={() => cambiarEstado(e)} className={`px-3 py-1.5 rounded-full text-[10px] font-medium border transition-colors ${ESTADO_CLS[e]}`}>{ESTADOS_L[e]}</button>
+          ))}
+          {cot.estado === 'aceptada' && (
+            <button onClick={() => router.push(`/operaciones?cot=${cot.id}`)} className="flex items-center gap-1 px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">🚢 Ver operación</button>
+          )}
+          <button onClick={() => window.print()} className="flex items-center gap-1.5 px-4 py-1.5 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF] transition-colors">🖨 Imprimir / PDF</button>
+        </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-5 gap-3 mb-5">
-        {[
-          { label: 'Total', value: stats.total, color: 'text-gray-900' },
-          { label: 'Borrador', value: stats.borrador, color: 'text-gray-500' },
-          { label: 'Enviadas', value: stats.enviada, color: 'text-blue-600' },
-          { label: 'Aceptadas', value: stats.aceptada, color: 'text-green-700' },
-          { label: 'Valor total', value: `USD ${fmt(stats.totalUSD, 0)}`, color: 'text-[#1D9E75]' },
-        ].map(s => (
-          <div key={s.label} className="bg-white border border-gray-100 rounded-xl p-3.5">
-            <div className={`text-lg font-semibold ${s.color}`}>{s.value}</div>
-            <div className="text-[10px] text-gray-400 mt-1">{s.label}</div>
+      {/* ── DOCUMENTO IMPRIMIBLE ── */}
+      <div id="printable" className="max-w-4xl mx-auto p-6">
+
+        {/* ENCABEZADO */}
+        <div className="flex items-start justify-between mb-6 pb-5 border-b-2 border-[#1168F8]">
+          <div>
+            <Image src="/logo.png" alt="Puerto NOA SpA" width={160} height={48} style={{ objectFit: 'contain' }} />
+            <div className="mt-2 text-[10px] text-gray-400 leading-relaxed">
+              Puerto NOA SpA — Logística de importaciones China → NOA Argentino<br/>
+              Paso de Jama · San Salvador de Jujuy, Argentina
+            </div>
           </div>
-        ))}
-      </div>
+          <div className="text-right">
+            <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Cotización</div>
+            <div className="text-2xl font-bold font-mono text-[#052698]">{cot.num}</div>
+            <div className="text-xs text-gray-500 mt-1">{fechaEmision}</div>
+            {cot.validez && <div className="text-[10px] text-amber-600 mt-1">Válida por {cot.validez}</div>}
+            <div className={`inline-flex px-3 py-1 rounded-full text-[10px] font-semibold mt-2 ${ESTADO_CLS[cot.estado]}`}>{ESTADOS_L[cot.estado]}</div>
+          </div>
+        </div>
 
-      {/* Filtros */}
-      <div className="flex gap-3 mb-4 flex-wrap">
-        <input
-          value={buscar}
-          onChange={e => setBuscar(e.target.value)}
-          placeholder="Buscar por cliente, número, mercadería..."
-          className="flex-1 min-w-48 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75]"
-        />
-        <select
-          value={filtroEstado}
-          onChange={e => setFiltroEstado(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1D9E75] bg-white"
-        >
-          <option value="">Todos los estados</option>
-          {Object.entries(ESTADOS_L).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-      </div>
+        {/* CLIENTE + RUTA */}
+        <div className="grid grid-cols-2 gap-4 mb-5">
+          <div className="border border-gray-200 rounded-xl p-4">
+            <div className="text-[10px] font-bold text-[#1168F8] uppercase tracking-wider mb-3">Datos del cliente</div>
+            <div className="space-y-1.5 text-xs">
+              <div className="flex gap-2"><span className="text-gray-400 w-24 flex-shrink-0">Razón social</span><span className="font-semibold text-gray-900">{cot.cliente}</span></div>
+              {cot.cuit && <div className="flex gap-2"><span className="text-gray-400 w-24 flex-shrink-0">CUIT</span><span className="font-mono text-gray-700">{cot.cuit}</span></div>}
+              {cot.email_cliente && <div className="flex gap-2"><span className="text-gray-400 w-24 flex-shrink-0">Email</span><span className="text-gray-700">{cot.email_cliente}</span></div>}
+              {cot.telefono_cliente && <div className="flex gap-2"><span className="text-gray-400 w-24 flex-shrink-0">Teléfono</span><span className="text-gray-700">{cot.telefono_cliente}</span></div>}
+              {(cot as any).despachante && <div className="flex gap-2"><span className="text-gray-400 w-24 flex-shrink-0">Despachante</span><span className="text-gray-700">{(cot as any).despachante}</span></div>}
+            </div>
+          </div>
+          <div className="border border-gray-200 rounded-xl p-4">
+            <div className="text-[10px] font-bold text-[#1168F8] uppercase tracking-wider mb-3">Ruta de importación</div>
+            <div className="space-y-1.5 text-xs">
+              <div className="flex gap-2"><span className="text-gray-400 w-28 flex-shrink-0">Origen</span><span className="font-medium text-gray-800">{cot.origen}</span></div>
+              <div className="flex gap-2"><span className="text-gray-400 w-28 flex-shrink-0">Puerto Chile</span><span className="text-gray-700">{PUERTOS_L[cot.puerto_chile || ''] || cot.puerto_chile}</span></div>
+              <div className="flex gap-2"><span className="text-gray-400 w-28 flex-shrink-0">Destino NOA</span><span className="font-medium text-gray-800">{cot.destino_noa}</span></div>
+              <div className="flex gap-2"><span className="text-gray-400 w-28 flex-shrink-0">Incoterm</span><span className="font-mono font-semibold text-[#052698]">{cot.incoterm}</span></div>
+              <div className="flex gap-2"><span className="text-gray-400 w-28 flex-shrink-0">Tránsito est.</span><span className="text-gray-700">{cot.transito}</span></div>
+              <div className="flex gap-2"><span className="text-gray-400 w-28 flex-shrink-0">Modalidad</span><span className="text-gray-700">Opción {(cot as any).opcion_transporte || 'A1'} · {(cot as any).opcion_transporte === 'B' ? 'Contenedor completo' : 'Desconsolidado'}</span></div>
+            </div>
+          </div>
+        </div>
 
-      {/* Tabla */}
-      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-gray-400 text-sm">Cargando...</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  {['N° Cotización', 'Cliente', 'Ruta', 'Contenedores', 'Total USD', 'Estado', 'Ejecutivo', 'Fecha', 'Acciones'].map(h => (
-                    <th key={h} className="text-left px-4 py-2.5 text-gray-400 font-medium text-[10px] uppercase tracking-wide whitespace-nowrap">{h}</th>
-                  ))}
+        {/* MERCADERÍA — protagonista */}
+        <div className="border border-gray-200 rounded-xl overflow-hidden mb-5">
+          <div className="px-5 py-3 bg-[#052698] flex items-center justify-between">
+            <div className="font-semibold text-sm text-white">Mercadería importada</div>
+            <div className="text-blue-200 text-xs">{contenedores.map((c: any) => `${c.cantidad}× ${c.tipo}`).join(' + ')} · {nc} contenedor(es)</div>
+          </div>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Descripción del producto</th>
+                <th className="text-center px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">NCM</th>
+                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Cant.</th>
+                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">P. Unit. USD</th>
+                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Subtotal USD</th>
+              </tr>
+            </thead>
+            <tbody>
+              {productos.map((p: any, i: number) => (
+                <tr key={i} className="border-b border-gray-100">
+                  <td className="px-4 py-3 font-medium text-gray-800">{p.descripcion || 'Sin descripción'}</td>
+                  <td className="px-4 py-3 text-center font-mono text-gray-500 text-[10px]">{p.ncm || '—'}</td>
+                  <td className="px-4 py-3 text-right text-gray-600">{p.cantidad}</td>
+                  <td className="px-4 py-3 text-right font-mono text-gray-600">{fmt(p.precio_unit || 0)}</td>
+                  <td className="px-4 py-3 text-right font-mono font-semibold text-gray-800">USD {fmt(p.subtotal)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtradas.map(c => (
-                  <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3">
-                      <Link href={`/registro/${c.id}`} className="font-mono text-blue-600 hover:underline text-[11px] font-medium">{c.num}</Link>
-                      {c.version > 1 && <span className="text-[9px] text-gray-400 ml-1">v{c.version}</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-gray-800">{c.cliente}</div>
-                      <div className="text-[10px] text-gray-400">{c.cuit}</div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-[11px]">
-                      {c.origen?.split(',')[0]} → {c.destino_noa}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-[11px]">
-                      {Array.isArray(c.tipo_contenedores) ? c.tipo_contenedores.map((x: any) => `${x.cantidad}× ${x.tipo}`).join(', ') : '—'}
-                    </td>
-                    <td className="px-4 py-3 font-mono font-medium text-right">USD {fmt(c.total_landed || 0)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${ESTADO_CLS[c.estado] || ''}`}>
-                        {ESTADOS_L[c.estado]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-[11px]">{c.ejecutivo_id?.slice(0, 8) || '—'}</td>
-                    <td className="px-4 py-3 text-gray-400 text-[10px]">{c.created_at?.slice(0, 10)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1.5">
-                        <Link href={`/registro/${c.id}`} className="p-1.5 border border-gray-200 rounded-md hover:bg-gray-100 text-gray-500 transition-colors" title="Ver detalle">👁</Link>
-                        <button onClick={() => setModal({ type: 'estado', cot: c })} className="p-1.5 border border-gray-200 rounded-md hover:bg-gray-100 text-gray-500 transition-colors" title="Cambiar estado">🏷</button>
-                        {c.estado === 'aceptada' && (
-                          <button onClick={() => router.push(`/operaciones?cot=${c.id}`)} className="p-1.5 border border-green-200 rounded-md hover:bg-green-50 text-green-700 transition-colors" title="Ver operación">🚢</button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {!filtradas.length && (
-                  <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">Sin resultados.</td></tr>
-                )}
-              </tbody>
-            </table>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-[#EBF2FF] border-t-2 border-[#1168F8]">
+                <td colSpan={4} className="px-4 py-3 font-semibold text-[#052698] text-xs">VALOR {cot.incoterm} CHINA</td>
+                <td className="px-4 py-3 text-right font-mono font-bold text-[#052698] text-sm">USD {fmt(totalFOB, 0)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {/* COSTOS — tabla detallada */}
+        <div className="border border-gray-200 rounded-xl overflow-hidden mb-5">
+          <div className="px-5 py-3 bg-gray-50 border-b border-gray-200">
+            <div className="font-semibold text-sm text-gray-900">Estructura de costos hasta {cot.destino_noa}</div>
+            <div className="text-[10px] text-gray-400 mt-0.5">Todos los valores expresados en USD a tipo de cambio de referencia</div>
+          </div>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Sección</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Concepto</th>
+                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">USD</th>
+                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">% s/landed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Producto */}
+              <tr className="border-b border-gray-100 bg-blue-50/30">
+                <td className="px-4 py-2.5 text-[#052698] font-medium">Mercadería</td>
+                <td className="px-4 py-2.5 text-gray-700">Valor {cot.incoterm} China · {productos.length} ítem(s)</td>
+                <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-800">{fmt(totalFOB, 0)}</td>
+                <td className="px-4 py-2.5 text-right text-gray-400">{totalLanded > 0 ? fmt(totalFOB / totalLanded * 100, 1) : '0'}%</td>
+              </tr>
+              {/* Logística */}
+              {presup.filter((it: any) => it.tipo !== 'tributos').map((it: any, i: number) => (
+                <tr key={i} className="border-b border-gray-50">
+                  <td className="px-4 py-2.5 text-gray-400 text-[10px]">{ETAPA_L[it.etapa] || it.etapa}</td>
+                  <td className="px-4 py-2.5 text-gray-700">{it.concepto}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-gray-600">{fmt(it.usd, 0)}</td>
+                  <td className="px-4 py-2.5 text-right text-gray-300 text-[10px]">{totalLanded > 0 ? fmt(it.usd / totalLanded * 100, 1) : '0'}%</td>
+                </tr>
+              ))}
+              {/* Subtotal logística */}
+              <tr className="border-b border-gray-200 bg-gray-50">
+                <td colSpan={2} className="px-4 py-2 text-xs font-semibold text-gray-600">Subtotal costos logísticos</td>
+                <td className="px-4 py-2 text-right font-mono font-semibold text-gray-700">{fmt(totalLog, 0)}</td>
+                <td className="px-4 py-2 text-right text-gray-400 text-[10px]">{totalLanded > 0 ? fmt(totalLog / totalLanded * 100, 1) : '0'}%</td>
+              </tr>
+              {/* Tributos */}
+              <tr className="border-b border-gray-100 bg-amber-50/40">
+                <td className="px-4 py-2.5 text-amber-700 font-medium">Tributos ARCA</td>
+                <td className="px-4 py-2.5 text-gray-700">
+                  Régimen {regimen} · Aduana Jujuy · Base CIF Jama
+                  {tcRef > 0 && <span className="text-gray-400 ml-1">(TC ref. ARS {fmt(tcRef, 0)})</span>}
+                </td>
+                <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-800">{fmt(totalTribUSD, 0)}</td>
+                <td className="px-4 py-2.5 text-right text-gray-400">{totalLanded > 0 ? fmt(totalTribUSD / totalLanded * 100, 1) : '0'}%</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr className="bg-[#052698]">
+                <td colSpan={2} className="px-4 py-3.5 font-bold text-white text-sm">TOTAL LANDED EN {(cot.destino_noa || '').toUpperCase()}</td>
+                <td className="px-4 py-3.5 text-right font-mono font-bold text-white text-base">USD {fmt(totalLanded, 0)}</td>
+                <td className="px-4 py-3.5 text-right text-blue-200 text-xs">100%</td>
+              </tr>
+              {nc > 1 && (
+                <tr className="bg-[#EBF2FF]">
+                  <td colSpan={2} className="px-4 py-2 text-[10px] text-[#052698]">Costo por contenedor</td>
+                  <td colSpan={2} className="px-4 py-2 text-right font-mono text-[10px] font-semibold text-[#052698]">USD {fmt(totalLanded / nc, 0)} / cont.</td>
+                </tr>
+              )}
+            </tfoot>
+          </table>
+        </div>
+
+        {/* PAGOS EN PESOS */}
+        <div className="grid grid-cols-2 gap-4 mb-5">
+          <div className="border border-gray-200 rounded-xl p-4">
+            <div className="text-[10px] font-bold text-[#1168F8] uppercase tracking-wider mb-3">Tributos a pagar en Aduana (ARS)</div>
+            <div className="text-2xl font-bold text-gray-900 mb-1">ARS {Math.round(totalTribARS).toLocaleString('es-AR')}</div>
+            <div className="text-[10px] text-gray-400 space-y-0.5">
+              <div>Equivalente USD ref.: USD {fmt(totalTribUSD, 0)}</div>
+              {tcRef > 0 && <div>TC de referencia: ARS {fmt(tcRef, 0)} por USD</div>}
+              <div className="text-amber-600 mt-1">Se abona al TC oficial BNA del día del despacho</div>
+            </div>
+          </div>
+          <div className="border border-[#1168F8] rounded-xl p-4 bg-[#EBF2FF]">
+            <div className="text-[10px] font-bold text-[#052698] uppercase tracking-wider mb-3">Resumen financiero</div>
+            <div className="space-y-1.5 text-xs">
+              <div className="flex justify-between"><span className="text-gray-600">Mercadería ({cot.incoterm})</span><span className="font-mono font-semibold">USD {fmt(totalFOB, 0)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Logística total</span><span className="font-mono font-semibold">USD {fmt(totalLog, 0)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Tributos ARCA (USD ref.)</span><span className="font-mono font-semibold">USD {fmt(totalTribUSD, 0)}</span></div>
+              <div className="flex justify-between pt-1.5 border-t border-[#93B8FC] mt-1">
+                <span className="font-bold text-[#052698]">TOTAL LANDED</span>
+                <span className="font-mono font-bold text-[#052698]">USD {fmt(totalLanded, 0)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* TC DE REFERENCIA */}
+        {tcRef > 0 && (
+          <div className="border border-gray-200 rounded-xl px-5 py-3 mb-5 bg-gray-50">
+            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Tipos de cambio de referencia a la fecha de cotización</div>
+            <div className="flex gap-6 text-xs">
+              <div><span className="text-gray-500">TC oficial BNA (ARS/USD): </span><span className="font-mono font-semibold text-gray-800">ARS {fmt(tcRef, 0)}</span><span className="text-gray-400 ml-1">— para tributos y gastos locales</span></div>
+            </div>
+            <div className="text-[10px] text-amber-600 mt-1.5">⚠ Los pagos en pesos se realizarán al tipo de cambio oficial BNA vigente en la fecha efectiva de cada pago.</div>
           </div>
         )}
-      </div>
 
-      {/* Modal cambiar estado */}
-      {modal?.type === 'estado' && modal.cot && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <span className="font-medium text-sm">Cambiar estado — {modal.cot.num}</span>
-              <button onClick={() => setModal(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+        {/* NOTAS */}
+        {cot.notas && (
+          <div className="border border-amber-200 rounded-xl px-4 py-3 mb-5 bg-amber-50">
+            <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1">Observaciones</div>
+            <div className="text-xs text-amber-800">{cot.notas}</div>
+          </div>
+        )}
+
+        {/* PIE DE PÁGINA */}
+        <div className="border-t-2 border-[#1168F8] pt-4 mt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <Image src="/logo.png" alt="Puerto NOA SpA" width={100} height={30} style={{ objectFit: 'contain', opacity: 0.7 }} />
             </div>
-            <div className="p-5 space-y-2">
-              <p className="text-xs text-gray-500 mb-3">Estado actual: <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${ESTADO_CLS[modal.cot.estado]}`}>{ESTADOS_L[modal.cot.estado]}</span></p>
-              {(['borrador', 'enviada', 'aceptada', 'rechazada', 'vencida'] as EstadoCotizacion[]).map(e => (
-                <button
-                  key={e}
-                  onClick={() => cambiarEstado(modal.cot!.id, e)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors ${e === modal.cot?.estado ? 'border-[#1D9E75] bg-green-50' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${ESTADO_CLS[e]}`}>{ESTADOS_L[e]}</span>
-                  <span className="text-xs text-gray-500">{{ borrador: 'En preparación', enviada: 'Enviada al cliente', aceptada: 'Confirmada — activa operación', rechazada: 'Rechazada por el cliente', vencida: 'Plazo vencido' }[e]}</span>
-                </button>
-              ))}
+            <div className="text-center text-[10px] text-gray-400">
+              <div>Esta cotización fue generada el {fechaEmision} y es válida por {cot.validez || '30 días'}.</div>
+              <div>Los valores están expresados en USD. Los pagos en ARS se realizan al TC BNA del día de cada pago.</div>
             </div>
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-end">
-              <button onClick={() => setModal(null)} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Cancelar</button>
+            <div className="text-right text-[10px] text-gray-400">
+              <div className="font-mono font-medium text-gray-600">{cot.num}</div>
+              <div>Puerto NOA SpA</div>
             </div>
           </div>
         </div>
-      )}
-    </div>
+
+      </div>
+    </>
   )
 }
