@@ -31,13 +31,13 @@ export default function LoginPage() {
             // Get approximate IP via public API
             let ip = '', ciudad = '', pais = '', paisCodigo = ''
             try {
-              const geoRes = await fetch('http://ip-api.com/json/?fields=query,city,country,countryCode&lang=es')
+              const geoRes = await fetch('https://ipapi.co/json/')
               if (geoRes.ok) {
                 const geo = await geoRes.json()
-                ip = geo.query || ''
+                ip = geo.ip || ''
                 ciudad = geo.city || ''
-                pais = geo.country || ''
-                paisCodigo = geo.countryCode || ''
+                pais = geo.country_name || ''
+                paisCodigo = geo.country_code || ''
               }
             } catch {}
             // Insert login log
