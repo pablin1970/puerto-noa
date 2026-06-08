@@ -310,7 +310,7 @@ export default function TiposCambioPage() {
                 const fb = FUENTE_BADGE[e.fuente]
                 return (
                   <tr key={e.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-[11px] font-semibold text-gray-700">{e.fecha}</td>
+                    <td className="px-4 py-3 font-mono text-[11px] font-semibold text-gray-700">{e.fecha ? new Date(e.fecha + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}</td>
                     <td className="px-4 py-3 font-mono text-[10px] text-gray-400">
                       {new Date(e.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                     </td>
