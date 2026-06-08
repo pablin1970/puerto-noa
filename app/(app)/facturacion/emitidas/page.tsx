@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt } from '@/lib/utils'
 import Link from 'next/link'
-import Image from 'next/image'
+
 
 interface FacturaEmitida {
   id: string
@@ -773,7 +773,7 @@ function ImpresionFactura({ factura, onBack }: any) {
           {/* Encabezado */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '12px', marginBottom: '16px', borderBottom: '3px solid #1168F8' }}>
             <div>
-              <Image src="/logo.png" alt="Puerto NOA SpA" width={160} height={46} style={{ objectFit: 'contain' }} />
+              <img src="/logo.png" alt="Puerto NOA SpA" style={{ height: '46px', objectFit: 'contain' }} />
               <div style={{ marginTop: '8px', fontSize: '10px', color: '#9ca3af', lineHeight: '1.6' }}>
                 Puerto NOA SpA<br />
                 Logística de importaciones China → NOA<br />
@@ -935,7 +935,7 @@ function ImpresionFactura({ factura, onBack }: any) {
 
           {/* Pie */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '10px', borderTop: '2px solid #1168F8' }}>
-            <Image src="/logo.png" alt="Puerto NOA SpA" width={90} height={26} style={{ objectFit: 'contain', opacity: 0.5 }} />
+            <img src="/logo.png" alt="Puerto NOA SpA" style={{ height: '26px', objectFit: 'contain', opacity: 0.5 }} />
             <div style={{ textAlign: 'center', fontSize: '9px', color: '#9ca3af' }}>
               <div style={{ fontWeight: 700, color: '#374151' }}>Puerto NOA SpA</div>
               <div>Logística China → NOA Argentino</div>
