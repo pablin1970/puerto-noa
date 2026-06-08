@@ -98,7 +98,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           if (!latest.fecha) {
             latest.fecha = ev.fecha
             latest.hora = new Date(ev.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-            latest.fuente = ev.fuente === 'automatico' ? '🤖' : ev.fuente === 'forzado' ? '⚡' : '✏️'
+            latest.fuente = ev.fuente === 'automatico' ? '🤖 Sistema' : ev.fuente === 'forzado' ? '⚡' : '✏️'
           }
         }
         if (latest.CLP === null && ev.clp !== null) latest.CLP = ev.clp
