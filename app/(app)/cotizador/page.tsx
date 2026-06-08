@@ -193,6 +193,12 @@ export default function CotizadorPage(){
   const [cotNavieras,setCotNavieras]=useState<any[]>([])
   const [cotTransporte,setCotTransporte]=useState<any[]>([])
   const [cotArgentina,setCotArgentina]=useState<any[]>([])
+  const [terceros,setTerceros]=useState<any[]>([])
+  const [buscarCliente,setBuscarCliente]=useState('')
+  const [showClienteDropdown,setShowClienteDropdown]=useState(false)
+  const [clienteSelId,setClienteSelId]=useState<string|null>(null)
+  const [histCliente,setHistCliente]=useState<any[]>([])
+  const [showHist,setShowHist]=useState(false)
   const [tribCfg,setTribCfg]=useState<TribCfg[]>([])
   const [saving,setSaving]=useState(false)
   const supabase=createClient()
@@ -209,6 +215,11 @@ export default function CotizadorPage(){
           if (clp) setS(p => ({ ...p, tcClp: clp }))
         }
       })
+
+    // Load terceros (clientes)
+    supabase.from('terceros').select('id,razon_social,nombre_fantasia,nro_doc,tipo_doc,condicion_iva,email,telefono,dir_fiscal_ciudad,pais')
+      .contains('tipo', ['cliente']).eq('activo', true).order('razon_social')
+      .then(({data})=>{ if(data) setTerceros(data) })
 
     // Load cotizaciones de proveedores vigentes
     supabase.from('cotizaciones_proveedor')
@@ -418,6 +429,50 @@ export default function CotizadorPage(){
     }))
   }
 
+  async function selectCliente(t: any) {
+    u('cliente', t.razon_social)
+    u('cuit', t.nro_doc || '')
+    u('email', t.email || '')
+    u('telefono', t.telefono || '')
+    u('ivaCondicion', t.condicion_iva || 'Responsable Inscripto')
+    setClienteSelId(t.id)
+    setBuscarCliente(t.razon_social)
+    setShowClienteDropdown(false)
+    // Load historial
+    const {data} = await supabase.from('cotizaciones').select('id,num,estado,total_landed,created_at').eq('tercero_id', t.id).order('created_at',{ascending:false}).limit(5)
+    if(data) setHistCliente(data)
+    setShowHist(true)
+  }
+
+  async function duplicarCotizacion(cotId: string) {
+    const {data: orig} = await supabase.from('cotizaciones').select('*').eq('id', cotId).single()
+    if(!orig) return
+    // Get current TC
+    const {data: tcData} = await supabase.from('tipos_cambio_eventos').select('ars,clp,cny').order('created_at',{ascending:false}).limit(1).single()
+    const newState = {
+      ...s,
+      cliente: (orig as any).cliente,
+      cuit: (orig as any).cuit || '',
+      email: (orig as any).email_cliente || '',
+      telefono: (orig as any).telefono_cliente || '',
+      productos: (orig as any).productos || s.productos,
+      contenedores: (orig as any).tipo_contenedores || s.contenedores,
+      origen: (orig as any).origen || s.origen,
+      ptoChile: (orig as any).puerto_chile || s.ptoChile,
+      destinoNoa: (orig as any).destino_noa || s.destinoNoa,
+      incoterm: (orig as any).incoterm || s.incoterm,
+      transito: (orig as any).transito || s.transito,
+      rowsA: (orig as any).presupuesto?.filter((p:any)=>p.etapa==='maritimo').map((p:any)=>({id:Math.random().toString(36).slice(2),desc:p.concepto,cant:1,unitario:p.usd,ivaChile:'exento' as const,tipoCalc:'fijo' as const})) || s.rowsA,
+      tcArs: (tcData as any)?.ars || s.tcArs,
+      tcTrib: (tcData as any)?.ars || s.tcTrib,
+      tcClp: (tcData as any)?.clp || s.tcClp,
+      notas: '',
+    }
+    setS(newState)
+    setTab('embarque')
+    alert('Cotización duplicada. Revisá los valores y guardá cuando esté lista.')
+  }
+
   function cargarSeccionA(){
     const mar=tarifas.filter(t=>(t.tipo as string)==='maritima')
     setS(p=>{
@@ -528,6 +583,7 @@ export default function CotizadorPage(){
       const {error}=await (supabase.from('cotizaciones') as any).insert({
         num,version:1,
         cliente:s.cliente,cuit:s.cuit,email_cliente:s.email,telefono_cliente:s.telefono,
+        tercero_id: clienteSelId || null,
         origen:s.origen,puerto_chile:s.ptoChile,destino_noa:s.destinoNoa,incoterm:s.incoterm,
         transito:s.transito,ref_naviero:s.refNaviero,notas:s.notas,
         tipo_contenedores:s.contenedores,productos:s.productos,
@@ -556,7 +612,7 @@ export default function CotizadorPage(){
   const TABS=[{key:'embarque',label:'Embarque'},{key:'logistica',label:'Logística'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as const
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
+    <div className="p-6 bg-gray-50 min-h-screen" onClick={()=>setShowClienteDropdown(false)}>
       <div className="mb-5 flex items-center gap-4">
         <div className="bg-white border border-gray-100 rounded-2xl px-4 py-2.5 shadow-sm">
           <Image src="/logo.png" alt="Puertonoa" width={130} height={38} style={{objectFit:'contain'}}/>
@@ -581,7 +637,69 @@ export default function CotizadorPage(){
         <div className="space-y-4">
           <Card title="Cliente y operación">
             <div className="grid grid-cols-4 gap-3 mb-3">
-              <div className="col-span-2"><Field label="Razón social"><input value={s.cliente} onChange={e=>u('cliente',e.target.value)} className={inp} placeholder="Razón social completa del cliente"/></Field></div>
+              <div className="col-span-2">
+                <Field label="Razón social">
+                  <div className="relative">
+                    <input
+                      value={buscarCliente||s.cliente}
+                      onChange={e=>{
+                        setBuscarCliente(e.target.value)
+                        u('cliente',e.target.value)
+                        setShowClienteDropdown(e.target.value.length>1)
+                        if(!e.target.value){setClienteSelId(null);setShowHist(false)}
+                      }}
+                      onFocus={()=>{if((buscarCliente||s.cliente).length>1)setShowClienteDropdown(true)}}
+                      className={inp} placeholder="Buscar o escribir razón social..."/>
+                    {showClienteDropdown && (
+                      <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto mt-1">
+                        {terceros.filter(t=>
+                          t.razon_social.toLowerCase().includes((buscarCliente||s.cliente).toLowerCase()) ||
+                          (t.nro_doc||'').includes(buscarCliente||s.cliente) ||
+                          (t.nombre_fantasia||'').toLowerCase().includes((buscarCliente||s.cliente).toLowerCase())
+                        ).slice(0,8).map(t=>(
+                          <button key={t.id} onMouseDown={()=>selectCliente(t)}
+                            className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] transition-colors border-b border-gray-50 last:border-0">
+                            <div className="font-semibold text-sm text-gray-900">{t.razon_social}</div>
+                            <div className="text-[10px] text-gray-400 flex gap-2 mt-0.5">
+                              {t.nro_doc&&<span className="font-mono">{t.tipo_doc}: {t.nro_doc}</span>}
+                              {t.dir_fiscal_ciudad&&<span>{t.dir_fiscal_ciudad}, {t.pais}</span>}
+                            </div>
+                          </button>
+                        ))}
+                        {terceros.filter(t=>t.razon_social.toLowerCase().includes((buscarCliente||s.cliente).toLowerCase())).length===0&&(
+                          <div className="px-4 py-3 text-xs text-gray-400">
+                            No encontrado — se cargará como nuevo cliente al guardar
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </Field>
+                {/* Historial cliente */}
+                {showHist && histCliente.length>0 && (
+                  <div className="mt-2 bg-[#EBF2FF] border border-[#93B8FC] rounded-xl p-3">
+                    <div className="text-[10px] font-bold text-[#052698] mb-2">📋 Cotizaciones anteriores de este cliente</div>
+                    <div className="space-y-1">
+                      {histCliente.map(c=>(
+                        <div key={c.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[11px] font-bold text-[#1168F8]">{c.num}</span>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${c.estado==='aceptada'?'bg-green-50 text-green-700':c.estado==='enviada'?'bg-blue-50 text-[#1168F8]':'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
+                            <span className="text-[10px] text-gray-400">{c.created_at?.slice(0,10)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-semibold text-gray-700">USD {Math.round(c.total_landed||0).toLocaleString('es-AR')}</span>
+                            <button onMouseDown={()=>duplicarCotizacion(c.id)}
+                              className="px-2 py-0.5 bg-[#1168F8] text-white rounded text-[9px] font-bold hover:bg-[#052698] transition-colors">
+                              Duplicar
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <Field label="CUIT"><input value={s.cuit} onChange={e=>u('cuit',e.target.value)} className={inp} placeholder="XX-XXXXXXXX-X"/></Field>
               <Field label="Teléfono"><input value={s.telefono} onChange={e=>u('telefono',e.target.value)} className={inp} placeholder="+54 9 388..."/></Field>
             </div>
