@@ -41,12 +41,12 @@ export default function LoginPage() {
               }
             } catch {}
             // Insert login log
-            supabase.from('login_historial').insert({
+            (supabase.from('login_historial') as any).insert({
               usuario_id: userId, ip, ciudad, pais, pais_codigo: paisCodigo,
               user_agent: navigator.userAgent,
             }).then(() => {})
             // Update last login
-            supabase.from('usuarios').update({
+            (supabase.from('usuarios') as any).update({
               last_login_at: now, last_login_ip: ip,
               last_login_ciudad: ciudad, last_login_pais: pais,
             }).eq('id', userId).then(() => {})
