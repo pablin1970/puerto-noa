@@ -564,3 +564,4 @@ function DetalleFacturaRecibida({ factura, supabase, onReload, onBack }: any) {
     </div>
   )
 }
+
