@@ -22,7 +22,7 @@ interface TCVigente { ars: number | null; clp: number | null; cny: number | null
 
 const FUENTE_BADGE: Record<string, { label: string; icon: string; cls: string }> = {
   manual:     { label: 'Manual',   icon: '✏️', cls: 'bg-gray-100 text-gray-600' },
-  automatico: { label: 'Cron',     icon: '🤖', cls: 'bg-blue-50 text-[#1168F8]' },
+  automatico: { label: 'Automático', icon: '🤖', cls: 'bg-blue-50 text-[#1168F8]' },
   forzado:    { label: 'Forzado',  icon: '⚡', cls: 'bg-purple-50 text-purple-700' },
 }
 
@@ -164,15 +164,17 @@ export default function TiposCambioPage() {
   }
 
   async function checkAutoUpdate() {
+    const hoy = new Date().toISOString().slice(0, 10)
     const { data } = await supabase
       .from('tipos_cambio_eventos')
-      .select('fecha')
+      .select('fecha, fuente')
       .in('fuente', ['automatico', 'forzado'])
-      .order('created_at', { ascending: false })
+      .eq('fecha', hoy)
       .limit(1)
-    const hoy = new Date().toISOString().slice(0, 10)
-    const ultimo = (data as any[])?.[0]?.fecha
-    if (!ultimo || ultimo < hoy) await actualizarDesdeAPI('automatico')
+    // Only auto-update if there's NO auto/forced event today
+    if (!data || data.length === 0) {
+      await actualizarDesdeAPI('automatico')
+    }
   }
 
   const eventosFiltrados = eventos.filter(e => {
