@@ -211,7 +211,7 @@ export default function CotizadorPage(){
         if (data && data.length > 0) {
           const ars = (data as any[]).find(t => t.moneda === 'ARS')?.valor
           const clp = (data as any[]).find(t => t.moneda === 'CLP')?.valor
-          if (ars) setS(p => ({ ...p, tcArs: ars, tcTrib: ars }))
+          if (ars) setS(p => ({ ...p, tcTrib: ars }))
           if (clp) setS(p => ({ ...p, tcClp: clp }))
         }
       })
@@ -463,8 +463,8 @@ export default function CotizadorPage(){
       incoterm: (orig as any).incoterm || s.incoterm,
       transito: (orig as any).transito || s.transito,
       rowsA: (orig as any).presupuesto?.filter((p:any)=>p.etapa==='maritimo').map((p:any)=>({id:Math.random().toString(36).slice(2),desc:p.concepto,cant:1,unitario:p.usd,ivaChile:'exento' as const,tipoCalc:'fijo' as const})) || s.rowsA,
-      tcArs: (tcData as any)?.ars || s.tcArs,
       tcTrib: (tcData as any)?.ars || s.tcTrib,
+      
       tcClp: (tcData as any)?.clp || s.tcClp,
       notas: '',
     }
