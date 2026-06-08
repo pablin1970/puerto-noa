@@ -32,10 +32,10 @@ const NAV: NavItem[] = [
 
   // FACTURACIÓN
   { label: 'FACTURACIÓN', section: true },
-  { href: '/facturacion/emitidas', label: 'Facturas emitidas', icon: '📄', soon: true },
-  { href: '/facturacion/recibidas', label: 'Facturas recibidas', icon: '📥', soon: true },
-  { href: '/facturacion/cte-clientes', label: 'Cta. cte. clientes', icon: '👥', soon: true },
-  { href: '/facturacion/cte-proveedores', label: 'Cta. cte. proveedores', icon: '📦', soon: true },
+  { href: '/facturacion/emitidas', label: 'Facturas emitidas', icon: '📄' },
+  { href: '/facturacion/recibidas', label: 'Facturas recibidas', icon: '📥' },
+  { href: '/facturacion/cte-clientes', label: 'Cta. cte. clientes', icon: '👥' },
+  { href: '/facturacion/cte-proveedores', label: 'Cta. cte. proveedores', icon: '📦' },
 
   // TESORERÍA
   { label: 'TESORERÍA', section: true },
