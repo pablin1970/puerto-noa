@@ -135,15 +135,37 @@ export default function UsuariosPage() {
     return permisos.some(p => p.rol_id === rolId && p.modulo === modulo && p.accion === accion && p.permitido)
   }
 
-  async function togglePermiso(rolId: string, modulo: string, accion: string) {
-    const existing = permisos.find(p => p.rol_id === rolId && p.modulo === modulo && p.accion === accion)
-    if (existing) {
-      await (supabase.from('rol_permisos') as any).update({ permitido: !existing.permitido }).eq('id', existing.id)
-      setPermisos(ps => ps.map(p => p.id === existing.id ? { ...p, permitido: !p.permitido } : p))
-    } else {
-      const { data } = await (supabase.from('rol_permisos') as any).insert({ rol_id: rolId, modulo, accion, permitido: true }).select('*').single()
-      if (data) setPermisos(ps => [...ps, data as Permiso])
+  const [permisosModificados, setPermisosModificados] = useState<Record<string, boolean>>({})
+  const [savingPermisos, setSavingPermisos] = useState(false)
+
+  function togglePermiso(rolId: string, modulo: string, accion: string) {
+    const key = `${rolId}|${modulo}|${accion}`
+    const current = permisosModificados.hasOwnProperty(key)
+      ? permisosModificados[key]
+      : isPermitido(rolId, modulo, accion)
+    setPermisosModificados(pm => ({ ...pm, [key]: !current }))
+  }
+
+  function isPermitidoEfectivo(rolId: string, modulo: string, accion: string): boolean {
+    const key = `${rolId}|${modulo}|${accion}`
+    if (permisosModificados.hasOwnProperty(key)) return permisosModificados[key]
+    return isPermitido(rolId, modulo, accion)
+  }
+
+  async function guardarPermisos() {
+    setSavingPermisos(true)
+    for (const [key, valor] of Object.entries(permisosModificados)) {
+      const [rolId, modulo, accion] = key.split('|')
+      const existing = permisos.find(p => p.rol_id === rolId && p.modulo === modulo && p.accion === accion)
+      if (existing) {
+        await (supabase.from('rol_permisos') as any).update({ permitido: valor }).eq('id', existing.id)
+      } else if (valor) {
+        await (supabase.from('rol_permisos') as any).insert({ rol_id: rolId, modulo, accion, permitido: true })
+      }
     }
+    setPermisosModificados({})
+    await loadAll()
+    setSavingPermisos(false)
   }
 
   async function guardarUsuario() {
@@ -413,7 +435,7 @@ export default function UsuariosPage() {
                         <tr key={`${item.modulo}-${item.accion}`} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                           <td className="px-4 py-2.5 text-xs text-gray-700">{item.label}</td>
                           {roles.map(r => {
-                            const permitido = isPermitido(r.id, item.modulo, item.accion)
+                            const permitido = isPermitidoEfectivo(r.id, item.modulo, item.accion)
                             return (
                               <td key={r.id} className="text-center px-3 py-2.5">
                                 <button onClick={() => togglePermiso(r.id, item.modulo, item.accion)}
@@ -432,6 +454,23 @@ export default function UsuariosPage() {
               </table>
             </div>
           </div>
+          {Object.keys(permisosModificados).length > 0 && (
+            <div className="flex items-center justify-between mt-4 px-5 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
+              <span className="text-xs text-amber-800 font-medium">
+                ⚠ Hay {Object.keys(permisosModificados).length} cambio(s) sin guardar
+              </span>
+              <div className="flex gap-2">
+                <button onClick={() => setPermisosModificados({})}
+                  className="px-4 py-2 border border-amber-200 rounded-xl text-xs text-amber-700 hover:bg-amber-100">
+                  Descartar
+                </button>
+                <button onClick={guardarPermisos} disabled={savingPermisos}
+                  className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
+                  {savingPermisos ? 'Guardando...' : '✓ Guardar permisos'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -502,6 +541,23 @@ export default function UsuariosPage() {
               )}
             </div>
           </div>
+          {Object.keys(permisosModificados).length > 0 && (
+            <div className="flex items-center justify-between mt-4 px-5 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
+              <span className="text-xs text-amber-800 font-medium">
+                ⚠ Hay {Object.keys(permisosModificados).length} cambio(s) sin guardar
+              </span>
+              <div className="flex gap-2">
+                <button onClick={() => setPermisosModificados({})}
+                  className="px-4 py-2 border border-amber-200 rounded-xl text-xs text-amber-700 hover:bg-amber-100">
+                  Descartar
+                </button>
+                <button onClick={guardarPermisos} disabled={savingPermisos}
+                  className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
+                  {savingPermisos ? 'Guardando...' : '✓ Guardar permisos'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -545,6 +601,23 @@ export default function UsuariosPage() {
               <button onClick={() => { setModalUsuario(null); setGeneratedPassword('') }} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cerrar</button>
             </div>
           </div>
+          {Object.keys(permisosModificados).length > 0 && (
+            <div className="flex items-center justify-between mt-4 px-5 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
+              <span className="text-xs text-amber-800 font-medium">
+                ⚠ Hay {Object.keys(permisosModificados).length} cambio(s) sin guardar
+              </span>
+              <div className="flex gap-2">
+                <button onClick={() => setPermisosModificados({})}
+                  className="px-4 py-2 border border-amber-200 rounded-xl text-xs text-amber-700 hover:bg-amber-100">
+                  Descartar
+                </button>
+                <button onClick={guardarPermisos} disabled={savingPermisos}
+                  className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
+                  {savingPermisos ? 'Guardando...' : '✓ Guardar permisos'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -592,6 +665,23 @@ export default function UsuariosPage() {
               )}
             </div>
           </div>
+          {Object.keys(permisosModificados).length > 0 && (
+            <div className="flex items-center justify-between mt-4 px-5 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
+              <span className="text-xs text-amber-800 font-medium">
+                ⚠ Hay {Object.keys(permisosModificados).length} cambio(s) sin guardar
+              </span>
+              <div className="flex gap-2">
+                <button onClick={() => setPermisosModificados({})}
+                  className="px-4 py-2 border border-amber-200 rounded-xl text-xs text-amber-700 hover:bg-amber-100">
+                  Descartar
+                </button>
+                <button onClick={guardarPermisos} disabled={savingPermisos}
+                  className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
+                  {savingPermisos ? 'Guardando...' : '✓ Guardar permisos'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -638,6 +728,23 @@ export default function UsuariosPage() {
               </button>
             </div>
           </div>
+          {Object.keys(permisosModificados).length > 0 && (
+            <div className="flex items-center justify-between mt-4 px-5 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
+              <span className="text-xs text-amber-800 font-medium">
+                ⚠ Hay {Object.keys(permisosModificados).length} cambio(s) sin guardar
+              </span>
+              <div className="flex gap-2">
+                <button onClick={() => setPermisosModificados({})}
+                  className="px-4 py-2 border border-amber-200 rounded-xl text-xs text-amber-700 hover:bg-amber-100">
+                  Descartar
+                </button>
+                <button onClick={guardarPermisos} disabled={savingPermisos}
+                  className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
+                  {savingPermisos ? 'Guardando...' : '✓ Guardar permisos'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
