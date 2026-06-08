@@ -166,7 +166,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Nav */}
-        <nav className="flex-1 py-2 overflow-y-auto scrollbar-thin">
+        <nav className="flex-1 py-2 overflow-y-auto">
           {NAV.map((item, i) => {
             if (item.section) return (
               <div key={i} className={`${collapsed ? 'hidden' : ''} px-3 pt-4 pb-1 text-[8px] font-black text-white/25 tracking-widest uppercase flex items-center gap-1`}>
