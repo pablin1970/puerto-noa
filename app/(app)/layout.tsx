@@ -85,12 +85,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [])
 
   async function loadTC() {
-    const { data } = await supabase
-      .from('tipos_cambio_eventos')
-      .select('ars, clp, cny, fecha, fuente, created_at')
-      .order('created_at', { ascending: false })
-      .limit(10)
-    if (data && data.length > 0) {
+    try {
+      const { data, error } = await supabase
+        .from('tipos_cambio_eventos')
+        .select('ars, clp, cny, fecha, fuente, created_at')
+        .order('created_at', { ascending: false })
+        .limit(10)
+      if (error || !data || data.length === 0) return
       const latest: TCWidget = { ARS: null, CLP: null, CNY: null, fecha: '', hora: '', fuente: '' }
       for (const ev of data as any[]) {
         if (latest.ARS === null && ev.ars !== null) {
@@ -98,7 +99,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           if (!latest.fecha) {
             latest.fecha = ev.fecha
             latest.hora = new Date(ev.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-            latest.fuente = ev.fuente === 'automatico' ? '🤖 Sistema' : ev.fuente === 'forzado' ? '⚡' : '✏️'
+            latest.fuente = ev.fuente === 'automatico' ? '🤖' : ev.fuente === 'forzado' ? '⚡' : '✏️'
           }
         }
         if (latest.CLP === null && ev.clp !== null) latest.CLP = ev.clp
@@ -106,7 +107,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         if (latest.ARS !== null && latest.CLP !== null && latest.CNY !== null) break
       }
       setTc(latest)
-    }
+    } catch {}
   }
 
   async function handleLogout() {
