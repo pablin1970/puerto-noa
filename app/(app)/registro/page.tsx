@@ -220,7 +220,7 @@ export default function RegistroPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 font-mono text-[10px] text-gray-400">
-                      {c.created_at?.slice(0, 10)}
+                      {c.created_at ? new Date(c.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
