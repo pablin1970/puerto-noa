@@ -91,7 +91,7 @@ export default function LoginPage() {
         </form>
         <p className="text-xs text-gray-400 text-center mt-6">¿Sin acceso? Contactá al administrador del sistema.</p>
         <div className="mt-8 pt-4 border-t border-gray-100 text-center">
-          <p className="text-[10px] text-gray-300 tracking-widest uppercase font-medium">Developed by Pablin</p>
+          <p style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: '12px', color: '#6b7280', letterSpacing: '0.05em', fontStyle: 'italic', fontWeight: 400 }}>Developed by Pablin</p>
         </div>
       </div>
     </div>
