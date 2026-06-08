@@ -120,7 +120,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen overflow-hidden">
       {/* SIDEBAR */}
       <aside className={`${collapsed ? 'w-14' : 'w-56'} flex-shrink-0 flex flex-col transition-all duration-200`}
-        style={{ background: 'linear-gradient(180deg, #031d6e 0%, #052698 60%, #0a3ab8 100%)' }}>
+        style={{ background: 'linear-gradient(180deg, #0a3ab8 0%, #1168F8 60%, #1a74ff 100%)' }}>
 
         {/* Logo + collapse */}
         <div className={`flex items-center ${collapsed ? 'justify-center px-2' : 'justify-between px-4'} py-4 border-b border-white/10`}>
