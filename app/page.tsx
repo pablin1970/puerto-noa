@@ -30,26 +30,41 @@ export default function LoginPage() {
             const now = new Date().toISOString()
             // Get approximate IP via public API
             let ip = '', ciudad = '', pais = '', paisCodigo = ''
+            // Try multiple geo APIs
+            const geoApis = [
+              'https://ipapi.co/json/',
+              'https://api.ipify.org?format=json',
+            ]
+            for (const apiUrl of geoApis) {
+              try {
+                const geoRes = await fetch(apiUrl, { signal: AbortSignal.timeout(3000) })
+                if (geoRes.ok) {
+                  const geo = await geoRes.json()
+                  if (apiUrl.includes('ipapi.co')) {
+                    ip = geo.ip || ''
+                    ciudad = geo.city || ''
+                    pais = geo.country_name || ''
+                    paisCodigo = geo.country_code || ''
+                  } else {
+                    ip = geo.ip || ''
+                  }
+                  if (ip) break
+                }
+              } catch {}
+            }
+            // Always insert login log regardless of geo success
             try {
-              const geoRes = await fetch('https://ipapi.co/json/')
-              if (geoRes.ok) {
-                const geo = await geoRes.json()
-                ip = geo.ip || ''
-                ciudad = geo.city || ''
-                pais = geo.country_name || ''
-                paisCodigo = geo.country_code || ''
-              }
-            } catch {}
-            // Insert login log
-            (supabase.from('login_historial') as any).insert({
-              usuario_id: userId, ip, ciudad, pais, pais_codigo: paisCodigo,
-              user_agent: navigator.userAgent,
-            }).then(() => {})
-            // Update last login
-            (supabase.from('usuarios') as any).update({
-              last_login_at: now, last_login_ip: ip,
-              last_login_ciudad: ciudad, last_login_pais: pais,
-            }).eq('id', userId).then(() => {})
+              await (supabase.from('login_historial') as any).insert({
+                usuario_id: userId, ip: ip || 'desconocida', ciudad, pais, pais_codigo: paisCodigo,
+                user_agent: navigator.userAgent,
+              })
+              await (supabase.from('usuarios') as any).update({
+                last_login_at: now, last_login_ip: ip || 'desconocida',
+                last_login_ciudad: ciudad, last_login_pais: pais,
+              }).eq('id', userId)
+            } catch(trackErr) {
+              console.error('Error guardando login:', trackErr)
+            }
             // Force password change
             if ((u as any).force_password_change) {
               router.push('/cambiar-password')
