@@ -21,16 +21,35 @@ export default function LoginPage() {
       setError('Email o contraseña incorrectos.')
       setLoading(false)
     } else {
-      // Track login
+      // Track login client-side
       if (data.user) {
         try {
           const { data: u } = await supabase.from('usuarios').select('id, force_password_change').eq('auth_id', data.user.id).single()
           if (u) {
-            fetch('/api/track-login', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ usuario_id: (u as any).id })
-            }).catch(() => {})
+            const userId = (u as any).id
+            const now = new Date().toISOString()
+            // Get approximate IP via public API
+            let ip = '', ciudad = '', pais = '', paisCodigo = ''
+            try {
+              const geoRes = await fetch('http://ip-api.com/json/?fields=query,city,country,countryCode&lang=es')
+              if (geoRes.ok) {
+                const geo = await geoRes.json()
+                ip = geo.query || ''
+                ciudad = geo.city || ''
+                pais = geo.country || ''
+                paisCodigo = geo.countryCode || ''
+              }
+            } catch {}
+            // Insert login log
+            supabase.from('login_historial').insert({
+              usuario_id: userId, ip, ciudad, pais, pais_codigo: paisCodigo,
+              user_agent: navigator.userAgent,
+            }).then(() => {})
+            // Update last login
+            supabase.from('usuarios').update({
+              last_login_at: now, last_login_ip: ip,
+              last_login_ciudad: ciudad, last_login_pais: pais,
+            }).eq('id', userId).then(() => {})
             // Force password change
             if ((u as any).force_password_change) {
               router.push('/cambiar-password')
