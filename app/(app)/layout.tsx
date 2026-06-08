@@ -158,7 +158,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               ))}
               {tc.fecha && (
                 <div className="pt-1 mt-1 flex items-center justify-between" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                  <span className="text-[9px] text-white/25">{tc.fuente} {tc.fecha} {tc.hora}</span>
+                  <span className="text-[9px] text-white/25">{tc.fuente} {tc.fecha ? tc.fecha.split('-').reverse().join('/') : ''} {tc.hora}</span>
                 </div>
               )}
             </div>
