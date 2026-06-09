@@ -124,18 +124,33 @@ export default function TiposCambioPage() {
       let ars: number | null = null, clp: number | null = null, cny: number | null = null
       let apiFuente = ''
 
+      // ARS desde DolarAPI (oficial BNA)
       try {
-        const r = await fetch('https://api.bluelytics.com.ar/v2/latest')
-        if (r.ok) { const d = await r.json(); ars = d?.blue?.value_sell || null; apiFuente = 'Bluelytics (Blue)' }
+        const r = await fetch('https://dolarapi.com/v1/dolares/oficial')
+        if (r.ok) {
+          const d = await r.json()
+          ars = d?.venta || null
+          if (ars) apiFuente = 'DolarAPI (BNA)'
+        }
       } catch {}
 
+      // CLP desde mindicador.cl (BCCh)
+      try {
+        const r = await fetch('https://mindicador.cl/api/dolar')
+        if (r.ok) {
+          const d = await r.json()
+          clp = d?.serie?.[0]?.valor || null
+          if (clp) apiFuente = apiFuente ? apiFuente + ' - mindicador.cl (BCCh)' : 'mindicador.cl (BCCh)'
+        }
+      } catch {}
+
+      // CNY desde Open Exchange Rates
       try {
         const r = await fetch('https://open.er-api.com/v6/latest/USD')
         if (r.ok) {
           const d = await r.json()
-          clp = d?.rates?.CLP || null
           cny = d?.rates?.CNY || null
-          apiFuente = apiFuente ? apiFuente + ' - Open Exchange Rates' : 'Open Exchange Rates'
+          if (cny) apiFuente = apiFuente ? apiFuente + ' - Open Exchange Rates' : 'Open Exchange Rates'
         }
       } catch {}
 
