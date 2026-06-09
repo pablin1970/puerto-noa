@@ -8,17 +8,14 @@ const CRON_SECRET = process.env.CRON_SECRET || 'puertonoa_cron_2026';
 
 async function fetchTipoCambio(): Promise<{ ars: number; clp: number; cny: number } | null> {
   try {
-    // USD a ARS (blue - bluelytics)
     const arsRes = await fetch('https://api.bluelytics.com.ar/v2/latest', { cache: 'no-store' });
     const arsData = await arsRes.json();
     const ars = arsData?.blue?.value_sell ?? null;
 
-    // USD a CLP
     const clpRes = await fetch('https://mindicador.cl/api/dolar', { cache: 'no-store' });
     const clpData = await clpRes.json();
     const clp = clpData?.serie?.[0]?.valor ?? null;
 
-    // USD a CNY
     const cnyRes = await fetch('https://open.er-api.com/v6/latest/USD', { cache: 'no-store' });
     const cnyData = await cnyRes.json();
     const cny = cnyData?.rates?.CNY ?? null;
@@ -67,7 +64,7 @@ export async function GET(request: Request) {
   if (!res.ok) {
     const error = await res.text();
     console.error('Error insertando en Supabase:', error);
-    return NextResponse.json({ error: 'Error guardando en base de datos' }, { status: 500 });
+    return NextResponse.json({ error: 'Error guardando en base de datos', detalle: error }, { status: 500 });
   }
 
   const data = await res.json();
