@@ -6,27 +6,43 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const CRON_SECRET = process.env.CRON_SECRET || 'puertonoa_cron_2026';
 
-async function fetchTipoCambio(): Promise<{ ars: number; clp: number; cny: number } | null> {
+async function fetchTipoCambio(): Promise<{ ars: number | null; clp: number | null; cny: number | null; apiFuente: string }> {
+  let ars: number | null = null;
+  let clp: number | null = null;
+  let cny: number | null = null;
+  let apiFuente = '';
+
+  // ARS desde DolarAPI (oficial BNA)
   try {
-    const arsRes = await fetch('https://api.bluelytics.com.ar/v2/latest', { cache: 'no-store' });
-    const arsData = await arsRes.json();
-    const ars = arsData?.blue?.value_sell ?? null;
+    const r = await fetch('https://dolarapi.com/v1/dolares/oficial', { cache: 'no-store' });
+    if (r.ok) {
+      const d = await r.json();
+      ars = d?.venta || null;
+      if (ars) apiFuente = 'DolarAPI (BNA)';
+    }
+  } catch {}
 
-    const clpRes = await fetch('https://mindicador.cl/api/dolar', { cache: 'no-store' });
-    const clpData = await clpRes.json();
-    const clp = clpData?.serie?.[0]?.valor ?? null;
+  // CLP desde mindicador.cl (BCCh)
+  try {
+    const r = await fetch('https://mindicador.cl/api/dolar', { cache: 'no-store' });
+    if (r.ok) {
+      const d = await r.json();
+      clp = d?.serie?.[0]?.valor || null;
+      if (clp) apiFuente = apiFuente ? apiFuente + ' - mindicador.cl (BCCh)' : 'mindicador.cl (BCCh)';
+    }
+  } catch {}
 
-    const cnyRes = await fetch('https://open.er-api.com/v6/latest/USD', { cache: 'no-store' });
-    const cnyData = await cnyRes.json();
-    const cny = cnyData?.rates?.CNY ?? null;
+  // CNY desde Open Exchange Rates
+  try {
+    const r = await fetch('https://open.er-api.com/v6/latest/USD', { cache: 'no-store' });
+    if (r.ok) {
+      const d = await r.json();
+      cny = d?.rates?.CNY || null;
+      if (cny) apiFuente = apiFuente ? apiFuente + ' - Open Exchange Rates' : 'Open Exchange Rates';
+    }
+  } catch {}
 
-    if (!ars || !clp || !cny) return null;
-
-    return { ars, clp, cny };
-  } catch (err) {
-    console.error('Error fetching tipos de cambio:', err);
-    return null;
-  }
+  return { ars, clp, cny, apiFuente };
 }
 
 export async function GET(request: Request) {
@@ -37,17 +53,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const tasas = await fetchTipoCambio();
+  const { ars, clp, cny, apiFuente } = await fetchTipoCambio();
 
-  if (!tasas) {
+  if (!ars && !clp && !cny) {
     return NextResponse.json({ error: 'No se pudieron obtener los tipos de cambio' }, { status: 500 });
   }
 
   const body = {
     fuente: 'automatico',
-    ars: tasas.ars,
-    clp: tasas.clp,
-    cny: tasas.cny,
+    ars,
+    clp,
+    cny,
+    api_fuente: apiFuente,
+    usuario_nombre: 'Sistema (cron)',
   };
 
   const res = await fetch(`${SUPABASE_URL}/rest/v1/tipos_cambio_eventos`, {
