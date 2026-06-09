@@ -63,7 +63,6 @@ export default function TiposCambioPage() {
 
     if (data && data.length > 0) {
       setEventos(data as TCEvento[])
-      // Build vigente from latest value per moneda
       const vig: TCVigente = { ars: null, clp: null, cny: null, fecha: '' }
       for (const ev of data as TCEvento[]) {
         if (vig.ars === null && ev.ars !== null) { vig.ars = ev.ars; vig.fecha = ev.fecha }
@@ -125,10 +124,10 @@ export default function TiposCambioPage() {
       let ars: number | null = null, clp: number | null = null, cny: number | null = null
       let apiFuente = ''
 
-      // ARS desde DolarAPI
+      // ARS desde Bluelytics (blue)
       try {
-        const r = await fetch('https://dolarapi.com/v1/dolares/oficial')
-        if (r.ok) { const d = await r.json(); ars = d?.venta || null; apiFuente = 'DolarAPI (BNA)' }
+        const r = await fetch('https://api.bluelytics.com.ar/v2/latest')
+        if (r.ok) { const d = await r.json(); ars = d?.blue?.value_sell || null; apiFuente = 'Bluelytics (Blue)' }
       } catch {}
 
       // CLP y CNY desde Open Exchange Rates
@@ -138,8 +137,7 @@ export default function TiposCambioPage() {
           const d = await r.json()
           clp = d?.rates?.CLP || null
           cny = d?.rates?.CNY || null
-          if (!apiFuente) apiFuente = 'Open Exchange Rates'
-          else apiFuente += ' · Open Exchange Rates'
+          apiFuente = apiFuente ? apiFuente + ' · Open Exchange Rates' : 'Open Exchange Rates'
         }
       } catch {}
 
@@ -171,7 +169,6 @@ export default function TiposCambioPage() {
       .in('fuente', ['automatico', 'forzado'])
       .eq('fecha', hoy)
       .limit(1)
-    // Only auto-update if there's NO auto/forced event today
     if (!data || data.length === 0) {
       await actualizarDesdeAPI('automatico')
     }
@@ -270,93 +267,3 @@ export default function TiposCambioPage() {
           <div className="flex gap-2 flex-wrap items-center">
             <select value={filtroFuente} onChange={e => setFiltroFuente(e.target.value)}
               className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
-              <option value="">Todos</option>
-              <option value="manual">✏️ Manual</option>
-              <option value="automatico">🤖 Cron</option>
-              <option value="forzado">⚡ Forzado</option>
-            </select>
-            <input type="date" value={filtroDesde} onChange={e => setFiltroDesde(e.target.value)}
-              className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8]" />
-            <span className="text-gray-300">→</span>
-            <input type="date" value={filtroHasta} onChange={e => setFiltroHasta(e.target.value)}
-              className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8]" />
-            {(filtroDesde || filtroHasta || filtroFuente) && (
-              <button onClick={() => { setFiltroDesde(''); setFiltroHasta(''); setFiltroFuente('') }}
-                className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-500 hover:bg-gray-50">✕</button>
-            )}
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="p-8 text-center text-gray-400">Cargando...</div>
-        ) : eventosFiltrados.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 text-sm">Sin registros.</div>
-        ) : (
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Fecha</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Hora</th>
-                <th className="text-right px-4 py-3 text-[10px] font-semibold text-[#1168F8] uppercase tracking-wider">🇦🇷 ARS</th>
-                <th className="text-right px-4 py-3 text-[10px] font-semibold text-red-600 uppercase tracking-wider">🇨🇱 CLP</th>
-                <th className="text-right px-4 py-3 text-[10px] font-semibold text-amber-700 uppercase tracking-wider">🇨🇳 CNY</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Fuente</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Origen</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Usuario</th>
-              </tr>
-            </thead>
-            <tbody>
-              {eventosFiltrados.map(e => {
-                const fb = FUENTE_BADGE[e.fuente]
-                return (
-                  <tr key={e.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-[11px] font-semibold text-gray-700">{e.fecha ? new Date(e.fecha + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}</td>
-                    <td className="px-4 py-3 font-mono text-[10px] text-gray-400">
-                      {new Date(e.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {e.ars !== null ? (
-                        <div>
-                          <div className="font-mono font-bold text-[#1168F8]">{fmt(e.ars, 0)}</div>
-                          {varBadge(e.ars, e.ars_anterior)}
-                        </div>
-                      ) : <span className="text-gray-200 font-mono">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {e.clp !== null ? (
-                        <div>
-                          <div className="font-mono font-bold text-red-600">{fmt(e.clp, 0)}</div>
-                          {varBadge(e.clp, e.clp_anterior)}
-                        </div>
-                      ) : <span className="text-gray-200 font-mono">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {e.cny !== null ? (
-                        <div>
-                          <div className="font-mono font-bold text-amber-700">{e.cny.toFixed(4)}</div>
-                          {varBadge(e.cny, e.cny_anterior)}
-                        </div>
-                      ) : <span className="text-gray-200 font-mono">—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${fb.cls}`}>
-                        {fb.icon} {fb.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-400 text-[10px] max-w-36 truncate">{e.api_fuente || '—'}</td>
-                    <td className="px-4 py-3 text-gray-600">{e.usuario_nombre || '—'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <div className="mt-4 bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-4 py-3 text-xs text-[#052698]">
-        <span className="font-bold">ℹ️</span> El TC vigente se aplica automáticamente en todas las cotizaciones nuevas.
-        <span className="ml-2">✏️ Manual = valor ingresado · 🤖 Cron = actualización diaria automática · ⚡ Forzado = actualización manual desde APIs</span>
-      </div>
-    </div>
-  )
-}
