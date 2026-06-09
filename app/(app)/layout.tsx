@@ -16,42 +16,35 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  // GENERAL
   { href: '/dashboard', label: 'Dashboard', icon: '⊞' },
 
-  // COMERCIAL
   { label: 'COMERCIAL', section: true },
-  { href: '/cotizador', label: 'Nueva cotización', icon: '✦' },
+  { href: '/cotizador', label: 'Nueva cotizacion', icon: '✦' },
   { href: '/registro', label: 'Cotizaciones', icon: '☰' },
   { href: '/clientes', label: 'Clientes y proveedores', icon: '🏢' },
 
-  // OPERACIONES
   { label: 'OPERACIONES', section: true },
   { href: '/operaciones', label: 'Operaciones activas', icon: '🚢' },
-  { href: '/cierre', label: 'Liquidación y cierre', icon: '✓' },
+  { href: '/cierre', label: 'Liquidacion y cierre', icon: '✓' },
 
-  // FACTURACIÓN
-  { label: 'FACTURACIÓN', section: true },
+  { label: 'FACTURACION', section: true },
   { href: '/facturacion/emitidas', label: 'Facturas emitidas', icon: '📄' },
   { href: '/facturacion/recibidas', label: 'Facturas recibidas', icon: '📥' },
   { href: '/facturacion/cte-clientes', label: 'Cta. cte. clientes', icon: '👥' },
   { href: '/facturacion/cte-proveedores', label: 'Cta. cte. proveedores', icon: '📦' },
 
-  // TESORERÍA
-  { label: 'TESORERÍA', section: true },
+  { label: 'TESORERIA', section: true },
   { href: '/tesoreria/caja', label: 'Caja', icon: '💵', soon: true },
   { href: '/tesoreria/bancos', label: 'Bancos', icon: '🏦', soon: true },
-  { href: '/tesoreria/fondos', label: 'Fondos por operación', icon: '💰', soon: true },
+  { href: '/tesoreria/fondos', label: 'Fondos por operacion', icon: '💰', soon: true },
   { href: '/tesoreria/puertonoa-arg', label: 'Cta. Puerto NOA Arg.', icon: '🇦🇷', soon: true },
 
-  // CONTABILIDAD
   { label: 'CONTABILIDAD', section: true },
   { href: '/contabilidad/iva', label: 'Libro IVA', icon: '📊', soon: true },
   { href: '/contabilidad/gastos', label: 'Gastos y costos', icon: '📉', soon: true },
   { href: '/contabilidad/resultados', label: 'Resultados', icon: '📈', soon: true },
 
-  // CONFIGURACIÓN
-  { label: 'CONFIGURACIÓN', section: true },
+  { label: 'CONFIGURACION', section: true },
   { href: '/tarifas', label: 'Tarifas base', icon: '⚙' },
   { href: '/tipos-cambio', label: 'Tipos de cambio', icon: '💱' },
   { href: '/tributos-config', label: 'Tributos ARCA', icon: '§', adminOnly: true },
@@ -129,18 +122,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Image src="/logo-white.png" alt="Puertonoa" width={120} height={36} style={{ objectFit: 'contain' }} />
           )}
           <button onClick={() => setCollapsed(!collapsed)}
-            className="text-white/40 hover:text-white transition-colors text-sm p-1 rounded-lg hover:bg-white/10">
+            className="text-white/60 hover:text-white transition-colors text-sm p-1 rounded-lg hover:bg-white/10">
             {collapsed ? '›' : '‹'}
           </button>
         </div>
 
         {/* Fecha + TC Widget */}
         {!collapsed && (
-          <div className="mx-3 mt-3 mb-1 rounded-xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)' }}>
-            {/* Fecha y hora */}
-            <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-              <span className="text-[10px] text-white/60 font-medium capitalize">{hoy}</span>
-              <Link href="/tipos-cambio" className="text-[9px] text-white/30 hover:text-white/60 transition-colors">TC →</Link>
+          <div className="mx-3 mt-3 mb-1 rounded-xl overflow-hidden" style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)' }}>
+            {/* Fecha */}
+            <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+              <span className="text-[10px] text-white/80 font-medium capitalize">{hoy}</span>
+              <Link href="/tipos-cambio" className="text-[9px] text-white/50 hover:text-white transition-colors">TC →</Link>
             </div>
             {/* TC rows */}
             <div className="px-3 py-2 space-y-1.5">
@@ -150,15 +143,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 { moneda: 'CNY', flag: '🇨🇳', valor: tc.CNY, decimals: 4 },
               ].map(({ moneda, flag, valor, decimals }) => (
                 <div key={moneda} className="flex items-center justify-between">
-                  <span className="text-[10px] text-white/40">{flag} {moneda}</span>
-                  <span className="font-mono font-bold text-white text-[11px]">
-                    {valor !== null ? (decimals > 0 ? valor.toFixed(decimals) : Math.round(valor).toLocaleString('es-AR')) : '—'}
+                  <span className="text-[11px] text-white/70 font-medium">{flag} {moneda}</span>
+                  <span className="font-mono font-bold text-white text-[12px]">
+                    {valor !== null ? (decimals > 0 ? valor.toFixed(decimals) : Math.round(valor).toLocaleString('es-AR')) : '-'}
                   </span>
                 </div>
               ))}
               {tc.fecha && (
-                <div className="pt-1 mt-1 flex items-center justify-between" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                  <span className="text-[9px] text-white/25">{tc.fuente} {tc.fecha ? tc.fecha.split('-').reverse().join('/') : ''} {tc.hora}</span>
+                <div className="pt-1 mt-1 flex items-center justify-between" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                  <span className="text-[9px] text-white/50">{tc.fuente} {tc.fecha ? tc.fecha.split('-').reverse().join('/') : ''} {tc.hora}</span>
                 </div>
               )}
             </div>
@@ -169,7 +162,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 py-2 overflow-y-auto scrollbar-thin">
           {NAV.map((item, i) => {
             if (item.section) return (
-              <div key={i} className={`${collapsed ? 'hidden' : ''} px-3 pt-4 pb-1 text-[8px] font-black text-white/25 tracking-widest uppercase flex items-center gap-1`}>
+              <div key={i} className={`${collapsed ? 'hidden' : ''} px-3 pt-4 pb-1 text-[8px] font-black text-white/40 tracking-widest uppercase flex items-center gap-1`}>
                 <div className="flex-1 h-px bg-white/10"></div>
                 <span>{item.label}</span>
                 <div className="flex-1 h-px bg-white/10"></div>
@@ -185,18 +178,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <div className={`flex items-center gap-2 mx-2 px-3 py-1.5 rounded-lg text-[11px] mb-0.5 opacity-40 cursor-not-allowed ${collapsed ? 'justify-center' : ''}`}>
                     <span className={`${collapsed ? 'text-base' : 'text-sm'} w-4 text-center flex-shrink-0 text-white/40`}>{item.icon}</span>
                     {!collapsed && <span className="text-white/40 truncate">{item.label}</span>}
-                    {!collapsed && <span className="ml-auto text-[7px] text-white/20 uppercase tracking-wide bg-white/10 px-1.5 py-0.5 rounded-full">Pronto</span>}
+                    {!collapsed && <span className="ml-auto text-[7px] text-white/30 uppercase tracking-wide bg-white/10 px-1.5 py-0.5 rounded-full">Pronto</span>}
                   </div>
                 ) : (
                   <Link href={item.href}
                     className={`flex items-center gap-2 mx-2 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all mb-0.5 ${collapsed ? 'justify-center' : ''} ${
                       active
                         ? 'bg-white/20 text-white shadow-sm'
-                        : 'text-white/55 hover:text-white hover:bg-white/10'
+                        : 'text-white/70 hover:text-white hover:bg-white/10'
                     }`}>
                     <span className={`${collapsed ? 'text-base' : 'text-sm'} w-4 text-center flex-shrink-0`}>{item.icon}</span>
                     {!collapsed && <span className="truncate">{item.label}</span>}
-                    {!collapsed && item.adminOnly && <span className="ml-auto text-[7px] text-white/25 uppercase tracking-wide">Admin</span>}
+                    {!collapsed && item.adminOnly && <span className="ml-auto text-[7px] text-white/40 uppercase tracking-wide">Admin</span>}
                   </Link>
                 )}
                 {/* Tooltip when collapsed */}
@@ -221,7 +214,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-white text-[11px] font-semibold truncate">{user.nombre.split(' ')[0]}</div>
-                <div className="text-white/30 text-[9px] capitalize">{user.rol}</div>
+                <div className="text-white/50 text-[9px] capitalize">{user.rol}</div>
               </div>
             </div>
           )}
@@ -234,8 +227,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           )}
           <button onClick={handleLogout}
-            className={`w-full text-white/30 hover:text-white/60 text-[10px] transition-colors rounded-lg hover:bg-white/10 py-1 ${collapsed ? 'px-0 text-center' : 'px-2 text-left'}`}>
-            {collapsed ? '↪' : '↪ Cerrar sesión'}
+            className={`w-full text-white/50 hover:text-white/80 text-[10px] transition-colors rounded-lg hover:bg-white/10 py-1 ${collapsed ? 'px-0 text-center' : 'px-2 text-left'}`}>
+            {collapsed ? '↪' : '↪ Cerrar sesion'}
           </button>
         </div>
       </aside>
