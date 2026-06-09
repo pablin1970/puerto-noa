@@ -49,41 +49,41 @@ interface LoginLog {
 
 const MODULOS_PERMISOS = [
   { section: 'COMERCIAL', items: [
-    { modulo: 'cotizaciones', accion: 'ver', label: 'Cotizaciones · Ver' },
-    { modulo: 'cotizaciones', accion: 'crear', label: 'Cotizaciones · Crear' },
-    { modulo: 'cotizaciones', accion: 'editar', label: 'Cotizaciones · Editar' },
-    { modulo: 'cotizaciones', accion: 'eliminar', label: 'Cotizaciones · Eliminar' },
-    { modulo: 'cotizaciones', accion: 'cambiar_estado', label: 'Cotizaciones · Cambiar estado' },
-    { modulo: 'clientes', accion: 'ver', label: 'Clientes · Ver' },
-    { modulo: 'clientes', accion: 'crear', label: 'Clientes · Crear/Editar' },
+    { modulo: 'cotizaciones', accion: 'ver', label: 'Cotizaciones - Ver' },
+    { modulo: 'cotizaciones', accion: 'crear', label: 'Cotizaciones - Crear' },
+    { modulo: 'cotizaciones', accion: 'editar', label: 'Cotizaciones - Editar' },
+    { modulo: 'cotizaciones', accion: 'eliminar', label: 'Cotizaciones - Eliminar' },
+    { modulo: 'cotizaciones', accion: 'cambiar_estado', label: 'Cotizaciones - Cambiar estado' },
+    { modulo: 'clientes', accion: 'ver', label: 'Clientes - Ver' },
+    { modulo: 'clientes', accion: 'crear', label: 'Clientes - Crear/Editar' },
   ]},
   { section: 'OPERACIONES', items: [
-    { modulo: 'operaciones', accion: 'ver', label: 'Operaciones · Ver' },
-    { modulo: 'operaciones', accion: 'gastos', label: 'Operaciones · Cargar gastos' },
-    { modulo: 'operaciones', accion: 'documentos', label: 'Operaciones · Subir documentos' },
-    { modulo: 'cierre', accion: 'ver', label: 'Liquidación · Ver' },
-    { modulo: 'cierre', accion: 'editar', label: 'Liquidación · Editar' },
+    { modulo: 'operaciones', accion: 'ver', label: 'Operaciones - Ver' },
+    { modulo: 'operaciones', accion: 'gastos', label: 'Operaciones - Cargar gastos' },
+    { modulo: 'operaciones', accion: 'documentos', label: 'Operaciones - Subir documentos' },
+    { modulo: 'cierre', accion: 'ver', label: 'Liquidacion - Ver' },
+    { modulo: 'cierre', accion: 'editar', label: 'Liquidacion - Editar' },
   ]},
-  { section: 'FACTURACIÓN', items: [
-    { modulo: 'facturas', accion: 'ver', label: 'Facturas · Ver' },
-    { modulo: 'facturas', accion: 'emitir', label: 'Facturas · Emitir' },
-    { modulo: 'facturas', accion: 'anular', label: 'Facturas · Anular' },
-    { modulo: 'cuentas_corrientes', accion: 'ver', label: 'Cuentas corrientes · Ver' },
+  { section: 'FACTURACION', items: [
+    { modulo: 'facturas', accion: 'ver', label: 'Facturas - Ver' },
+    { modulo: 'facturas', accion: 'emitir', label: 'Facturas - Emitir' },
+    { modulo: 'facturas', accion: 'anular', label: 'Facturas - Anular' },
+    { modulo: 'cuentas_corrientes', accion: 'ver', label: 'Cuentas corrientes - Ver' },
   ]},
-  { section: 'TESORERÍA', items: [
-    { modulo: 'tesoreria', accion: 'ver', label: 'Tesorería · Ver' },
-    { modulo: 'tesoreria', accion: 'registrar', label: 'Tesorería · Registrar movimientos' },
+  { section: 'TESORERIA', items: [
+    { modulo: 'tesoreria', accion: 'ver', label: 'Tesoreria - Ver' },
+    { modulo: 'tesoreria', accion: 'registrar', label: 'Tesoreria - Registrar movimientos' },
   ]},
   { section: 'CONTABILIDAD', items: [
-    { modulo: 'contabilidad', accion: 'ver', label: 'Contabilidad · Ver' },
-    { modulo: 'contabilidad', accion: 'editar', label: 'Contabilidad · Editar' },
+    { modulo: 'contabilidad', accion: 'ver', label: 'Contabilidad - Ver' },
+    { modulo: 'contabilidad', accion: 'editar', label: 'Contabilidad - Editar' },
   ]},
-  { section: 'CONFIGURACIÓN', items: [
-    { modulo: 'tarifas', accion: 'ver', label: 'Tarifas · Ver' },
-    { modulo: 'tarifas', accion: 'editar', label: 'Tarifas · Editar' },
-    { modulo: 'tipos_cambio', accion: 'editar', label: 'Tipos de cambio · Editar' },
-    { modulo: 'tributos', accion: 'editar', label: 'Tributos ARCA · Editar' },
-    { modulo: 'usuarios', accion: 'gestionar', label: 'Usuarios · Gestionar' },
+  { section: 'CONFIGURACION', items: [
+    { modulo: 'tarifas', accion: 'ver', label: 'Tarifas - Ver' },
+    { modulo: 'tarifas', accion: 'editar', label: 'Tarifas - Editar' },
+    { modulo: 'tipos_cambio', accion: 'editar', label: 'Tipos de cambio - Editar' },
+    { modulo: 'tributos', accion: 'editar', label: 'Tributos ARCA - Editar' },
+    { modulo: 'usuarios', accion: 'gestionar', label: 'Usuarios - Gestionar' },
   ]},
 ]
 
@@ -98,15 +98,12 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
 
-  // Modals
   const [modalUsuario, setModalUsuario] = useState<{ type: 'nuevo' | 'editar' | 'historial' | 'password'; usuario?: Usuario } | null>(null)
   const [modalRol, setModalRol] = useState<{ type: 'nuevo' | 'editar'; rol?: Role } | null>(null)
   const [historialLogs, setHistorialLogs] = useState<LoginLog[]>([])
 
-  // Forms
   const [formU, setFormU] = useState({ nombre: '', email: '', iniciales: '', roles_ids: [] as string[], activo: true })
   const [formR, setFormR] = useState({ nombre: '', descripcion: '', color: '#1168F8' })
-  const [tempPassword, setTempPassword] = useState('')
   const [generatedPassword, setGeneratedPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null)
@@ -168,40 +165,82 @@ export default function UsuariosPage() {
     setSavingPermisos(false)
   }
 
+  function generarPassword(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$'
+    return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  }
+
   async function guardarUsuario() {
     if (!formU.nombre || !formU.email) return
     setSaving(true)
     const iniciales = formU.iniciales || formU.nombre.split(' ').map((x: string) => x[0]).join('').slice(0, 3).toUpperCase()
+
     if (modalUsuario?.type === 'nuevo') {
       const tempPwd = generarPassword()
-      const { data: authData } = await supabase.auth.admin.createUser({ email: formU.email, password: tempPwd, email_confirm: true })
+
+      // Crear en Auth via API route del servidor
+      const res = await fetch('/api/admin-usuarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'crear', email: formU.email, password: tempPwd }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        alert('Error creando usuario: ' + (data.error || 'Error desconocido'))
+        setSaving(false)
+        return
+      }
+
+      const authId = data.user?.id || null
+
+      // Insertar en tabla usuarios
       await (supabase.from('usuarios') as any).insert({
-        auth_id: authData?.user?.id || null, nombre: formU.nombre, email: formU.email,
-        iniciales, rol: 'ejecutivo', roles_ids: formU.roles_ids, activo: formU.activo,
+        auth_id: authId,
+        nombre: formU.nombre,
+        email: formU.email,
+        iniciales,
+        rol: 'ejecutivo',
+        roles_ids: formU.roles_ids,
+        activo: formU.activo,
         force_password_change: true,
       })
+
       setGeneratedPassword(tempPwd)
+
     } else if (modalUsuario?.usuario) {
       await (supabase.from('usuarios') as any).update({
-        nombre: formU.nombre, email: formU.email, iniciales, roles_ids: formU.roles_ids, activo: formU.activo,
+        nombre: formU.nombre,
+        email: formU.email,
+        iniciales,
+        roles_ids: formU.roles_ids,
+        activo: formU.activo,
       }).eq('id', modalUsuario.usuario.id)
       setModalUsuario(null)
     }
+
     await loadAll()
     setSaving(false)
   }
 
   async function resetPassword(usuario: Usuario) {
     const newPwd = generarPassword()
-    setTempPassword(newPwd)
-    try {
-      await supabase.auth.admin.updateUserById(usuario.auth_id, { password: newPwd })
-      await (supabase.from('usuarios') as any).update({ force_password_change: true }).eq('id', usuario.id)
-      setGeneratedPassword(newPwd)
-      await loadAll()
-    } catch {
-      alert('Para resetear contraseñas se requiere la service_role key. Contactá al administrador de Supabase.')
+
+    const res = await fetch('/api/admin-usuarios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reset_password', auth_id: usuario.auth_id, password: newPwd }),
+    })
+    const data = await res.json()
+
+    if (!res.ok) {
+      alert('Error reseteando contraseña: ' + (data.error || 'Error desconocido'))
+      return
     }
+
+    await (supabase.from('usuarios') as any).update({ force_password_change: true }).eq('id', usuario.id)
+    setGeneratedPassword(newPwd)
+    await loadAll()
   }
 
   async function toggleActivo(u: Usuario) {
@@ -242,14 +281,9 @@ export default function UsuariosPage() {
   }
 
   async function eliminarRol(id: string) {
-    if (!confirm('¿Eliminar este rol? Se quitará de todos los usuarios que lo tengan.')) return
+    if (!confirm('Eliminar este rol?')) return
     await supabase.from('roles').delete().eq('id', id)
     await loadAll()
-  }
-
-  function generarPassword(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$'
-    return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
   }
 
   function getRolesDeUsuario(u: Usuario): Role[] {
@@ -263,7 +297,7 @@ export default function UsuariosPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Usuarios y roles</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Gestión de accesos · {usuarios.filter(u => u.activo).length} activos · {roles.length} roles</p>
+          <p className="text-xs text-gray-400 mt-0.5">Gestion de accesos - {usuarios.filter(u => u.activo).length} activos - {roles.length} roles</p>
         </div>
         <div className="flex gap-2">
           {tab === 'usuarios' && (
@@ -291,7 +325,7 @@ export default function UsuariosPage() {
         ))}
       </div>
 
-      {/* ── USUARIOS ── */}
+      {/* USUARIOS */}
       {tab === 'usuarios' && (
         <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
           {loading ? (
@@ -300,7 +334,7 @@ export default function UsuariosPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  {['Usuario', 'Roles', 'Último acceso', 'Ubicación', 'Estado', 'Acciones'].map(h => (
+                  {['Usuario', 'Roles', 'Ultimo acceso', 'Ubicacion', 'Estado', 'Acciones'].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -308,12 +342,11 @@ export default function UsuariosPage() {
               <tbody>
                 {usuarios.map(u => {
                   const rolesU = getRolesDeUsuario(u)
-                  const lastLogin = u.last_login_at ? new Date(u.last_login_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'
+                  const lastLogin = u.last_login_at ? new Date(u.last_login_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'
                   return (
                     <tr key={u.id} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${!u.activo ? 'opacity-60' : ''}`}>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-3">
-                          {/* Avatar / Foto */}
                           <div className="relative flex-shrink-0">
                             {u.foto_url ? (
                               <img src={u.foto_url} alt={u.nombre} className="w-9 h-9 rounded-xl object-cover" />
@@ -332,7 +365,7 @@ export default function UsuariosPage() {
                           <div>
                             <div className="font-semibold text-gray-900 flex items-center gap-1.5">
                               {u.nombre}
-                              {u.force_password_change && <span className="text-[9px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full border border-amber-200">🔑 Debe cambiar pwd</span>}
+                              {u.force_password_change && <span className="text-[9px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full border border-amber-200">Debe cambiar pwd</span>}
                             </div>
                             <div className="text-[10px] text-gray-400">{u.email}</div>
                           </div>
@@ -354,12 +387,12 @@ export default function UsuariosPage() {
                       <td className="px-4 py-3.5">
                         {u.last_login_ciudad ? (
                           <div className="text-xs text-gray-600">{u.last_login_ciudad}, {u.last_login_pais}</div>
-                        ) : <span className="text-gray-300">—</span>}
+                        ) : <span className="text-gray-300">-</span>}
                       </td>
                       <td className="px-4 py-3.5">
                         <button onClick={() => toggleActivo(u)}
                           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border transition-colors ${u.activo ? 'bg-green-50 text-green-700 border-green-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200' : 'bg-red-50 text-red-700 border-red-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
-                          {u.activo ? '● Activo' : '○ Pausado'}
+                          {u.activo ? 'Activo' : 'Pausado'}
                         </button>
                       </td>
                       <td className="px-4 py-3.5">
@@ -369,7 +402,7 @@ export default function UsuariosPage() {
                           <button onClick={() => verHistorial(u)}
                             className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors" title="Historial">📋</button>
                           <button onClick={() => { setGeneratedPassword(''); setModalUsuario({ type: 'password', usuario: u }) }}
-                            className="p-1.5 border border-amber-200 rounded-lg hover:bg-amber-50 text-amber-700 transition-colors" title="Reset contraseña">🔑</button>
+                            className="p-1.5 border border-amber-200 rounded-lg hover:bg-amber-50 text-amber-700 transition-colors" title="Reset contrasena">🔑</button>
                         </div>
                       </td>
                     </tr>
@@ -381,10 +414,9 @@ export default function UsuariosPage() {
         </div>
       )}
 
-      {/* ── ROLES Y PERMISOS ── */}
+      {/* ROLES Y PERMISOS */}
       {tab === 'roles' && (
         <div>
-          {/* Lista de roles */}
           <div className="grid grid-cols-5 gap-3 mb-5">
             {roles.map(r => (
               <div key={r.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
@@ -405,17 +437,16 @@ export default function UsuariosPage() {
             ))}
           </div>
 
-          {/* Matriz de permisos */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-4 border-b border-gray-100">
               <div className="font-bold text-sm text-gray-900">Matriz de permisos</div>
-              <div className="text-[10px] text-gray-400 mt-0.5">Los cambios se guardan automáticamente al hacer click</div>
+              <div className="text-[10px] text-gray-400 mt-0.5">Los cambios se guardan al hacer click en Guardar permisos</div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-52">Módulo / Acción</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-52">Modulo / Accion</th>
                     {roles.map(r => (
                       <th key={r.id} className="text-center px-3 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: r.color }}>
                         {r.nombre}
@@ -441,7 +472,7 @@ export default function UsuariosPage() {
                                 <button onClick={() => togglePermiso(r.id, item.modulo, item.accion)}
                                   className={`w-5 h-5 rounded-md border-2 flex items-center justify-center mx-auto transition-all ${permitido ? 'text-white border-transparent' : 'bg-white border-gray-200 hover:border-gray-300'}`}
                                   style={permitido ? { background: r.color, borderColor: r.color } : {}}>
-                                  {permitido && <span className="text-[10px] font-bold">✓</span>}
+                                  {permitido && <span className="text-[10px] font-bold">v</span>}
                                 </button>
                               </td>
                             )
@@ -457,7 +488,7 @@ export default function UsuariosPage() {
           {Object.keys(permisosModificados).length > 0 && (
             <div className="flex items-center justify-between mt-4 px-5 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
               <span className="text-xs text-amber-800 font-medium">
-                ⚠ Hay {Object.keys(permisosModificados).length} cambio(s) sin guardar
+                Hay {Object.keys(permisosModificados).length} cambio(s) sin guardar
               </span>
               <div className="flex gap-2">
                 <button onClick={() => setPermisosModificados({})}
@@ -466,7 +497,7 @@ export default function UsuariosPage() {
                 </button>
                 <button onClick={guardarPermisos} disabled={savingPermisos}
                   className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
-                  {savingPermisos ? 'Guardando...' : '✓ Guardar permisos'}
+                  {savingPermisos ? 'Guardando...' : 'Guardar permisos'}
                 </button>
               </div>
             </div>
@@ -474,13 +505,13 @@ export default function UsuariosPage() {
         </div>
       )}
 
-      {/* ── MODAL NUEVO/EDITAR USUARIO ── */}
+      {/* MODAL NUEVO/EDITAR USUARIO */}
       {modalUsuario && (modalUsuario.type === 'nuevo' || modalUsuario.type === 'editar') && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <span className="font-bold text-sm text-gray-900">{modalUsuario.type === 'nuevo' ? 'Nuevo usuario' : 'Editar usuario'}</span>
-              <button onClick={() => { setModalUsuario(null); setGeneratedPassword('') }} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+              <button onClick={() => { setModalUsuario(null); setGeneratedPassword('') }} className="text-gray-400 hover:text-gray-600 text-xl">x</button>
             </div>
             <div className="px-5 py-4 space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -493,7 +524,7 @@ export default function UsuariosPage() {
                   <input type="email" value={formU.email} onChange={e => setFormU(f => ({ ...f, email: e.target.value }))} className={inp} placeholder="correo@empresa.com" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Iniciales (máx. 3)</label>
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Iniciales (max. 3)</label>
                   <input value={formU.iniciales} onChange={e => setFormU(f => ({ ...f, iniciales: e.target.value.toUpperCase() }))} maxLength={3} className={inp + ' font-mono tracking-widest'} placeholder="RPM" />
                 </div>
                 <div className="flex items-end gap-2">
@@ -523,9 +554,9 @@ export default function UsuariosPage() {
               </div>
               {generatedPassword && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                  <div className="text-[10px] font-bold text-amber-800 mb-1">✓ Usuario creado — Contraseña temporal:</div>
+                  <div className="text-[10px] font-bold text-amber-800 mb-1">Usuario creado - Contrasena temporal:</div>
                   <div className="font-mono text-lg font-black text-amber-900 tracking-widest">{generatedPassword}</div>
-                  <div className="text-[10px] text-amber-600 mt-1">Comunícale esta contraseña. Deberá cambiarla al primer ingreso.</div>
+                  <div className="text-[10px] text-amber-600 mt-1">Comunica esta contrasena. Debera cambiarla al primer ingreso.</div>
                 </div>
               )}
             </div>
@@ -536,38 +567,21 @@ export default function UsuariosPage() {
               {!generatedPassword && (
                 <button onClick={guardarUsuario} disabled={saving}
                   className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
-                  {saving ? 'Guardando...' : '✓ Guardar'}
+                  {saving ? 'Guardando...' : 'Guardar'}
                 </button>
               )}
             </div>
           </div>
-          {Object.keys(permisosModificados).length > 0 && (
-            <div className="flex items-center justify-between mt-4 px-5 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
-              <span className="text-xs text-amber-800 font-medium">
-                ⚠ Hay {Object.keys(permisosModificados).length} cambio(s) sin guardar
-              </span>
-              <div className="flex gap-2">
-                <button onClick={() => setPermisosModificados({})}
-                  className="px-4 py-2 border border-amber-200 rounded-xl text-xs text-amber-700 hover:bg-amber-100">
-                  Descartar
-                </button>
-                <button onClick={guardarPermisos} disabled={savingPermisos}
-                  className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
-                  {savingPermisos ? 'Guardando...' : '✓ Guardar permisos'}
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
-      {/* ── MODAL RESET PASSWORD ── */}
+      {/* MODAL RESET PASSWORD */}
       {modalUsuario?.type === 'password' && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <span className="font-bold text-sm text-gray-900">Resetear contraseña</span>
-              <button onClick={() => { setModalUsuario(null); setGeneratedPassword('') }} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+              <span className="font-bold text-sm text-gray-900">Resetear contrasena</span>
+              <button onClick={() => { setModalUsuario(null); setGeneratedPassword('') }} className="text-gray-400 hover:text-gray-600 text-xl">x</button>
             </div>
             <div className="px-5 py-4">
               <div className="flex items-center gap-3 mb-4">
@@ -581,18 +595,18 @@ export default function UsuariosPage() {
               </div>
               {generatedPassword ? (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
-                  <div className="text-[10px] font-bold text-amber-800 mb-2">Nueva contraseña temporal:</div>
+                  <div className="text-[10px] font-bold text-amber-800 mb-2">Nueva contrasena temporal:</div>
                   <div className="font-mono text-2xl font-black text-amber-900 tracking-widest mb-2">{generatedPassword}</div>
-                  <div className="text-[10px] text-amber-600">Comunícale esta contraseña al usuario. Deberá cambiarla al próximo ingreso.</div>
+                  <div className="text-[10px] text-amber-600">Comunica esta contrasena al usuario. Debera cambiarla al proximo ingreso.</div>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-xs text-gray-600">
-                    Se generará una contraseña temporal aleatoria. El usuario deberá cambiarla al próximo ingreso.
+                    Se generara una contrasena temporal aleatoria. El usuario debera cambiarla al proximo ingreso.
                   </div>
                   <button onClick={() => modalUsuario.usuario && resetPassword(modalUsuario.usuario)}
                     className="w-full py-2.5 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700">
-                    🔑 Generar nueva contraseña
+                    Generar nueva contrasena
                   </button>
                 </div>
               )}
@@ -601,27 +615,10 @@ export default function UsuariosPage() {
               <button onClick={() => { setModalUsuario(null); setGeneratedPassword('') }} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cerrar</button>
             </div>
           </div>
-          {Object.keys(permisosModificados).length > 0 && (
-            <div className="flex items-center justify-between mt-4 px-5 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
-              <span className="text-xs text-amber-800 font-medium">
-                ⚠ Hay {Object.keys(permisosModificados).length} cambio(s) sin guardar
-              </span>
-              <div className="flex gap-2">
-                <button onClick={() => setPermisosModificados({})}
-                  className="px-4 py-2 border border-amber-200 rounded-xl text-xs text-amber-700 hover:bg-amber-100">
-                  Descartar
-                </button>
-                <button onClick={guardarPermisos} disabled={savingPermisos}
-                  className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
-                  {savingPermisos ? 'Guardando...' : '✓ Guardar permisos'}
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
-      {/* ── MODAL HISTORIAL ── */}
+      {/* MODAL HISTORIAL */}
       {modalUsuario?.type === 'historial' && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
@@ -630,16 +627,16 @@ export default function UsuariosPage() {
                 <span className="font-bold text-sm text-gray-900">Historial de conexiones</span>
                 <span className="text-xs text-gray-400 ml-2">{modalUsuario.usuario?.nombre}</span>
               </div>
-              <button onClick={() => setModalUsuario(null)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+              <button onClick={() => setModalUsuario(null)} className="text-gray-400 hover:text-gray-600 text-xl">x</button>
             </div>
             <div className="overflow-auto flex-1">
               {historialLogs.length === 0 ? (
-                <div className="p-8 text-center text-gray-400 text-sm">Sin registros de conexión.</div>
+                <div className="p-8 text-center text-gray-400 text-sm">Sin registros de conexion.</div>
               ) : (
                 <table className="w-full text-xs">
                   <thead className="sticky top-0">
                     <tr className="bg-gray-50 border-b border-gray-100">
-                      {['Fecha y hora', 'IP', 'Ciudad', 'País', 'Navegador'].map(h => (
+                      {['Fecha y hora', 'IP', 'Ciudad', 'Pais', 'Navegador'].map(h => (
                         <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
@@ -650,14 +647,14 @@ export default function UsuariosPage() {
                         <td className="px-4 py-3 font-mono text-[11px] text-gray-700">
                           {new Date(log.created_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </td>
-                        <td className="px-4 py-3 font-mono text-[11px] text-gray-500">{log.ip || '—'}</td>
-                        <td className="px-4 py-3 text-gray-600">{log.ciudad || '—'}</td>
+                        <td className="px-4 py-3 font-mono text-[11px] text-gray-500">{log.ip || '-'}</td>
+                        <td className="px-4 py-3 text-gray-600">{log.ciudad || '-'}</td>
                         <td className="px-4 py-3">
                           {log.pais ? (
                             <span className="text-gray-600">{log.pais_codigo && <span className="mr-1">{log.pais_codigo}</span>}{log.pais}</span>
-                          ) : '—'}
+                          ) : '-'}
                         </td>
-                        <td className="px-4 py-3 text-gray-400 text-[10px] max-w-40 truncate">{log.user_agent?.split(' ')[0] || '—'}</td>
+                        <td className="px-4 py-3 text-gray-400 text-[10px] max-w-40 truncate">{log.user_agent?.split(' ')[0] || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -665,33 +662,16 @@ export default function UsuariosPage() {
               )}
             </div>
           </div>
-          {Object.keys(permisosModificados).length > 0 && (
-            <div className="flex items-center justify-between mt-4 px-5 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
-              <span className="text-xs text-amber-800 font-medium">
-                ⚠ Hay {Object.keys(permisosModificados).length} cambio(s) sin guardar
-              </span>
-              <div className="flex gap-2">
-                <button onClick={() => setPermisosModificados({})}
-                  className="px-4 py-2 border border-amber-200 rounded-xl text-xs text-amber-700 hover:bg-amber-100">
-                  Descartar
-                </button>
-                <button onClick={guardarPermisos} disabled={savingPermisos}
-                  className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
-                  {savingPermisos ? 'Guardando...' : '✓ Guardar permisos'}
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
-      {/* ── MODAL NUEVO/EDITAR ROL ── */}
+      {/* MODAL NUEVO/EDITAR ROL */}
       {modalRol && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <span className="font-bold text-sm text-gray-900">{modalRol.type === 'nuevo' ? 'Nuevo rol' : 'Editar rol'}</span>
-              <button onClick={() => setModalRol(null)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+              <button onClick={() => setModalRol(null)} className="text-gray-400 hover:text-gray-600 text-xl">x</button>
             </div>
             <div className="px-5 py-4 space-y-3">
               <div>
@@ -699,8 +679,8 @@ export default function UsuariosPage() {
                 <input value={formR.nombre} onChange={e => setFormR(f => ({ ...f, nombre: e.target.value }))} className={inp} placeholder="ej. Supervisor de operaciones" />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Descripción</label>
-                <input value={formR.descripcion} onChange={e => setFormR(f => ({ ...f, descripcion: e.target.value }))} className={inp} placeholder="Qué puede hacer este rol" />
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Descripcion</label>
+                <input value={formR.descripcion} onChange={e => setFormR(f => ({ ...f, descripcion: e.target.value }))} className={inp} placeholder="Que puede hacer este rol" />
               </div>
               <div>
                 <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Color identificador</label>
@@ -724,27 +704,10 @@ export default function UsuariosPage() {
               <button onClick={guardarRol} disabled={saving}
                 className="px-5 py-2 text-white rounded-xl text-xs font-bold disabled:opacity-50"
                 style={{ background: formR.color }}>
-                {saving ? 'Guardando...' : '✓ Guardar rol'}
+                {saving ? 'Guardando...' : 'Guardar rol'}
               </button>
             </div>
           </div>
-          {Object.keys(permisosModificados).length > 0 && (
-            <div className="flex items-center justify-between mt-4 px-5 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
-              <span className="text-xs text-amber-800 font-medium">
-                ⚠ Hay {Object.keys(permisosModificados).length} cambio(s) sin guardar
-              </span>
-              <div className="flex gap-2">
-                <button onClick={() => setPermisosModificados({})}
-                  className="px-4 py-2 border border-amber-200 rounded-xl text-xs text-amber-700 hover:bg-amber-100">
-                  Descartar
-                </button>
-                <button onClick={guardarPermisos} disabled={savingPermisos}
-                  className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
-                  {savingPermisos ? 'Guardando...' : '✓ Guardar permisos'}
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
