@@ -8,7 +8,7 @@ const CRON_SECRET = process.env.CRON_SECRET || 'puertonoa_cron_2026';
 
 async function fetchTipoCambio(): Promise<{ ars: number; clp: number; cny: number } | null> {
   try {
-    // USD a ARS (blue/informal - usamos bluelytics)
+    // USD a ARS (blue - bluelytics)
     const arsRes = await fetch('https://api.bluelytics.com.ar/v2/latest', { cache: 'no-store' });
     const arsData = await arsRes.json();
     const ars = arsData?.blue?.value_sell ?? null;
@@ -18,7 +18,7 @@ async function fetchTipoCambio(): Promise<{ ars: number; clp: number; cny: numbe
     const clpData = await clpRes.json();
     const clp = clpData?.serie?.[0]?.valor ?? null;
 
-    // USD a CNY (tipo de cambio oficial)
+    // USD a CNY
     const cnyRes = await fetch('https://open.er-api.com/v6/latest/USD', { cache: 'no-store' });
     const cnyData = await cnyRes.json();
     const cny = cnyData?.rates?.CNY ?? null;
@@ -46,13 +46,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'No se pudieron obtener los tipos de cambio' }, { status: 500 });
   }
 
-  // Insertar evento en tipos_cambio_eventos
   const body = {
-    tipo_fuente: 'automatico',
-    ars_por_usd: tasas.ars,
-    clp_por_usd: tasas.clp,
-    cny_por_usd: tasas.cny,
-    notas: 'Actualización automática vía cron',
+    fuente: 'automatico',
+    ars: tasas.ars,
+    clp: tasas.clp,
+    cny: tasas.cny,
   };
 
   const res = await fetch(`${SUPABASE_URL}/rest/v1/tipos_cambio_eventos`, {
