@@ -645,10 +645,10 @@ export default function CotizadorPage(){
                       onChange={e=>{
                         setBuscarCliente(e.target.value)
                         u('cliente',e.target.value)
-                        setShowClienteDropdown(e.target.value.length>1)
+                        setShowClienteDropdown(e.target.value.length>0)
                         if(!e.target.value){setClienteSelId(null);setShowHist(false)}
                       }}
-                      onFocus={()=>{if((buscarCliente||s.cliente).length>1)setShowClienteDropdown(true)}}
+                      onFocus={()=>setShowClienteDropdown(true)}
                       className={inp} placeholder="Buscar o escribir razón social..."/>
                     {showClienteDropdown && (
                       <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto mt-1">
