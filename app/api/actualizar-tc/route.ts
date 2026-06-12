@@ -24,7 +24,7 @@ async function fetchTipoCambio(): Promise<{ ars: number | null; clp: number | nu
   let cny: number | null = null
   let apiFuente = ''
 
-  // ARS desde DolarAPI (oficial BNA) - timeout 8s
+  // ARS desde DolarAPI (oficial BNA)
   try {
     const r = await fetchWithTimeout('https://dolarapi.com/v1/dolares/oficial', 8000)
     if (r.ok) {
@@ -34,23 +34,14 @@ async function fetchTipoCambio(): Promise<{ ars: number | null; clp: number | nu
     }
   } catch {}
 
-  // CLP desde mindicador.cl (BCCh) - timeout 12s
-  try {
-    const r = await fetchWithTimeout('https://mindicador.cl/api/dolar', 12000)
-    if (r.ok) {
-      const d = await r.json()
-      clp = d?.serie?.[0]?.valor || null
-      if (clp) apiFuente = apiFuente ? apiFuente + ' - mindicador.cl (BCCh)' : 'mindicador.cl (BCCh)'
-    }
-  } catch {}
-
-  // CNY desde Open Exchange Rates - timeout 8s
+  // CLP y CNY desde Open Exchange Rates
   try {
     const r = await fetchWithTimeout('https://open.er-api.com/v6/latest/USD', 8000)
     if (r.ok) {
       const d = await r.json()
+      clp = d?.rates?.CLP || null
       cny = d?.rates?.CNY || null
-      if (cny) apiFuente = apiFuente ? apiFuente + ' - Open Exchange Rates' : 'Open Exchange Rates'
+      if (clp || cny) apiFuente = apiFuente ? apiFuente + ' - Open Exchange Rates' : 'Open Exchange Rates'
     }
   } catch {}
 
