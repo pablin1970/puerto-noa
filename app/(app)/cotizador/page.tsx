@@ -27,8 +27,8 @@ interface GastoArg {
   valor: number
   pisoUsd: number
   techoUsd: number
-  usd: number  // calculado
-  ars: number  // calculado
+  usd: number
+  ars: number
 }
 interface TribCfg { id: string; codigo: string; concepto: string; tipo: 'pct'|'fijo'; valor: number; aplica: boolean; orden: number }
 interface CotState {
@@ -53,7 +53,7 @@ interface CotState {
 
 const INIT: CotState = {
   cliente:'',cuit:'',email:'',telefono:'',despachante:'',ivaCondicion:'Responsable Inscripto',validez:'',
-  origen:'Dalian, China (CNDAG)',ptoChile:'IQQ',destinoNoa:'Jujuy',incoterm:'FOB',transito:'44-46 días',refNaviero:'',cotProvId:'',cotProvLabel:'',cotTranspId:'',cotTranspLabel:'',cotArgId:'',cotArgLabel:'',notas:'',
+  origen:'Dalian, China (CNDAG)',ptoChile:'IQQ',destinoNoa:'Jujuy',incoterm:'FOB',transito:'44-46 dias',refNaviero:'',cotProvId:'',cotProvLabel:'',cotTranspId:'',cotTranspLabel:'',cotArgId:'',cotArgLabel:'',notas:'',
   contenedores:[{tipo:'40HC',cantidad:1}],
   productos:[{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:'FOB'}],
   exwTransp:0,exwAgente:0,exwOtros:0,precioArgEquiv:0,proformas:[],
@@ -67,10 +67,10 @@ const INIT: CotState = {
 }
 
 const REG_L: Record<string,string> = {
-  A:'A — Persona jurídica · Comercialización',
-  B:'B — Persona jurídica · Uso propio',
-  C:'C — Persona física · Comercialización',
-  D:'D — Persona física · Uso propio',
+  A:'A — Persona juridica - Comercializacion',
+  B:'B — Persona juridica - Uso propio',
+  C:'C — Persona fisica - Comercializacion',
+  D:'D — Persona fisica - Uso propio',
 }
 
 const inp = 'w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -104,10 +104,9 @@ function LogRows({rows,onChange,withIva}:{rows:ItemLog[];onChange:(r:ItemLog[])=
   const cols = withIva ? '1fr 70px 110px 90px 28px' : '1fr 70px 110px 28px'
   return (
     <div>
-      {/* Encabezados */}
       {rows.length>0&&(
         <div style={{display:'grid',gridTemplateColumns:cols,gap:'6px'}} className="mb-1 text-[10px] text-gray-400 font-medium uppercase tracking-wide">
-          <div>Descripción</div>
+          <div>Descripcion</div>
           <div className="text-right">Cant.</div>
           <div className="text-right">Precio USD</div>
           {withIva&&<div>IVA Chile</div>}
@@ -116,51 +115,32 @@ function LogRows({rows,onChange,withIva}:{rows:ItemLog[];onChange:(r:ItemLog[])=
       )}
       {rows.map((r,i)=>(
         <div key={r.id} style={{display:'grid',gridTemplateColumns:cols,gap:'6px',alignItems:'center'}} className="mb-2">
-          <input
-            value={r.desc}
-            onChange={e=>{const n=[...rows];n[i]={...n[i],desc:e.target.value};onChange(n)}}
-            className={inp}
-            placeholder="Descripción"
-          />
-          <input
-            type="text" inputMode="decimal"
-            value={r.cant}
-            onFocus={e=>e.target.select()}
-            onChange={e=>{const n=[...rows];n[i]={...n[i],cant:parseNum(e.target.value)||1};onChange(n)}}
-            className={inp+' text-right'}
-          />
-          <input
-            type="text" inputMode="decimal"
-            value={r.unitario}
-            onFocus={e=>e.target.select()}
-            onChange={e=>{const n=[...rows];n[i]={...n[i],unitario:parseNum(e.target.value)};onChange(n)}}
-            className={inp+' text-right'}
-            placeholder="0.00"
-          />
+          <input value={r.desc} onChange={e=>{const n=[...rows];n[i]={...n[i],desc:e.target.value};onChange(n)}} className={inp} placeholder="Descripcion"/>
+          <input type="text" inputMode="decimal" value={r.cant} onFocus={e=>e.target.select()} onChange={e=>{const n=[...rows];n[i]={...n[i],cant:parseNum(e.target.value)||1};onChange(n)}} className={inp+' text-right'}/>
+          <input type="text" inputMode="decimal" value={r.unitario} onFocus={e=>e.target.select()} onChange={e=>{const n=[...rows];n[i]={...n[i],unitario:parseNum(e.target.value)};onChange(n)}} className={inp+' text-right'} placeholder="0.00"/>
           {withIva&&(
             <select value={r.ivaChile||'exento'} onChange={e=>{const n=[...rows];n[i]={...n[i],ivaChile:e.target.value as any};onChange(n)}} className={sel}>
               <option value="exento">Exento</option>
               <option value="gravado">Grav. 19%</option>
             </select>
           )}
-          <button onClick={()=>onChange(rows.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs">🗑</button>
+          <button onClick={()=>onChange(rows.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs">X</button>
         </div>
       ))}
-      {/* Subtotales por fila */}
       {rows.filter(r=>r.cant>0&&r.unitario>0).length>0&&(
         <div className="mt-2 pt-2 border-t border-gray-100 flex flex-wrap gap-x-4 gap-y-1">
           {rows.filter(r=>r.cant>0&&r.unitario>0).map((r,i)=>(
             <div key={r.id} className="text-[10px] text-gray-500">
-              <span className="font-medium text-gray-700">{r.desc||`Ítem ${i+1}`}</span>
-              <span className="mx-1 text-gray-300">·</span>
-              <span className="font-mono">{r.cant} × USD {fmt(r.unitario)}</span>
+              <span className="font-medium text-gray-700">{r.desc||`Item ${i+1}`}</span>
+              <span className="mx-1 text-gray-300">-</span>
+              <span className="font-mono">{r.cant} x USD {fmt(r.unitario)}</span>
               <span className="mx-1 text-gray-300">=</span>
               <span className="font-mono font-semibold text-[#052698]">USD {fmt(r.cant*r.unitario)}</span>
             </div>
           ))}
         </div>
       )}
-      <button onClick={()=>onChange([...rows,{id:Math.random().toString(36).slice(2),desc:'',cant:1,unitario:0,ivaChile:'exento',tipoCalc:'fijo'}])} className="text-xs text-[#1168F8] hover:underline mt-2 block">+ Agregar ítem</button>
+      <button onClick={()=>onChange([...rows,{id:Math.random().toString(36).slice(2),desc:'',cant:1,unitario:0,ivaChile:'exento',tipoCalc:'fijo'}])} className="text-xs text-[#1168F8] hover:underline mt-2 block">+ Agregar item</button>
     </div>
   )
 }
@@ -171,17 +151,17 @@ function DesconRows({rows,onChange,totalM3}:{rows:ItemLog[];onChange:(r:ItemLog[
         <div key={r.id} style={{display:'grid',gridTemplateColumns:'2.5fr 100px 1fr 1fr auto',gap:'7px',alignItems:'end'}} className="mb-2">
           <input value={r.desc} onChange={e=>{const n=[...rows];n[i]={...n[i],desc:e.target.value};onChange(n)}} className={inp} placeholder="Concepto"/>
           <select value={r.tipoCalc||'fijo'} onChange={e=>{const n=[...rows];n[i]={...n[i],tipoCalc:e.target.value as any};onChange(n)}} className={sel}>
-            <option value="fijo">Fijo (USD)</option><option value="m3">Por m³</option>
+            <option value="fijo">Fijo (USD)</option><option value="m3">Por m3</option>
           </select>
           {r.tipoCalc==='fijo'
             ?<input type="text" inputMode="decimal" value={r.cant} onFocus={e=>e.target.select()} onChange={e=>{const n=[...rows];n[i]={...n[i],cant:parseNum(e.target.value)||1};onChange(n)}} className={inp+' text-right'} placeholder="Cant."/>
-            :<div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right font-mono">{fmt(totalM3,2)} m³</div>
+            :<div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right font-mono">{fmt(totalM3,2)} m3</div>
           }
-          <input type="text" inputMode="decimal" value={r.unitario} onFocus={e=>e.target.select()} onChange={e=>{const n=[...rows];n[i]={...n[i],unitario:parseNum(e.target.value)};onChange(n)}} className={inp+' text-right'} placeholder={r.tipoCalc==='m3'?'USD/m³':'USD'}/>
-          <button onClick={()=>onChange(rows.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs pb-1">🗑</button>
+          <input type="text" inputMode="decimal" value={r.unitario} onFocus={e=>e.target.select()} onChange={e=>{const n=[...rows];n[i]={...n[i],unitario:parseNum(e.target.value)};onChange(n)}} className={inp+' text-right'} placeholder={r.tipoCalc==='m3'?'USD/m3':'USD'}/>
+          <button onClick={()=>onChange(rows.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs pb-1">X</button>
         </div>
       ))}
-      <button onClick={()=>onChange([...rows,{id:Math.random().toString(36).slice(2),desc:'',cant:1,unitario:0,tipoCalc:'fijo'}])} className="text-xs text-[#1168F8] hover:underline mt-1">+ Agregar ítem</button>
+      <button onClick={()=>onChange([...rows,{id:Math.random().toString(36).slice(2),desc:'',cant:1,unitario:0,tipoCalc:'fijo'}])} className="text-xs text-[#1168F8] hover:underline mt-1">+ Agregar item</button>
     </div>
   )
 }
@@ -205,21 +185,19 @@ export default function CotizadorPage(){
   const router=useRouter()
 
   useEffect(()=>{
-    // Load TC from system
-    supabase.from('tipos_cambio').select('moneda, valor').order('fecha', { ascending: false }).order('created_at', { ascending: false })
+    // Load TC desde tipos_cambio_eventos
+    supabase.from('tipos_cambio_eventos').select('ars,clp').order('created_at', { ascending: false }).limit(1)
       .then(({ data }) => {
         if (data && data.length > 0) {
-          const ars = (data as any[]).find(t => t.moneda === 'ARS')?.valor
-          const clp = (data as any[]).find(t => t.moneda === 'CLP')?.valor
-          if (ars) setS(p => ({ ...p, tcTrib: ars }))
-          if (clp) setS(p => ({ ...p, tcClp: clp }))
+          if (data[0].ars) setS(p => ({ ...p, tcTrib: data[0].ars }))
+          if (data[0].clp) setS(p => ({ ...p, tcClp: data[0].clp }))
         }
       })
 
     // Load terceros (clientes)
     supabase.from('terceros').select('id,razon_social,nombre_fantasia,nro_doc,tipo_doc,condicion_iva,email,telefono,dir_fiscal_ciudad,pais')
       .eq('activo', 'true')
-      .then(({data})=>{ if(data) setTerceros(data) })
+      .then(({data,error})=>{ console.log('terceros loaded:', data?.length, error); if(data) setTerceros(data) })
 
     // Load cotizaciones de proveedores vigentes
     supabase.from('cotizaciones_proveedor')
@@ -236,7 +214,6 @@ export default function CotizadorPage(){
     supabase.from('tarifas').select('*').eq('activo',true).then(({data})=>{
       if(data) {
         setTarifas(data as Tarifa[])
-        // Pre-cargar gastos Argentina
         const gastosArgTarifas = (data as any[]).filter((t:any) => t.tipo === 'argentina')
         if(gastosArgTarifas.length > 0) {
           setS(p => ({
@@ -258,11 +235,9 @@ export default function CotizadorPage(){
     })
   },[])
   useEffect(()=>{loadTrib()},[s.regimen])
-  // Actualizar filas A y transporte terrestre cuando cambian contenedores o tarifas
   useEffect(()=>{
     if(tarifas.length===0) return
     setS(p=>{
-      // Sección A — flete marítimo por tipo de contenedor
       const filasA = p.contenedores.map(c=>{
         const tarifa = tarifas.find(t=>t.tipo==='maritima' && t.tipo_contenedor===c.tipo)
         const precio = tarifa?.valor || 0
@@ -270,28 +245,21 @@ export default function CotizadorPage(){
         const existing = p.rowsA.find(r=>r.desc.includes(c.tipo))
         return {
           id: existing?.id || Math.random().toString(36).slice(2),
-          desc: `Flete marítimo ${c.tipo}${naviera?' ('+naviera+')':''}`,
+          desc: `Flete maritimo ${c.tipo}${naviera?' ('+naviera+')':''}`,
           cant: c.cantidad,
           unitario: existing?.unitario ?? precio,
           ivaChile: 'exento' as const,
           tipoCalc: 'fijo' as const
         }
       })
-      // Transporte terrestre — buscar tarifa terrestre según destino NOA
       const tarifaTerrestre = tarifas.find(t=>
         t.tipo==='terrestre' && t.ruta.toLowerCase().includes(p.destinoNoa.toLowerCase())
       ) || tarifas.find(t=>t.tipo==='terrestre')
       const precioTerrestre = tarifaTerrestre?.valor || 0
       const ncTotal = p.contenedores.reduce((s,c)=>s+c.cantidad,0) || 1
-      // Solo actualizar si no fue editado manualmente
       const nuevoFtCamion = p.ftCamion === 0 ? precioTerrestre : p.ftCamion
       const nuevoNCamiones = p.nCamiones === 1 ? ncTotal : p.nCamiones
-      return {
-        ...p,
-        rowsA: filasA,
-        ftCamion: nuevoFtCamion,
-        nCamiones: nuevoNCamiones,
-      }
+      return { ...p, rowsA: filasA, ftCamion: nuevoFtCamion, nCamiones: nuevoNCamiones }
     })
   },[s.contenedores, s.destinoNoa, tarifas])
 
@@ -324,7 +292,6 @@ export default function CotizadorPage(){
   const cif=totalFOB+subA+seg
   const cifARS=cif*s.tcTrib
 
-  // Calcular gastos Argentina con lógica piso/techo — DESPUÉS de cif
   const calcGastoArg = (g: GastoArg, cifUsd: number, tcTrib: number): number => {
     let usd = 0
     if(g.tipoCalc === 'pct_cif') {
@@ -363,15 +330,15 @@ export default function CotizadorPage(){
     if (!cot) return
     const opRef = (cot.operacion as any)?.cotizacion
     const label = cot.tipo === 'especifica' && opRef
-      ? `Cotiz. específica ${opRef.num} · ${cot.proveedor} · ${cot.fecha}`
-      : `Cotiz. genérica · ${cot.proveedor} · ${cot.fecha}`
+      ? `Cotiz. especifica ${opRef.num} - ${cot.proveedor} - ${cot.fecha}`
+      : `Cotiz. generica - ${cot.proveedor} - ${cot.fecha}`
     setS(p => {
       const filasA = p.contenedores.map(c => {
         const item = cot.items?.find((i:any) => i.tipo_servicio === 'maritima' && i.tipo_equipo === c.tipo)
           || cot.items?.find((i:any) => i.tipo_servicio === 'maritima')
         return {
           id: Math.random().toString(36).slice(2),
-          desc: `${item?.descripcion || 'Flete marítimo'} ${c.tipo} · ${label}`,
+          desc: `${item?.descripcion || 'Flete maritimo'} ${c.tipo} - ${label}`,
           cant: c.cantidad,
           unitario: item?.valor || 0,
           ivaChile: 'exento' as const,
@@ -387,8 +354,8 @@ export default function CotizadorPage(){
     if (!cot) return
     const opRef = (cot.operacion as any)?.cotizacion
     const label = cot.tipo === 'especifica' && opRef
-      ? `Cotiz. específica ${opRef.num} · ${cot.proveedor} · ${cot.fecha}`
-      : `Cotiz. genérica · ${cot.proveedor} · ${cot.fecha}`
+      ? `Cotiz. especifica ${opRef.num} - ${cot.proveedor} - ${cot.fecha}`
+      : `Cotiz. generica - ${cot.proveedor} - ${cot.fecha}`
     const ncTotal = s.contenedores.reduce((t,c)=>t+c.cantidad,0)||1
     const item = cot.items?.find((i:any) =>
       i.tipo_servicio === 'terrestre' &&
@@ -408,8 +375,8 @@ export default function CotizadorPage(){
     if (!cot) return
     const opRef = (cot.operacion as any)?.cotizacion
     const label = cot.tipo === 'especifica' && opRef
-      ? `Cotiz. específica ${opRef.num} · ${cot.proveedor} · ${cot.fecha}`
-      : `Cotiz. genérica · ${cot.proveedor} · ${cot.fecha}`
+      ? `Cotiz. especifica ${opRef.num} - ${cot.proveedor} - ${cot.fecha}`
+      : `Cotiz. generica - ${cot.proveedor} - ${cot.fecha}`
     const items = cot.items?.filter((i:any) => i.tipo_servicio === 'argentina') || []
     if (!items.length) return
     setS(p => ({
@@ -418,7 +385,7 @@ export default function CotizadorPage(){
       cotArgLabel: label,
       gastosArg: items.map((i:any) => ({
         id: Math.random().toString(36).slice(2),
-        desc: `${i.descripcion} · ${label}`,
+        desc: `${i.descripcion} - ${label}`,
         tipoCalc: (i.tipo_calculo||'fijo_usd') as 'pct_cif'|'fijo_usd'|'fijo_ars',
         moneda: (i.moneda||'USD') as 'USD'|'ARS',
         valor: i.valor||0,
@@ -438,7 +405,6 @@ export default function CotizadorPage(){
     setClienteSelId(t.id)
     setBuscarCliente(t.razon_social)
     setShowClienteDropdown(false)
-    // Load historial
     const {data} = await supabase.from('cotizaciones').select('id,num,estado,total_landed,created_at').eq('tercero_id', t.id).order('created_at',{ascending:false}).limit(5)
     if(data) setHistCliente(data)
     setShowHist(true)
@@ -447,8 +413,7 @@ export default function CotizadorPage(){
   async function duplicarCotizacion(cotId: string) {
     const {data: orig} = await supabase.from('cotizaciones').select('*').eq('id', cotId).single()
     if(!orig) return
-    // Get current TC
-    const {data: tcData} = await supabase.from('tipos_cambio_eventos').select('ars,clp,cny').order('created_at',{ascending:false}).limit(1).single()
+    const {data: tcData} = await supabase.from('tipos_cambio_eventos').select('ars,clp').order('created_at',{ascending:false}).limit(1).single()
     const newState = {
       ...s,
       cliente: (orig as any).cliente,
@@ -464,13 +429,12 @@ export default function CotizadorPage(){
       transito: (orig as any).transito || s.transito,
       rowsA: (orig as any).presupuesto?.filter((p:any)=>p.etapa==='maritimo').map((p:any)=>({id:Math.random().toString(36).slice(2),desc:p.concepto,cant:1,unitario:p.usd,ivaChile:'exento' as const,tipoCalc:'fijo' as const})) || s.rowsA,
       tcTrib: (tcData as any)?.ars || s.tcTrib,
-      
       tcClp: (tcData as any)?.clp || s.tcClp,
       notas: '',
     }
     setS(newState)
     setTab('embarque')
-    alert('Cotización duplicada. Revisá los valores y guardá cuando esté lista.')
+    alert('Cotizacion duplicada. Revisa los valores y guarda cuando este lista.')
   }
 
   function cargarSeccionA(){
@@ -480,7 +444,7 @@ export default function CotizadorPage(){
         const tarifa = mar.find(t=>t.tipo_contenedor===c.tipo)
         return {
           id: Math.random().toString(36).slice(2),
-          desc: `Flete marítimo ${c.tipo}${tarifa?.naviera?' ('+tarifa.naviera+')':''}`,
+          desc: `Flete maritimo ${c.tipo}${tarifa?.naviera?' ('+tarifa.naviera+')':''}`,
           cant: c.cantidad,
           unitario: tarifa?.valor || 0,
           ivaChile: 'exento' as const,
@@ -530,54 +494,25 @@ export default function CotizadorPage(){
     }))
   }
 
-  function aplicarTarifas(){
-    const pto=tarifas.filter(t=>(t.tipo as string)==='puerto')
-    // Generar filas A basadas en contenedores seleccionados
-    setS(p=>{
-      const filasA = p.contenedores.map(c=>{
-        const tarifa = tarifas.find(t=>t.tipo==='maritima' && t.tipo_contenedor===c.tipo)
-        const precio = tarifa?.valor || 0
-        const naviera = tarifa?.naviera || ''
-        return {
-          id: Math.random().toString(36).slice(2),
-          desc: `Flete marítimo ${c.tipo}${naviera?' ('+naviera+')':''}`,
-          cant: c.cantidad,
-          unitario: precio,
-          ivaChile: 'exento' as const,
-          tipoCalc: 'fijo' as const
-        }
-      })
-      const filasC = pto.map(t=>({
-        id:Math.random().toString(36).slice(2),
-        desc:t.ruta,
-        cant: p.contenedores.reduce((s,c)=>s+c.cantidad,0)||1,
-        unitario:t.valor,
-        ivaChile:(t.iva_chile||'exento') as 'exento'|'gravado',
-        tipoCalc:'fijo' as const
-      }))
-      return {...p, rowsA: filasA, rowsC: filasC}
-    })
-  }
-
   async function guardar(){
-    if(!s.cliente){alert('Ingresá el nombre del cliente.');return}
+    if(!s.cliente){alert('Ingresa el nombre del cliente.');return}
     setSaving(true)
     try {
       const {data:cots}=await supabase.from('cotizaciones').select('num')
       const num=nextCotNum(cots||[])
       const {data:user}=await supabase.auth.getUser()
-      if(!user.user){alert('Tu sesión expiró. Por favor ingresá nuevamente.');setSaving(false);return}
+      if(!user.user){alert('Tu sesion expiro. Por favor ingresa nuevamente.');setSaving(false);return}
       const {data:uDB}=await supabase.from('usuarios').select('id').eq('auth_id',user.user.id).single()
       const uid=(uDB as any)?.id||''
       const presupuesto=[
-        ...(subA>0?[{etapa:'maritimo',tipo:'flete',concepto:'Flete marítimo y cargos naviero',usd:subA}]:[]),
-        ...(seg>0?[{etapa:'maritimo',tipo:'seguro',concepto:'Seguro mercadería',usd:seg}]:[]),
+        ...(subA>0?[{etapa:'maritimo',tipo:'flete',concepto:'Flete maritimo y cargos naviero',usd:subA}]:[]),
+        ...(seg>0?[{etapa:'maritimo',tipo:'seguro',concepto:'Seguro mercaderia',usd:seg}]:[]),
         ...(subC>0?[{etapa:'chile',tipo:'servicios',concepto:'Gastos puerto Chile',usd:subC}]:[]),
-        ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidación (Opción ${s.optTransp})`,usd:subD}]:[]),
+        ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidacion (Opcion ${s.optTransp})`,usd:subD}]:[]),
         ...(subTransp>0?[{etapa:'terrestre',tipo:'flete',concepto:'Transporte terrestre',usd:subTransp}]:[]),
         ...(subE>0?[{etapa:'argentina',tipo:'servicios',concepto:'Gastos Argentina',usd:subE}]:[]),
         ...(subGastosArg>0?[{etapa:'argentina',tipo:'gastos_arg',concepto:'Gastos Argentina (despachante y otros)',usd:subGastosArg}]:[]),
-        ...(totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Régimen ${s.regimen}`,usd:totalTribUSD}]:[]),
+        ...(totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Regimen ${s.regimen}`,usd:totalTribUSD}]:[]),
         ...(fee>0?[{etapa:'fee',tipo:'fee',concepto:'Fee Puerto NOA',usd:fee}]:[]),
       ]
       const {error}=await (supabase.from('cotizaciones') as any).insert({
@@ -609,7 +544,13 @@ export default function CotizadorPage(){
     }
   }
 
-  const TABS=[{key:'embarque',label:'Embarque'},{key:'logistica',label:'Logística'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as const
+  const clientesFiltrados = terceros.filter(t=>
+    t.razon_social.toLowerCase().includes((buscarCliente||s.cliente).toLowerCase()) ||
+    (t.nro_doc||'').includes(buscarCliente||s.cliente) ||
+    (t.nombre_fantasia||'').toLowerCase().includes((buscarCliente||s.cliente).toLowerCase())
+  ).slice(0,8)
+
+  const TABS=[{key:'embarque',label:'Embarque'},{key:'logistica',label:'Logistica'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as const
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen" onClick={()=>setShowClienteDropdown(false)}>
@@ -618,8 +559,8 @@ export default function CotizadorPage(){
           <Image src="/logo.png" alt="Puertonoa" width={130} height={38} style={{objectFit:'contain'}}/>
         </div>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Nueva cotización</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Módulo 1 — Cotizador logístico China → NOA</p>
+          <h1 className="text-xl font-bold text-gray-900">Nueva cotizacion</h1>
+          <p className="text-xs text-gray-400 mt-0.5">Modulo 1 — Cotizador logistico China - NOA</p>
         </div>
       </div>
 
@@ -632,13 +573,12 @@ export default function CotizadorPage(){
         </div>
       </div>
 
-      {/* ── EMBARQUE ── */}
       {tab==='embarque'&&(
         <div className="space-y-4">
-          <Card title="Cliente y operación">
+          <Card title="Cliente y operacion">
             <div className="grid grid-cols-4 gap-3 mb-3">
               <div className="col-span-2">
-                <Field label="Razón social">
+                <Field label="Razon social">
                   <div className="relative">
                     <input
                       value={buscarCliente||s.cliente}
@@ -649,14 +589,11 @@ export default function CotizadorPage(){
                         if(!e.target.value){setClienteSelId(null);setShowHist(false)}
                       }}
                       onFocus={()=>setShowClienteDropdown(true)}
-                      className={inp} placeholder="Buscar o escribir razón social..."/>
+                      onClick={e=>e.stopPropagation()}
+                      className={inp} placeholder="Buscar o escribir razon social..."/>
                     {showClienteDropdown && (
-                      <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto mt-1">
-                        {terceros.filter(t=>
-                          t.razon_social.toLowerCase().includes((buscarCliente||s.cliente).toLowerCase()) ||
-                          (t.nro_doc||'').includes(buscarCliente||s.cliente) ||
-                          (t.nombre_fantasia||'').toLowerCase().includes((buscarCliente||s.cliente).toLowerCase())
-                        ).slice(0,8).map(t=>(
+                      <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto mt-1" onClick={e=>e.stopPropagation()}>
+                        {clientesFiltrados.length > 0 ? clientesFiltrados.map(t=>(
                           <button key={t.id} onMouseDown={()=>selectCliente(t)}
                             className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] transition-colors border-b border-gray-50 last:border-0">
                             <div className="font-semibold text-sm text-gray-900">{t.razon_social}</div>
@@ -665,20 +602,18 @@ export default function CotizadorPage(){
                               {t.dir_fiscal_ciudad&&<span>{t.dir_fiscal_ciudad}, {t.pais}</span>}
                             </div>
                           </button>
-                        ))}
-                        {terceros.filter(t=>t.razon_social.toLowerCase().includes((buscarCliente||s.cliente).toLowerCase())).length===0&&(
+                        )) : (
                           <div className="px-4 py-3 text-xs text-gray-400">
-                            No encontrado — se cargará como nuevo cliente al guardar
+                            {terceros.length === 0 ? 'Cargando clientes...' : 'No encontrado — se cargara como nuevo cliente al guardar'}
                           </div>
                         )}
                       </div>
                     )}
                   </div>
                 </Field>
-                {/* Historial cliente */}
                 {showHist && histCliente.length>0 && (
                   <div className="mt-2 bg-[#EBF2FF] border border-[#93B8FC] rounded-xl p-3">
-                    <div className="text-[10px] font-bold text-[#052698] mb-2">📋 Cotizaciones anteriores de este cliente</div>
+                    <div className="text-[10px] font-bold text-[#052698] mb-2">Cotizaciones anteriores de este cliente</div>
                     <div className="space-y-1">
                       {histCliente.map(c=>(
                         <div key={c.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-1.5">
@@ -689,10 +624,7 @@ export default function CotizadorPage(){
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-xs font-semibold text-gray-700">USD {Math.round(c.total_landed||0).toLocaleString('es-AR')}</span>
-                            <button onMouseDown={()=>duplicarCotizacion(c.id)}
-                              className="px-2 py-0.5 bg-[#1168F8] text-white rounded text-[9px] font-bold hover:bg-[#052698] transition-colors">
-                              Duplicar
-                            </button>
+                            <button onMouseDown={()=>duplicarCotizacion(c.id)} className="px-2 py-0.5 bg-[#1168F8] text-white rounded text-[9px] font-bold hover:bg-[#052698] transition-colors">Duplicar</button>
                           </div>
                         </div>
                       ))}
@@ -701,15 +633,15 @@ export default function CotizadorPage(){
                 )}
               </div>
               <Field label="CUIT"><input value={s.cuit} onChange={e=>u('cuit',e.target.value)} className={inp} placeholder="XX-XXXXXXXX-X"/></Field>
-              <Field label="Teléfono"><input value={s.telefono} onChange={e=>u('telefono',e.target.value)} className={inp} placeholder="+54 9 388..."/></Field>
+              <Field label="Telefono"><input value={s.telefono} onChange={e=>u('telefono',e.target.value)} className={inp} placeholder="+54 9 388..."/></Field>
             </div>
             <div className="grid grid-cols-4 gap-3 mb-3">
               <div className="col-span-2"><Field label="Email"><input type="email" value={s.email} onChange={e=>u('email',e.target.value)} className={inp} placeholder="correo@empresa.com"/></Field></div>
               <Field label="Despachante de aduana"><input value={s.despachante} onChange={e=>u('despachante',e.target.value)} className={inp} placeholder="Nombre / CUIT"/></Field>
-              <Field label="Condición IVA"><select value={s.ivaCondicion} onChange={e=>u('ivaCondicion',e.target.value)} className={sel}>{['Responsable Inscripto','Monotributista','Exento','Consumidor Final'].map(v=><option key={v}>{v}</option>)}</select></Field>
+              <Field label="Condicion IVA"><select value={s.ivaCondicion} onChange={e=>u('ivaCondicion',e.target.value)} className={sel}>{['Responsable Inscripto','Monotributista','Exento','Consumidor Final'].map(v=><option key={v}>{v}</option>)}</select></Field>
             </div>
             <div className="grid grid-cols-4 gap-3">
-              <Field label="Validez oferta"><select value={s.validez} onChange={e=>u('validez',e.target.value)} className={sel}><option value="">Sin especificar</option><option value="15 días">15 días</option><option value="30 días">30 días</option><option value="45 días">45 días</option></select></Field>
+              <Field label="Validez oferta"><select value={s.validez} onChange={e=>u('validez',e.target.value)} className={sel}><option value="">Sin especificar</option><option value="15 dias">15 dias</option><option value="30 dias">30 dias</option><option value="45 dias">45 dias</option></select></Field>
               <div className="col-span-3"><Field label="Notas internas"><input value={s.notas} onChange={e=>u('notas',e.target.value)} className={inp} placeholder="Observaciones"/></Field></div>
             </div>
           </Card>
@@ -718,50 +650,36 @@ export default function CotizadorPage(){
             <div className="grid grid-cols-4 gap-3 mb-3">
               <Field label="Origen"><input value={s.origen} onChange={e=>u('origen',e.target.value)} className={inp}/></Field>
               <Field label="Puerto Chile"><select value={s.ptoChile} onChange={e=>u('ptoChile',e.target.value)} className={sel}>{Object.entries(PUERTOS_L).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></Field>
-              <Field label="Destino NOA"><select value={s.destinoNoa} onChange={e=>u('destinoNoa',e.target.value)} className={sel}>{['Jujuy','Salta','Tucumán','Catamarca','La Rioja'].map(v=><option key={v}>{v}</option>)}</select></Field>
+              <Field label="Destino NOA"><select value={s.destinoNoa} onChange={e=>u('destinoNoa',e.target.value)} className={sel}>{['Jujuy','Salta','Tucuman','Catamarca','La Rioja'].map(v=><option key={v}>{v}</option>)}</select></Field>
               <Field label="Incoterm"><select value={s.incoterm} onChange={e=>u('incoterm',e.target.value)} className={sel}>{['FOB','EXW','CIF','CFR'].map(v=><option key={v}>{v}</option>)}</select></Field>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Tránsito estimado"><input value={s.transito} onChange={e=>u('transito',e.target.value)} className={inp}/></Field>
-              <Field label="Cotización naviero">
+              <Field label="Transito estimado"><input value={s.transito} onChange={e=>u('transito',e.target.value)} className={inp}/></Field>
+              <Field label="Cotizacion naviero">
                 {cotNavieras.length > 0 ? (
                   <div className="space-y-1.5">
-                    <select
-                      value={s.cotProvId}
-                      onChange={e => {
-                        if (e.target.value === '__manual__') {
-                          u('cotProvId', '')
-                        } else if (e.target.value) {
-                          aplicarCotNaviera(e.target.value)
-                        } else {
-                          u('cotProvId', '')
-                        }
-                      }}
-                      className={sel}
-                    >
-                      <option value="">— Seleccionar cotización —</option>
+                    <select value={s.cotProvId} onChange={e => { if (e.target.value === '__manual__') { u('cotProvId', '') } else if (e.target.value) { aplicarCotNaviera(e.target.value) } else { u('cotProvId', '') } }} className={sel}>
+                      <option value="">— Seleccionar cotizacion —</option>
                       {cotNavieras.filter((c:any)=>c.tipo==='especifica').length>0 && (
-                        <optgroup label="🎯 Específicas para esta operación">
+                        <optgroup label="Especificas para esta operacion">
                           {cotNavieras.filter((c:any)=>c.tipo==='especifica').map((c:any)=>{
                             const op=(c.operacion as any)?.cotizacion
-                            return <option key={c.id} value={c.id}>{c.proveedor} · {c.fecha}{op?` · ${op.num}`:''}</option>
+                            return <option key={c.id} value={c.id}>{c.proveedor} - {c.fecha}{op?` - ${op.num}`:''}</option>
                           })}
                         </optgroup>
                       )}
-                      <optgroup label="📋 Genéricas vigentes">
+                      <optgroup label="Genericas vigentes">
                         {cotNavieras.filter((c:any)=>c.tipo==='generica').map((c:any)=>(
-                          <option key={c.id} value={c.id}>{c.proveedor} · {c.referencia||c.fecha}</option>
+                          <option key={c.id} value={c.id}>{c.proveedor} - {c.referencia||c.fecha}</option>
                         ))}
                       </optgroup>
-                      <option value="__manual__">✏ Ingresar manualmente</option>
+                      <option value="__manual__">Ingresar manualmente</option>
                     </select>
                     {(!s.cotProvId || s.cotProvId === '__manual__') && (
                       <input value={s.refNaviero} onChange={e=>u('refNaviero',e.target.value)} className={inp} placeholder="ej. Q-AR-DR... (Hellmann)"/>
                     )}
                     {s.cotProvId && s.cotProvId !== '__manual__' && (
-                      <div className="text-[10px] text-[#1168F8] bg-[#EBF2FF] px-2.5 py-1.5 rounded-lg">
-                        ✓ {s.cotProvLabel} — precios cargados en sección A
-                      </div>
+                      <div className="text-[10px] text-[#1168F8] bg-[#EBF2FF] px-2.5 py-1.5 rounded-lg">OK {s.cotProvLabel} — precios cargados en seccion A</div>
                     )}
                   </div>
                 ) : (
@@ -771,7 +689,6 @@ export default function CotizadorPage(){
             </div>
           </Card>
 
-          {/* Contenedores — chips */}
           <Card title="Contenedores">
             <div className="flex flex-wrap gap-2 items-center mb-3">
               {s.contenedores.map((c,i)=>(
@@ -779,21 +696,20 @@ export default function CotizadorPage(){
                   <select value={c.tipo} onChange={e=>{const n=[...s.contenedores];n[i]={...n[i],tipo:e.target.value};u('contenedores',n)}} className="border-0 bg-transparent text-xs font-semibold text-[#1168F8] focus:outline-none">
                     {Object.keys(CONT_CAPS).map(k=><option key={k}>{k}</option>)}
                   </select>
-                  <span className="text-[#93B8FC] text-xs">×</span>
+                  <span className="text-[#93B8FC] text-xs">x</span>
                   <input type="text" inputMode="decimal" value={c.cantidad} min={1} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.contenedores];n[i]={...n[i],cantidad:parseInt2(e.target.value)||1};u('contenedores',n)}} className="w-10 text-center text-xs border-0 bg-transparent focus:outline-none font-bold text-[#052698]"/>
-                  {s.contenedores.length>1&&<button onClick={()=>u('contenedores',s.contenedores.filter((_,j)=>j!==i))} className="text-[#93B8FC] hover:text-red-400 text-xs">✕</button>}
+                  {s.contenedores.length>1&&<button onClick={()=>u('contenedores',s.contenedores.filter((_,j)=>j!==i))} className="text-[#93B8FC] hover:text-red-400 text-xs">X</button>}
                 </div>
               ))}
               <button onClick={()=>u('contenedores',[...s.contenedores,{tipo:'40HC',cantidad:1}])} className="text-xs text-[#1168F8] hover:underline px-2">+ Agregar tipo</button>
             </div>
-            <div className="text-xs text-gray-500">Total: <strong className="text-gray-800">{nc} contenedor(es)</strong> · {s.contenedores.map(c=>`${c.cantidad}× ${c.tipo}`).join(', ')}</div>
+            <div className="text-xs text-gray-500">Total: <strong className="text-gray-800">{nc} contenedor(es)</strong> - {s.contenedores.map(c=>`${c.cantidad}x ${c.tipo}`).join(', ')}</div>
           </Card>
 
-          {/* Productos */}
           <Card title="Productos de China">
             <div className="overflow-x-auto">
               <table className="w-full text-xs mb-2">
-                <thead><tr className="bg-gray-50">{['Descripción','NCM','Cant.','Precio unit. USD','Subtotal','Peso kg/u','Vol m³/u','Incoterm',''].map(h=><th key={h} className="text-left px-2 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide whitespace-nowrap">{h}</th>)}</tr></thead>
+                <thead><tr className="bg-gray-50">{['Descripcion','NCM','Cant.','Precio unit. USD','Subtotal','Peso kg/u','Vol m3/u','Incoterm',''].map(h=><th key={h} className="text-left px-2 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide whitespace-nowrap">{h}</th>)}</tr></thead>
                 <tbody>
                   {s.productos.map((p,i)=>(
                     <tr key={i} className="border-b border-gray-50">
@@ -805,7 +721,7 @@ export default function CotizadorPage(){
                       <td className="px-2 py-1.5"><input type="text" inputMode="decimal" value={p.peso_unit} onFocus={e=>e.target.select()} min={0} onChange={e=>{const n=[...s.productos];n[i]={...n[i],peso_unit:parseNum(e.target.value)};u('productos',n)}} className={inp+' text-right w-20'}/></td>
                       <td className="px-2 py-1.5"><input type="text" inputMode="decimal" value={p.vol_unit} onFocus={e=>e.target.select()} min={0} step={0.001} onChange={e=>{const n=[...s.productos];n[i]={...n[i],vol_unit:parseNum(e.target.value)};u('productos',n)}} className={inp+' text-right w-20'}/></td>
                       <td className="px-2 py-1.5"><select value={p.incoterm} onChange={e=>{const n=[...s.productos];n[i]={...n[i],incoterm:e.target.value};u('productos',n)}} className={sel+' w-20'}>{['FOB','EXW','CIF'].map(v=><option key={v}>{v}</option>)}</select></td>
-                      <td className="px-2 py-1.5"><button onClick={()=>u('productos',s.productos.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs">🗑</button></td>
+                      <td className="px-2 py-1.5"><button onClick={()=>u('productos',s.productos.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs">X</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -813,18 +729,18 @@ export default function CotizadorPage(){
             </div>
             <button onClick={()=>u('productos',[...s.productos,{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:s.incoterm,proformaId:''}])} className="text-xs text-[#1168F8] hover:underline">+ Agregar producto</button>
             <div className="grid grid-cols-4 gap-3 mt-4">
-              {[{label:'Total FOB/EXW (USD)',value:`USD ${fmt(totalFOB)}`},{label:'Peso total',value:`${fmt(cap.totalKg,0)} kg`},{label:'Volumen total',value:`${fmt(cap.totalM3,2)} m³`},{label:'Productos',value:String(s.productos.length)}].map(it=>(
+              {[{label:'Total FOB/EXW (USD)',value:`USD ${fmt(totalFOB)}`},{label:'Peso total',value:`${fmt(cap.totalKg,0)} kg`},{label:'Volumen total',value:`${fmt(cap.totalM3,2)} m3`},{label:'Productos',value:String(s.productos.length)}].map(it=>(
                 <div key={it.label} className="bg-gray-50 border border-gray-100 rounded-lg p-3"><div className="text-[10px] text-gray-400 mb-1">{it.label}</div><div className="font-semibold text-sm text-gray-800">{it.value}</div></div>
               ))}
             </div>
             {nc>0&&(cap.totalKg>0||cap.totalM3>0)&&(
               <div className="grid grid-cols-3 gap-3 mt-3">
-                {[{label:'PESO',pct:cap.pctKg,curr:fmt(cap.totalKg,0)+' kg',max:fmt(cap.capKg,0)+' kg'},{label:'VOLUMEN',pct:cap.pctM3,curr:fmt(cap.totalM3,2)+' m³',max:fmt(cap.capM3,1)+' m³'}].map(it=>{
+                {[{label:'PESO',pct:cap.pctKg,curr:fmt(cap.totalKg,0)+' kg',max:fmt(cap.capKg,0)+' kg'},{label:'VOLUMEN',pct:cap.pctM3,curr:fmt(cap.totalM3,2)+' m3',max:fmt(cap.capM3,1)+' m3'}].map(it=>{
                   const st=it.pct>100?'bg-red-50 border-red-200 text-red-700':it.pct>85?'bg-amber-50 border-amber-200 text-amber-700':'bg-green-50 border-green-200 text-green-700'
                   const bc=it.pct>100?'#A32D2D':it.pct>85?'#EF9F27':'#1168F8'
                   return <div key={it.label} className={`border rounded-lg p-3 ${st}`}><div className="text-[9px] font-bold uppercase tracking-wider mb-1">{it.label}</div><div className="text-xl font-semibold">{fmt(it.pct,1)}%</div><div className="text-[10px] mt-1 opacity-80">{it.curr} de {it.max}</div><div className="h-1.5 bg-white/50 rounded-full overflow-hidden mt-2"><div className="h-full rounded-full" style={{width:`${Math.min(it.pct,100)}%`,background:bc}}/></div></div>
                 })}
-                <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-lg p-3"><div className="text-[9px] font-bold uppercase tracking-wider text-[#052698] mb-1">CONTENEDORES</div><div className="text-xl font-semibold text-[#1168F8]">{nc}</div><div className="text-[10px] text-[#1168F8] mt-1">{s.contenedores.map(c=>`${c.cantidad}× ${c.tipo}`).join(', ')}</div></div>
+                <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-lg p-3"><div className="text-[9px] font-bold uppercase tracking-wider text-[#052698] mb-1">CONTENEDORES</div><div className="text-xl font-semibold text-[#1168F8]">{nc}</div><div className="text-[10px] text-[#1168F8] mt-1">{s.contenedores.map(c=>`${c.cantidad}x ${c.tipo}`).join(', ')}</div></div>
               </div>
             )}
             {s.incoterm==='EXW'&&(
@@ -832,39 +748,33 @@ export default function CotizadorPage(){
                 <div className="text-xs font-medium text-gray-700 mb-3">Puesta a FOB (precio EXW)</div>
                 <div className="grid grid-cols-3 gap-3">
                   <Field label="Transporte interno China (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.exwTransp} onChange={e=>u('exwTransp',parseNum(e.target.value))} className={inp}/></Field>
-                  <Field label="Agente exportación (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.exwAgente} onChange={e=>u('exwAgente',parseNum(e.target.value))} className={inp}/></Field>
+                  <Field label="Agente exportacion (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.exwAgente} onChange={e=>u('exwAgente',parseNum(e.target.value))} className={inp}/></Field>
                   <Field label="Otros gastos origen (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.exwOtros} onChange={e=>u('exwOtros',parseNum(e.target.value))} className={inp}/></Field>
                 </div>
               </div>
             )}
-            {/* PROFORMAS */}
             <div className="mt-4 pt-4 border-t border-gray-100">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-xs font-medium text-gray-700">Proformas del proveedor</div>
-                <button onClick={()=>u('proformas',[...s.proformas,{id:Math.random().toString(36).slice(2),numero:'',proveedor:'',fecha:new Date().toISOString().slice(0,10)}])}
-                  className="text-xs text-[#1168F8] hover:underline">+ Agregar proforma</button>
+                <button onClick={()=>u('proformas',[...s.proformas,{id:Math.random().toString(36).slice(2),numero:'',proveedor:'',fecha:new Date().toISOString().slice(0,10)}])} className="text-xs text-[#1168F8] hover:underline">+ Agregar proforma</button>
               </div>
               {s.proformas.length===0 ? (
-                <div className="text-[10px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">Sin proformas adjuntas. Las proformas son el documento base de la importación.</div>
+                <div className="text-[10px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">Sin proformas adjuntas.</div>
               ) : (
                 <div className="space-y-2">
                   {s.proformas.map((pf,pi)=>(
                     <div key={pf.id} className="flex items-center gap-2 p-3 bg-[#EBF2FF] border border-[#93B8FC] rounded-lg">
                       <div className="grid grid-cols-3 gap-2 flex-1">
-                        <input value={pf.numero} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],numero:e.target.value};u('proformas',n)}}
-                          className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="N° proforma"/>
-                        <input value={pf.proveedor} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],proveedor:e.target.value};u('proformas',n)}}
-                          className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Proveedor chino"/>
-                        <input type="date" value={pf.fecha} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],fecha:e.target.value};u('proformas',n)}}
-                          className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white"/>
+                        <input value={pf.numero} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],numero:e.target.value};u('proformas',n)}} className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="N proforma"/>
+                        <input value={pf.proveedor} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],proveedor:e.target.value};u('proformas',n)}} className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Proveedor chino"/>
+                        <input type="date" value={pf.fecha} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],fecha:e.target.value};u('proformas',n)}} className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white"/>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {pf.archivo_url ? (
-                          <a href={pf.archivo_url} target="_blank" rel="noreferrer"
-                            className="px-2 py-1 bg-white text-[#1168F8] rounded text-[10px] border border-[#93B8FC] hover:bg-[#93B8FC] transition-colors">📄 Ver</a>
+                          <a href={pf.archivo_url} target="_blank" rel="noreferrer" className="px-2 py-1 bg-white text-[#1168F8] rounded text-[10px] border border-[#93B8FC] hover:bg-[#93B8FC] transition-colors">Ver</a>
                         ) : (
                           <label className="px-2 py-1 border border-dashed border-[#93B8FC] rounded text-[10px] text-[#1168F8] hover:bg-white cursor-pointer transition-colors">
-                            📎 PDF
+                            PDF
                             <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={async e=>{
                               const f=e.target.files?.[0]; if(!f) return
                               const { data:auth } = await createClient().auth.getUser()
@@ -878,14 +788,12 @@ export default function CotizadorPage(){
                             }}/>
                           </label>
                         )}
-                        <button onClick={()=>u('proformas',s.proformas.filter((_,j)=>j!==pi))}
-                          className="text-[#93B8FC] hover:text-red-500 text-xs transition-colors">✕</button>
+                        <button onClick={()=>u('proformas',s.proformas.filter((_,j)=>j!==pi))} className="text-[#93B8FC] hover:text-red-500 text-xs transition-colors">X</button>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-              {/* Referencia de proforma en cada producto */}
               {s.proformas.length>0&&s.productos.some(p=>p.subtotal>0)&&(
                 <div className="mt-3 pt-3 border-t border-gray-100">
                   <div className="text-[10px] font-medium text-gray-500 mb-2">Referencia de proforma por producto</div>
@@ -893,12 +801,9 @@ export default function CotizadorPage(){
                     {s.productos.filter(p=>p.descripcion).map((p,pi)=>(
                       <div key={pi} className="flex items-center gap-2 text-xs">
                         <span className="text-gray-600 flex-1 truncate">{p.descripcion||`Producto ${pi+1}`}</span>
-                        <select value={(p as any).proformaId||''} onChange={e=>{const n=[...s.productos];(n[pi] as any).proformaId=e.target.value;u('productos',n)}}
-                          className="px-2 py-1 border border-gray-200 rounded text-[10px] focus:outline-none focus:border-[#1168F8] bg-white">
+                        <select value={(p as any).proformaId||''} onChange={e=>{const n=[...s.productos];(n[pi] as any).proformaId=e.target.value;u('productos',n)}} className="px-2 py-1 border border-gray-200 rounded text-[10px] focus:outline-none focus:border-[#1168F8] bg-white">
                           <option value="">Sin proforma asignada</option>
-                          {s.proformas.map(pf=>(
-                            <option key={pf.id} value={pf.id}>{pf.numero||'Sin número'} · {pf.proveedor} · {pf.fecha}</option>
-                          ))}
+                          {s.proformas.map(pf=>(<option key={pf.id} value={pf.id}>{pf.numero||'Sin numero'} - {pf.proveedor} - {pf.fecha}</option>))}
                         </select>
                       </div>
                     ))}
@@ -906,16 +811,14 @@ export default function CotizadorPage(){
                 </div>
               )}
             </div>
-
             <div className="mt-4 pt-4 border-t border-gray-100">
-              <Field label="Precio equivalente en Argentina (USD) · para comparativa"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.precioArgEquiv||''} onChange={e=>u('precioArgEquiv',parseNum(e.target.value))} className={inp} placeholder="0.00"/></Field>
+              <Field label="Precio equivalente en Argentina (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.precioArgEquiv||''} onChange={e=>u('precioArgEquiv',parseNum(e.target.value))} className={inp} placeholder="0.00"/></Field>
             </div>
           </Card>
-          <div className="flex justify-end"><button onClick={()=>setTab('logistica')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors">Logística →</button></div>
+          <div className="flex justify-end"><button onClick={()=>setTab('logistica')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors">Logistica</button></div>
         </div>
       )}
 
-      {/* ── LOGÍSTICA ── */}
       {tab==='logistica'&&(
         <div className="space-y-4">
           <div className="flex gap-4 items-center px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-xs flex-wrap">
@@ -924,12 +827,11 @@ export default function CotizadorPage(){
             <div className="flex items-center gap-2"><label className="text-gray-500">USD/CLP</label><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.tcClp} onChange={e=>u('tcClp',parseNum(e.target.value)||950)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]"/></div>
           </div>
 
-          <SecCard letter="A" label="Flete marítimo internacional" sub="China → Puerto Chile" sub2={subA}
-            loadBtn={<button onClick={cargarSeccionA} className="text-[10px] text-[#1168F8] hover:underline flex items-center gap-1">⬇ Cargar tarifa base</button>}>
+          <SecCard letter="A" label="Flete maritimo internacional" sub="China - Puerto Chile" sub2={subA} loadBtn={<button onClick={cargarSeccionA} className="text-[10px] text-[#1168F8] hover:underline">Cargar tarifa base</button>}>
             <LogRows rows={s.rowsA} onChange={r=>u('rowsA',r)}/>
           </SecCard>
 
-          <SecCard letter="B" label="Seguro de la mercadería" sub2={seg}>
+          <SecCard letter="B" label="Seguro de la mercaderia" sub2={seg}>
             <div className="grid grid-cols-3 gap-3">
               <Field label="Modalidad"><select value={s.segModo} onChange={e=>u('segModo',e.target.value as any)} className={sel}><option value="pct">% sobre FOB + flete</option><option value="fijo">Monto fijo (USD)</option></select></Field>
               <Field label={s.segModo==='pct'?'Tasa seguro (%)':'Monto fijo (USD)'}><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.segVal} step={0.1} onChange={e=>u('segVal',parseNum(e.target.value))} className={inp}/></Field>
@@ -937,12 +839,10 @@ export default function CotizadorPage(){
             </div>
           </SecCard>
 
-          <SecCard letter="C" label="Gastos en puerto Chile" sub="THC, handling, manipulación · IVA Chile discriminado" sub2={subC}
-            loadBtn={<button onClick={cargarSeccionC} className="text-[10px] text-[#1168F8] hover:underline flex items-center gap-1">⬇ Cargar tarifa base</button>}>
+          <SecCard letter="C" label="Gastos en puerto Chile" sub="THC, handling" sub2={subC} loadBtn={<button onClick={cargarSeccionC} className="text-[10px] text-[#1168F8] hover:underline">Cargar tarifa base</button>}>
             <LogRows rows={s.rowsC} onChange={r=>u('rowsC',r)} withIva/>
           </SecCard>
 
-          {/* D — Modalidad de transporte */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1168F8] text-white text-[10px] font-bold">D</span>
@@ -950,21 +850,19 @@ export default function CotizadorPage(){
             </div>
             <div className="px-5 py-4">
               <div className="grid grid-cols-3 gap-3 mb-4">
-                {[{key:'A1',label:'Opción A1',sub:'Desconsolidar + cargar directo al camión'},{key:'A2',label:'Opción A2',sub:'Desconsolidar + almacenar + cargar al camión'},{key:'B',label:'Opción B',sub:'Contenedor completo hasta Argentina'}].map(o=>(
+                {[{key:'A1',label:'Opcion A1',sub:'Desconsolidar + cargar directo al camion'},{key:'A2',label:'Opcion A2',sub:'Desconsolidar + almacenar + cargar al camion'},{key:'B',label:'Opcion B',sub:'Contenedor completo hasta Argentina'}].map(o=>(
                   <button key={o.key} onClick={()=>u('optTransp',o.key as OptTransp)} className={`px-3 py-2.5 rounded-lg border text-left transition-colors ${s.optTransp===o.key?'border-[#1168F8] bg-[#EBF2FF] text-[#052698]':'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
                     <div className="text-xs font-semibold">{o.label}</div><div className="text-[10px] opacity-70 mt-0.5">{o.sub}</div>
                   </button>
                 ))}
               </div>
-
               {s.optTransp!=='B'&&(
                 <div className="space-y-4">
                   <div>
-                    <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Gastos de desconsolidación</div>
+                    <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Gastos de desconsolidacion</div>
                     <DesconRows rows={s.rowsDescon} onChange={r=>u('rowsDescon',r)} totalM3={totalM3}/>
-                    {subDescon>0&&<div className="text-right text-xs text-gray-500 mt-1">Subtotal desconsolidación: <strong className="font-mono">USD {fmt(subDescon)}</strong></div>}
+                    {subDescon>0&&<div className="text-right text-xs text-gray-500 mt-1">Subtotal: <strong className="font-mono">USD {fmt(subDescon)}</strong></div>}
                   </div>
-
                   {s.optTransp==='A2'&&(
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                       <div className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider mb-3">Almacenaje en Chile</div>
@@ -972,162 +870,114 @@ export default function CotizadorPage(){
                         <Field label="Volumen a almacenar">
                           <div className="flex gap-1">
                             <select value={s.almModoVol} onChange={e=>u('almModoVol',e.target.value as any)} className={sel+' flex-shrink-0 w-20'}><option value="auto">Auto</option><option value="manual">Manual</option></select>
-                            {s.almModoVol==='manual'
-                              ?<input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almVolM3} step={0.1} onChange={e=>u('almVolM3',parseNum(e.target.value))} className={inp} placeholder="m³"/>
-                              :<div className="px-2.5 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-mono flex-1 text-right">{fmt(totalM3,2)} m³</div>
-                            }
+                            {s.almModoVol==='manual'?<input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almVolM3} step={0.1} onChange={e=>u('almVolM3',parseNum(e.target.value))} className={inp} placeholder="m3"/>:<div className="px-2.5 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-mono flex-1 text-right">{fmt(totalM3,2)} m3</div>}
                           </div>
                         </Field>
-                        <Field label="Costo por m³/día (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almCostoDia} step={0.01} onChange={e=>u('almCostoDia',parseNum(e.target.value))} className={inp}/></Field>
-                        <Field label="Días estimados"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almDias} min={1} onChange={e=>u('almDias',parseInt2(e.target.value)||0)} className={inp}/></Field>
+                        <Field label="Costo por m3/dia (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almCostoDia} step={0.01} onChange={e=>u('almCostoDia',parseNum(e.target.value))} className={inp}/></Field>
+                        <Field label="Dias estimados"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almDias} min={1} onChange={e=>u('almDias',parseInt2(e.target.value)||0)} className={inp}/></Field>
                         <Field label="Subtotal almacenaje"><div className="px-2.5 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-mono text-right font-semibold text-amber-800">USD {fmt(subAlm)}</div></Field>
                       </div>
-                      {subAlm>0&&<div className="text-[10px] text-amber-600 bg-white/60 rounded px-3 py-1.5">{fmt(volAlm,2)} m³ × USD {fmt(s.almCostoDia)} × {s.almDias} día(s) = USD {fmt(subAlm)}</div>}
                     </div>
                   )}
-
                   <div>
-                    <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Carga al camión</div>
+                    <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Carga al camion</div>
                     <div className="grid grid-cols-4 gap-3">
-                      <Field label="Modalidad cálculo"><select value={s.cargaModo} onChange={e=>u('cargaModo',e.target.value as any)} className={sel}><option value="fijo">Importe fijo (USD)</option><option value="m3">Por m³ (USD/m³)</option></select></Field>
-                      <Field label={s.cargaModo==='fijo'?'Importe fijo (USD)':'USD por m³'}><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.cargaValor} step={0.01} onChange={e=>u('cargaValor',parseNum(e.target.value))} className={inp}/></Field>
-                      {s.cargaModo==='m3'&&<Field label="m³ totales"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">{fmt(totalM3,2)}</div></Field>}
+                      <Field label="Modalidad calculo"><select value={s.cargaModo} onChange={e=>u('cargaModo',e.target.value as any)} className={sel}><option value="fijo">Importe fijo (USD)</option><option value="m3">Por m3 (USD/m3)</option></select></Field>
+                      <Field label={s.cargaModo==='fijo'?'Importe fijo (USD)':'USD por m3'}><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.cargaValor} step={0.01} onChange={e=>u('cargaValor',parseNum(e.target.value))} className={inp}/></Field>
+                      {s.cargaModo==='m3'&&<Field label="m3 totales"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">{fmt(totalM3,2)}</div></Field>}
                       <Field label="Subtotal carga"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right font-semibold">USD {fmt(subCarga)}</div></Field>
                     </div>
-                    {s.cargaModo==='m3'&&s.cargaValor>0&&<div className="text-[10px] text-gray-500 mt-1.5 px-1">{fmt(totalM3,2)} m³ × USD {fmt(s.cargaValor)} = USD {fmt(subCarga)}</div>}
                   </div>
-
                   <div className="flex justify-end items-center gap-2 pt-2 border-t border-gray-100 text-xs text-gray-500">
-                    Subtotal sección D: <span className="font-mono font-semibold text-gray-800">USD {fmt(subD)}</span>
+                    Subtotal seccion D: <span className="font-mono font-semibold text-gray-800">USD {fmt(subD)}</span>
                   </div>
                 </div>
               )}
-
               {s.optTransp==='B'&&(
                 <div>
-                  <div className="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg px-3 py-2 mb-3">El round trip (ida + devolución en un contrato) suele ser más económico. El sistema elige automáticamente.</div>
                   <div className="grid grid-cols-4 gap-3">
                     <Field label="Flete ida (USD/cont)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftIda} onChange={e=>u('ftIda',parseNum(e.target.value))} className={inp}/></Field>
-                    <Field label="Devolución (USD/cont)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftDev} onChange={e=>u('ftDev',parseNum(e.target.value))} className={inp}/></Field>
+                    <Field label="Devolucion (USD/cont)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftDev} onChange={e=>u('ftDev',parseNum(e.target.value))} className={inp}/></Field>
                     <Field label="Round trip disponible (USD/cont)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftRt} onChange={e=>u('ftRt',parseNum(e.target.value))} className={inp} placeholder="0 = no disponible"/></Field>
                     <Field label="Elegido (USD total)"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(subTransp)}</div></Field>
                   </div>
-                  {s.ftRt>0&&s.ftRt<(s.ftIda+s.ftDev)*nc&&<p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mt-2">✓ Round trip USD {fmt(s.ftRt*nc)} más económico. Ahorro: USD {fmt((s.ftIda+s.ftDev)*nc-s.ftRt*nc)}</p>}
                 </div>
               )}
             </div>
             <div className="flex justify-end items-center gap-2 px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
-              Subtotal sección D: <strong className="font-mono text-gray-800">USD {fmt(s.optTransp==='B'?0:subD)}</strong>
+              Subtotal seccion D: <strong className="font-mono text-gray-800">USD {fmt(s.optTransp==='B'?0:subD)}</strong>
             </div>
           </div>
 
-          <SecCard letter="E" label="Transporte terrestre Chile → NOA" sub2={subTransp}
-            loadBtn={s.optTransp!=='B'?<button onClick={cargarSeccionE} className="text-[10px] text-[#1168F8] hover:underline flex items-center gap-1">⬇ Cargar tarifa base</button>:undefined}>
+          <SecCard letter="E" label="Transporte terrestre Chile - NOA" sub2={subTransp} loadBtn={s.optTransp!=='B'?<button onClick={cargarSeccionE} className="text-[10px] text-[#1168F8] hover:underline">Cargar tarifa base</button>:undefined}>
             {s.optTransp!=='B'?(
               <div>
                 <div className="grid grid-cols-3 gap-3 mb-3">
-                  <Field label="Flete terrestre (USD/camión)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftCamion} onChange={e=>u('ftCamion',parseNum(e.target.value))} className={inp}/></Field>
-                  <Field label="N° camiones"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.nCamiones} min={1} onChange={e=>u('nCamiones',parseInt2(e.target.value)||1)} className={inp}/></Field>
+                  <Field label="Flete terrestre (USD/camion)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftCamion} onChange={e=>u('ftCamion',parseNum(e.target.value))} className={inp}/></Field>
+                  <Field label="N camiones"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.nCamiones} min={1} onChange={e=>u('nCamiones',parseInt2(e.target.value)||1)} className={inp}/></Field>
                   <Field label="Subtotal transporte"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(subTransp)}</div></Field>
                 </div>
-                {s.nCamiones>0&&s.ftCamion>0&&(
-                  <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-lg px-4 py-2.5 text-xs">
-                    <div className="font-medium text-[#052698] mb-1">Detalle de camiones</div>
-                    <div className="flex flex-wrap gap-3 text-[#1168F8]">
-                      <span>{s.nCamiones} camión{s.nCamiones>1?'es':''}</span><span>×</span><span>USD {fmt(s.ftCamion)} por camión</span><span>=</span><span className="font-semibold">USD {fmt(subTransp)} total</span>
-                    </div>
-                  </div>
-                )}
               </div>
             ):(
               <div>
-                <div className="text-xs text-gray-500 mb-3">Opción B — Contenedor completo. El flete se calcula en la sección D.</div>
                 <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-lg px-4 py-2.5 text-xs text-[#052698]">Flete elegido: <strong className="font-mono">USD {fmt(subTransp)}</strong></div>
               </div>
             )}
           </SecCard>
 
-          {/* F: Gastos Argentina */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1168F8] text-white text-[10px] font-bold">F</span>
               <span className="font-medium text-sm text-gray-900">Gastos en Argentina</span>
-              <span className="text-[10px] text-gray-400">Despachante, desconsolidación, almacenaje, traslado</span>
               <div className="ml-auto flex items-center gap-2">
                 {cotArgentina.length>0&&(
-                  <select value={s.cotArgId} onChange={e=>e.target.value?aplicarCotArgentina(e.target.value):u('cotArgId','')}
-                    className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]">
-                    <option value="">— Cotización proveedor —</option>
+                  <select value={s.cotArgId} onChange={e=>e.target.value?aplicarCotArgentina(e.target.value):u('cotArgId','')} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]">
+                    <option value="">— Cotizacion proveedor —</option>
                     {cotArgentina.filter((c:any)=>c.tipo==='especifica').length>0&&(
-                      <optgroup label="🎯 Específicas">
+                      <optgroup label="Especificas">
                         {cotArgentina.filter((c:any)=>c.tipo==='especifica').map((c:any)=>{
                           const op=(c.operacion as any)?.cotizacion
-                          return <option key={c.id} value={c.id}>{c.proveedor} · {c.fecha}{op?` · ${op.num}`:''}</option>
+                          return <option key={c.id} value={c.id}>{c.proveedor} - {c.fecha}{op?` - ${op.num}`:''}</option>
                         })}
                       </optgroup>
                     )}
-                    <optgroup label="📋 Genéricas">
-                      {cotArgentina.filter((c:any)=>c.tipo==='generica').map((c:any)=>(
-                        <option key={c.id} value={c.id}>{c.proveedor} · {c.referencia||c.fecha}</option>
-                      ))}
+                    <optgroup label="Genericas">
+                      {cotArgentina.filter((c:any)=>c.tipo==='generica').map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor} - {c.referencia||c.fecha}</option>))}
                     </optgroup>
                   </select>
                 )}
-                <button onClick={cargarSeccionF} className="text-[10px] text-[#1168F8] hover:underline flex items-center gap-1">⬇ Tarifa base</button>
+                <button onClick={cargarSeccionF} className="text-[10px] text-[#1168F8] hover:underline">Tarifa base</button>
               </div>
             </div>
             <div className="px-5 py-4">
-              {/* Badge cotización Argentina */}
-              {s.cotArgId&&<div className="text-[10px] text-[#1168F8] bg-[#EBF2FF] px-2.5 py-1.5 rounded-lg mb-3">✓ {s.cotArgLabel}</div>}
-              {/* Gastos con lógica especial (% CIF, piso, techo) */}
+              {s.cotArgId&&<div className="text-[10px] text-[#1168F8] bg-[#EBF2FF] px-2.5 py-1.5 rounded-lg mb-3">OK {s.cotArgLabel}</div>}
               {s.gastosArg.length > 0 && (
                 <div className="mb-4">
                   <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Gastos pre-configurados</div>
-                  <div className="grid gap-2 mb-1 text-[10px] text-gray-400 font-medium uppercase tracking-wide" style={{display:'grid',gridTemplateColumns:'1.5fr 110px 80px 80px 80px 80px 80px',gap:'6px'}}>
-                    <div>Concepto</div><div>Tipo</div><div>Valor</div><div>Piso USD</div><div>Techo USD</div><div className="text-right">USD</div><div className="text-right">ARS</div>
-                  </div>
                   {s.gastosArg.map((g,i)=>{
                     const usd = calcGastoArg(g, cif, s.tcTrib)
                     const arsEquiv = usd * s.tcTrib
                     return (
                       <div key={g.id} className="mb-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
                         <div style={{display:'grid',gridTemplateColumns:'1fr 110px 90px 90px 90px',gap:'6px',alignItems:'center'}} className="mb-2">
-                          {/* Concepto */}
-                          <input
-                            type="text"
-                            value={g.desc}
-                            onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],desc:e.target.value};u('gastosArg',n)}}
-                            className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white"
-                            placeholder="Concepto"
-                          />
-                          {/* Tipo */}
+                          <input type="text" value={g.desc} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],desc:e.target.value};u('gastosArg',n)}} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Concepto"/>
                           <select value={g.tipoCalc} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],tipoCalc:e.target.value as any};u('gastosArg',n)}} className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white">
                             <option value="pct_cif">% sobre CIF</option>
                             <option value="fijo_usd">Fijo USD</option>
                             <option value="fijo_ars">Fijo ARS</option>
                           </select>
-                          {/* Valor */}
                           <div className="flex items-center gap-1">
                             <span className="text-[10px] text-gray-400 flex-shrink-0">{g.tipoCalc==='pct_cif'?'%':g.tipoCalc==='fijo_ars'?'ARS':'USD'}</span>
                             <input type="text" inputMode="decimal" value={g.valor||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],valor:parseNum(e.target.value)};u('gastosArg',n)}} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono bg-white"/>
                           </div>
-                          {/* Piso */}
-                          {g.tipoCalc==='pct_cif'
-                            ?<div className="flex items-center gap-1"><span className="text-[10px] text-gray-400 flex-shrink-0">Piso</span><input type="text" inputMode="decimal" value={g.pisoUsd||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],pisoUsd:parseNum(e.target.value)};u('gastosArg',n)}} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono bg-white"/></div>
-                            :<div/>
-                          }
-                          {/* Techo */}
-                          {g.tipoCalc==='pct_cif'
-                            ?<div className="flex items-center gap-1"><span className="text-[10px] text-gray-400 flex-shrink-0">Techo</span><input type="text" inputMode="decimal" value={g.techoUsd||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],techoUsd:parseNum(e.target.value)};u('gastosArg',n)}} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono bg-white" /></div>
-                            :<div/>
-                          }
+                          {g.tipoCalc==='pct_cif'?<div className="flex items-center gap-1"><span className="text-[10px] text-gray-400 flex-shrink-0">Piso</span><input type="text" inputMode="decimal" value={g.pisoUsd||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],pisoUsd:parseNum(e.target.value)};u('gastosArg',n)}} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono bg-white"/></div>:<div/>}
+                          {g.tipoCalc==='pct_cif'?<div className="flex items-center gap-1"><span className="text-[10px] text-gray-400 flex-shrink-0">Techo</span><input type="text" inputMode="decimal" value={g.techoUsd||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],techoUsd:parseNum(e.target.value)};u('gastosArg',n)}} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono bg-white"/></div>:<div/>}
                         </div>
-                        {/* Resultado + botón eliminar */}
                         <div className="flex items-center justify-between">
-                          <button onClick={()=>u('gastosArg',s.gastosArg.filter((_,j)=>j!==i))} className="text-[10px] text-red-400 hover:text-red-600 transition-colors">🗑 Eliminar</button>
+                          <button onClick={()=>u('gastosArg',s.gastosArg.filter((_,j)=>j!==i))} className="text-[10px] text-red-400 hover:text-red-600 transition-colors">Eliminar</button>
                           <div className="text-right text-xs">
                             <span className="font-mono font-semibold text-[#052698]">USD {fmt(usd)}</span>
-                            <span className="text-gray-300 mx-2">·</span>
+                            <span className="text-gray-300 mx-2">-</span>
                             <span className="font-mono text-gray-500 text-[10px]">ARS {Math.round(arsEquiv).toLocaleString('es-AR')}</span>
                           </div>
                         </div>
@@ -1137,65 +987,53 @@ export default function CotizadorPage(){
                   <button onClick={()=>u('gastosArg',[...s.gastosArg,{id:Math.random().toString(36).slice(2),desc:'',tipoCalc:'fijo_usd',moneda:'USD',valor:0,pisoUsd:0,techoUsd:0,usd:0,ars:0}])} className="text-xs text-[#1168F8] hover:underline mt-1">+ Agregar gasto</button>
                   <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between text-xs">
                     <span className="text-gray-500">Subtotal gastos Argentina:</span>
-                    <div className="text-right">
-                      <span className="font-mono font-semibold text-[#052698]">USD {fmt(subGastosArg)}</span>
-                      <span className="text-gray-400 ml-2 font-mono text-[10px]">ARS {Math.round(subGastosArg*s.tcTrib).toLocaleString('es-AR')}</span>
-                    </div>
+                    <span className="font-mono font-semibold text-[#052698]">USD {fmt(subGastosArg)}</span>
                   </div>
                 </div>
               )}
-              {/* Otros gastos adicionales */}
-              {s.rowsE.length > 0 && <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2 mt-3">Otros gastos adicionales</div>}
               <LogRows rows={s.rowsE} onChange={r=>u('rowsE',r)}/>
             </div>
             <div className="flex justify-end items-center gap-3 px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
-              Subtotal sección F: <strong className="font-mono text-gray-800">USD {fmt(subE+subGastosArg)}</strong>
-              <span className="text-gray-300">·</span>
-              <span className="font-mono text-[10px] text-gray-400">ARS {Math.round((subE+subGastosArg)*s.tcTrib).toLocaleString('es-AR')}</span>
+              Subtotal seccion F: <strong className="font-mono text-gray-800">USD {fmt(subE+subGastosArg)}</strong>
             </div>
           </div>
 
           <SecCard letter="G" label="Fee Puerto NOA" sub2={fee}>
             <div className="grid grid-cols-3 gap-3">
               <Field label="Fee por contenedor (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.feeCont} onChange={e=>u('feeCont',parseNum(e.target.value))} className={inp}/></Field>
-              <Field label="N° contenedores"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right">{nc}</div></Field>
+              <Field label="N contenedores"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right">{nc}</div></Field>
               <Field label="Fee total (USD)"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(fee)}</div></Field>
             </div>
           </SecCard>
 
           <div className="flex justify-between">
-            <button onClick={()=>setTab('embarque')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">← Anterior</button>
-            <button onClick={()=>setTab('tributos')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Tributos ARCA →</button>
+            <button onClick={()=>setTab('embarque')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
+            <button onClick={()=>setTab('tributos')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Tributos ARCA</button>
           </div>
         </div>
       )}
 
-      {/* ── TRIBUTOS ── */}
       {tab==='tributos'&&(
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-3">
             {[
-              {label:'FOB China',value:`USD ${fmt(totalFOB,0)}`,sub:'Precio mercadería + puesta a FOB',bg:'bg-[#EBF2FF] border-[#93B8FC]',tl:'text-[#052698]',tv:'text-[#1168F8]',ts:'text-[#1168F8]'},
-              {label:'Flete hasta Jama + Seguro',value:`USD ${fmt(subA+seg,0)}`,sub:'Flete marítimo + seguro',bg:'bg-[#EBF2FF] border-[#93B8FC]',tl:'text-[#052698]',tv:'text-[#1168F8]',ts:'text-[#1168F8]'},
+              {label:'FOB China',value:`USD ${fmt(totalFOB,0)}`,sub:'Precio mercaderia + puesta a FOB',bg:'bg-[#EBF2FF] border-[#93B8FC]',tl:'text-[#052698]',tv:'text-[#1168F8]',ts:'text-[#1168F8]'},
+              {label:'Flete hasta Jama + Seguro',value:`USD ${fmt(subA+seg,0)}`,sub:'Flete maritimo + seguro',bg:'bg-[#EBF2FF] border-[#93B8FC]',tl:'text-[#052698]',tv:'text-[#1168F8]',ts:'text-[#1168F8]'},
               {label:'Valor CIF Jama — base imponible',value:`USD ${fmt(cif,0)}`,sub:`ARS ${Math.round(cifARS).toLocaleString('es-AR')}`,bg:'bg-[#052698] border-[#052698]',tl:'text-blue-200',tv:'text-white',ts:'text-blue-300'},
             ].map(b=><div key={b.label} className={`${b.bg} border rounded-xl p-4`}><div className={`text-[10px] mb-1 ${b.tl}`}>{b.label}</div><div className={`text-xl font-semibold ${b.tv}`}>{b.value}</div><div className={`text-[10px] mt-1 ${b.ts}`}>{b.sub}</div></div>)}
           </div>
-
-          <Card title="Liquidación ARCA — Aduana Jujuy">
+          <Card title="Liquidacion ARCA — Aduana Jujuy">
             <div className="grid grid-cols-4 gap-3 mb-4">
-              <Field label="Régimen de importación"><select value={s.regimen} onChange={e=>u('regimen',e.target.value as any)} className={sel}>{Object.entries(REG_L).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></Field>
+              <Field label="Regimen de importacion"><select value={s.regimen} onChange={e=>u('regimen',e.target.value as any)} className={sel}>{Object.entries(REG_L).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></Field>
               <Field label="TC oficial BNA (ARS/USD)"><div className="px-2.5 py-1.5 bg-[#EBF2FF] border border-[#93B8FC] rounded-lg text-xs font-mono text-right font-semibold text-[#052698]">ARS {fmt(s.tcTrib,0)}</div></Field>
-              <Field label="Derechos importación % (NCM)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.derPct} step={0.5} onChange={e=>u('derPct',parseNum(e.target.value))} className={inp}/></Field>
+              <Field label="Derechos importacion % (NCM)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.derPct} step={0.5} onChange={e=>u('derPct',parseNum(e.target.value))} className={inp}/></Field>
               <Field label="NCM principal"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono">{s.productos.find(p=>p.ncm)?.ncm||'—'}</div></Field>
             </div>
             {tribCfg.length===0?(
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700">No hay tributos configurados para el Régimen {s.regimen}. Configuralos en <strong>Tributos ARCA</strong> (menú lateral).</div>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700">No hay tributos configurados para el Regimen {s.regimen}.</div>
             ):(
               <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
-                <div className="text-[10px] font-semibold text-gray-500 mb-3 uppercase tracking-wider">RÉGIMEN {s.regimen} — {REG_L[s.regimen]} · SIM Aduana Jujuy</div>
-                <div className="grid grid-cols-5 gap-2 text-[9px] font-semibold text-gray-400 uppercase tracking-wide pb-2 border-b border-gray-200 mb-1">
-                  <div>Cód.</div><div className="col-span-2">Concepto</div><div className="text-right">Tasa</div><div className="text-right">Importe ARS</div>
-                </div>
+                <div className="text-[10px] font-semibold text-gray-500 mb-3 uppercase tracking-wider">REGIMEN {s.regimen} - SIM Aduana Jujuy</div>
                 {tributos.map((t:any)=>(
                   <div key={t.codigo} className="grid grid-cols-5 gap-2 text-xs py-1.5 border-b border-gray-100">
                     <div className="font-mono text-[10px] text-gray-400">{t.codigo}</div>
@@ -1208,55 +1046,51 @@ export default function CotizadorPage(){
                   <span>TOTAL PAGADO ADUANA</span>
                   <span className="font-mono text-[#052698]">ARS {Math.round(totalTribARS).toLocaleString('es-AR')}</span>
                 </div>
-                <div className="text-right text-[10px] text-gray-400 mt-1">Equiv. USD ref.: USD {fmt(totalTribUSD,0)}</div>
               </div>
             )}
           </Card>
-
           <div className="flex justify-between">
-            <button onClick={()=>setTab('logistica')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">← Anterior</button>
-            <button onClick={()=>setTab('resumen')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Ver resumen →</button>
+            <button onClick={()=>setTab('logistica')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
+            <button onClick={()=>setTab('resumen')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Ver resumen</button>
           </div>
         </div>
       )}
 
-      {/* ── RESUMEN ── */}
       {tab==='resumen'&&(
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-3 items-center">
             <div className="bg-white border border-gray-100 border-t-4 border-t-[#1168F8] rounded-xl p-5 text-center">
-              <div className="text-[10px] text-gray-400 mb-1">Costo total China → {s.destinoNoa}</div>
+              <div className="text-[10px] text-gray-400 mb-1">Costo total China - {s.destinoNoa}</div>
               <div className="text-2xl font-semibold text-gray-900">USD {fmt(totalLanded,0)}</div>
-              <div className="text-[10px] text-gray-400 mt-1">producto + logística + tributos</div>
+              <div className="text-[10px] text-gray-400 mt-1">producto + logistica + tributos</div>
             </div>
             <div className="text-center text-sm text-gray-400 font-semibold">VS</div>
             <div className="bg-white border border-gray-100 border-t-4 border-t-blue-300 rounded-xl p-5 text-center">
               <div className="text-[10px] text-gray-400 mb-1">Precio equivalente en Argentina</div>
               <div className="text-2xl font-semibold text-gray-900">{s.precioArgEquiv>0?`USD ${fmt(s.precioArgEquiv,0)}`:'—'}</div>
-              <div className="text-[10px] text-gray-400 mt-1">precio ingresado</div>
             </div>
           </div>
-          {s.precioArgEquiv>0&&(()=>{const d=s.precioArgEquiv-totalLanded;return <div className={`text-xs px-4 py-3 rounded-xl text-center font-medium ${d>0?'bg-[#EBF2FF] text-[#052698] border border-[#93B8FC]':'bg-red-50 text-red-700 border border-red-200'}`}>{d>0?`✓ Importar desde China es USD ${fmt(Math.abs(d),0)} más económico (${Math.round(Math.abs(d)/s.precioArgEquiv*100)}% de ahorro)`:`✗ Importar desde China resulta USD ${fmt(Math.abs(d),0)} más caro que el precio local`}</div>})()}
+          {s.precioArgEquiv>0&&(()=>{const d=s.precioArgEquiv-totalLanded;return <div className={`text-xs px-4 py-3 rounded-xl text-center font-medium ${d>0?'bg-[#EBF2FF] text-[#052698] border border-[#93B8FC]':'bg-red-50 text-red-700 border border-red-200'}`}>{d>0?`Importar desde China es USD ${fmt(Math.abs(d),0)} mas economico (${Math.round(Math.abs(d)/s.precioArgEquiv*100)}% de ahorro)`:`Importar desde China resulta USD ${fmt(Math.abs(d),0)} mas caro que el precio local`}</div>})()}
 
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Desglose completo de costos</div>
             <table className="w-full text-xs">
-              <thead><tr className="bg-gray-50"><th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Sección</th><th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase tracking-wide">Concepto</th><th className="text-right px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase tracking-wide">USD</th></tr></thead>
+              <thead><tr className="bg-gray-50"><th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase">Seccion</th><th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase">Concepto</th><th className="text-right px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase">USD</th></tr></thead>
               <tbody>
                 {[
-                  {sec:'Producto',concepto:`Precio mercadería China (${s.incoterm})`,v:totalFOB},
+                  {sec:'Producto',concepto:`Precio mercaderia China (${s.incoterm})`,v:totalFOB},
                   ...(s.incoterm==='EXW'?[{sec:'Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros}]:[]),
-                  {sec:'A — Flete marítimo',concepto:`China → ${PUERTOS_L[s.ptoChile]}`,v:subA},
-                  {sec:'B — Seguro',concepto:s.segModo==='pct'?`${s.segVal}% sobre FOB+flete`:'Monto fijo',v:seg},
-                  {sec:'C — Puerto Chile',concepto:'THC, handling, gastos portuarios',v:subC},
-                  ...(s.optTransp!=='B'&&subDescon>0?[{sec:'D — Desconsolidación',concepto:'Gastos desconsolidación',v:subDescon}]:[]),
-                  ...(s.optTransp==='A2'&&subAlm>0?[{sec:'D — Almacenaje',concepto:`${fmt(volAlm,2)} m³ × ${s.almDias} días`,v:subAlm}]:[]),
-                  ...(subCarga>0?[{sec:'D — Carga al camión',concepto:s.cargaModo==='m3'?`${fmt(totalM3,2)} m³ × USD ${fmt(s.cargaValor)}`:'Importe fijo',v:subCarga}]:[]),
-                  {sec:'E — Transporte terrestre',concepto:s.optTransp!=='B'?`${s.nCamiones} camión(es) × USD ${fmt(s.ftCamion)}`:`${PUERTOS_L[s.ptoChile]} → ${s.destinoNoa}`,v:subTransp},
-                  ...(subGastosArg>0?[{sec:'F — Gastos Argentina',concepto:`Despachante y honorarios · ARS ${Math.round(subGastosArg*s.tcTrib).toLocaleString('es-AR')}`,v:subGastosArg}]:[]),
-                  ...(subE>0?[{sec:'F — Gastos Argentina',concepto:'Otros gastos',v:subE}]:[]),
-                  ...(fee>0?[{sec:'G — Fee Puerto NOA',concepto:`${nc} cont. × USD ${s.feeCont}`,v:fee}]:[]),
-                  {sec:'Tributos ARCA',concepto:`Régimen ${s.regimen} · Base CIF Jama`,v:totalTribUSD},
+                  {sec:'A - Flete maritimo',concepto:`China - ${PUERTOS_L[s.ptoChile]}`,v:subA},
+                  {sec:'B - Seguro',concepto:s.segModo==='pct'?`${s.segVal}% sobre FOB+flete`:'Monto fijo',v:seg},
+                  {sec:'C - Puerto Chile',concepto:'THC, handling, gastos portuarios',v:subC},
+                  ...(s.optTransp!=='B'&&subDescon>0?[{sec:'D - Desconsolidacion',concepto:'Gastos desconsolidacion',v:subDescon}]:[]),
+                  ...(s.optTransp==='A2'&&subAlm>0?[{sec:'D - Almacenaje',concepto:`${fmt(volAlm,2)} m3 x ${s.almDias} dias`,v:subAlm}]:[]),
+                  ...(subCarga>0?[{sec:'D - Carga al camion',concepto:'Importe carga',v:subCarga}]:[]),
+                  {sec:'E - Transporte terrestre',concepto:`${s.nCamiones} camion(es) x USD ${fmt(s.ftCamion)}`,v:subTransp},
+                  ...(subGastosArg>0?[{sec:'F - Gastos Argentina',concepto:'Despachante y honorarios',v:subGastosArg}]:[]),
+                  ...(subE>0?[{sec:'F - Gastos Argentina',concepto:'Otros gastos',v:subE}]:[]),
+                  ...(fee>0?[{sec:'G - Fee Puerto NOA',concepto:`${nc} cont. x USD ${s.feeCont}`,v:fee}]:[]),
+                  {sec:'Tributos ARCA',concepto:`Regimen ${s.regimen} - Base CIF Jama`,v:totalTribUSD},
                 ].filter(r=>r.v>0).map((r,i)=>(
                   <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
                     <td className="px-4 py-2.5 text-[10px] text-gray-400">{r.sec}</td>
@@ -1272,122 +1106,40 @@ export default function CotizadorPage(){
             </table>
           </div>
 
-          {/* Resumen de totales reorganizado */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Composición del costo total</div>
+            <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Composicion del costo total</div>
             <div className="p-4 space-y-2">
-              {/* Producto */}
               <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg">
-                <div>
-                  <div className="text-xs font-medium text-gray-700">Valor mercadería China ({s.incoterm})</div>
-                  <div className="text-[10px] text-gray-400 mt-0.5">{s.productos.filter(p=>p.subtotal>0).length} producto(s) · {s.contenedores.map(c=>`${c.cantidad}× ${c.tipo}`).join(', ')}</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-mono font-semibold text-gray-800">USD {fmt(totalFOB,0)}</div>
-                  <div className="text-[10px] text-gray-400 font-mono">{fmt(totalFOB/totalLanded*100,1)}% del total</div>
-                </div>
+                <div><div className="text-xs font-medium text-gray-700">Valor mercaderia China ({s.incoterm})</div></div>
+                <div className="text-right"><div className="font-mono font-semibold text-gray-800">USD {fmt(totalFOB,0)}</div><div className="text-[10px] text-gray-400 font-mono">{fmt(totalFOB/totalLanded*100,1)}% del total</div></div>
               </div>
-              {/* Logística */}
               <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg">
-                <div>
-                  <div className="text-xs font-medium text-gray-700">Costos logísticos</div>
-                  <div className="text-[10px] text-gray-400 mt-0.5">Flete · Seguro · Puerto · Transporte · Gastos Argentina · Fee</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-mono font-semibold text-gray-800">USD {fmt(totalLog,0)}</div>
-                  <div className="text-[10px] text-gray-400 font-mono">{fmt(totalLog/totalLanded*100,1)}% del total</div>
-                </div>
+                <div><div className="text-xs font-medium text-gray-700">Costos logisticos</div></div>
+                <div className="text-right"><div className="font-mono font-semibold text-gray-800">USD {fmt(totalLog,0)}</div><div className="text-[10px] text-gray-400 font-mono">{fmt(totalLog/totalLanded*100,1)}% del total</div></div>
               </div>
-              {/* Tributos */}
               <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg">
-                <div>
-                  <div className="text-xs font-medium text-gray-700">Tributos ARCA — Aduana Argentina</div>
-                  <div className="text-[10px] text-gray-400 mt-0.5">Régimen {s.regimen} · {REG_L[s.regimen]} · Base CIF Jama</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-mono font-semibold text-gray-800">USD {fmt(totalTribUSD,0)}</div>
-                  <div className="font-mono text-[10px] text-[#052698] font-medium">ARS {Math.round(totalTribARS).toLocaleString('es-AR')}</div>
-                  <div className="text-[10px] text-gray-400 font-mono">{fmt(totalTribUSD/totalLanded*100,1)}% del total</div>
-                </div>
+                <div><div className="text-xs font-medium text-gray-700">Tributos ARCA — Aduana Argentina</div><div className="text-[10px] text-gray-400 mt-0.5">Regimen {s.regimen}</div></div>
+                <div className="text-right"><div className="font-mono font-semibold text-gray-800">USD {fmt(totalTribUSD,0)}</div><div className="font-mono text-[10px] text-[#052698] font-medium">ARS {Math.round(totalTribARS).toLocaleString('es-AR')}</div></div>
               </div>
-              {/* Total */}
               <div className="flex items-center justify-between px-3 py-3 bg-[#052698] rounded-lg mt-1">
-                <div>
-                  <div className="text-xs font-semibold text-white">TOTAL LANDED EN DESTINO</div>
-                  <div className="text-[10px] text-blue-200 mt-0.5">USD {fmt(totalLanded/nc,0)} por contenedor · {nc} contenedor(es)</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-mono font-bold text-white text-xl">USD {fmt(totalLanded,0)}</div>
-                </div>
+                <div><div className="text-xs font-semibold text-white">TOTAL LANDED EN DESTINO</div><div className="text-[10px] text-blue-200 mt-0.5">USD {fmt(totalLanded/nc,0)} por contenedor</div></div>
+                <div className="font-mono font-bold text-white text-xl">USD {fmt(totalLanded,0)}</div>
               </div>
             </div>
           </div>
 
-          {/* Tributos y gastos en ARS con TC */}
-          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Pagos en Argentina (ARS)</div>
-            <div className="divide-y divide-gray-50">
-              {/* Tributos aduana */}
-              <div className="px-5 py-3.5 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-medium text-gray-700">Tributos Aduana Argentina</div>
-                  <div className="text-[10px] text-gray-400 mt-0.5">
-                    Régimen {s.regimen} · TC ref. <span className="font-mono font-semibold text-gray-600">ARS {fmt(s.tcTrib,0)}</span> por USD · Se abona al TC oficial del día del despacho
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-mono font-semibold text-gray-800 text-base">ARS {Math.round(totalTribARS).toLocaleString('es-AR')}</div>
-                  <div className="text-[10px] text-gray-400 font-mono">≈ USD {fmt(totalTribUSD,0)}</div>
-                </div>
-              </div>
-              {/* Gastos Argentina */}
-              {(subE+subGastosArg)>0&&(
-                <div className="px-5 py-3.5 flex items-center justify-between">
-                  <div>
-                    <div className="text-xs font-medium text-gray-700">Gastos Argentina (despachante y otros)</div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">
-                      TC ref. <span className="font-mono font-semibold text-gray-600">ARS {fmt(s.tcTrib,0)}</span> por USD · Cotización del día del pago efectivo
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-mono font-semibold text-gray-800 text-base">ARS {Math.round((subE+subGastosArg)*s.tcTrib).toLocaleString('es-AR')}</div>
-                    <div className="text-[10px] text-gray-400 font-mono">≈ USD {fmt(subE+subGastosArg,0)}</div>
-                  </div>
-                </div>
-              )}
-              {/* Total ARS */}
-              <div className="px-5 py-3 bg-gray-50 flex items-center justify-between">
-                <div className="text-xs font-semibold text-gray-700">Total estimado en pesos</div>
-                <div className="text-right">
-                  <div className="font-mono font-bold text-gray-900 text-base">ARS {Math.round(totalTribARS+(subE+subGastosArg)*s.tcTrib).toLocaleString('es-AR')}</div>
-                  <div className="text-[10px] text-gray-400">Tributos + Gastos Argentina</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* TC consolidado */}
           <div className="bg-white border border-gray-100 rounded-xl px-5 py-3.5">
-            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Tipos de cambio aplicados en esta cotización</div>
+            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Tipos de cambio aplicados</div>
             <div className="flex flex-wrap gap-4 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-gray-500">TC oficial BNA (ARS/USD)</span>
-                <span className="font-mono font-semibold text-gray-800 bg-[#EBF2FF] px-2 py-0.5 rounded">ARS {fmt(s.tcTrib,0)}</span>
-                <span className="text-[10px] text-gray-400">para tributos y gastos locales</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-gray-500">CLP/USD</span>
-                <span className="font-mono font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded">CLP {fmt(s.tcClp,0)}</span>
-                <span className="text-[10px] text-gray-400">para gastos en Chile</span>
-              </div>
+              <div className="flex items-center gap-2"><span className="text-gray-500">TC oficial BNA (ARS/USD)</span><span className="font-mono font-semibold text-gray-800 bg-[#EBF2FF] px-2 py-0.5 rounded">ARS {fmt(s.tcTrib,0)}</span></div>
+              <div className="flex items-center gap-2"><span className="text-gray-500">CLP/USD</span><span className="font-mono font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded">CLP {fmt(s.tcClp,0)}</span></div>
             </div>
-            <div className="text-[10px] text-amber-600 mt-2">⚠ Valores de referencia a la fecha de cotización. Los pagos se realizarán al TC oficial del día efectivo.</div>
           </div>
 
           <div className="flex justify-between">
-            <button onClick={()=>setTab('tributos')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">← Anterior</button>
+            <button onClick={()=>setTab('tributos')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
             <button onClick={guardar} disabled={saving} className="bg-[#1168F8] text-white px-6 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] disabled:opacity-60">
-              {saving?'Guardando...':'✓ Guardar cotización'}
+              {saving?'Guardando...':'Guardar cotizacion'}
             </button>
           </div>
         </div>
