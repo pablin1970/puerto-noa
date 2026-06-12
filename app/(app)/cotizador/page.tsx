@@ -158,7 +158,7 @@ export default function CotizadorPage(){
       })
     supabase.from('terceros').select('id,razon_social,nombre_fantasia,nro_doc,tipo_doc,condicion_iva,dir_fiscal_ciudad,pais')
       .eq('activo','true')
-      .filter('tipo', 'cs', '{"cliente"}')
+      .contains('tipo', ['cliente'])
       .then(({data})=>{if(data) setTerceros(data)})
     // Cargar cotizaciones de proveedores v2 vigentes por rubro
     supabase.from('cotizaciones_proveedor_v2')
