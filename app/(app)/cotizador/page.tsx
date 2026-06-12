@@ -218,7 +218,7 @@ export default function CotizadorPage(){
 
     // Load terceros (clientes)
     supabase.from('terceros').select('id,razon_social,nombre_fantasia,nro_doc,tipo_doc,condicion_iva,email,telefono,dir_fiscal_ciudad,pais')
-      .contains('tipo', ['cliente']).eq('activo', true).order('razon_social')
+      .filter('tipo', 'cs', '{"cliente"}').eq('activo', true).order('razon_social')
       .then(({data})=>{ if(data) setTerceros(data) })
 
     // Load cotizaciones de proveedores vigentes
