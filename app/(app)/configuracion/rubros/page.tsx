@@ -90,7 +90,7 @@ export default function RubrosPage() {
   // Agrupar rubros por bloque para el mapa visual
   const mapaRubros = BLOQUES.map(b => ({
     ...b,
-    rubros: rubros.filter(r => r.activo && (r.bloques_cotizador || []).includes(b.num))
+    rubros: rubros.filter(r => r.activo !== false && (r.bloques_cotizador || []).includes(b.num))
   }))
 
   return (
