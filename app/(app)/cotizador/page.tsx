@@ -189,8 +189,9 @@ export default function CotizadorPage(){
     supabase.from('tipos_cambio_eventos').select('ars,clp').order('created_at', { ascending: false }).limit(1)
       .then(({ data }) => {
         if (data && data.length > 0) {
-          if (data[0].ars) setS(p => ({ ...p, tcTrib: data[0].ars }))
-          if (data[0].clp) setS(p => ({ ...p, tcClp: data[0].clp }))
+   const row = data[0] as any
+          if (row.ars) setS(p => ({ ...p, tcTrib: row.ars }))
+          if (row.clp) setS(p => ({ ...p, tcClp: row.clp }))
         }
       })
 
