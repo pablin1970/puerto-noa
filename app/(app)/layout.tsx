@@ -46,6 +46,7 @@ const NAV: NavItem[] = [
 
   { label: 'CONFIGURACION', section: true },
   { href: '/cotizaciones-proveedores', label: 'Cotizaciones proveedores', icon: '📋' },
+  { href: '/configuracion/rubros', label: 'Rubros proveedores', icon: '🏷' },
 { href: '/tarifas', label: 'Tarifas base', icon: '⚙' },
   { href: '/tipos-cambio', label: 'Tipos de cambio', icon: '💱' },
   { href: '/tributos-config', label: 'Tributos ARCA', icon: '§', adminOnly: true },
