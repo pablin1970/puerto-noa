@@ -196,7 +196,7 @@ export default function CotizadorPage(){
       })
 
     // Load terceros (clientes)
-    supabase.from('terceros').select('id,razon_social,nombre_fantasia,nro_doc,tipo_doc,condicion_iva,email,telefono,dir_fiscal_ciudad,pais')
+    supabase.from('terceros').select('id,razon_social,nombre_fantasia,nro_doc,tipo_doc,condicion_iva,dir_fiscal_ciudad,pais')
       .eq('activo', 'true')
       .then(({data,error})=>{ console.log('terceros loaded:', data?.length, error); if(data) setTerceros(data) })
 
