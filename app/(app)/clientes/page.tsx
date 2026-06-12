@@ -15,8 +15,11 @@ interface Tercero {
   condicion_iva: string
   actividad: string
   nro_importador: string
+  dir_fiscal_calle: string
   dir_fiscal_ciudad: string
+  dir_fiscal_provincia: string
   dir_fiscal_pais: string
+  dir_fiscal_cp: string
   banco: string
   notas: string
   created_at: string
@@ -33,16 +36,29 @@ interface Contacto {
   principal: boolean
 }
 
-const PAISES = ['Argentina', 'Chile', 'China', 'Bolivia', 'Perú', 'Uruguay', 'Brasil', 'Colombia', 'México', 'España', 'Estados Unidos', 'Otro']
+interface CuentaBancaria {
+  id: string
+  tercero_id: string
+  banco: string
+  cuenta: string
+  cbu_iban: string
+  swift: string
+  moneda: string
+  principal: boolean
+  notas: string
+}
+
+const PAISES = ['Argentina', 'Chile', 'China', 'Bolivia', 'Peru', 'Uruguay', 'Brasil', 'Colombia', 'Mexico', 'Espana', 'Estados Unidos', 'Otro']
 const TIPO_DOC_POR_PAIS: Record<string, string[]> = {
   Argentina: ['CUIT', 'CUIL', 'DNI', 'Pasaporte'],
   Chile: ['RUT', 'RUN', 'Pasaporte'],
   China: ['Unified Social Credit Code', 'Pasaporte'],
   Bolivia: ['NIT', 'CI', 'Pasaporte'],
-  Perú: ['RUC', 'DNI', 'Pasaporte'],
+  Peru: ['RUC', 'DNI', 'Pasaporte'],
   default: ['NIF', 'RUT', 'Tax ID', 'Pasaporte', 'Otro'],
 }
 const CONDICION_IVA = ['Responsable Inscripto', 'Exento', 'Monotributo', 'No inscripto', 'Consumidor Final', 'No aplica']
+const MONEDAS = ['USD', 'ARS', 'CLP', 'CNY', 'EUR']
 
 export default function ClientesPage() {
   const supabase = useMemo(() => createClient(), [])
@@ -91,11 +107,11 @@ export default function ClientesPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Clientes y Proveedores</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Base de terceros · {terceros.filter(t=>t.activo).length} activos</p>
+          <p className="text-xs text-gray-400 mt-0.5">Base de terceros - {terceros.filter(t=>t.activo).length} activos</p>
         </div>
         <div className="flex gap-2">
           {view !== 'lista' && (
-            <button onClick={() => setView('lista')} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-100 transition-colors">← Volver</button>
+            <button onClick={() => setView('lista')} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-100 transition-colors">Volver</button>
           )}
           {view === 'lista' && (
             <button onClick={() => setView('nuevo')} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] transition-colors shadow-sm">+ Nuevo</button>
@@ -105,7 +121,6 @@ export default function ClientesPage() {
 
       {view === 'lista' && (
         <>
-          {/* KPIs */}
           <div className="grid grid-cols-4 gap-3 mb-5">
             {[
               { label: 'Total', value: terceros.length, icon: '🏢', color: 'text-gray-900' },
@@ -121,7 +136,6 @@ export default function ClientesPage() {
             ))}
           </div>
 
-          {/* Filtros */}
           <div className="flex gap-3 mb-4 flex-wrap items-center">
             <div className="relative flex-1 min-w-60">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
@@ -136,24 +150,23 @@ export default function ClientesPage() {
             </select>
             <select value={filtroPais} onChange={e => setFiltroPais(e.target.value)}
               className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8] shadow-sm">
-              <option value="">Todos los países</option>
+              <option value="">Todos los paises</option>
               {paises.map(p => <option key={p}>{p}</option>)}
             </select>
             {(buscar || filtroTipo || filtroPais) && (
               <button onClick={() => { setBuscar(''); setFiltroTipo(''); setFiltroPais('') }}
-                className="px-3 py-2 border border-gray-200 rounded-xl text-xs text-gray-500 hover:bg-gray-50">✕ Limpiar</button>
+                className="px-3 py-2 border border-gray-200 rounded-xl text-xs text-gray-500 hover:bg-gray-50">X Limpiar</button>
             )}
             <span className="text-xs text-gray-400 ml-auto">{filtrados.length} registro(s)</span>
           </div>
 
-          {/* Lista */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             {loading ? (
               <div className="p-12 text-center text-gray-400">Cargando...</div>
             ) : filtrados.length === 0 ? (
               <div className="p-12 text-center">
                 <div className="text-4xl mb-3">🏢</div>
-                <div className="text-gray-500 text-sm mb-1">{terceros.length === 0 ? 'Sin clientes ni proveedores aún' : 'Sin resultados'}</div>
+                <div className="text-gray-500 text-sm mb-1">{terceros.length === 0 ? 'Sin clientes ni proveedores aun' : 'Sin resultados'}</div>
                 {terceros.length === 0 && (
                   <button onClick={() => setView('nuevo')} className="mt-3 px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold">+ Agregar primero</button>
                 )}
@@ -162,7 +175,7 @@ export default function ClientesPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    {['Razón social', 'País', 'Documento', 'Tipo', 'Contacto principal', 'Ciudad', ''].map(h => (
+                    {['Razon social', 'Pais', 'Documento', 'Tipo', 'Contacto principal', 'Ciudad', ''].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
@@ -202,7 +215,7 @@ export default function ClientesPage() {
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3.5 text-gray-500">{t.dir_fiscal_ciudad || '—'}</td>
+                        <td className="px-4 py-3.5 text-gray-500">{t.dir_fiscal_ciudad || '-'}</td>
                         <td className="px-4 py-3.5">
                           <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                             <button onClick={e => { e.stopPropagation(); setSelId(t.id); setView('detalle') }}
@@ -222,7 +235,7 @@ export default function ClientesPage() {
       {view === 'nuevo' && (
         <FormTercero
           supabase={supabase} currentUser={currentUser}
-          onSave={async (data) => {
+          onSave={async (data: any) => {
             await (supabase.from('terceros') as any).insert({ ...data, creado_por: currentUser?.nombre, creado_por_id: currentUser?.id })
             await loadData()
             setView('lista')
@@ -234,7 +247,7 @@ export default function ClientesPage() {
       {view === 'detalle' && sel && (
         <DetalleTercero
           tercero={sel} supabase={supabase} currentUser={currentUser}
-          onReload={async () => { await loadData(); const updated = terceros.find(t => t.id === sel.id); if (updated) setSelId(updated.id) }}
+          onReload={async () => { await loadData() }}
           onBack={() => setView('lista')}
         />
       )}
@@ -242,39 +255,53 @@ export default function ClientesPage() {
   )
 }
 
-// ── FORMULARIO NUEVO TERCERO ────────────────────────────────
 function FormTercero({ supabase, currentUser, onSave, onCancel }: any) {
   const [form, setForm] = useState({
     razon_social: '', nombre_fantasia: '', pais: 'Argentina',
     tipo_doc: 'CUIT', nro_doc: '', condicion_iva: 'Responsable Inscripto',
     actividad: '', nro_importador: '',
-    dir_fiscal_calle: '', dir_fiscal_ciudad: '', dir_fiscal_provincia: '', dir_fiscal_cp: '',
-    banco: '', cuenta: '', cbu_iban: '', swift: '', moneda_cuenta: 'USD',
+    dir_fiscal_calle: '', dir_fiscal_ciudad: '', dir_fiscal_provincia: '', dir_fiscal_pais: 'Argentina', dir_fiscal_cp: '',
     notas: '', activo: true,
     tipo: ['cliente'] as string[],
   })
+  const [cuentas, setCuentas] = useState<any[]>([{ banco: '', cuenta: '', cbu_iban: '', swift: '', moneda: 'USD', principal: true, notas: '' }])
   const [saving, setSaving] = useState(false)
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
   const tiposDocs = TIPO_DOC_POR_PAIS[form.pais] || TIPO_DOC_POR_PAIS.default
 
   function toggleTipo(t: string) {
-    setForm(f => ({
-      ...f,
-      tipo: f.tipo.includes(t) ? f.tipo.filter(x => x !== t) : [...f.tipo, t]
-    }))
+    setForm(f => ({ ...f, tipo: f.tipo.includes(t) ? f.tipo.filter(x => x !== t) : [...f.tipo, t] }))
+  }
+
+  function addCuenta() {
+    setCuentas(c => [...c, { banco: '', cuenta: '', cbu_iban: '', swift: '', moneda: 'USD', principal: false, notas: '' }])
+  }
+
+  function removeCuenta(i: number) {
+    setCuentas(c => c.filter((_, idx) => idx !== i))
+  }
+
+  function updateCuenta(i: number, field: string, value: any) {
+    setCuentas(c => c.map((ct, idx) => idx === i ? { ...ct, [field]: value } : ct))
   }
 
   async function handleSave() {
-    if (!form.razon_social) { alert('La razón social es obligatoria'); return }
-    if (form.tipo.length === 0) { alert('Seleccioná al menos un tipo'); return }
+    if (!form.razon_social) { alert('La razon social es obligatoria'); return }
+    if (form.tipo.length === 0) { alert('Selecciona al menos un tipo'); return }
     setSaving(true)
-    await onSave(form)
+    const { data: tercero } = await (supabase.from('terceros') as any).insert({ ...form, creado_por: currentUser?.nombre, creado_por_id: currentUser?.id }).select().single()
+    if (tercero) {
+      const cuentasValidas = cuentas.filter(c => c.banco || c.cuenta || c.cbu_iban)
+      if (cuentasValidas.length > 0) {
+        await (supabase.from('tercero_cuentas_bancarias') as any).insert(cuentasValidas.map((c: any) => ({ ...c, tercero_id: tercero.id })))
+      }
+    }
+    await onSave(null)
     setSaving(false)
   }
 
   return (
     <div className="max-w-3xl space-y-4">
-      {/* Tipo */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <h3 className="font-bold text-sm text-gray-900 mb-4">Tipo de tercero</h3>
         <div className="flex gap-3">
@@ -292,33 +319,30 @@ function FormTercero({ supabase, currentUser, onSave, onCancel }: any) {
         </div>
       </div>
 
-      {/* Datos generales */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <h3 className="font-bold text-sm text-gray-900 mb-4">Datos generales</h3>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Razón social *</label>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Razon social *</label>
             <input value={form.razon_social} onChange={e => setForm(f => ({ ...f, razon_social: e.target.value }))} className={inp} placeholder="Nombre legal completo" />
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Nombre fantasía</label>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Nombre fantasia</label>
             <input value={form.nombre_fantasia} onChange={e => setForm(f => ({ ...f, nombre_fantasia: e.target.value }))} className={inp} placeholder="Nombre comercial" />
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">País *</label>
-            <select value={form.pais} onChange={e => setForm(f => ({ ...f, pais: e.target.value, tipo_doc: (TIPO_DOC_POR_PAIS[e.target.value] || TIPO_DOC_POR_PAIS.default)[0] }))}
-              className={inp}>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Pais *</label>
+            <select value={form.pais} onChange={e => setForm(f => ({ ...f, pais: e.target.value, tipo_doc: (TIPO_DOC_POR_PAIS[e.target.value] || TIPO_DOC_POR_PAIS.default)[0] }))} className={inp}>
               {PAISES.map(p => <option key={p}>{p}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Actividad comercial</label>
-            <input value={form.actividad} onChange={e => setForm(f => ({ ...f, actividad: e.target.value }))} className={inp} placeholder="ej. Importación de maquinaria" />
+            <input value={form.actividad} onChange={e => setForm(f => ({ ...f, actividad: e.target.value }))} className={inp} placeholder="ej. Importacion de maquinaria" />
           </div>
         </div>
       </div>
 
-      {/* Datos fiscales */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <h3 className="font-bold text-sm text-gray-900 mb-4">Datos fiscales</h3>
         <div className="grid grid-cols-3 gap-3">
@@ -329,28 +353,27 @@ function FormTercero({ supabase, currentUser, onSave, onCancel }: any) {
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Número</label>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Numero</label>
             <input value={form.nro_doc} onChange={e => setForm(f => ({ ...f, nro_doc: e.target.value }))} className={inp} placeholder="ej. 20-12345678-9" />
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Condición IVA</label>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Condicion IVA</label>
             <select value={form.condicion_iva} onChange={e => setForm(f => ({ ...f, condicion_iva: e.target.value }))} className={inp}>
               {CONDICION_IVA.map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">N° importador / exportador</label>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">N importador / exportador</label>
             <input value={form.nro_importador} onChange={e => setForm(f => ({ ...f, nro_importador: e.target.value }))} className={inp} placeholder="Registro aduanero" />
           </div>
         </div>
       </div>
 
-      {/* Dirección fiscal */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-        <h3 className="font-bold text-sm text-gray-900 mb-4">Dirección fiscal</h3>
+        <h3 className="font-bold text-sm text-gray-900 mb-4">Direccion fiscal</h3>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Calle y número</label>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Calle y numero</label>
             <input value={form.dir_fiscal_calle} onChange={e => setForm(f => ({ ...f, dir_fiscal_calle: e.target.value }))} className={inp} placeholder="ej. Av. Corrientes 1234" />
           </div>
           <div>
@@ -358,46 +381,68 @@ function FormTercero({ supabase, currentUser, onSave, onCancel }: any) {
             <input value={form.dir_fiscal_ciudad} onChange={e => setForm(f => ({ ...f, dir_fiscal_ciudad: e.target.value }))} className={inp} />
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Provincia / Estado / Región</label>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Provincia / Estado / Region</label>
             <input value={form.dir_fiscal_provincia} onChange={e => setForm(f => ({ ...f, dir_fiscal_provincia: e.target.value }))} className={inp} />
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Código postal</label>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Pais</label>
+            <select value={form.dir_fiscal_pais} onChange={e => setForm(f => ({ ...f, dir_fiscal_pais: e.target.value }))} className={inp}>
+              {PAISES.map(p => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Codigo postal</label>
             <input value={form.dir_fiscal_cp} onChange={e => setForm(f => ({ ...f, dir_fiscal_cp: e.target.value }))} className={inp} />
           </div>
         </div>
       </div>
 
-      {/* Datos bancarios */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-        <h3 className="font-bold text-sm text-gray-900 mb-4">Datos bancarios</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Banco</label>
-            <input value={form.banco} onChange={e => setForm(f => ({ ...f, banco: e.target.value }))} className={inp} placeholder="ej. Banco Nación Argentina" />
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Moneda de la cuenta</label>
-            <select value={form.moneda_cuenta} onChange={e => setForm(f => ({ ...f, moneda_cuenta: e.target.value }))} className={inp}>
-              {['USD', 'ARS', 'CLP', 'CNY', 'EUR'].map(m => <option key={m}>{m}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">N° cuenta</label>
-            <input value={form.cuenta} onChange={e => setForm(f => ({ ...f, cuenta: e.target.value }))} className={inp} />
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">CBU / IBAN</label>
-            <input value={form.cbu_iban} onChange={e => setForm(f => ({ ...f, cbu_iban: e.target.value }))} className={inp} />
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">SWIFT / BIC</label>
-            <input value={form.swift} onChange={e => setForm(f => ({ ...f, swift: e.target.value }))} className={inp} />
-          </div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-sm text-gray-900">Cuentas bancarias</h3>
+          <button onClick={addCuenta} className="px-3 py-1.5 border border-[#1168F8] text-[#1168F8] rounded-xl text-xs font-bold hover:bg-[#EBF2FF]">+ Agregar cuenta</button>
+        </div>
+        <div className="space-y-4">
+          {cuentas.map((c, i) => (
+            <div key={i} className="border border-gray-100 rounded-xl p-4 bg-gray-50 relative">
+              {cuentas.length > 1 && (
+                <button onClick={() => removeCuenta(i)} className="absolute top-3 right-3 text-gray-400 hover:text-red-500 text-xs">X</button>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco</label>
+                  <input value={c.banco} onChange={e => updateCuenta(i, 'banco', e.target.value)} className={inp} placeholder="ej. Banco Nacion Argentina" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
+                  <select value={c.moneda} onChange={e => updateCuenta(i, 'moneda', e.target.value)} className={inp}>
+                    {MONEDAS.map(m => <option key={m}>{m}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N cuenta</label>
+                  <input value={c.cuenta} onChange={e => updateCuenta(i, 'cuenta', e.target.value)} className={inp} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">CBU / IBAN</label>
+                  <input value={c.cbu_iban} onChange={e => updateCuenta(i, 'cbu_iban', e.target.value)} className={inp} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">SWIFT / BIC</label>
+                  <input value={c.swift} onChange={e => updateCuenta(i, 'swift', e.target.value)} className={inp} />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 cursor-pointer pb-2">
+                    <input type="checkbox" checked={c.principal} onChange={e => updateCuenta(i, 'principal', e.target.checked)} className="w-4 h-4 rounded" />
+                    <span className="text-xs text-gray-600 font-medium">Cuenta principal</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Notas */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <h3 className="font-bold text-sm text-gray-900 mb-3">Notas</h3>
         <textarea value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))}
@@ -408,28 +453,34 @@ function FormTercero({ supabase, currentUser, onSave, onCancel }: any) {
         <button onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50">Cancelar</button>
         <button onClick={handleSave} disabled={saving}
           className="px-6 py-2.5 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50 transition-colors shadow-sm">
-          {saving ? 'Guardando...' : '✓ Guardar tercero'}
+          {saving ? 'Guardando...' : 'Guardar tercero'}
         </button>
       </div>
     </div>
   )
 }
 
-// ── DETALLE TERCERO ─────────────────────────────────────────
 function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: any) {
-  const [tab, setTab] = useState<'datos' | 'contactos' | 'documentos' | 'operaciones'>('datos')
+  const [tab, setTab] = useState<'datos' | 'contactos' | 'bancario' | 'documentos' | 'operaciones'>('datos')
   const [contactos, setContactos] = useState<Contacto[]>(tercero.contactos || [])
+  const [cuentas, setCuentas] = useState<CuentaBancaria[]>([])
   const [docs, setDocs] = useState<any[]>([])
   const [ops, setOps] = useState<any[]>([])
   const [editando, setEditando] = useState(false)
   const [form, setForm] = useState({ ...tercero })
   const [newContacto, setNewContacto] = useState({ nombre: '', cargo: '', email: '', telefono: '', whatsapp: '', principal: false })
+  const [newCuenta, setNewCuenta] = useState({ banco: '', cuenta: '', cbu_iban: '', swift: '', moneda: 'USD', principal: false, notas: '' })
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [docForm, setDocForm] = useState({ tipo: 'estatuto', nombre_custom: '', referencia: '', fecha: '', notas: '' })
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 
-  useEffect(() => { loadDocs(); loadOps() }, [])
+  useEffect(() => { loadDocs(); loadOps(); loadCuentas() }, [])
+
+  async function loadCuentas() {
+    const { data } = await supabase.from('tercero_cuentas_bancarias').select('*').eq('tercero_id', tercero.id).order('created_at')
+    if (data) setCuentas(data)
+  }
 
   async function loadDocs() {
     const { data } = await supabase.from('tercero_documentos').select('*').eq('tercero_id', tercero.id).order('created_at', { ascending: false })
@@ -458,9 +509,22 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
   }
 
   async function deleteContacto(id: string) {
-    if (!confirm('¿Eliminar contacto?')) return
+    if (!confirm('Eliminar contacto?')) return
     await supabase.from('tercero_contactos').delete().eq('id', id)
     setContactos(c => c.filter(x => x.id !== id))
+  }
+
+  async function addCuenta() {
+    if (!newCuenta.banco && !newCuenta.cuenta && !newCuenta.cbu_iban) return
+    await (supabase.from('tercero_cuentas_bancarias') as any).insert({ ...newCuenta, tercero_id: tercero.id })
+    await loadCuentas()
+    setNewCuenta({ banco: '', cuenta: '', cbu_iban: '', swift: '', moneda: 'USD', principal: false, notas: '' })
+  }
+
+  async function deleteCuenta(id: string) {
+    if (!confirm('Eliminar cuenta bancaria?')) return
+    await supabase.from('tercero_cuentas_bancarias').delete().eq('id', id)
+    setCuentas(c => c.filter(x => x.id !== id))
   }
 
   async function subirDoc(file: File) {
@@ -489,7 +553,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
   const TIPOS_DOC_LABEL: Record<string, string> = {
     estatuto: 'Estatuto / Acta constitutiva',
     poder: 'Poder notarial',
-    certificado: 'Certificado / Habilitación',
+    certificado: 'Certificado / Habilitacion',
     rut: 'RUT / CUIT / Constancia fiscal',
     contrato: 'Contrato marco',
     otro: 'Otro',
@@ -499,7 +563,6 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
 
   return (
     <div>
-      {/* Header tercero */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm mb-4">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
@@ -512,7 +575,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                 {tercero.tipo?.includes('cliente') && <span className="px-2.5 py-0.5 bg-[#EBF2FF] text-[#052698] rounded-full text-[10px] font-bold">Cliente</span>}
                 {tercero.tipo?.includes('proveedor') && <span className="px-2.5 py-0.5 bg-green-50 text-green-700 rounded-full text-[10px] font-bold">Proveedor</span>}
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${tercero.activo ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                  {tercero.activo ? '● Activo' : '○ Inactivo'}
+                  {tercero.activo ? 'Activo' : 'Inactivo'}
                 </span>
               </div>
               {tercero.nombre_fantasia && <div className="text-xs text-gray-400 mt-0.5">{tercero.nombre_fantasia}</div>}
@@ -520,21 +583,22 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                 <span>{tercero.pais}</span>
                 {tercero.nro_doc && <span className="font-mono">{tercero.tipo_doc}: {tercero.nro_doc}</span>}
                 {tercero.dir_fiscal_ciudad && <span>{tercero.dir_fiscal_ciudad}</span>}
+                {tercero.dir_fiscal_provincia && <span>{tercero.dir_fiscal_provincia}</span>}
               </div>
             </div>
           </div>
           <button onClick={() => setEditando(!editando)}
             className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-colors ${editando ? 'bg-gray-100 border-gray-200 text-gray-600' : 'border-[#1168F8] text-[#1168F8] hover:bg-[#EBF2FF]'}`}>
-            {editando ? '✕ Cancelar' : '✏ Editar'}
+            {editando ? 'Cancelar' : 'Editar'}
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 flex-wrap">
         {[
           { key: 'datos', label: 'Datos generales' },
           { key: 'contactos', label: `Contactos (${contactos.length})` },
+          { key: 'bancario', label: `Cuentas bancarias (${cuentas.length})` },
           { key: 'documentos', label: `Documentos (${docs.length})` },
           { key: 'operaciones', label: `Operaciones (${ops.length})` },
         ].map(t => (
@@ -545,7 +609,6 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
         ))}
       </div>
 
-      {/* Tab: Datos */}
       {tab === 'datos' && (
         <div className="space-y-4">
           {editando ? (
@@ -554,15 +617,15 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                 <h3 className="font-bold text-sm text-gray-900 mb-4">Datos generales</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="col-span-2">
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Razón social</label>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Razon social</label>
                     <input value={form.razon_social} onChange={e => setForm((f: any) => ({ ...f, razon_social: e.target.value }))} className={inp} />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre fantasía</label>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre fantasia</label>
                     <input value={form.nombre_fantasia || ''} onChange={e => setForm((f: any) => ({ ...f, nombre_fantasia: e.target.value }))} className={inp} />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">País</label>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Pais</label>
                     <select value={form.pais} onChange={e => setForm((f: any) => ({ ...f, pais: e.target.value }))} className={inp}>
                       {PAISES.map(p => <option key={p}>{p}</option>)}
                     </select>
@@ -574,50 +637,61 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Número</label>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Numero</label>
                     <input value={form.nro_doc || ''} onChange={e => setForm((f: any) => ({ ...f, nro_doc: e.target.value }))} className={inp} />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Condición IVA</label>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Condicion IVA</label>
                     <select value={form.condicion_iva || ''} onChange={e => setForm((f: any) => ({ ...f, condicion_iva: e.target.value }))} className={inp}>
                       {CONDICION_IVA.map(c => <option key={c}>{c}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N° importador</label>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N importador</label>
                     <input value={form.nro_importador || ''} onChange={e => setForm((f: any) => ({ ...f, nro_importador: e.target.value }))} className={inp} />
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Actividad</label>
                     <input value={form.actividad || ''} onChange={e => setForm((f: any) => ({ ...f, actividad: e.target.value }))} className={inp} />
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Ciudad fiscal</label>
-                    <input value={form.dir_fiscal_ciudad || ''} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_ciudad: e.target.value }))} className={inp} />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Dirección fiscal</label>
+                </div>
+              </div>
+              <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                <h3 className="font-bold text-sm text-gray-900 mb-4">Direccion fiscal</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Calle y numero</label>
                     <input value={form.dir_fiscal_calle || ''} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_calle: e.target.value }))} className={inp} />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco</label>
-                    <input value={form.banco || ''} onChange={e => setForm((f: any) => ({ ...f, banco: e.target.value }))} className={inp} />
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Ciudad</label>
+                    <input value={form.dir_fiscal_ciudad || ''} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_ciudad: e.target.value }))} className={inp} />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">CBU / IBAN</label>
-                    <input value={form.cbu_iban || ''} onChange={e => setForm((f: any) => ({ ...f, cbu_iban: e.target.value }))} className={inp} />
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Provincia / Region</label>
+                    <input value={form.dir_fiscal_provincia || ''} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_provincia: e.target.value }))} className={inp} />
                   </div>
-                  <div className="col-span-2">
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas</label>
-                    <textarea value={form.notas || ''} onChange={e => setForm((f: any) => ({ ...f, notas: e.target.value }))}
-                      className={inp + ' resize-none'} rows={2} />
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Pais</label>
+                    <select value={form.dir_fiscal_pais || form.pais} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_pais: e.target.value }))} className={inp}>
+                      {PAISES.map(p => <option key={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Codigo postal</label>
+                    <input value={form.dir_fiscal_cp || ''} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_cp: e.target.value }))} className={inp} />
                   </div>
                 </div>
+              </div>
+              <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                <h3 className="font-bold text-sm text-gray-900 mb-3">Notas</h3>
+                <textarea value={form.notas || ''} onChange={e => setForm((f: any) => ({ ...f, notas: e.target.value }))}
+                  className={inp + ' resize-none'} rows={2} />
               </div>
               <div className="flex justify-end gap-2">
                 <button onClick={() => setEditando(false)} className="px-4 py-2 border border-gray-200 rounded-xl text-xs">Cancelar</button>
                 <button onClick={saveData} disabled={saving} className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
-                  {saving ? 'Guardando...' : '✓ Guardar cambios'}
+                  {saving ? 'Guardando...' : 'Guardar cambios'}
                 </button>
               </div>
             </>
@@ -625,15 +699,16 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
             <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
               <div className="grid grid-cols-3 gap-x-8 gap-y-4">
                 {[
-                  { l: 'País', v: tercero.pais },
+                  { l: 'Pais', v: tercero.pais },
                   { l: 'Actividad', v: tercero.actividad },
-                  { l: 'Condición IVA', v: tercero.condicion_iva },
+                  { l: 'Condicion IVA', v: tercero.condicion_iva },
                   { l: tercero.tipo_doc || 'Documento', v: tercero.nro_doc },
-                  { l: 'N° importador', v: tercero.nro_importador },
-                  { l: 'Dirección fiscal', v: [tercero.dir_fiscal_calle, tercero.dir_fiscal_ciudad, tercero.dir_fiscal_provincia].filter(Boolean).join(', ') },
-                  { l: 'Banco', v: tercero.banco },
-                  { l: 'CBU / IBAN', v: tercero.cbu_iban },
-                  { l: 'SWIFT', v: tercero.swift },
+                  { l: 'N importador', v: tercero.nro_importador },
+                  { l: 'Calle fiscal', v: tercero.dir_fiscal_calle },
+                  { l: 'Ciudad', v: tercero.dir_fiscal_ciudad },
+                  { l: 'Provincia / Region', v: tercero.dir_fiscal_provincia },
+                  { l: 'Pais fiscal', v: tercero.dir_fiscal_pais },
+                  { l: 'Codigo postal', v: tercero.dir_fiscal_cp },
                 ].filter(r => r.v).map(r => (
                   <div key={r.l}>
                     <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-0.5">{r.l}</div>
@@ -652,7 +727,6 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
         </div>
       )}
 
-      {/* Tab: Contactos */}
       {tab === 'contactos' && (
         <div className="space-y-4">
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
@@ -664,24 +738,23 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
               </div>
               <div>
                 <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cargo</label>
-                <input value={newContacto.cargo} onChange={e => setNewContacto(f => ({ ...f, cargo: e.target.value }))} className={inp} placeholder="ej. Gerente de compras" />
+                <input value={newContacto.cargo} onChange={e => setNewContacto(f => ({ ...f, cargo: e.target.value }))} className={inp} />
               </div>
               <div>
                 <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Email</label>
                 <input type="email" value={newContacto.email} onChange={e => setNewContacto(f => ({ ...f, email: e.target.value }))} className={inp} />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Teléfono</label>
-                <input value={newContacto.telefono} onChange={e => setNewContacto(f => ({ ...f, telefono: e.target.value }))} className={inp} placeholder="+54 9 388..." />
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Telefono</label>
+                <input value={newContacto.telefono} onChange={e => setNewContacto(f => ({ ...f, telefono: e.target.value }))} className={inp} />
               </div>
               <div>
                 <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">WhatsApp</label>
-                <input value={newContacto.whatsapp} onChange={e => setNewContacto(f => ({ ...f, whatsapp: e.target.value }))} className={inp} placeholder="+54 9 388..." />
+                <input value={newContacto.whatsapp} onChange={e => setNewContacto(f => ({ ...f, whatsapp: e.target.value }))} className={inp} />
               </div>
               <div className="flex items-end">
                 <label className="flex items-center gap-2 cursor-pointer pb-2">
-                  <input type="checkbox" checked={newContacto.principal} onChange={e => setNewContacto(f => ({ ...f, principal: e.target.checked }))}
-                    className="w-4 h-4 rounded" />
+                  <input type="checkbox" checked={newContacto.principal} onChange={e => setNewContacto(f => ({ ...f, principal: e.target.checked }))} className="w-4 h-4 rounded" />
                   <span className="text-xs text-gray-600 font-medium">Contacto principal</span>
                 </label>
               </div>
@@ -690,13 +763,12 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
               <button onClick={addContacto} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Agregar</button>
             </div>
           </div>
-
           {contactos.length > 0 && (
             <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    {['Nombre', 'Cargo', 'Email', 'Teléfono', 'WhatsApp', ''].map(h => (
+                    {['Nombre', 'Cargo', 'Email', 'Telefono', 'WhatsApp', ''].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
@@ -708,10 +780,10 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                         {c.nombre}
                         {c.principal && <span className="ml-1.5 px-1.5 py-0.5 bg-[#EBF2FF] text-[#052698] rounded text-[9px] font-bold">Principal</span>}
                       </td>
-                      <td className="px-4 py-3 text-gray-500">{c.cargo || '—'}</td>
-                      <td className="px-4 py-3 text-[#1168F8]">{c.email || '—'}</td>
-                      <td className="px-4 py-3 font-mono text-[10px]">{c.telefono || '—'}</td>
-                      <td className="px-4 py-3 font-mono text-[10px] text-green-700">{c.whatsapp || '—'}</td>
+                      <td className="px-4 py-3 text-gray-500">{c.cargo || '-'}</td>
+                      <td className="px-4 py-3 text-[#1168F8]">{c.email || '-'}</td>
+                      <td className="px-4 py-3 font-mono text-[10px]">{c.telefono || '-'}</td>
+                      <td className="px-4 py-3 font-mono text-[10px] text-green-700">{c.whatsapp || '-'}</td>
                       <td className="px-4 py-3">
                         <button onClick={() => deleteContacto(c.id)} className="text-gray-400 hover:text-red-500 transition-colors">🗑</button>
                       </td>
@@ -724,7 +796,82 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
         </div>
       )}
 
-      {/* Tab: Documentos */}
+      {tab === 'bancario' && (
+        <div className="space-y-4">
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <h3 className="font-bold text-sm text-gray-900 mb-4">Agregar cuenta bancaria</h3>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco</label>
+                <input value={newCuenta.banco} onChange={e => setNewCuenta(f => ({ ...f, banco: e.target.value }))} className={inp} placeholder="ej. Banco Nacion Argentina" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
+                <select value={newCuenta.moneda} onChange={e => setNewCuenta(f => ({ ...f, moneda: e.target.value }))} className={inp}>
+                  {MONEDAS.map(m => <option key={m}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N cuenta</label>
+                <input value={newCuenta.cuenta} onChange={e => setNewCuenta(f => ({ ...f, cuenta: e.target.value }))} className={inp} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">CBU / IBAN</label>
+                <input value={newCuenta.cbu_iban} onChange={e => setNewCuenta(f => ({ ...f, cbu_iban: e.target.value }))} className={inp} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">SWIFT / BIC</label>
+                <input value={newCuenta.swift} onChange={e => setNewCuenta(f => ({ ...f, swift: e.target.value }))} className={inp} />
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 cursor-pointer pb-2">
+                  <input type="checkbox" checked={newCuenta.principal} onChange={e => setNewCuenta(f => ({ ...f, principal: e.target.checked }))} className="w-4 h-4 rounded" />
+                  <span className="text-xs text-gray-600 font-medium">Cuenta principal</span>
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button onClick={addCuenta} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Agregar</button>
+            </div>
+          </div>
+          {cuentas.length > 0 && (
+            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    {['Banco', 'Moneda', 'N Cuenta', 'CBU / IBAN', 'SWIFT', ''].map(h => (
+                      <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {cuentas.map(c => (
+                    <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="px-4 py-3 font-semibold text-gray-800">
+                        {c.banco || '-'}
+                        {c.principal && <span className="ml-1.5 px-1.5 py-0.5 bg-[#EBF2FF] text-[#052698] rounded text-[9px] font-bold">Principal</span>}
+                      </td>
+                      <td className="px-4 py-3"><span className="px-2 py-0.5 bg-gray-100 rounded-full text-[10px] font-bold text-gray-600">{c.moneda}</span></td>
+                      <td className="px-4 py-3 font-mono text-[11px] text-gray-700">{c.cuenta || '-'}</td>
+                      <td className="px-4 py-3 font-mono text-[10px] text-gray-500">{c.cbu_iban || '-'}</td>
+                      <td className="px-4 py-3 font-mono text-[10px] text-gray-500">{c.swift || '-'}</td>
+                      <td className="px-4 py-3">
+                        <button onClick={() => deleteCuenta(c.id)} className="text-gray-400 hover:text-red-500 transition-colors">🗑</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {cuentas.length === 0 && (
+            <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center text-gray-400 text-sm shadow-sm">
+              Sin cuentas bancarias cargadas aun.
+            </div>
+          )}
+        </div>
+      )}
+
       {tab === 'documentos' && (
         <div className="space-y-4">
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
@@ -744,7 +891,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
               )}
               <div>
                 <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Referencia</label>
-                <input value={docForm.referencia} onChange={e => setDocForm(f => ({ ...f, referencia: e.target.value }))} className={inp} placeholder="N° o código" />
+                <input value={docForm.referencia} onChange={e => setDocForm(f => ({ ...f, referencia: e.target.value }))} className={inp} placeholder="N o codigo" />
               </div>
               <div>
                 <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Fecha</label>
@@ -757,7 +904,6 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                 onChange={e => { const f = e.target.files?.[0]; if (f) subirDoc(f) }} />
             </label>
           </div>
-
           {docs.length > 0 && (
             <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
               <div className="divide-y divide-gray-50">
@@ -783,16 +929,15 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
         </div>
       )}
 
-      {/* Tab: Operaciones */}
       {tab === 'operaciones' && (
         <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
           {ops.length === 0 ? (
-            <div className="p-8 text-center text-gray-400 text-sm">Sin operaciones vinculadas aún.</div>
+            <div className="p-8 text-center text-gray-400 text-sm">Sin operaciones vinculadas aun.</div>
           ) : (
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  {['N° Cotización', 'Cliente', 'Estado', 'Fecha'].map(h => (
+                  {['N Cotizacion', 'Cliente', 'Estado', 'Fecha'].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
