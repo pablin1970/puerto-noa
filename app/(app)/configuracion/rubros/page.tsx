@@ -40,7 +40,8 @@ export default function RubrosPage() {
   async function loadRubros() {
     setLoading(true)
     const { data } = await supabase.from('proveedor_rubros').select('*').order('orden').order('nombre')
-    console.log('rubros data:', data, data?.length) if (data) setRubros(data as Rubro[])
+    console.log('rubros data:', data, data?.length) 
+    if (data) setRubros(data as Rubro[])
     setLoading(false)
   }
 
