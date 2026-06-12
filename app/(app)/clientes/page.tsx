@@ -235,11 +235,7 @@ export default function ClientesPage() {
       {view === 'nuevo' && (
         <FormTercero
           supabase={supabase} currentUser={currentUser}
-          onSave={async (data: any) => {
-            await (supabase.from('terceros') as any).insert({ ...data, creado_por: currentUser?.nombre, creado_por_id: currentUser?.id })
-            await loadData()
-            setView('lista')
-          }}
+          onSave={async () => { await loadData(); setView('lista') }}
           onCancel={() => setView('lista')}
         />
       )}
@@ -266,8 +262,6 @@ function FormTercero({ supabase, currentUser, onSave, onCancel }: any) {
   })
   const [cuentas, setCuentas] = useState<any[]>([{ banco: '', cuenta: '', cbu_iban: '', swift: '', moneda: 'USD', principal: true, notas: '' }])
   const [saving, setSaving] = useState(false)
-  const [rubros, setRubros] = useState<any[]>([])
-const [todosRubros, setTodosRubros] = useState<any[]>([])
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
   const tiposDocs = TIPO_DOC_POR_PAIS[form.pais] || TIPO_DOC_POR_PAIS.default
 
@@ -298,7 +292,7 @@ const [todosRubros, setTodosRubros] = useState<any[]>([])
         await (supabase.from('tercero_cuentas_bancarias') as any).insert(cuentasValidas.map((c: any) => ({ ...c, tercero_id: tercero.id })))
       }
     }
-    await onSave(null)
+    await onSave()
     setSaving(false)
   }
 
@@ -463,11 +457,13 @@ const [todosRubros, setTodosRubros] = useState<any[]>([])
 }
 
 function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: any) {
-  const [tab, setTab] = useState<'datos' | 'contactos' | 'bancario' | 'documentos' | 'operaciones'>('datos')
+  const [tab, setTab] = useState<'datos' | 'contactos' | 'bancario' | 'documentos' | 'operaciones' | 'rubros'>('datos')
   const [contactos, setContactos] = useState<Contacto[]>(tercero.contactos || [])
   const [cuentas, setCuentas] = useState<CuentaBancaria[]>([])
   const [docs, setDocs] = useState<any[]>([])
   const [ops, setOps] = useState<any[]>([])
+  const [rubros, setRubros] = useState<any[]>([])
+  const [todosRubros, setTodosRubros] = useState<any[]>([])
   const [editando, setEditando] = useState(false)
   const [form, setForm] = useState({ ...tercero })
   const [newContacto, setNewContacto] = useState({ nombre: '', cargo: '', email: '', telefono: '', whatsapp: '', principal: false })
@@ -478,33 +474,37 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 
   useEffect(() => {
-  loadDocs(); loadOps(); loadCuentas()
-  if (tercero.tipo?.includes('proveedor')) loadRubros()
-}, [])
+    loadDocs()
+    loadOps()
+    loadCuentas()
+    if (tercero.tipo?.includes('proveedor')) loadRubros()
+  }, [])
 
   async function loadCuentas() {
     const { data } = await supabase.from('tercero_cuentas_bancarias').select('*').eq('tercero_id', tercero.id).order('created_at')
     if (data) setCuentas(data)
   }
-  async function loadRubros()
-  async function toggleRubro(rubroId: string) {
-  const yaAsignado = rubros.some((r: any) => r.id === rubroId)
-  if (yaAsignado) {
-    await supabase.from('tercero_rubros').delete().eq('tercero_id', tercero.id).eq('rubro_id', rubroId)
-    setRubros(prev => prev.filter((r: any) => r.id !== rubroId))
-  } else {
-    await (supabase.from('tercero_rubros') as any).insert({ tercero_id: tercero.id, rubro_id: rubroId })
-    const nuevo = todosRubros.find(r => r.id === rubroId)
-    if (nuevo) setRubros(prev => [...prev, nuevo])
+
+  async function loadRubros() {
+    const [rubrosTercero, todosRes] = await Promise.all([
+      supabase.from('tercero_rubros').select('rubro_id, rubro:proveedor_rubros(id,nombre,color,icono,descripcion)').eq('tercero_id', tercero.id),
+      supabase.from('proveedor_rubros').select('*').eq('activo', true).order('orden')
+    ])
+    if (rubrosTercero.data) setRubros((rubrosTercero.data as any[]).map(r => (r as any).rubro).filter(Boolean))
+    if (todosRes.data) setTodosRubros(todosRes.data)
   }
-}{
-  const [rubrosTercero, todosRes] = await Promise.all([
-    supabase.from('tercero_rubros').select('rubro_id, rubro:proveedor_rubros(id,nombre,color,icono)').eq('tercero_id', tercero.id),
-    supabase.from('proveedor_rubros').select('*').eq('activo', true).order('orden')
-  ])
-  if (rubrosTercero.data) setRubros((rubrosTercero.data as any[]).map(r => (r as any).rubro))
-  if (todosRes.data) setTodosRubros(todosRes.data)
-}
+
+  async function toggleRubro(rubroId: string) {
+    const yaAsignado = rubros.some((r: any) => r.id === rubroId)
+    if (yaAsignado) {
+      await supabase.from('tercero_rubros').delete().eq('tercero_id', tercero.id).eq('rubro_id', rubroId)
+      setRubros(prev => prev.filter((r: any) => r.id !== rubroId))
+    } else {
+      await (supabase.from('tercero_rubros') as any).insert({ tercero_id: tercero.id, rubro_id: rubroId })
+      const nuevo = todosRubros.find(r => r.id === rubroId)
+      if (nuevo) setRubros(prev => [...prev, nuevo])
+    }
+  }
 
   async function loadDocs() {
     const { data } = await supabase.from('tercero_documentos').select('*').eq('tercero_id', tercero.id).order('created_at', { ascending: false })
@@ -512,7 +512,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
   }
 
   async function loadOps() {
-    const { data } = await supabase.from('cotizaciones').select('num, cliente, estado, created_at').eq('tercero_id', tercero.id).order('created_at', { ascending: false })
+    const { data } = await supabase.from('cotizaciones').select('id, num, cliente, estado, created_at').eq('tercero_id', tercero.id).order('created_at', { ascending: false })
     if (data) setOps(data)
   }
 
@@ -609,6 +609,15 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                 {tercero.dir_fiscal_ciudad && <span>{tercero.dir_fiscal_ciudad}</span>}
                 {tercero.dir_fiscal_provincia && <span>{tercero.dir_fiscal_provincia}</span>}
               </div>
+              {rubros.length > 0 && (
+                <div className="flex gap-1.5 mt-2 flex-wrap">
+                  {rubros.map((r: any) => (
+                    <span key={r.id} className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white" style={{ background: r.color }}>
+                      {r.icono} {r.nombre}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <button onClick={() => setEditando(!editando)}
@@ -625,7 +634,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
           { key: 'bancario', label: `Cuentas bancarias (${cuentas.length})` },
           { key: 'documentos', label: `Documentos (${docs.length})` },
           { key: 'operaciones', label: `Operaciones (${ops.length})` },
-      ...(tercero.tipo?.includes('proveedor') ? [{ key: 'rubros', label: `Rubros (${rubros.length})` }] : []),
+          ...(tercero.tipo?.includes('proveedor') ? [{ key: 'rubros', label: `Rubros (${rubros.length})` }] : []),
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key as any)}
             className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm ${tab === t.key ? 'bg-[#1168F8] text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
@@ -810,7 +819,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                       <td className="px-4 py-3 font-mono text-[10px]">{c.telefono || '-'}</td>
                       <td className="px-4 py-3 font-mono text-[10px] text-green-700">{c.whatsapp || '-'}</td>
                       <td className="px-4 py-3">
-                        <button onClick={() => deleteContacto(c.id)} className="text-gray-400 hover:text-red-500 transition-colors">🗑</button>
+                        <button onClick={() => deleteContacto(c.id)} className="text-gray-400 hover:text-red-500 transition-colors">X</button>
                       </td>
                     </tr>
                   ))}
@@ -881,7 +890,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                       <td className="px-4 py-3 font-mono text-[10px] text-gray-500">{c.cbu_iban || '-'}</td>
                       <td className="px-4 py-3 font-mono text-[10px] text-gray-500">{c.swift || '-'}</td>
                       <td className="px-4 py-3">
-                        <button onClick={() => deleteCuenta(c.id)} className="text-gray-400 hover:text-red-500 transition-colors">🗑</button>
+                        <button onClick={() => deleteCuenta(c.id)} className="text-gray-400 hover:text-red-500 transition-colors">X</button>
                       </td>
                     </tr>
                   ))}
@@ -944,7 +953,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                     </div>
                     {d.archivo_url && (
                       <a href={d.archivo_url} target="_blank" rel="noreferrer"
-                        className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC]">📄 Ver</a>
+                        className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC]">Ver</a>
                     )}
                   </div>
                 ))}
@@ -958,45 +967,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
         <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
           {ops.length === 0 ? (
             <div className="p-8 text-center text-gray-400 text-sm">Sin operaciones vinculadas aun.</div>
-          ) {tab === 'rubros' && (
-  <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-    <div className="mb-4">
-      <div className="text-sm font-bold text-gray-900 mb-1">Rubros asignados</div>
-      <div className="text-[10px] text-gray-400">Determina en que bloque del cotizador aparece este proveedor</div>
-    </div>
-    <div className="grid grid-cols-2 gap-3">
-      {todosRubros.map(r => {
-        const asignado = rubros.some((x: any) => x.id === r.id)
-        return (
-          <button key={r.id} onClick={() => toggleRubro(r.id)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${asignado ? '' : 'border-gray-200 hover:border-gray-300 bg-gray-50'}`}
-            style={asignado ? { background: r.color + '15', borderColor: r.color + '40' } : {}}>
-            <span className="text-xl flex-shrink-0">{r.icono}</span>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold truncate" style={asignado ? { color: r.color } : { color: '#374151' }}>{r.nombre}</div>
-              {r.descripcion && <div className="text-[10px] text-gray-400 truncate mt-0.5">{r.descripcion}</div>}
-            </div>
-            {asignado && (
-              <span className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: r.color }}>v</span>
-            )}
-          </button>
-        )
-      })}
-    </div>
-    {rubros.length > 0 && (
-      <div className="mt-4 pt-4 border-t border-gray-100">
-        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Aparece en el cotizador como:</div>
-        <div className="flex flex-wrap gap-2">
-          {rubros.map((r: any) => (
-            <div key={r.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white" style={{ background: r.color }}>
-              <span>{r.icono}</span><span>{r.nombre}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    )}
-  </div>
-)} : (
+          ) : (
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
@@ -1020,6 +991,52 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                 ))}
               </tbody>
             </table>
+          )}
+        </div>
+      )}
+
+      {tab === 'rubros' && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+          <div className="mb-4">
+            <div className="text-sm font-bold text-gray-900 mb-1">Rubros asignados</div>
+            <div className="text-[10px] text-gray-400">Determina en que bloque del cotizador aparece este proveedor</div>
+          </div>
+          {todosRubros.length === 0 ? (
+            <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 text-center">
+              No hay rubros configurados. Configuralos en Rubros proveedores desde el menu lateral.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {todosRubros.map(r => {
+                const asignado = rubros.some((x: any) => x.id === r.id)
+                return (
+                  <button key={r.id} onClick={() => toggleRubro(r.id)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${asignado ? '' : 'border-gray-200 hover:border-gray-300 bg-gray-50'}`}
+                    style={asignado ? { background: r.color + '15', borderColor: r.color + '40' } : {}}>
+                    <span className="text-xl flex-shrink-0">{r.icono}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold truncate" style={asignado ? { color: r.color } : { color: '#374151' }}>{r.nombre}</div>
+                      {r.descripcion && <div className="text-[10px] text-gray-400 truncate mt-0.5">{r.descripcion}</div>}
+                    </div>
+                    {asignado && (
+                      <span className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: r.color }}>v</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {rubros.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Aparece en el cotizador como:</div>
+              <div className="flex flex-wrap gap-2">
+                {rubros.map((r: any) => (
+                  <div key={r.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white" style={{ background: r.color }}>
+                    <span>{r.icono}</span><span>{r.nombre}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       )}
