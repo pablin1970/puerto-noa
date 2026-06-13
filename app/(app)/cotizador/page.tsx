@@ -72,8 +72,8 @@ interface CotState {
   honTipo: 'pct_cif'|'fijo_usd'|'fijo_ars'
   honValor: number; honPiso: number; honTecho: number
   gastosDesp: GastoArg[]
-  // Sección B: otros gastos libres (cant × unitario)
-  rowsE: ItemLog[]
+  // Sección B: otros gastos en Argentina con tipoCalc completo
+  rowsE: GastoArg[]
   // Bloque 5 - Fee
   feeModo: 'cont'|'pct'
   feeCont: number
@@ -313,7 +313,7 @@ export default function CotizadorPage(){
     else {usd=g.valor/(tcTrib||1)}
     return usd
   }
-  const subE=s.rowsE.reduce((t,r)=>t+r.cant*r.unitario,0)
+  const subE=s.rowsE.reduce((t,r)=>t+calcGastoArg(r,cif,s.tcTrib),0)
   const cif=totalFOB+subFW+totalSeg
   const cifARS=cif*s.tcTrib
   // Honorario + gastos adicionales despachante (sección A)
@@ -1238,25 +1238,54 @@ export default function CotizadorPage(){
                   <button onClick={()=>u('gastosDesp',[...s.gastosDesp,{id:uid2(),desc:'',tipoCalc:'fijo_usd',moneda:'USD',valor:0,pisoUsd:0,techoUsd:0,usd:0,ars:0}])}
                     className="text-[10px] text-[#6b21a8] hover:underline">+ Agregar gasto</button>
                 </div>
-
-                {/* Buscador despachante */}
-                <div className="relative mb-3">
-                  <input
-                    value={despachanteSelId ? despachantes.find((d:any)=>d.id===despachanteSelId)?.razon_social||'' : buscarDespachante}
-                    onChange={e=>{setBuscarDespachante(e.target.value);setShowDespachanteDropdown(e.target.value.length>0);if(!e.target.value){setDespachanteSelId(null);u('despachante','')}}}
-                    onFocus={()=>setShowDespachanteDropdown(true)}
-                    onClick={e=>e.stopPropagation()}
-                    className={inp} placeholder="Buscar despachante de aduana..."/>
-                  {showDespachanteDropdown&&despachantes.filter((d:any)=>!buscarDespachante||d.razon_social?.toLowerCase().includes(buscarDespachante.toLowerCase())).length>0&&(
-                    <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-40 overflow-y-auto mt-1" onClick={e=>e.stopPropagation()}>
-                      {despachantes.filter((d:any)=>!buscarDespachante||d.razon_social?.toLowerCase().includes(buscarDespachante.toLowerCase())).map((d:any)=>(
-                        <button key={d.id} onMouseDown={()=>seleccionarDespachante(d)} className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
-                          <div className="font-semibold text-gray-900">{d.razon_social}</div>
-                        </button>
-                      ))}
-                    </div>
+                {/* Buscador despachante + selector cotización del sistema */}
+                <div className="flex gap-2 mb-3">
+                  <div className="relative flex-1">
+                    <input
+                      value={despachanteSelId ? despachantes.find((d:any)=>d.id===despachanteSelId)?.razon_social||'' : buscarDespachante}
+                      onChange={e=>{setBuscarDespachante(e.target.value);setShowDespachanteDropdown(e.target.value.length>0);if(!e.target.value){setDespachanteSelId(null);u('despachante','')}}}
+                      onFocus={()=>setShowDespachanteDropdown(true)}
+                      onClick={e=>e.stopPropagation()}
+                      className={inp} placeholder="Buscar despachante de aduana..."/>
+                    {showDespachanteDropdown&&despachantes.filter((d:any)=>!buscarDespachante||d.razon_social?.toLowerCase().includes(buscarDespachante.toLowerCase())).length>0&&(
+                      <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-40 overflow-y-auto mt-1" onClick={e=>e.stopPropagation()}>
+                        {despachantes.filter((d:any)=>!buscarDespachante||d.razon_social?.toLowerCase().includes(buscarDespachante.toLowerCase())).map((d:any)=>(
+                          <button key={d.id} onMouseDown={()=>seleccionarDespachante(d)} className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
+                            <div className="font-semibold text-gray-900">{d.razon_social}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {despachantes.length===0&&<div className="mt-1 text-[9px] text-amber-600">Sin despachantes. Agregalos en Clientes y Proveedores con rubro Despachante de aduana.</div>}
+                  </div>
+                  {cotsArgDisponibles.length>0&&(
+                    <select onChange={e=>{
+                      if(!e.target.value) return
+                      const cot=cotsArgDisponibles.find((c:any)=>c.id===e.target.value)
+                      if(!cot) return
+                      const items=cot.items||[]
+                      const it=items[0] as any
+                      if(it){
+                        setS(p=>({...p,
+                          honTipo:(it.tipo_calculo==='pct_cif'?'pct_cif':it.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,
+                          honValor:it.valor||0,honPiso:it.piso_usd||0,honTecho:it.techo_usd||0,
+                          gastosDesp:items.slice(1).map((x:any)=>({id:uid2(),desc:x.descripcion,tipoCalc:(x.tipo_calculo==='pct_cif'?'pct_cif':x.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,moneda:'USD' as const,valor:x.valor||0,pisoUsd:x.piso_usd||0,techoUsd:x.techo_usd||0,usd:0,ars:0})),
+                        }))
+                        setProvUsado(pv=>({...pv,4:cot.id}))
+                      }
+                      e.target.value=''
+                    }} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#6b21a8]" defaultValue="">
+                      <option value="">+ Cotizacion del sistema</option>
+                      {(()=>{const {especificas,genericas}=filtrarCotsBloque(cotsArgDisponibles,clienteSelId);return(<>
+                        {especificas.length>0&&(<optgroup label="Especificas para este cliente">
+                          {especificas.map((c:any)=>(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
+                        </optgroup>)}
+                        <optgroup label="Genericas vigentes">
+                          {genericas.map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
+                        </optgroup>
+                      </>)})()}
+                    </select>
                   )}
-                  {despachantes.length===0&&<div className="mt-1 text-[9px] text-amber-600">Sin despachantes cargados. Agregalos en Clientes y Proveedores con rubro Despachante de aduana.</div>}
                 </div>
                 {loadingDesp&&<div className="text-[10px] text-gray-400 mb-2">Cargando condiciones del despachante...</div>}
                 {despachanteSelId&&(
@@ -1266,57 +1295,72 @@ export default function CotizadorPage(){
                       className="text-[9px] text-gray-400 hover:text-red-500">Cambiar</button>
                   </div>
                 )}
-
-                {/* Honorario despachante — siempre visible */}
+                {/* Honorario — fijo, siempre visible. Fila 1: tipo+valor. Fila 2 (solo si %): piso+techo */}
                 <div className="p-3 bg-purple-50 rounded-lg border border-purple-100 mb-2">
                   <div className="text-[10px] font-semibold text-[#6b21a8] mb-2">Honorario despachante de aduana</div>
-                  <div style={{display:'grid',gridTemplateColumns:'130px 90px 90px 90px',gap:'6px',alignItems:'center'}}>
-                    <select value={s.honTipo} onChange={e=>u('honTipo',e.target.value as any)} className="px-2 py-1.5 border border-purple-200 rounded-lg text-xs focus:outline-none bg-white">
+                  <div className="flex gap-2 items-center mb-2">
+                    <select value={s.honTipo} onChange={e=>u('honTipo',e.target.value as any)}
+                      className="px-2 py-1.5 border border-purple-200 rounded-lg text-xs focus:outline-none bg-white w-36 flex-shrink-0">
                       <option value="pct_cif">% sobre CIF</option>
                       <option value="fijo_usd">Fijo USD</option>
                       <option value="fijo_ars">Fijo ARS</option>
                     </select>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-gray-400 flex-shrink-0">{s.honTipo==='pct_cif'?'%':s.honTipo==='fijo_ars'?'ARS':'USD'}</span>
-                      <input type="text" inputMode="decimal" value={s.honValor||''} placeholder="0" onFocus={e=>e.target.select()}
-                        onChange={e=>u('honValor',parseNum(e.target.value))}
-                        className="flex-1 px-2 py-1.5 border border-purple-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#6b21a8]"/>
-                    </div>
-                    {s.honTipo==='pct_cif'
-                      ?<div className="flex items-center gap-1"><span className="text-[10px] text-gray-400 flex-shrink-0">Piso USD</span><input type="text" inputMode="decimal" value={s.honPiso||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>u('honPiso',parseNum(e.target.value))} className="flex-1 px-2 py-1.5 border border-purple-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none"/></div>
-                      :<div/>}
-                    {s.honTipo==='pct_cif'
-                      ?<div className="flex items-center gap-1"><span className="text-[10px] text-gray-400 flex-shrink-0">Techo USD</span><input type="text" inputMode="decimal" value={s.honTecho||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>u('honTecho',parseNum(e.target.value))} className="flex-1 px-2 py-1.5 border border-purple-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none"/></div>
-                      :<div/>}
+                    <span className="text-[10px] text-gray-500 flex-shrink-0">{s.honTipo==='pct_cif'?'%':s.honTipo==='fijo_ars'?'ARS':'USD'}</span>
+                    <input type="text" inputMode="decimal" value={s.honValor||''} placeholder="0" onFocus={e=>e.target.select()}
+                      onChange={e=>u('honValor',parseNum(e.target.value))}
+                      className="w-32 px-2 py-1.5 border border-purple-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#6b21a8]"/>
                   </div>
-                  <div className="flex justify-end mt-2">
-                    <span className="font-mono font-semibold text-[#6b21a8] text-xs">USD {fmt(subGastosArg)}</span>
+                  {s.honTipo==='pct_cif'&&(
+                    <div className="flex gap-2 items-center mb-1">
+                      <span className="text-[10px] text-gray-400 w-36 flex-shrink-0 text-right">Piso USD</span>
+                      <input type="text" inputMode="decimal" value={s.honPiso||''} placeholder="0" onFocus={e=>e.target.select()}
+                        onChange={e=>u('honPiso',parseNum(e.target.value))}
+                        className="w-32 px-2 py-1.5 border border-purple-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#6b21a8]"/>
+                      <span className="text-[10px] text-gray-400 ml-2 flex-shrink-0">Techo USD</span>
+                      <input type="text" inputMode="decimal" value={s.honTecho||''} placeholder="0" onFocus={e=>e.target.select()}
+                        onChange={e=>u('honTecho',parseNum(e.target.value))}
+                        className="w-32 px-2 py-1.5 border border-purple-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#6b21a8]"/>
+                    </div>
+                  )}
+                  <div className="flex justify-end mt-1">
+                    <span className="font-mono font-semibold text-[#6b21a8] text-xs">USD {fmt(subHon)}</span>
                     <span className="text-gray-300 mx-2">—</span>
-                    <span className="font-mono text-gray-500 text-[10px]">ARS {Math.round(subGastosArg*s.tcTrib).toLocaleString('es-AR')}</span>
+                    <span className="font-mono text-gray-500 text-[10px]">ARS {Math.round(subHon*s.tcTrib).toLocaleString('es-AR')}</span>
                   </div>
                 </div>
-
-                {/* Items adicionales del despachante */}
+                {/* Gastos adicionales del despachante — misma estructura, eliminables */}
                 {s.gastosDesp.map((g,i)=>{
                   const usdItem=calcGastoArg(g,cif,s.tcTrib)
                   return (
                     <div key={g.id} className="p-3 bg-purple-50 rounded-lg border border-purple-100 mb-2">
-                      <div style={{display:'grid',gridTemplateColumns:'1fr 130px 90px 90px 90px 24px',gap:'6px',alignItems:'center'}}>
-                        <input value={g.desc} onChange={e=>{const n=[...s.gastosDesp];n[i]={...n[i],desc:e.target.value};u('gastosDesp',n)}} className="w-full px-2.5 py-1.5 border border-purple-200 rounded-lg text-xs focus:outline-none focus:border-[#6b21a8] bg-white" placeholder="Concepto (ej. Gastos administrativos)"/>
-                        <select value={g.tipoCalc} onChange={e=>{const n=[...s.gastosDesp];n[i]={...n[i],tipoCalc:e.target.value as any};u('gastosDesp',n)}} className="px-2 py-1.5 border border-purple-200 rounded-lg text-xs focus:outline-none bg-white">
+                      <div className="flex gap-2 items-center mb-2">
+                        <input value={g.desc} onChange={e=>{const n=[...s.gastosDesp];n[i]={...n[i],desc:e.target.value};u('gastosDesp',n)}}
+                          className="flex-1 px-2.5 py-1.5 border border-purple-200 rounded-lg text-xs focus:outline-none focus:border-[#6b21a8] bg-white" placeholder="Concepto (ej. Gastos administrativos)"/>
+                        <select value={g.tipoCalc} onChange={e=>{const n=[...s.gastosDesp];n[i]={...n[i],tipoCalc:e.target.value as any};u('gastosDesp',n)}}
+                          className="px-2 py-1.5 border border-purple-200 rounded-lg text-xs focus:outline-none bg-white w-36 flex-shrink-0">
                           <option value="pct_cif">% sobre CIF</option>
                           <option value="fijo_usd">Fijo USD</option>
                           <option value="fijo_ars">Fijo ARS</option>
                         </select>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-gray-400 flex-shrink-0">{g.tipoCalc==='pct_cif'?'%':g.tipoCalc==='fijo_ars'?'ARS':'USD'}</span>
-                          <input type="text" inputMode="decimal" value={g.valor||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosDesp];n[i]={...n[i],valor:parseNum(e.target.value)};u('gastosDesp',n)}} className="flex-1 px-2 py-1.5 border border-purple-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none"/>
-                        </div>
-                        {g.tipoCalc==='pct_cif'?<div className="flex items-center gap-1"><span className="text-[10px] text-gray-400 flex-shrink-0">Piso</span><input type="text" inputMode="decimal" value={g.pisoUsd||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosDesp];n[i]={...n[i],pisoUsd:parseNum(e.target.value)};u('gastosDesp',n)}} className="flex-1 px-2 py-1.5 border border-purple-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none"/></div>:<div/>}
-                        {g.tipoCalc==='pct_cif'?<div className="flex items-center gap-1"><span className="text-[10px] text-gray-400 flex-shrink-0">Techo</span><input type="text" inputMode="decimal" value={g.techoUsd||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosDesp];n[i]={...n[i],techoUsd:parseNum(e.target.value)};u('gastosDesp',n)}} className="flex-1 px-2 py-1.5 border border-purple-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none"/></div>:<div/>}
-                        <button onClick={()=>u('gastosDesp',s.gastosDesp.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs">X</button>
+                        <span className="text-[10px] text-gray-500 flex-shrink-0">{g.tipoCalc==='pct_cif'?'%':g.tipoCalc==='fijo_ars'?'ARS':'USD'}</span>
+                        <input type="text" inputMode="decimal" value={g.valor||''} placeholder="0" onFocus={e=>e.target.select()}
+                          onChange={e=>{const n=[...s.gastosDesp];n[i]={...n[i],valor:parseNum(e.target.value)};u('gastosDesp',n)}}
+                          className="w-28 px-2 py-1.5 border border-purple-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none"/>
+                        <button onClick={()=>u('gastosDesp',s.gastosDesp.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs flex-shrink-0">X</button>
                       </div>
-                      <div className="flex justify-end mt-2">
+                      {g.tipoCalc==='pct_cif'&&(
+                        <div className="flex gap-2 items-center mb-1">
+                          <span className="text-[10px] text-gray-400 flex-shrink-0 ml-1">Piso USD</span>
+                          <input type="text" inputMode="decimal" value={g.pisoUsd||''} placeholder="0" onFocus={e=>e.target.select()}
+                            onChange={e=>{const n=[...s.gastosDesp];n[i]={...n[i],pisoUsd:parseNum(e.target.value)};u('gastosDesp',n)}}
+                            className="w-28 px-2 py-1.5 border border-purple-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none"/>
+                          <span className="text-[10px] text-gray-400 ml-2 flex-shrink-0">Techo USD</span>
+                          <input type="text" inputMode="decimal" value={g.techoUsd||''} placeholder="0" onFocus={e=>e.target.select()}
+                            onChange={e=>{const n=[...s.gastosDesp];n[i]={...n[i],techoUsd:parseNum(e.target.value)};u('gastosDesp',n)}}
+                            className="w-28 px-2 py-1.5 border border-purple-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none"/>
+                        </div>
+                      )}
+                      <div className="flex justify-end mt-1">
                         <span className="font-mono font-semibold text-[#6b21a8] text-xs">USD {fmt(usdItem)}</span>
                         <span className="text-gray-300 mx-2">—</span>
                         <span className="font-mono text-gray-500 text-[10px]">ARS {Math.round(usdItem*s.tcTrib).toLocaleString('es-AR')}</span>
@@ -1334,20 +1378,51 @@ export default function CotizadorPage(){
                     <span className="text-xs font-semibold text-gray-700">Otros gastos en Argentina</span>
                     <span className="text-[10px] text-gray-400">Transporte interno, almacenaje, etc.</span>
                   </div>
-                  <button onClick={()=>u('rowsE',[...s.rowsE,{id:uid2(),desc:'',cant:1,unitario:0}])}
+                  <button onClick={()=>u('rowsE',[...s.rowsE,{id:uid2(),desc:'',tipoCalc:'fijo_usd',moneda:'USD',valor:0,pisoUsd:0,techoUsd:0,usd:0,ars:0}])}
                     className="text-[10px] text-[#1168F8] hover:underline">+ Agregar</button>
                 </div>
                 {s.rowsE.length===0&&(
                   <div className="text-[10px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">Sin gastos adicionales.</div>
                 )}
-                {s.rowsE.map((r,i)=>(
-                  <div key={r.id} style={{display:'grid',gridTemplateColumns:'1fr 70px 110px 28px',gap:'6px',alignItems:'center'}} className="mb-2">
-                    <input value={r.desc} onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],desc:e.target.value};u('rowsE',n)}} className={inp} placeholder="Descripcion del gasto"/>
-                    <input type="text" inputMode="decimal" value={r.cant} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],cant:parseNum(e.target.value)||1};u('rowsE',n)}} className={inp+' text-right'} placeholder="Cant."/>
-                    <input type="text" inputMode="decimal" value={r.unitario} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],unitario:parseNum(e.target.value)};u('rowsE',n)}} className={inp+' text-right'} placeholder="USD"/>
-                    <button onClick={()=>u('rowsE',s.rowsE.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs">X</button>
-                  </div>
-                ))}
+                {s.rowsE.map((r,i)=>{
+                  const usdR=calcGastoArg(r,cif,s.tcTrib)
+                  return (
+                    <div key={r.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 mb-2">
+                      <div className="flex gap-2 items-center mb-2">
+                        <input value={r.desc} onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],desc:e.target.value};u('rowsE',n)}}
+                          className="flex-1 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Descripcion del gasto"/>
+                        <select value={r.tipoCalc} onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],tipoCalc:e.target.value as any};u('rowsE',n)}}
+                          className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none bg-white w-36 flex-shrink-0">
+                          <option value="pct_cif">% sobre CIF</option>
+                          <option value="fijo_usd">Fijo USD</option>
+                          <option value="fijo_ars">Fijo ARS</option>
+                        </select>
+                        <span className="text-[10px] text-gray-500 flex-shrink-0">{r.tipoCalc==='pct_cif'?'%':r.tipoCalc==='fijo_ars'?'ARS':'USD'}</span>
+                        <input type="text" inputMode="decimal" value={r.valor||''} placeholder="0" onFocus={e=>e.target.select()}
+                          onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],valor:parseNum(e.target.value)};u('rowsE',n)}}
+                          className="w-28 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]"/>
+                        <button onClick={()=>u('rowsE',s.rowsE.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs flex-shrink-0">X</button>
+                      </div>
+                      {r.tipoCalc==='pct_cif'&&(
+                        <div className="flex gap-2 items-center mb-1">
+                          <span className="text-[10px] text-gray-400 flex-shrink-0 ml-1">Piso USD</span>
+                          <input type="text" inputMode="decimal" value={r.pisoUsd||''} placeholder="0" onFocus={e=>e.target.select()}
+                            onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],pisoUsd:parseNum(e.target.value)};u('rowsE',n)}}
+                            className="w-28 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]"/>
+                          <span className="text-[10px] text-gray-400 ml-2 flex-shrink-0">Techo USD</span>
+                          <input type="text" inputMode="decimal" value={r.techoUsd||''} placeholder="0" onFocus={e=>e.target.select()}
+                            onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],techoUsd:parseNum(e.target.value)};u('rowsE',n)}}
+                            className="w-28 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]"/>
+                        </div>
+                      )}
+                      <div className="flex justify-end mt-1">
+                        <span className="font-mono font-semibold text-gray-700 text-xs">USD {fmt(usdR)}</span>
+                        <span className="text-gray-300 mx-2">—</span>
+                        <span className="font-mono text-gray-500 text-[10px]">ARS {Math.round(usdR*s.tcTrib).toLocaleString('es-AR')}</span>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
             <div className="flex justify-end items-center gap-2 px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
