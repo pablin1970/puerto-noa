@@ -78,7 +78,7 @@ const INIT: CotState = {
   origen:'Dalian, China (CNDAG)',ptoChile:'IQQ',destinoNoa:'Jujuy',incoterm:'FOB',transito:'44-46 dias',notas:'',
   puertoChiId:'',puertoChileId:'',pasoId:'',ciudadDestinoId:'',
   modalidadCarga:'contenedor',
-  contenedores:[{tipo:'40HC',cantidad:1,tipoCamionId:''}],
+  contenedores:[{tipo:'40HC',cantidad:1} as any],
   productos:[{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:'FOB'}],
   exwTransp:0,exwAgente:0,exwOtros:0,precioArgEquiv:0,proformas:[],
   cotsFW:[],
@@ -692,7 +692,7 @@ export default function CotizadorPage(){
                       )}
                     </div>
                   ))}
-                  <button onClick={()=>u('contenedores',[...s.contenedores,{tipo:'40HC',cantidad:1,tipoCamionId:''}])}
+                  <button onClick={()=>u('contenedores',[...s.contenedores,{tipo:'40HC',cantidad:1} as any])}
                     className="text-xs text-[#1168F8] hover:underline mt-1">+ Agregar contenedor</button>
                   <div className="mt-3 text-xs text-gray-500">
                     Total: <strong className="text-gray-800">{nc} contenedor(es)</strong> — {s.contenedores.map(c=>`${c.cantidad}x ${c.tipo}`).join(', ')}
