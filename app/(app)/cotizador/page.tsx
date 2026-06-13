@@ -627,7 +627,7 @@ export default function CotizadorPage(){
                     <div key={c.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-1.5">
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-[11px] font-bold text-[#1168F8]">{c.num}</span>
-                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${c.estado==='aceptada'?'bg-green-50 text-green-700':c.estado==='enviada'?'bg-blue-50 text-[#1168F8]}':'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
+                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${c.estado==='aceptada'?'bg-green-50 text-green-700':c.estado==='enviada'?'bg-blue-50 text-[#1168F8]':'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
                         <span className="text-[10px] text-gray-400">{c.created_at?.slice(0,10)}</span>
                       </div>
                       <div className="flex items-center gap-2">
