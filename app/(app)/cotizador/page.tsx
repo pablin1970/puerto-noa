@@ -166,6 +166,7 @@ export default function CotizadorPage(){
   const [terceros,setTerceros]=useState<any[]>([])
   const [despachantes,setDespachantes]=useState<any[]>([])
   const [despachanteSelId,setDespachanteSelId]=useState<string|null>(null)
+  const [cotDesp,setCotDesp]=useState<{id:string;referencia:string;fecha:string;tipo:'generica'|'especifica'}|null>(null)
   const [buscarDespachante,setBuscarDespachante]=useState('')
   const [showDespachanteDropdown,setShowDespachanteDropdown]=useState(false)
   const [loadingDesp,setLoadingDesp]=useState(false)
@@ -442,8 +443,10 @@ export default function CotizadorPage(){
         }))
       }
       setProvUsado(pv=>({...pv,4:cot.id}))
+      setCotDesp({id:cot.id,referencia:cot.referencia||'',fecha:cot.fecha||'',tipo:(cot.tipo==='especifica'?'especifica':'generica')})
     } else {
       setS(p=>({...p,honTipo:'fijo_usd',honValor:0,honPiso:0,honTecho:0,gastosDesp:[]}))
+      setCotDesp(null)
     }
     setLoadingDesp(false)
   }
@@ -1273,6 +1276,7 @@ export default function CotizadorPage(){
                           gastosDesp:items.slice(1).map((x:any)=>({id:uid2(),desc:x.descripcion,tipoCalc:(x.tipo_calculo==='pct_cif'?'pct_cif':x.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,moneda:'USD' as const,valor:x.valor||0,pisoUsd:x.piso_usd||0,techoUsd:x.techo_usd||0,usd:0,ars:0})),
                         }))
                         setProvUsado(pv=>({...pv,4:cot.id}))
+                        setCotDesp({id:cot.id,referencia:cot.referencia||'',fecha:cot.fecha||'',tipo:(cot.tipo==='especifica'?'especifica':'generica')})
                       }
                       e.target.value=''
                     }} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#6b21a8]" defaultValue="">
@@ -1290,9 +1294,20 @@ export default function CotizadorPage(){
                 </div>
                 {loadingDesp&&<div className="text-[10px] text-gray-400 mb-2">Cargando condiciones del despachante...</div>}
                 {despachanteSelId&&(
-                  <div className="mb-3 flex items-center gap-2">
-                    <span className="text-[9px] text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded-full">✓ {despachantes.find((d:any)=>d.id===despachanteSelId)?.razon_social} — condiciones cargadas</span>
-                    <button onClick={()=>{setDespachanteSelId(null);u('despachante','');setBuscarDespachante('');setS(p=>({...p,honTipo:'fijo_usd',honValor:0,honPiso:0,honTecho:0,gastosDesp:[]}))}}
+                  <div className="mb-3 flex items-center gap-2 flex-wrap">
+                    <span className="text-[9px] text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded-full">
+                      ✓ {despachantes.find((d:any)=>d.id===despachanteSelId)?.razon_social}
+                    </span>
+                    {cotDesp ? (
+                      <span className={`text-[9px] font-medium px-2 py-0.5 rounded-full ${cotDesp.tipo==='especifica'?'bg-amber-50 text-amber-700 border border-amber-200':'bg-gray-100 text-gray-500'}`}>
+                        {cotDesp.tipo==='especifica'?'⭐ Cotizacion especifica':'Cotizacion generica'}
+                        {cotDesp.referencia?' — '+cotDesp.referencia:''}
+                        {cotDesp.fecha?' ('+cotDesp.fecha.slice(0,10).split('-').reverse().join('/')+')':''}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-gray-400 italic">Sin cotizacion del sistema — valores manuales</span>
+                    )}
+                    <button onClick={()=>{setDespachanteSelId(null);u('despachante','');setBuscarDespachante('');setCotDesp(null);setS(p=>({...p,honTipo:'fijo_usd',honValor:0,honPiso:0,honTecho:0,gastosDesp:[]}))}}
                       className="text-[9px] text-gray-400 hover:text-red-500">Cambiar</button>
                   </div>
                 )}
