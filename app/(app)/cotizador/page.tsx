@@ -155,6 +155,10 @@ export default function CotizadorPage(){
   // Cotizaciones de proveedores seleccionadas por bloque
   const [provUsado,setProvUsado]=useState<Record<number,string|null>>({1:null,2:null,3:null,4:null})
   const [terceros,setTerceros]=useState<any[]>([])
+  const [despachantes,setDespachantes]=useState<any[]>([])
+  const [despachanteSelId,setDespachanteSelId]=useState<string|null>(null)
+  const [buscarDespachante,setBuscarDespachante]=useState('')
+  const [showDespachanteDropdown,setShowDespachanteDropdown]=useState(false)
   const [buscarCliente,setBuscarCliente]=useState('')
   const [showClienteDropdown,setShowClienteDropdown]=useState(false)
   const [clienteSelId,setClienteSelId]=useState<string|null>(null)
@@ -178,6 +182,16 @@ export default function CotizadorPage(){
       .eq('activo','true')
       .filter('tipo', 'cs', '{"cliente"}')
       .then(({data})=>{if(data) setTerceros(data)})
+    // Cargar despachantes (proveedores con rubro despachante de aduana)
+    supabase.from('tercero_rubros')
+      .select('tercero_id, rubro:proveedor_rubros!inner(nombre), tercero:terceros!inner(id,razon_social,activo)')
+      .eq('rubro.nombre','Despachante de aduana')
+      .then(({data})=>{
+        if(data){
+          const desps=(data as any[]).filter(r=>r.tercero?.activo!==false).map(r=>r.tercero)
+          setDespachantes(desps)
+        }
+      })
     // Cargar cotizaciones de proveedores v2 vigentes por rubro
     supabase.from('cotizaciones_proveedor_v2')
       .select('*, items:cotizaciones_proveedor_v2_items(*)')
@@ -512,7 +526,7 @@ export default function CotizadorPage(){
       {tab==='embarque'&&(
         <div className="space-y-4">
           <Card title="Cliente y operacion">
-            <div className="grid grid-cols-4 gap-3 mb-3">
+            <div className="grid grid-cols-3 gap-3 mb-3">
               <div className="col-span-2">
                 <Field label="Razon social">
                   <div className="relative">
@@ -566,11 +580,89 @@ export default function CotizadorPage(){
             <div className="grid grid-cols-4 gap-3 mb-3">
               <div className="col-span-2"><Field label="Email"><input type="email" value={s.email} onChange={e=>u('email',e.target.value)} className={inp} placeholder="correo@empresa.com"/></Field></div>
               <Field label="Despachante de aduana"><input value={s.despachante} onChange={e=>u('despachante',e.target.value)} className={inp} placeholder="Nombre / CUIT"/></Field>
-              <Field label="Condicion IVA"><select value={s.ivaCondicion} onChange={e=>u('ivaCondicion',e.target.value)} className={sel}>{['Responsable Inscripto','Monotributista','Exento','Consumidor Final'].map(v=><option key={v}>{v}</option>)}</select></Field>
+
             </div>
-            <div className="grid grid-cols-4 gap-3">
-              <Field label="Validez oferta"><select value={s.validez} onChange={e=>u('validez',e.target.value)} className={sel}><option value="">Sin especificar</option><option value="15 dias">15 dias</option><option value="30 dias">30 dias</option><option value="45 dias">45 dias</option></select></Field>
-              <div className="col-span-3"><Field label="Notas internas"><input value={s.notas} onChange={e=>u('notas',e.target.value)} className={inp} placeholder="Observaciones"/></Field></div>
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div className="col-span-2 relative">
+                <label className="block text-[10px] font-medium text-gray-500 mb-1">Despachante de aduana</label>
+                <input
+                  value={despachanteSelId
+                    ? despachantes.find((d:any)=>d.id===despachanteSelId)?.razon_social||s.despachante
+                    : buscarDespachante||s.despachante}
+                  onChange={e=>{
+                    setBuscarDespachante(e.target.value)
+                    u('despachante',e.target.value)
+                    setShowDespachanteDropdown(e.target.value.length>0)
+                    if(!e.target.value) setDespachanteSelId(null)
+                  }}
+                  onFocus={()=>setShowDespachanteDropdown(true)}
+                  onClick={e=>e.stopPropagation()}
+                  className={inp} placeholder="Buscar o escribir despachante..."/>
+                {showDespachanteDropdown&&despachantes.filter((d:any)=>
+                  !buscarDespachante||d.razon_social?.toLowerCase().includes(buscarDespachante.toLowerCase())
+                ).length>0&&(
+                  <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-40 overflow-y-auto mt-1"
+                    onClick={e=>e.stopPropagation()}>
+                    {despachantes.filter((d:any)=>
+                      !buscarDespachante||d.razon_social?.toLowerCase().includes(buscarDespachante.toLowerCase())
+                    ).map((d:any)=>(
+                      <button key={d.id} onMouseDown={async()=>{
+                        setDespachanteSelId(d.id)
+                        u('despachante',d.razon_social)
+                        setBuscarDespachante('')
+                        setShowDespachanteDropdown(false)
+                        // Cargar cotizaciones vigentes del despachante y pre-llenar Bloque 4
+                        const {data:cots}=await supabase.from('cotizaciones_proveedor_v2')
+                          .select('*,items:cotizaciones_proveedor_v2_items(*)')
+                          .eq('tercero_id',d.id)
+                          .eq('estado','vigente')
+                          .order('fecha',{ascending:false})
+                          .limit(1)
+                        if(cots&&cots.length>0){
+                          const cot=cots[0] as any
+                          const nuevos=(cot.items||[]).map((it:any)=>({
+                            id:uid2(),
+                            desc:`${it.descripcion} — ${d.razon_social}`,
+                            tipoCalc:(it.tipo_calculo==='pct_cif'?'pct_cif':it.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,
+                            moneda:(it.moneda||'USD') as any,
+                            valor:it.valor||0,
+                            pisoUsd:it.piso_usd||0,
+                            techoUsd:it.techo_usd||0,
+                            usd:0,ars:0,
+                          }))
+                          setS(p=>({...p,gastosArg:[...p.gastosArg,...nuevos]}))
+                          setProvUsado(pv=>({...pv,4:cot.id}))
+                        }
+                      }} className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
+                        <div className="font-semibold text-gray-900">{d.razon_social}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {despachanteSelId&&(
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="text-[10px] text-green-600 font-medium">✓ Condiciones cargadas en Bloque 4</span>
+                    <button onClick={()=>{setDespachanteSelId(null);u('despachante','');setBuscarDespachante('')}}
+                      className="text-[10px] text-gray-400 hover:text-red-500">Limpiar</button>
+                  </div>
+                )}
+                {despachantes.length===0&&(
+                  <div className="mt-1 text-[10px] text-amber-600">
+                    Sin despachantes cargados. Agregalos en Clientes y Proveedores con rubro Despachante de aduana.
+                  </div>
+                )}
+              </div>
+              <Field label="Validez oferta">
+                <select value={s.validez} onChange={e=>u('validez',e.target.value)} className={sel}>
+                  <option value="">Sin especificar</option>
+                  <option value="15 dias">15 dias</option>
+                  <option value="30 dias">30 dias</option>
+                  <option value="45 dias">45 dias</option>
+                </select>
+              </Field>
+            </div>
+            <div className="mt-3">
+              <Field label="Notas internas"><input value={s.notas} onChange={e=>u('notas',e.target.value)} className={inp} placeholder="Observaciones"/></Field>
             </div>
           </Card>
 
