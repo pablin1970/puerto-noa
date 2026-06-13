@@ -531,8 +531,6 @@ export default function CotizadorPage(){
     (t.nombre_fantasia||'').toLowerCase().includes((buscarCliente||s.cliente).toLowerCase())
   ).slice(0,8)
 
-  const TABS=[{key:'embarque',label:'Embarque'},{key:'logistica',label:'Logistica'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as const
-
   return (
     <div ref={topRef} className="p-6 bg-gray-50 min-h-screen" onClick={()=>setShowClienteDropdown(false)}>
       <div className="mb-5 flex items-center gap-4">
@@ -546,8 +544,8 @@ export default function CotizadorPage(){
       </div>
 
       <div className="flex gap-2 mb-5 flex-wrap items-center">
-        {TABS.map(t=>(
-          <button key={t.key} onClick={()=>cambiarTab(t.key as Tab)} className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm ${tab===t.key?'bg-[#1168F8] text-white shadow-md':'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{t.label}</button>
+        {([{key:'embarque',label:'Embarque'},{key:'logistica',label:'Logistica'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as const).map(t=>(
+          <button key={t.key} onClick={()=>{setTab(t.key as Tab);setTimeout(()=>{topRef.current?.scrollIntoView({behavior:'smooth',block:'start'})},50)}} className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm ${tab===t.key?'bg-[#1168F8] text-white shadow-md':'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{t.label}</button>
         ))}
         <div className="ml-auto">
           <Image src="/logo.png" alt="Puertonoa" width={80} height={22} style={{objectFit:'contain',opacity:0.6}}/>
@@ -1442,7 +1440,13 @@ export default function CotizadorPage(){
               <div className="text-2xl font-semibold text-gray-900">{s.precioArgEquiv>0?`USD ${fmt(s.precioArgEquiv,0)}`:'—'}</div>
             </div>
           </div>
-          {s.precioArgEquiv>0&&(()=>{const d=s.precioArgEquiv-totalLanded;return <div className={`text-xs px-4 py-3 rounded-xl text-center font-medium ${d>0?'bg-[#EBF2FF] text-[#052698] border border-[#93B8FC]':'bg-red-50 text-red-700 border border-red-200'}`}>{d>0?`Importar desde China es USD ${fmt(Math.abs(d),0)} mas economico (${Math.round(Math.abs(d)/s.precioArgEquiv*100)}% de ahorro)`:`Importar desde China resulta USD ${fmt(Math.abs(d),0)} mas caro que el precio local`}</div>})()}
+          {s.precioArgEquiv>0&&(
+            <div className={`text-xs px-4 py-3 rounded-xl text-center font-medium ${(s.precioArgEquiv-totalLanded)>0?'bg-[#EBF2FF] text-[#052698] border border-[#93B8FC]':'bg-red-50 text-red-700 border border-red-200'}`}>
+              {(s.precioArgEquiv-totalLanded)>0
+                ?`Importar desde China es USD ${fmt(Math.abs(s.precioArgEquiv-totalLanded),0)} mas economico (${Math.round(Math.abs(s.precioArgEquiv-totalLanded)/s.precioArgEquiv*100)}% de ahorro)`
+                :`Importar desde China resulta USD ${fmt(Math.abs(s.precioArgEquiv-totalLanded),0)} mas caro que el precio local`}
+            </div>
+          )}
 
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Desglose completo de costos</div>
