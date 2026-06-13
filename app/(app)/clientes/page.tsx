@@ -647,6 +647,31 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
         <div className="space-y-4">
           {editando ? (
             <>
+              {/* Tipo de tercero — editable */}
+              <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                <h3 className="font-bold text-sm text-gray-900 mb-3">Tipo de tercero</h3>
+                <div className="flex gap-3">
+                  {[
+                    { key: 'cliente', label: 'Cliente', icon: '🤝', desc: 'Contrata servicios a Puerto NOA' },
+                    { key: 'proveedor', label: 'Proveedor', icon: '📦', desc: 'Presta servicios a Puerto NOA' },
+                  ].map(o => (
+                    <button key={o.key} onClick={() => {
+                      const tipos = form.tipo || []
+                      const nuevos = tipos.includes(o.key) ? tipos.filter((x: string) => x !== o.key) : [...tipos, o.key]
+                      if (nuevos.length === 0) return // al menos uno
+                      setForm((f: any) => ({ ...f, tipo: nuevos }))
+                    }}
+                      className={`flex-1 px-4 py-3 rounded-xl border-2 text-left transition-all ${(form.tipo || []).includes(o.key) ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
+                      <div className="text-base mb-1">{o.icon}</div>
+                      <div className="font-bold text-sm text-gray-900">{o.label}</div>
+                      <div className="text-[10px] text-gray-400">{o.desc}</div>
+                    </button>
+                  ))}
+                </div>
+                {(form.tipo || []).includes('cliente') && (form.tipo || []).includes('proveedor') && (
+                  <div className="mt-2 text-[10px] text-amber-600 font-medium">↔️ Registrado como cliente y proveedor simultáneamente</div>
+                )}
+              </div>
               <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
                 <h3 className="font-bold text-sm text-gray-900 mb-4">Datos generales</h3>
                 <div className="grid grid-cols-2 gap-3">
