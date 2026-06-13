@@ -571,7 +571,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
   )
 }
 
-function DetalleCotizacion({ cotizacion, supabase, terceros, onReload, onBack, onEliminar }: any) {
+function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, onReload, onBack, onEliminar }: any) {
   const [editando, setEditando] = useState(false)
   const [items, setItems] = useState<Item[]>(cotizacion.items || [])
   const [saving, setSaving] = useState(false)
