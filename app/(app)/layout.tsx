@@ -35,7 +35,6 @@ const NAV: NavItem[] = [
   // Gestión de costos y proveedores de servicio
   { label: 'COMPRAS', section: true },
   { href: '/cotizaciones-proveedores', label: 'Cotizaciones proveedores', icon: '📋' },
-  { href: '/tarifas',                  label: 'Tarifas base',             icon: '⚙' },
 
   // ── 4. FINANZAS ────────────────────────────────────
   // Facturación + cuentas corrientes + tesorería
