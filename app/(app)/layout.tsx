@@ -50,7 +50,7 @@ const NAV: NavItem[] = [
 { href: '/tarifas', label: 'Tarifas base', icon: '⚙' },
   { href: '/tipos-cambio', label: 'Tipos de cambio', icon: '💱' },
   { href: '/tributos-config', label: 'Tributos ARCA', icon: '§', adminOnly: true },
-  { href: '/usuarios', label: 'Usuarios', icon: '◎', adminOnly: true },
+  { href: '/usuarios', label: 'Usuarios', icon: '◎', adminOnly: true },{ href: '/configuracion/tipos-camion', label: 'Tipos de camion', icon: '🚛' },
 ]
 
 interface TCWidget {
