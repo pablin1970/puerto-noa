@@ -1294,42 +1294,15 @@ export default function CotizadorPage(){
                   <button onClick={()=>u('rowsE',[...s.rowsE,{id:uid2(),desc:'',cant:1,unitario:0}])}
                     className="text-[10px] text-[#1168F8] hover:underline">+ Agregar</button>
                 </div>
-              {s.rowsE.map((r,i)=>{
-                const usd=calcGastoArg(g,cif,s.tcTrib)
-                const arsEquiv=usd*s.tcTrib
-                return (
-                  <div key={g.id} className="mb-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
-                    <div style={{display:'grid',gridTemplateColumns:'1fr 110px 90px 90px 90px',gap:'6px',alignItems:'center'}} className="mb-2">
-                      <input type="text" value={g.desc} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],desc:e.target.value};u('gastosArg',n)}} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Concepto"/>
-                      <select value={g.tipoCalc} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],tipoCalc:e.target.value as any};u('gastosArg',n)}} className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white">
-                        <option value="pct_cif">% sobre CIF</option><option value="fijo_usd">Fijo USD</option><option value="fijo_ars">Fijo ARS</option>
-                      </select>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-gray-400 flex-shrink-0">{g.tipoCalc==='pct_cif'?'%':g.tipoCalc==='fijo_ars'?'ARS':'USD'}</span>
-                        <input type="text" inputMode="decimal" value={g.valor||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],valor:parseNum(e.target.value)};u('gastosArg',n)}} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono bg-white"/>
-                      </div>
-                      {g.tipoCalc==='pct_cif'?<div className="flex items-center gap-1"><span className="text-[10px] text-gray-400 flex-shrink-0">Piso</span><input type="text" inputMode="decimal" value={g.pisoUsd||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],pisoUsd:parseNum(e.target.value)};u('gastosArg',n)}} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono bg-white"/></div>:<div/>}
-                      {g.tipoCalc==='pct_cif'?<div className="flex items-center gap-1"><span className="text-[10px] text-gray-400 flex-shrink-0">Techo</span><input type="text" inputMode="decimal" value={g.techoUsd||''} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.gastosArg];n[i]={...n[i],techoUsd:parseNum(e.target.value)};u('gastosArg',n)}} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono bg-white"/></div>:<div/>}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <button onClick={()=>u('gastosArg',s.gastosArg.filter((_,j)=>j!==i))} className="text-[10px] text-red-400 hover:text-red-600">Eliminar</button>
-                      <div className="text-right text-xs">
-                        <span className="font-mono font-semibold text-[#052698]">USD {fmt(usd)}</span>
-                        <span className="text-gray-300 mx-2">—</span>
-                        <span className="font-mono text-gray-500 text-[10px]">ARS {Math.round(arsEquiv).toLocaleString('es-AR')}</span>
-                      </div>
-                    </div>
+                {s.rowsE.map((r,i)=>(
+                  <div key={r.id} style={{display:'grid',gridTemplateColumns:'1fr 70px 110px 28px',gap:'6px',alignItems:'center'}} className="mb-2">
+                    <input value={r.desc} onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],desc:e.target.value};u('rowsE',n)}} className={inp} placeholder="Descripcion del gasto"/>
+                    <input type="text" inputMode="decimal" value={r.cant} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],cant:parseNum(e.target.value)||1};u('rowsE',n)}} className={inp+' text-right'} placeholder="Cant."/>
+                    <input type="text" inputMode="decimal" value={r.unitario} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],unitario:parseNum(e.target.value)};u('rowsE',n)}} className={inp+' text-right'} placeholder="USD"/>
+                    <button onClick={()=>u('rowsE',s.rowsE.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs">X</button>
                   </div>
-                )
-              })}
-              {s.rowsE.map((r,i)=>(
-                <div key={r.id} style={{display:'grid',gridTemplateColumns:'1fr 70px 110px 28px',gap:'6px',alignItems:'center'}} className="mb-2">
-                  <input value={r.desc} onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],desc:e.target.value};u('rowsE',n)}} className={inp} placeholder="Descripcion del gasto"/>
-                  <input type="text" inputMode="decimal" value={r.cant} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],cant:parseNum(e.target.value)||1};u('rowsE',n)}} className={inp+' text-right'} placeholder="Cant."/>
-                  <input type="text" inputMode="decimal" value={r.unitario} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],unitario:parseNum(e.target.value)};u('rowsE',n)}} className={inp+' text-right'} placeholder="USD"/>
-                  <button onClick={()=>u('rowsE',s.rowsE.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs">X</button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
             <div className="flex justify-end items-center gap-2 px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
               Subtotal bloque 4: <strong className="font-mono text-gray-800">USD {fmt(subE+subGastosArg)}</strong>
@@ -1456,7 +1429,7 @@ export default function CotizadorPage(){
                 {[
                   {sec:'Producto',concepto:`Precio mercaderia China (${s.incoterm})`,v:totalFOB},
                   ...(s.incoterm==='EXW'?[{sec:'Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros}]:[]),
-                  ...(subFW>0?[{sec:'1 — ForWarder',concepto:fwElegida?.proveedor?`${fwElegida.proveedor}${fwElegida.referencia?` — ${fwElegida.referencia}`:'`'}`:'Manual',v:subFW}]:[]),
+                  ...(subFW>0?[{sec:'1 — ForWarder',concepto:fwElegida?.proveedor?`${fwElegida.proveedor}${fwElegida.referencia?` — ${fwElegida.referencia}`:''}`:'Manual',v:subFW}]:[]),
                   ...(totalSeg>0?[{sec:'1 — Seguro',concepto:segFW>0?'Incluido en cotizacion ForWarder':'Contratado independientemente',v:totalSeg}]:[]),
                   ...(subGastosChile>0?[{sec:'2 — Gastos Chile',concepto:'Post-entrega naviera',v:subGastosChile}]:[]),
                   ...(subDescon>0?[{sec:'3 — Desconsolidacion',concepto:'Opcion '+s.optTransp,v:subDescon}]:[]),
