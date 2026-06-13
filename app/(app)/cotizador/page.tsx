@@ -526,6 +526,7 @@ export default function CotizadorPage(){
       {tab==='embarque'&&(
         <div className="space-y-4">
           <Card title="Cliente y operacion">
+            {/* Fila 1: Razon social + CUIT */}
             <div className="grid grid-cols-3 gap-3 mb-3">
               <div className="col-span-2">
                 <Field label="Razon social">
@@ -561,7 +562,7 @@ export default function CotizadorPage(){
                         <div key={c.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-1.5">
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-[11px] font-bold text-[#1168F8]">{c.num}</span>
-                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${c.estado==='aceptada'?'bg-green-50 text-green-700':c.estado==='enviada'?'bg-blue-50 text-[#1168F8]':'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${c.estado==='aceptada'?'bg-green-50 text-green-700':c.estado==='enviada'?'bg-blue-50 text-[#1168F8]}':'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
                             <span className="text-[10px] text-gray-400">{c.created_at?.slice(0,10)}</span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -575,20 +576,20 @@ export default function CotizadorPage(){
                 )}
               </div>
               <Field label="CUIT"><input value={s.cuit} onChange={e=>u('cuit',e.target.value)} className={inp} placeholder="XX-XXXXXXXX-X"/></Field>
+            </div>
+            {/* Fila 2: Email + Telefono */}
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <Field label="Email"><input type="email" value={s.email} onChange={e=>u('email',e.target.value)} className={inp} placeholder="correo@empresa.com"/></Field>
               <Field label="Telefono"><input value={s.telefono} onChange={e=>u('telefono',e.target.value)} className={inp} placeholder="+54 9 388..."/></Field>
             </div>
-            <div className="grid grid-cols-4 gap-3 mb-3">
-              <div className="col-span-2"><Field label="Email"><input type="email" value={s.email} onChange={e=>u('email',e.target.value)} className={inp} placeholder="correo@empresa.com"/></Field></div>
-              <Field label="Despachante de aduana"><input value={s.despachante} onChange={e=>u('despachante',e.target.value)} className={inp} placeholder="Nombre / CUIT"/></Field>
-
-            </div>
+            {/* Fila 3: Despachante + Validez */}
             <div className="grid grid-cols-3 gap-3 mb-3">
               <div className="col-span-2 relative">
                 <label className="block text-[10px] font-medium text-gray-500 mb-1">Despachante de aduana</label>
                 <input
                   value={despachanteSelId
-                    ? despachantes.find((d:any)=>d.id===despachanteSelId)?.razon_social||s.despachante
-                    : buscarDespachante||s.despachante}
+                    ? despachantes.find((d:any)=>d.id===despachanteSelId)?.razon_social||''
+                    : buscarDespachante}
                   onChange={e=>{
                     setBuscarDespachante(e.target.value)
                     u('despachante',e.target.value)
@@ -597,7 +598,7 @@ export default function CotizadorPage(){
                   }}
                   onFocus={()=>setShowDespachanteDropdown(true)}
                   onClick={e=>e.stopPropagation()}
-                  className={inp} placeholder="Buscar o escribir despachante..."/>
+                  className={inp} placeholder="Buscar despachante..."/>
                 {showDespachanteDropdown&&despachantes.filter((d:any)=>
                   !buscarDespachante||d.razon_social?.toLowerCase().includes(buscarDespachante.toLowerCase())
                 ).length>0&&(
@@ -611,7 +612,6 @@ export default function CotizadorPage(){
                         u('despachante',d.razon_social)
                         setBuscarDespachante('')
                         setShowDespachanteDropdown(false)
-                        // Cargar cotizaciones vigentes del despachante y pre-llenar Bloque 4
                         const {data:cots}=await supabase.from('cotizaciones_proveedor_v2')
                           .select('*,items:cotizaciones_proveedor_v2_items(*)')
                           .eq('tercero_id',d.id)
@@ -625,10 +625,7 @@ export default function CotizadorPage(){
                             desc:`${it.descripcion} — ${d.razon_social}`,
                             tipoCalc:(it.tipo_calculo==='pct_cif'?'pct_cif':it.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,
                             moneda:(it.moneda||'USD') as any,
-                            valor:it.valor||0,
-                            pisoUsd:it.piso_usd||0,
-                            techoUsd:it.techo_usd||0,
-                            usd:0,ars:0,
+                            valor:it.valor||0,pisoUsd:it.piso_usd||0,techoUsd:it.techo_usd||0,usd:0,ars:0,
                           }))
                           setS(p=>({...p,gastosArg:[...p.gastosArg,...nuevos]}))
                           setProvUsado(pv=>({...pv,4:cot.id}))
@@ -641,15 +638,13 @@ export default function CotizadorPage(){
                 )}
                 {despachanteSelId&&(
                   <div className="mt-1 flex items-center gap-2">
-                    <span className="text-[10px] text-green-600 font-medium">✓ Condiciones cargadas en Bloque 4</span>
+                    <span className="text-[9px] text-green-600 font-medium">✓ Condiciones pre-cargadas en Bloque 4</span>
                     <button onClick={()=>{setDespachanteSelId(null);u('despachante','');setBuscarDespachante('')}}
-                      className="text-[10px] text-gray-400 hover:text-red-500">Limpiar</button>
+                      className="text-[9px] text-gray-400 hover:text-red-500">Limpiar</button>
                   </div>
                 )}
-                {despachantes.length===0&&(
-                  <div className="mt-1 text-[10px] text-amber-600">
-                    Sin despachantes cargados. Agregalos en Clientes y Proveedores con rubro Despachante de aduana.
-                  </div>
+                {!despachanteSelId&&despachantes.length===0&&(
+                  <div className="mt-1 text-[9px] text-amber-600">Sin despachantes. Agregalos en Clientes y Proveedores con rubro Despachante de aduana.</div>
                 )}
               </div>
               <Field label="Validez oferta">
@@ -661,9 +656,8 @@ export default function CotizadorPage(){
                 </select>
               </Field>
             </div>
-            <div className="mt-3">
-              <Field label="Notas internas"><input value={s.notas} onChange={e=>u('notas',e.target.value)} className={inp} placeholder="Observaciones"/></Field>
-            </div>
+            {/* Fila 4: Notas */}
+            <Field label="Notas internas"><input value={s.notas} onChange={e=>u('notas',e.target.value)} className={inp} placeholder="Observaciones internas..."/></Field>
           </Card>
 
           {/* ── BLOQUE A: RUTA ── */}
