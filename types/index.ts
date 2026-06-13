@@ -25,6 +25,7 @@ export type TipoMovCC = 'ingreso' | 'egreso'
 export type Regimen = 'A' | 'B' | 'C' | 'D'
 export type OpcionTransporte = 'desconsolidar' | 'contenedor' | 'A' | 'B1' | 'B2'
 export type TipoTarifa = 'maritima' | 'terrestre' | 'puerto' | 'argentina'
+export type ModalidadCarga = 'contenedor' | 'bulk' | 'mixta'
 
 export type EtapaGasto =
   | 'china' | 'maritimo' | 'chile' | 'terrestre'
