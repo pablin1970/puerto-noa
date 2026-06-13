@@ -51,6 +51,7 @@ interface CotState {
   // IDs de catálogos geográficos
   puertoChiId: string; puertoChileId: string; pasoId: string; ciudadDestinoId: string
   modalidadCarga: 'contenedor' | 'bulk' | 'mixta'
+  bulkDescripcion: string; bulkPesoTon: number; bulkVolM3: number
   contenedores: ContenedorCot[]; productos: ProductoCot[]
   exwTransp: number; exwAgente: number; exwOtros: number; precioArgEquiv: number
   proformas: Proforma[]
@@ -78,6 +79,7 @@ const INIT: CotState = {
   origen:'Dalian, China (CNDAG)',ptoChile:'IQQ',destinoNoa:'Jujuy',incoterm:'FOB',transito:'44-46 dias',notas:'',
   puertoChiId:'',puertoChileId:'',pasoId:'',ciudadDestinoId:'',
   modalidadCarga:'contenedor',
+  bulkDescripcion:'',bulkPesoTon:0,bulkVolM3:0,
   contenedores:[{tipo:'40HC',cantidad:1} as any],
   productos:[{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:'FOB'}],
   exwTransp:0,exwAgente:0,exwOtros:0,precioArgEquiv:0,proformas:[],
@@ -659,9 +661,12 @@ export default function CotizadorPage(){
                 ))}
               </div>
 
-              {/* Contenedorizada */}
-              {s.modalidadCarga==='contenedor'&&(
-                <>
+              {/* Parte contenedorizada — para contenedor y mixta */}
+              {(s.modalidadCarga==='contenedor'||s.modalidadCarga==='mixta')&&(
+                <div className={s.modalidadCarga==='mixta'?'mb-4':''}>
+                  {s.modalidadCarga==='mixta'&&(
+                    <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Parte contenedorizada</div>
+                  )}
                   <div className="grid text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-2 gap-3" style={{gridTemplateColumns:'1fr 60px 1.5fr auto'}}>
                     <div>Tipo contenedor</div><div>Cant.</div><div>Tipo de camion</div><div></div>
                   </div>
@@ -689,19 +694,39 @@ export default function CotizadorPage(){
                   ))}
                   <button onClick={()=>u('contenedores',[...s.contenedores,{tipo:'40HC',cantidad:1} as any])}
                     className="text-xs text-[#1168F8] hover:underline mt-1">+ Agregar contenedor</button>
-                  <div className="mt-3 text-xs text-gray-500">
+                  <div className="mt-2 text-xs text-gray-500">
                     Total: <strong className="text-gray-800">{nc} contenedor(es)</strong> — {s.contenedores.map(c=>`${c.cantidad}x ${c.tipo}`).join(', ')}
                   </div>
-                </>
+                </div>
               )}
 
-              {/* Bulk cargo */}
-              {s.modalidadCarga==='bulk'&&(
-                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
-                  <div className="font-semibold mb-1">Carga a granel</div>
-                  <div className="text-[11px] text-amber-700">
-                    El Freight Forwarder especificara en su cotizacion el modo de transporte,
-                    tipo de embarcacion y costos correspondientes al tramo maritimo y terrestre.
+              {/* Parte bulk — para bulk y mixta */}
+              {(s.modalidadCarga==='bulk'||s.modalidadCarga==='mixta')&&(
+                <div className={s.modalidadCarga==='mixta'?'pt-4 border-t border-gray-100':''}>
+                  {s.modalidadCarga==='mixta'&&(
+                    <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Parte bulk cargo</div>
+                  )}
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <div className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider mb-3">
+                      {s.modalidadCarga==='mixta'?'Carga suelta / granel':'Bulk cargo — carga a granel'}
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <Field label="Descripcion de la carga">
+                        <input value={s.bulkDescripcion} onChange={e=>u('bulkDescripcion',e.target.value)}
+                          className={inp} placeholder="ej. Mineral, graneles solidos"/>
+                      </Field>
+                      <Field label="Peso estimado (toneladas)">
+                        <input type="text" inputMode="decimal" value={s.bulkPesoTon||''} onFocus={e=>e.target.select()}
+                          onChange={e=>u('bulkPesoTon',parseNum(e.target.value))} className={inp} placeholder="0.00"/>
+                      </Field>
+                      <Field label="Volumen estimado (m3)">
+                        <input type="text" inputMode="decimal" value={s.bulkVolM3||''} onFocus={e=>e.target.select()}
+                          onChange={e=>u('bulkVolM3',parseNum(e.target.value))} className={inp} placeholder="0.00"/>
+                      </Field>
+                    </div>
+                    <div className="mt-2 text-[10px] text-amber-600">
+                      El Freight Forwarder especificara modo de transporte, tipo de embarcacion y costos en su cotizacion.
+                    </div>
                   </div>
                 </div>
               )}
