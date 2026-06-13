@@ -22,8 +22,8 @@ export type EstadoOp = 'activa' | 'cerrada'
 export type EstadoGasto = 'pendiente' | 'pagado' | 'parcial'
 export type Moneda = 'USD' | 'ARS' | 'CLP' | 'CNY'
 export type TipoMovCC = 'ingreso' | 'egreso'
-export type Regimen = 'A' | 'B'
-export type OpcionTransporte = 'desconsolidar' | 'contenedor'
+export type Regimen = 'A' | 'B' | 'C' | 'D'
+export type OpcionTransporte = 'desconsolidar' | 'contenedor' | 'A' | 'B1' | 'B2'
 export type TipoTarifa = 'maritima' | 'terrestre' | 'puerto' | 'argentina'
 
 export type EtapaGasto =
@@ -69,6 +69,7 @@ export interface ProductoCot {
 export interface ContenedorCot {
   tipo: string
   cantidad: number
+  tipoCamionId?: string
 }
 
 export interface ItemPresupuesto {
