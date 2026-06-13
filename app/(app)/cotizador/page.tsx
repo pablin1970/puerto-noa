@@ -256,6 +256,7 @@ export default function CotizadorPage(){
   }
 
   const u=<K extends keyof CotState>(k:K,v:CotState[K])=>setS(p=>({...p,[k]:v}))
+  const cambiarTab=(t:Tab)=>{setTab(t);window.scrollTo({top:0,behavior:'smooth'})}
   const nc=s.contenedores.reduce((t,c)=>t+c.cantidad,0)||1
   const totalFOB=s.productos.reduce((t,p)=>t+p.subtotal,0)+(s.incoterm==='EXW'?s.exwTransp+s.exwAgente+s.exwOtros:0)
   const totalM3=s.productos.reduce((t,p)=>t+p.vol_unit*p.cantidad,0)
@@ -422,7 +423,7 @@ export default function CotizadorPage(){
       transito:(orig as any).transito||p.transito,
       tcTrib:(tcData as any)?.ars||p.tcTrib,tcClp:(tcData as any)?.clp||p.tcClp,notas:'',
     }))
-    setTab('embarque')
+    cambiarTab('embarque')
     alert('Cotizacion duplicada. Revisa los valores y guarda cuando este lista.')
   }
 
@@ -515,7 +516,7 @@ export default function CotizadorPage(){
 
       <div className="flex gap-2 mb-5 flex-wrap items-center">
         {TABS.map(t=>(
-          <button key={t.key} onClick={()=>setTab(t.key as Tab)} className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm ${tab===t.key?'bg-[#1168F8] text-white shadow-md':'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{t.label}</button>
+          <button key={t.key} onClick={()=>cambiarTab(t.key as Tab)} className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm ${tab===t.key?'bg-[#1168F8] text-white shadow-md':'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{t.label}</button>
         ))}
         <div className="ml-auto">
           <Image src="/logo.png" alt="Puertonoa" width={80} height={22} style={{objectFit:'contain',opacity:0.6}}/>
@@ -883,7 +884,7 @@ export default function CotizadorPage(){
               <Field label="Precio equivalente en Argentina (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.precioArgEquiv||''} onChange={e=>u('precioArgEquiv',parseNum(e.target.value))} className={inp} placeholder="0.00"/></Field>
             </div>
           </Card>
-          <div className="flex justify-end"><button onClick={()=>setTab('logistica')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Logistica</button></div>
+          <div className="flex justify-end"><button onClick={()=>cambiarTab('logistica')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Logistica</button></div>
         </div>
       )}
 
@@ -1319,8 +1320,8 @@ export default function CotizadorPage(){
           </div>
 
           <div className="flex justify-between">
-            <button onClick={()=>setTab('embarque')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
-            <button onClick={()=>setTab('tributos')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Tributos ARCA</button>
+            <button onClick={()=>cambiarTab('embarque')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
+            <button onClick={()=>cambiarTab('tributos')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Tributos ARCA</button>
           </div>
         </div>
       )}
@@ -1363,8 +1364,8 @@ export default function CotizadorPage(){
             )}
           </Card>
           <div className="flex justify-between">
-            <button onClick={()=>setTab('logistica')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
-            <button onClick={()=>setTab('resumen')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Ver resumen</button>
+            <button onClick={()=>cambiarTab('logistica')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
+            <button onClick={()=>cambiarTab('resumen')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Ver resumen</button>
           </div>
         </div>
       )}
@@ -1463,7 +1464,7 @@ export default function CotizadorPage(){
           </div>
 
           <div className="flex justify-between">
-            <button onClick={()=>setTab('tributos')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
+            <button onClick={()=>cambiarTab('tributos')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
             <button onClick={guardar} disabled={saving} className="bg-[#1168F8] text-white px-6 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] disabled:opacity-60">
               {saving?'Guardando...':'Guardar cotizacion'}
             </button>
