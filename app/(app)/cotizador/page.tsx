@@ -48,6 +48,9 @@ interface CotState {
   despachante: string; ivaCondicion: string; validez: string
   origen: string; ptoChile: string; destinoNoa: string; incoterm: string
   transito: string; notas: string
+  // IDs de catálogos geográficos
+  puertoChiId: string; puertoChileId: string; pasoId: string; ciudadDestinoId: string
+  modalidadCarga: 'contenedor' | 'bulk'
   contenedores: ContenedorCot[]; productos: ProductoCot[]
   exwTransp: number; exwAgente: number; exwOtros: number; precioArgEquiv: number
   proformas: Proforma[]
@@ -73,7 +76,9 @@ interface CotState {
 const INIT: CotState = {
   cliente:'',cuit:'',email:'',telefono:'',despachante:'',ivaCondicion:'Responsable Inscripto',validez:'',
   origen:'Dalian, China (CNDAG)',ptoChile:'IQQ',destinoNoa:'Jujuy',incoterm:'FOB',transito:'44-46 dias',notas:'',
-  contenedores:[{tipo:'40HC',cantidad:1}],
+  puertoChiId:'',puertoChileId:'',pasoId:'',ciudadDestinoId:'',
+  modalidadCarga:'contenedor',
+  contenedores:[{tipo:'40HC',cantidad:1,tipoCamionId:''}],
   productos:[{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:'FOB'}],
   exwTransp:0,exwAgente:0,exwOtros:0,precioArgEquiv:0,proformas:[],
   cotsFW:[],
@@ -134,6 +139,13 @@ export default function CotizadorPage(){
   const [s,setS]=useState<CotState>(INIT)
   const [tab,setTab]=useState<Tab>('embarque')
   const [tarifas,setTarifas]=useState<Tarifa[]>([])
+  // Catálogos geográficos
+  const [puertosChi,setPuertosChi]=useState<any[]>([])
+  const [puertosChile,setPuertosChile]=useState<any[]>([])
+  const [pasosFront,setPasosFront]=useState<any[]>([])
+  const [ciudadesArg,setCiudadesArg]=useState<any[]>([])
+  const [tiposCont,setTiposCont]=useState<any[]>([])
+  const [tiposCamion,setTiposCamion]=useState<any[]>([])
   const [cotsFWDisponibles,setCotsFWDisponibles]=useState<any[]>([])
   const [cotsTranspDisponibles,setCotsTranspDisponibles]=useState<any[]>([])
   const [cotsArgDisponibles,setCotsArgDisponibles]=useState<any[]>([])
@@ -177,6 +189,22 @@ export default function CotizadorPage(){
           setCotsChileDisponibles((data as any[]).filter(c=>c.rubro==='transporte_chile'||c.rubro==='deposito'))
         }
       })
+    // Catálogos geográficos y tipos de camión
+    Promise.all([
+      supabase.from('puertos_china').select('id,locode,nombre,ciudad').eq('activo','true').order('orden'),
+      supabase.from('puertos_chile').select('id,locode,nombre,ciudad').eq('activo','true').order('orden'),
+      supabase.from('pasos_fronterizos').select('id,nombre,provincia_argentina,restriccion_invierno').eq('activo','true').order('orden'),
+      supabase.from('ciudades_destino_arg').select('id,ciudad,provincia').eq('activo','true').order('orden'),
+      supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo','true').order('orden'),
+      supabase.from('tipos_camion').select('id,nombre,icono').eq('activo','true').order('orden'),
+    ]).then(([ch,cl,ps,ci,tc,tca])=>{
+      if(ch.data) setPuertosChi(ch.data)
+      if(cl.data) setPuertosChile(cl.data)
+      if(ps.data) setPasosFront(ps.data)
+      if(ci.data) setCiudadesArg(ci.data)
+      if(tc.data) setTiposCont(tc.data)
+      if(tca.data) setTiposCamion(tca.data)
+    })
     supabase.from('tarifas').select('*').eq('activo',true).then(({data})=>{
       if(data){
         setTarifas(data as Tarifa[])
@@ -418,6 +446,10 @@ export default function CotizadorPage(){
         tercero_id:clienteSelId||null,
         origen:s.origen,puerto_chile:s.ptoChile,destino_noa:s.destinoNoa,incoterm:s.incoterm,
         transito:s.transito,notas:s.notas,
+        puerto_china_id:s.puertoChiId||null,
+        puerto_chile_id:s.puertoChileId||null,
+        paso_id:s.pasoId||null,
+        ciudad_destino_id:s.ciudadDestinoId||null,
         tipo_contenedores:s.contenedores,productos:s.productos,proformas:s.proformas,
         total_fob:totalFOB,total_logistico:totalLog,
         total_tributos_usd:totalTribUSD,total_tributos_ars:totalTribARS,
@@ -540,36 +572,149 @@ export default function CotizadorPage(){
             </div>
           </Card>
 
-          <Card title="Ruta del embarque">
-            <div className="grid grid-cols-4 gap-3 mb-3">
-              <Field label="Origen"><input value={s.origen} onChange={e=>u('origen',e.target.value)} className={inp}/></Field>
-              <Field label="Puerto Chile"><select value={s.ptoChile} onChange={e=>u('ptoChile',e.target.value)} className={sel}>{Object.entries(PUERTOS_L).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></Field>
-              <Field label="Destino NOA"><select value={s.destinoNoa} onChange={e=>u('destinoNoa',e.target.value)} className={sel}>{['Jujuy','Salta','Tucuman','Catamarca','La Rioja'].map(v=><option key={v}>{v}</option>)}</select></Field>
-              <Field label="Incoterm"><select value={s.incoterm} onChange={e=>u('incoterm',e.target.value)} className={sel}>{['FOB','EXW','CIF','CFR'].map(v=><option key={v}>{v}</option>)}</select></Field>
+          {/* ── BLOQUE A: RUTA ── */}
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#1168F8] text-white text-[11px] font-bold">A</span>
+              <span className="font-semibold text-sm text-gray-900">Ruta del embarque</span>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Transito estimado"><input value={s.transito} onChange={e=>u('transito',e.target.value)} className={inp}/></Field>
-            </div>
-          </Card>
-
-          <Card title="Contenedores">
-            <div className="flex flex-wrap gap-2 items-center mb-3">
-              {s.contenedores.map((c,i)=>(
-                <div key={i} className="flex items-center gap-2 bg-[#EBF2FF] border border-[#93B8FC] rounded-lg px-3 py-2">
-                  <select value={c.tipo} onChange={e=>{const n=[...s.contenedores];n[i]={...n[i],tipo:e.target.value};u('contenedores',n)}} className="border-0 bg-transparent text-xs font-semibold text-[#1168F8] focus:outline-none">
-                    {Object.keys(CONT_CAPS).map(k=><option key={k}>{k}</option>)}
-                  </select>
-                  <span className="text-[#93B8FC] text-xs">x</span>
-                  <input type="text" inputMode="decimal" value={c.cantidad} min={1} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.contenedores];n[i]={...n[i],cantidad:parseInt2(e.target.value)||1};u('contenedores',n)}} className="w-10 text-center text-xs border-0 bg-transparent focus:outline-none font-bold text-[#052698]"/>
-                  {s.contenedores.length>1&&<button onClick={()=>u('contenedores',s.contenedores.filter((_,j)=>j!==i))} className="text-[#93B8FC] hover:text-red-400 text-xs">X</button>}
+            <div className="px-5 py-4 space-y-3">
+              {/* Tramo marítimo */}
+              <div>
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Tramo maritimo</div>
+                <div className="grid grid-cols-3 gap-3">
+                  <Field label="Puerto de origen (China)">
+                    <select value={s.puertoChiId} onChange={e=>{
+                      u('puertoChiId',e.target.value)
+                      const p=puertosChi.find((x:any)=>x.id===e.target.value)
+                      if(p) u('origen',`${p.nombre} (${p.locode})`)
+                    }} className={sel}>
+                      <option value="">— Seleccionar puerto —</option>
+                      {puertosChi.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} — {p.ciudad}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Puerto Chile (descarga)">
+                    <select value={s.puertoChileId} onChange={e=>{
+                      u('puertoChileId',e.target.value)
+                      const p=puertosChile.find((x:any)=>x.id===e.target.value)
+                      if(p) u('ptoChile',p.locode)
+                    }} className={sel}>
+                      <option value="">— Seleccionar puerto —</option>
+                      {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Incoterm">
+                    <select value={s.incoterm} onChange={e=>u('incoterm',e.target.value)} className={sel}>
+                      {['FOB','EXW','CIF','CFR'].map(v=><option key={v}>{v}</option>)}
+                    </select>
+                  </Field>
                 </div>
-              ))}
-              <button onClick={()=>u('contenedores',[...s.contenedores,{tipo:'40HC',cantidad:1}])} className="text-xs text-[#1168F8] hover:underline px-2">+ Agregar tipo</button>
+              </div>
+              {/* Tramo terrestre */}
+              <div className="pt-3 border-t border-gray-100">
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Tramo terrestre</div>
+                <div className="grid grid-cols-3 gap-3">
+                  <Field label="Paso fronterizo">
+                    <select value={s.pasoId} onChange={e=>{u('pasoId',e.target.value)}} className={sel}>
+                      <option value="">— Seleccionar paso —</option>
+                      {pasosFront.map((p:any)=>(
+                        <option key={p.id} value={p.id}>
+                          {p.nombre} {p.restriccion_invierno?'⚠️':''} ({p.provincia_argentina})
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Ciudad destino Argentina">
+                    <select value={s.ciudadDestinoId} onChange={e=>{
+                      u('ciudadDestinoId',e.target.value)
+                      const c=ciudadesArg.find((x:any)=>x.id===e.target.value)
+                      if(c) u('destinoNoa',c.ciudad)
+                    }} className={sel}>
+                      <option value="">— Seleccionar ciudad —</option>
+                      {ciudadesArg.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Transito estimado">
+                    <input value={s.transito} onChange={e=>u('transito',e.target.value)} className={inp} placeholder="ej. 44-46 dias"/>
+                  </Field>
+                </div>
+              </div>
             </div>
-            <div className="text-xs text-gray-500">Total: <strong className="text-gray-800">{nc} contenedor(es)</strong> — {s.contenedores.map(c=>`${c.cantidad}x ${c.tipo}`).join(', ')}</div>
-          </Card>
+          </div>
 
-          <Card title="Productos de China">
+          {/* ── BLOQUE B: TIPO DE CARGA ── */}
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#0a9e6e] text-white text-[11px] font-bold">B</span>
+              <span className="font-semibold text-sm text-gray-900">Tipo de carga</span>
+            </div>
+            <div className="px-5 py-4">
+              {/* Modalidad */}
+              <div className="flex gap-3 mb-4">
+                {[
+                  {key:'contenedor',label:'Contenedorizada',icon:'📦',desc:'Carga en contenedores ISO'},
+                  {key:'bulk',label:'Bulk cargo',icon:'⚓',desc:'Carga a granel sin contenedor'},
+                ].map(m=>(
+                  <button key={m.key} onClick={()=>u('modalidadCarga',m.key as any)}
+                    className={`flex-1 px-4 py-3 rounded-xl border-2 text-left transition-all ${s.modalidadCarga===m.key?'border-[#0a9e6e] bg-green-50':'border-gray-200 hover:bg-gray-50'}`}>
+                    <div className="text-xl mb-1">{m.icon}</div>
+                    <div className="text-xs font-bold text-gray-900">{m.label}</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">{m.desc}</div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Contenedorizada */}
+              {s.modalidadCarga==='contenedor'&&(
+                <>
+                  <div className="grid text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-2 gap-3" style={{gridTemplateColumns:'1fr 60px 1.5fr auto'}}>
+                    <div>Tipo contenedor</div><div>Cant.</div><div>Tipo de camion</div><div></div>
+                  </div>
+                  {s.contenedores.map((c,i)=>(
+                    <div key={i} className="grid gap-3 mb-2 items-center" style={{gridTemplateColumns:'1fr 60px 1.5fr auto'}}>
+                      <select value={c.tipo} onChange={e=>{const n=[...s.contenedores];(n[i] as any).tipo=e.target.value;u('contenedores',n)}}
+                        className="px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+                        {tiposCont.length>0
+                          ? tiposCont.map((t:any)=><option key={t.codigo} value={t.codigo}>{t.codigo} — {t.nombre}</option>)
+                          : Object.keys(CONT_CAPS).map(k=><option key={k}>{k}</option>)}
+                      </select>
+                      <input type="text" inputMode="decimal" value={c.cantidad} min={1} onFocus={e=>e.target.select()}
+                        onChange={e=>{const n=[...s.contenedores];n[i]={...n[i],cantidad:parseInt2(e.target.value)||1};u('contenedores',n)}}
+                        className="px-3 py-2 border border-gray-200 rounded-xl text-xs text-center focus:outline-none focus:border-[#1168F8] bg-white font-bold"/>
+                      <select value={(c as any).tipoCamionId||''} onChange={e=>{const n=[...s.contenedores];(n[i] as any).tipoCamionId=e.target.value;u('contenedores',n)}}
+                        className="px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+                        <option value="">— Tipo de camion —</option>
+                        {tiposCamion.map((t:any)=><option key={t.id} value={t.id}>{t.icono} {t.nombre}</option>)}
+                      </select>
+                      {s.contenedores.length>1&&(
+                        <button onClick={()=>u('contenedores',s.contenedores.filter((_,j)=>j!==i))}
+                          className="text-gray-400 hover:text-red-500 text-xs p-1">X</button>
+                      )}
+                    </div>
+                  ))}
+                  <button onClick={()=>u('contenedores',[...s.contenedores,{tipo:'40HC',cantidad:1,tipoCamionId:''}])}
+                    className="text-xs text-[#1168F8] hover:underline mt-1">+ Agregar contenedor</button>
+                  <div className="mt-3 text-xs text-gray-500">
+                    Total: <strong className="text-gray-800">{nc} contenedor(es)</strong> — {s.contenedores.map(c=>`${c.cantidad}x ${c.tipo}`).join(', ')}
+                  </div>
+                </>
+              )}
+
+              {/* Bulk cargo */}
+              {s.modalidadCarga==='bulk'&&(
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
+                  <div className="font-semibold mb-1">Carga a granel</div>
+                  <div className="text-[11px] text-amber-700">
+                    El Freight Forwarder especificara en su cotizacion el modo de transporte,
+                    tipo de embarcacion y costos correspondientes al tramo maritimo y terrestre.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── BLOQUE C: MERCADERÍA Y PROFORMA ── */}
+          <Card title="Mercaderia — Proforma del proveedor">
             <div className="overflow-x-auto">
               <table className="w-full text-xs mb-2">
                 <thead><tr className="bg-gray-50">{['Descripcion','NCM','Cant.','Precio unit. USD','Subtotal','Peso kg/u','Vol m3/u','Incoterm',''].map(h=><th key={h} className="text-left px-2 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide whitespace-nowrap">{h}</th>)}</tr></thead>
