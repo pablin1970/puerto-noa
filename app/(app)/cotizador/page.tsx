@@ -584,39 +584,41 @@ export default function CotizadorPage(){
             </div>
 
             {/* Preview del cliente seleccionado */}
-            {clienteSelId&&(()=>{
-              const cli=terceros.find(t=>t.id===clienteSelId)
-              const contacto=cli?.contactos?.find((c:any)=>c.principal)||cli?.contactos?.[0]
-              return cli?(
-                <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 mb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-[#EBF2FF] flex items-center justify-center text-[#052698] text-sm font-black flex-shrink-0">
-                        {cli.razon_social.slice(0,2).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-sm text-gray-900">{cli.razon_social}</div>
-                        {cli.nombre_fantasia&&<div className="text-[10px] text-gray-400">{cli.nombre_fantasia}</div>}
-                        <div className="flex gap-3 mt-1 text-[10px] text-gray-500 flex-wrap">
-                          {cli.nro_doc&&<span className="font-mono">{cli.tipo_doc}: {cli.nro_doc}</span>}
-                          {cli.pais&&<span>{cli.pais}</span>}
-                          {cli.dir_fiscal_ciudad&&<span>{cli.dir_fiscal_ciudad}</span>}
-                          {cli.condicion_iva&&<span>{cli.condicion_iva}</span>}
-                        </div>
-                        {contacto&&(
-                          <div className="flex gap-3 mt-1 text-[10px] text-[#1168F8] flex-wrap">
-                            {contacto.email&&<span>✉ {contacto.email}</span>}
-                            {contacto.telefono&&<span>📞 {contacto.telefono}</span>}
-                          </div>
-                        )}
-                      </div>
+            {clienteSelId&&terceros.find(t=>t.id===clienteSelId)&&(
+              <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 mb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#EBF2FF] flex items-center justify-center text-[#052698] text-sm font-black flex-shrink-0">
+                      {terceros.find(t=>t.id===clienteSelId)!.razon_social.slice(0,2).toUpperCase()}
                     </div>
-                    <button onClick={()=>{setClienteSelId(null);setBuscarCliente('');u('cliente','');setShowHist(false)}}
-                      className="text-[10px] text-gray-400 hover:text-red-500 flex-shrink-0">Cambiar</button>
+                    <div>
+                      <div className="font-semibold text-sm text-gray-900">{terceros.find(t=>t.id===clienteSelId)!.razon_social}</div>
+                      {terceros.find(t=>t.id===clienteSelId)!.nombre_fantasia&&(
+                        <div className="text-[10px] text-gray-400">{terceros.find(t=>t.id===clienteSelId)!.nombre_fantasia}</div>
+                      )}
+                      <div className="flex gap-3 mt-1 text-[10px] text-gray-500 flex-wrap">
+                        {terceros.find(t=>t.id===clienteSelId)!.nro_doc&&<span className="font-mono">{terceros.find(t=>t.id===clienteSelId)!.tipo_doc}: {terceros.find(t=>t.id===clienteSelId)!.nro_doc}</span>}
+                        {terceros.find(t=>t.id===clienteSelId)!.pais&&<span>{terceros.find(t=>t.id===clienteSelId)!.pais}</span>}
+                        {terceros.find(t=>t.id===clienteSelId)!.dir_fiscal_ciudad&&<span>{terceros.find(t=>t.id===clienteSelId)!.dir_fiscal_ciudad}</span>}
+                        {terceros.find(t=>t.id===clienteSelId)!.condicion_iva&&<span>{terceros.find(t=>t.id===clienteSelId)!.condicion_iva}</span>}
+                      </div>
+                      {(terceros.find(t=>t.id===clienteSelId)!.contactos?.find((c:any)=>c.principal)||terceros.find(t=>t.id===clienteSelId)!.contactos?.[0])&&(
+                        <div className="flex gap-3 mt-1 text-[10px] text-[#1168F8] flex-wrap">
+                          {(terceros.find(t=>t.id===clienteSelId)!.contactos?.find((c:any)=>c.principal)||terceros.find(t=>t.id===clienteSelId)!.contactos?.[0])?.email&&(
+                            <span>✉ {(terceros.find(t=>t.id===clienteSelId)!.contactos?.find((c:any)=>c.principal)||terceros.find(t=>t.id===clienteSelId)!.contactos?.[0])?.email}</span>
+                          )}
+                          {(terceros.find(t=>t.id===clienteSelId)!.contactos?.find((c:any)=>c.principal)||terceros.find(t=>t.id===clienteSelId)!.contactos?.[0])?.telefono&&(
+                            <span>📞 {(terceros.find(t=>t.id===clienteSelId)!.contactos?.find((c:any)=>c.principal)||terceros.find(t=>t.id===clienteSelId)!.contactos?.[0])?.telefono}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
+                  <button onClick={()=>{setClienteSelId(null);setBuscarCliente('');u('cliente','');setShowHist(false)}}
+                    className="text-[10px] text-gray-400 hover:text-red-500 flex-shrink-0">Cambiar</button>
                 </div>
-              ):null
-            })()}
+              </div>
+            )}
 
             {/* Historial */}
             {showHist&&histCliente.length>0&&(
