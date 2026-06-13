@@ -15,10 +15,10 @@ interface Rubro {
 }
 
 const BLOQUES = [
-  { num: 1, label: 'Bloque 1 — Freight Forwarder',          color: '#1168F8' },
-  { num: 2, label: 'Bloque 2 — Transporte terrestre',       color: '#b45309' },
-  { num: 3, label: 'Bloque 3 — Gastos post-entrega Chile',  color: '#0891b2' },
-  { num: 4, label: 'Bloque 4 — Gastos Argentina',           color: '#6b21a8' },
+  { num: 1, label: 'Bloque 1 — Freight Forwarder',                    color: '#1168F8' },
+  { num: 2, label: 'Bloque 2 — Modalidad + Gastos post-entrega Chile', color: '#0a9e6e' },
+  { num: 3, label: 'Bloque 3 — Flete terrestre',                      color: '#b45309' },
+  { num: 4, label: 'Bloque 4 — Gastos Argentina',                     color: '#6b21a8' },
 ]
 
 const COLORES = ['#1168F8','#052698','#0a9e6e','#b45309','#6b21a8','#dc2626','#0891b2','#6b7280','#be185d','#15803d']
@@ -40,7 +40,6 @@ export default function RubrosPage() {
   async function loadRubros() {
     setLoading(true)
     const { data } = await supabase.from('proveedor_rubros').select('*').order('orden').order('nombre')
-    console.log('rubros data:', data, data?.length) 
     if (data) setRubros(data as Rubro[])
     setLoading(false)
   }
