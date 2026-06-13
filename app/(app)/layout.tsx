@@ -18,39 +18,52 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: '⊞' },
 
-  { label: 'COMERCIAL', section: true },
-  { href: '/cotizador', label: 'Nueva cotizacion', icon: '✦' },
-  { href: '/registro', label: 'Cotizaciones', icon: '☰' },
-  { href: '/clientes', label: 'Clientes y proveedores', icon: '🏢' },
+  // ── 1. VENTAS & CLIENTES ───────────────────────────
+  // Todo lo que genera ingreso y relación con el cliente
+  { label: 'VENTAS', section: true },
+  { href: '/cotizador',  label: 'Nueva cotizacion',       icon: '✦' },
+  { href: '/registro',   label: 'Cotizaciones',            icon: '☰' },
+  { href: '/clientes',   label: 'Clientes y proveedores',  icon: '🏢' },
 
+  // ── 2. OPERACIONES ─────────────────────────────────
+  // Ejecución del servicio logístico
   { label: 'OPERACIONES', section: true },
-  { href: '/operaciones', label: 'Operaciones activas', icon: '🚢' },
-  { href: '/cierre', label: 'Liquidacion y cierre', icon: '✓' },
+  { href: '/operaciones', label: 'Operaciones activas',    icon: '🚢' },
+  { href: '/cierre',      label: 'Liquidacion y cierre',   icon: '✓' },
 
-  { label: 'FACTURACION', section: true },
-  { href: '/facturacion/emitidas', label: 'Facturas emitidas', icon: '📄' },
-  { href: '/facturacion/recibidas', label: 'Facturas recibidas', icon: '📥' },
-  { href: '/facturacion/cte-clientes', label: 'Cta. cte. clientes', icon: '👥' },
-  { href: '/facturacion/cte-proveedores', label: 'Cta. cte. proveedores', icon: '📦' },
-
-  { label: 'TESORERIA', section: true },
-  { href: '/tesoreria/caja', label: 'Caja', icon: '💵', soon: true },
-  { href: '/tesoreria/bancos', label: 'Bancos', icon: '🏦', soon: true },
-  { href: '/tesoreria/fondos', label: 'Fondos por operacion', icon: '💰', soon: true },
-  { href: '/tesoreria/puertonoa-arg', label: 'Cta. Puerto NOA Arg.', icon: '🇦🇷', soon: true },
-
-  { label: 'CONTABILIDAD', section: true },
-  { href: '/contabilidad/iva', label: 'Libro IVA', icon: '📊', soon: true },
-  { href: '/contabilidad/gastos', label: 'Gastos y costos', icon: '📉', soon: true },
-  { href: '/contabilidad/resultados', label: 'Resultados', icon: '📈', soon: true },
-
-  { label: 'CONFIGURACION', section: true },
+  // ── 3. COMPRAS & PROVEEDORES ───────────────────────
+  // Gestión de costos y proveedores de servicio
+  { label: 'COMPRAS', section: true },
   { href: '/cotizaciones-proveedores', label: 'Cotizaciones proveedores', icon: '📋' },
-  { href: '/configuracion/rubros', label: 'Rubros proveedores', icon: '🏷' },
-{ href: '/tarifas', label: 'Tarifas base', icon: '⚙' },
-  { href: '/tipos-cambio', label: 'Tipos de cambio', icon: '💱' },
-  { href: '/tributos-config', label: 'Tributos ARCA', icon: '§', adminOnly: true },
-  { href: '/usuarios', label: 'Usuarios', icon: '◎', adminOnly: true },{ href: '/configuracion/tipos-camion', label: 'Tipos de camion', icon: '🚛' },
+  { href: '/tarifas',                  label: 'Tarifas base',             icon: '⚙' },
+
+  // ── 4. FINANZAS ────────────────────────────────────
+  // Facturación + cuentas corrientes + tesorería
+  { label: 'FINANZAS', section: true },
+  { href: '/facturacion/emitidas',        label: 'Facturas emitidas',      icon: '📄' },
+  { href: '/facturacion/recibidas',       label: 'Facturas recibidas',     icon: '📥' },
+  { href: '/facturacion/cte-clientes',    label: 'Cta. cte. clientes',     icon: '👥' },
+  { href: '/facturacion/cte-proveedores', label: 'Cta. cte. proveedores',  icon: '📦' },
+  { href: '/tesoreria/caja',              label: 'Caja',                   icon: '💵', soon: true },
+  { href: '/tesoreria/bancos',            label: 'Bancos',                 icon: '🏦', soon: true },
+  { href: '/tesoreria/fondos',            label: 'Fondos por operacion',   icon: '💰', soon: true },
+  { href: '/tesoreria/puertonoa-arg',     label: 'Cta. Puerto NOA Arg.',   icon: '🇦🇷', soon: true },
+
+  // ── 5. CONTABILIDAD ────────────────────────────────
+  // Registros contables y resultados
+  { label: 'CONTABILIDAD', section: true },
+  { href: '/contabilidad/iva',        label: 'Libro IVA',       icon: '📊', soon: true },
+  { href: '/contabilidad/gastos',     label: 'Gastos y costos', icon: '📉', soon: true },
+  { href: '/contabilidad/resultados', label: 'Resultados',      icon: '📈', soon: true },
+
+  // ── 6. CONFIGURACION ───────────────────────────────
+  // Parámetros del sistema — solo admin o técnico
+  { label: 'CONFIGURACION', section: true },
+  { href: '/tipos-cambio',               label: 'Tipos de cambio',  icon: '💱' },
+  { href: '/tributos-config',            label: 'Tributos ARCA',    icon: '§',  adminOnly: true },
+  { href: '/configuracion/rubros',       label: 'Rubros',           icon: '🏷' },
+  { href: '/configuracion/tipos-camion', label: 'Tipos de camion',  icon: '🚛' },
+  { href: '/usuarios',                   label: 'Usuarios',         icon: '◎',  adminOnly: true },
 ]
 
 interface TCWidget {
@@ -132,12 +145,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Fecha + TC Widget */}
         {!collapsed && (
           <div className="mx-3 mt-3 mb-1 rounded-xl overflow-hidden" style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)' }}>
-            {/* Fecha */}
             <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
               <span className="text-[10px] text-white/80 font-medium capitalize">{hoy}</span>
               <Link href="/tipos-cambio" className="text-[9px] text-white/50 hover:text-white transition-colors">TC →</Link>
             </div>
-            {/* TC rows */}
             <div className="px-3 py-2 space-y-1.5">
               {[
                 { moneda: 'ARS', flag: '🇦🇷', valor: tc.ARS, decimals: 0 },
@@ -194,7 +205,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     {!collapsed && item.adminOnly && <span className="ml-auto text-[7px] text-white/40 uppercase tracking-wide">Admin</span>}
                   </Link>
                 )}
-                {/* Tooltip when collapsed */}
                 {collapsed && (
                   <div className="absolute left-full top-0 ml-2 px-2 py-1 bg-gray-900 text-white text-[10px] rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
                     {item.label}
