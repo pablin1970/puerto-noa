@@ -220,7 +220,7 @@ export default function CotizadorPage(){
   const segFW=fwElegida?.segAlcance!=='no' ? (fwElegida?.seguroMonto||0) : 0
   // Seguro independiente (si no viene del FW)
   const segIndepCalc=fwElegida?.segAlcance==='maritimo'
-    ? (s.segModoIndep==='pct'?cif*s.segValIndep/100:s.segValIndep)
+    ? (s.segModoIndep==='pct'?(totalFOB+subFW)*s.segValIndep/100:s.segValIndep)
     : 0
   const totalSeg=segFW
 
