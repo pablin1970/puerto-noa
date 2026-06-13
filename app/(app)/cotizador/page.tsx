@@ -780,11 +780,17 @@ export default function CotizadorPage(){
                       <div className="border border-gray-200 rounded-xl p-3 mb-3">
                         <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Almacenaje en Chile</div>
                         <div className="grid grid-cols-4 gap-3">
-                          <Field label="Volumen">
-                            <div className="flex gap-1">
-                              <select value={s.almModoVol} onChange={e=>u('almModoVol',e.target.value as any)} className={sel+' flex-shrink-0 w-20'}><option value="auto">Auto</option><option value="manual">Manual</option></select>
-                              {s.almModoVol==='manual'?<input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almVolM3} onChange={e=>u('almVolM3',parseNum(e.target.value))} className={inp} placeholder="m3"/>:<div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono flex-1 text-right">{fmt(totalM3,2)} m3</div>}
-                            </div>
+                          <Field label="Volumen m3">
+                            {s.almModoVol==='manual'
+                              ? <div className="flex gap-1">
+                                  <input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almVolM3} onChange={e=>u('almVolM3',parseNum(e.target.value))} className={inp} placeholder="m3"/>
+                                  <button onClick={()=>u('almModoVol','auto')} className="text-[9px] text-gray-400 hover:text-gray-600 whitespace-nowrap">Auto</button>
+                                </div>
+                              : <div className="flex items-center gap-1">
+                                  <div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono flex-1 text-right">{fmt(totalM3,2)} m3</div>
+                                  <button onClick={()=>u('almModoVol','manual')} className="text-[9px] text-gray-400 hover:text-gray-600 whitespace-nowrap">Manual</button>
+                                </div>
+                            }
                           </Field>
                           <Field label="Costo m3/dia (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almCostoDia} onChange={e=>u('almCostoDia',parseNum(e.target.value))} className={inp}/></Field>
                           <Field label="Dias"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almDias} onChange={e=>u('almDias',parseInt2(e.target.value)||0)} className={inp}/></Field>
