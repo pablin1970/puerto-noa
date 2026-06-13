@@ -158,7 +158,7 @@ export default function CotizadorPage(){
           if(row.clp) setS(p=>({...p,tcClp:row.clp}))
         }
       })
-    supabase.from('terceros').select('id,razon_social,nombre_fantasia,nro_doc,tipo_doc,condicion_iva,dir_fiscal_ciudad,pais')
+    supabase.from('terceros').select('id,razon_social,nombre_fantasia,nro_doc,tipo_doc,condicion_iva,dir_fiscal_ciudad,pais,contactos:tercero_contactos(email,telefono,principal)')
       .eq('activo','true')
       .filter('tipo', 'cs', '{"cliente"}')
       .then(({data})=>{if(data) setTerceros(data)})
@@ -354,7 +354,8 @@ export default function CotizadorPage(){
   }
 
   async function selectCliente(t:any){
-    u('cliente',t.razon_social);u('cuit',t.nro_doc||'');u('email',t.email||'');u('telefono',t.telefono||'')
+    const contactoPpal=t.contactos?.find((c:any)=>c.principal)||t.contactos?.[0]
+    u('cliente',t.razon_social);u('cuit',t.nro_doc||'');u('email',contactoPpal?.email||'');u('telefono',contactoPpal?.telefono||'')
     u('ivaCondicion',t.condicion_iva||'Responsable Inscripto')
     setClienteSelId(t.id);setBuscarCliente(t.razon_social);setShowClienteDropdown(false)
     const {data}=await supabase.from('cotizaciones').select('id,num,estado,total_landed,created_at').eq('tercero_id',t.id).order('created_at',{ascending:false}).limit(5)
