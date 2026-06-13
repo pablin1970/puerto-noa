@@ -627,7 +627,7 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, onReload, onBack, o
               <span>Fecha: {cotizacion.fecha}</span>
               {cotizacion.fecha_vencimiento && <span>Vence: {cotizacion.fecha_vencimiento}</span>}
               <span className="font-mono font-semibold text-[#052698]">USD {fmt(totalUSD)} total</span>
-              {cotizacion.cotizacion_id && (()=>{const cot=(cotsSistema||[]).find((c:any)=>c.id===cotizacion.cotizacion_id);return cot?<span className="px-2 py-0.5 bg-[#EBF2FF] text-[#052698] rounded-full text-[9px] font-semibold">Operacion: {cot.num} — {cot.cliente}</span>:null})()}
+              {cotizacion.cotizacion_id && (cotsSistema||[]).find((c:any)=>c.id===cotizacion.cotizacion_id) && <span className="px-2 py-0.5 bg-[#EBF2FF] text-[#052698] rounded-full text-[9px] font-semibold">Operacion: {(cotsSistema||[]).find((c:any)=>c.id===cotizacion.cotizacion_id)?.num} — {(cotsSistema||[]).find((c:any)=>c.id===cotizacion.cotizacion_id)?.cliente}</span>}
             </div>
           </div>
           <div className="flex gap-2">
