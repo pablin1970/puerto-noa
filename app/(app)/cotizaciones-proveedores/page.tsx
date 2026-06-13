@@ -57,6 +57,7 @@ export default function CotizacionesProveedoresPage() {
   const supabase = useMemo(() => createClient(), [])
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
   const [terceros, setTerceros] = useState<any[]>([])
+  const [cotsSistema, setCotsSistema] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'lista' | 'nueva' | 'detalle'>('lista')
   const [selId, setSelId] = useState<string | null>(null)
@@ -283,7 +284,7 @@ export default function CotizacionesProveedoresPage() {
   )
 }
 
-function FormCotizacion({ supabase, terceros, onSave, onCancel, cotizacionInicial }: any) {
+function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cotizacionInicial }: any) {
   const [form, setForm] = useState({
     proveedor_nombre: '',
     tercero_id: '',
@@ -297,12 +298,18 @@ function FormCotizacion({ supabase, terceros, onSave, onCancel, cotizacionInicia
     seguro_incluido: false,
     seguro_monto: '',
     notas: '',
+    cotizacion_id: '',
     ...cotizacionInicial,
   })
   const [items, setItems] = useState<Item[]>(cotizacionInicial?.items || [{ ...ITEM_VACIO }])
   const [saving, setSaving] = useState(false)
   const [buscarProv, setBuscarProv] = useState('')
   const [showProvDropdown, setShowProvDropdown] = useState(false)
+  const [buscarCot, setBuscarCot] = useState('')
+  const [showCotDropdown, setShowCotDropdown] = useState(false)
+  const cotsFiltradas = (cotsSistema || []).filter((c: any) =>
+    !buscarCot || c.num?.toLowerCase().includes(buscarCot.toLowerCase()) || c.cliente?.toLowerCase().includes(buscarCot.toLowerCase())
+  ).slice(0, 8)
 
   const provsFiltrados = terceros.filter((t: any) =>
     !buscarProv || t.razon_social.toLowerCase().includes(buscarProv.toLowerCase())
@@ -338,6 +345,7 @@ function FormCotizacion({ supabase, terceros, onSave, onCancel, cotizacionInicia
       seguro_incluido: form.rubro === 'forwarder' ? form.seguro_incluido : false,
       seguro_monto: form.rubro === 'forwarder' && form.seguro_incluido ? parseFloat(form.seguro_monto as any) || null : null,
       notas: form.notas || null,
+      cotizacion_id: form.cotizacion_id || null,
     }).select().single()
 
     if (error) { alert('Error: ' + error.message); setSaving(false); return }
@@ -401,6 +409,35 @@ function FormCotizacion({ supabase, terceros, onSave, onCancel, cotizacionInicia
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Referencia (N cotizacion proveedor)</label>
             <input value={form.referencia} onChange={e => setForm((f: any) => ({ ...f, referencia: e.target.value }))} className={inp} placeholder="ej. Q-2026-001" />
+          </div>
+          <div className="col-span-2 relative">
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Asociar a cotizacion del sistema (opcional)</label>
+            <input
+              value={form.cotizacion_id ? (cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id) ? `${(cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id)?.num} — ${(cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id)?.cliente}` : form.cotizacion_id : buscarCot}
+              onChange={e => { setBuscarCot(e.target.value); setShowCotDropdown(true); if (!e.target.value) setForm((f:any)=>({...f,cotizacion_id:''})) }}
+              onFocus={() => setShowCotDropdown(true)}
+              className={inp} placeholder="Buscar por N o cliente..."
+            />
+            {form.cotizacion_id && (
+              <button onClick={() => { setForm((f:any)=>({...f,cotizacion_id:''})); setBuscarCot('') }}
+                className="absolute right-2 top-8 text-gray-400 hover:text-red-500 text-xs">X</button>
+            )}
+            {showCotDropdown && cotsFiltradas.length > 0 && !form.cotizacion_id && (
+              <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-48 overflow-y-auto"
+                onClick={e => e.stopPropagation()}>
+                {cotsFiltradas.map((c: any) => (
+                  <button key={c.id} onMouseDown={() => {
+                    setForm((f:any)=>({...f,cotizacion_id:c.id}))
+                    setShowCotDropdown(false)
+                    setBuscarCot('')
+                  }} className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
+                    <span className="font-mono font-semibold text-[#1168F8]">{c.num}</span>
+                    <span className="text-gray-600 ml-2">{c.cliente}</span>
+                    <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded-full ${c.estado==='aprobada'?'bg-green-50 text-green-700':'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
@@ -590,6 +627,7 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, onReload, onBack, o
               <span>Fecha: {cotizacion.fecha}</span>
               {cotizacion.fecha_vencimiento && <span>Vence: {cotizacion.fecha_vencimiento}</span>}
               <span className="font-mono font-semibold text-[#052698]">USD {fmt(totalUSD)} total</span>
+              {cotizacion.cotizacion_id && (()=>{const cot=(cotsSistema||[]).find((c:any)=>c.id===cotizacion.cotizacion_id);return cot?<span className="px-2 py-0.5 bg-[#EBF2FF] text-[#052698] rounded-full text-[9px] font-semibold">Operacion: {cot.num} — {cot.cliente}</span>:null})()}
             </div>
           </div>
           <div className="flex gap-2">
@@ -666,10 +704,76 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, onReload, onBack, o
         )}
       </div>
 
+      {/* Asociacion a cotizacion del sistema */}
+      <AsociarCotizacion cotizacion={cotizacion} supabase={supabase} cotsSistema={cotsSistema||[]} onReload={onReload} />
+
       {cotizacion.notas && (
         <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
           <div className="text-[10px] font-semibold text-gray-500 uppercase mb-2">Notas</div>
           <div className="text-xs text-gray-700">{cotizacion.notas}</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AsociarCotizacion({ cotizacion, supabase, cotsSistema, onReload }: any) {
+  const [buscar, setBuscar] = useState('')
+  const [showDrop, setShowDrop] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const cotVinculada = cotsSistema.find((c: any) => c.id === cotizacion.cotizacion_id)
+  const cotsFiltradas = cotsSistema.filter((c: any) =>
+    !buscar || c.num?.toLowerCase().includes(buscar.toLowerCase()) || c.cliente?.toLowerCase().includes(buscar.toLowerCase())
+  ).slice(0, 8)
+  const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+
+  async function asociar(cotId: string) {
+    setSaving(true)
+    await (supabase.from('cotizaciones_proveedor_v2') as any).update({ cotizacion_id: cotId || null }).eq('id', cotizacion.id)
+    await onReload()
+    setBuscar('')
+    setShowDrop(false)
+    setSaving(false)
+  }
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm mb-4">
+      <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Cotizacion del sistema vinculada</div>
+      {cotVinculada ? (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-[#EBF2FF] flex items-center justify-center text-[#052698] text-[10px] font-bold">{cotVinculada.num?.slice(-3)}</div>
+            <div>
+              <div className="text-sm font-semibold text-gray-900">{cotVinculada.num}</div>
+              <div className="text-[10px] text-gray-400">{cotVinculada.cliente}</div>
+            </div>
+            <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold ${cotVinculada.estado==='aprobada'?'bg-green-50 text-green-700':'bg-gray-100 text-gray-500'}`}>{cotVinculada.estado}</span>
+          </div>
+          <button onClick={() => asociar('')} disabled={saving}
+            className="px-3 py-1.5 border border-red-200 text-red-500 rounded-xl text-xs hover:bg-red-50 transition-colors">
+            Desvincular
+          </button>
+        </div>
+      ) : (
+        <div className="relative">
+          <input value={buscar} onChange={e => { setBuscar(e.target.value); setShowDrop(true) }}
+            onFocus={() => setShowDrop(true)}
+            className={inp} placeholder="Buscar cotizacion por N o cliente..." />
+          {showDrop && cotsFiltradas.length > 0 && (
+            <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-48 overflow-y-auto">
+              {cotsFiltradas.map((c: any) => (
+                <button key={c.id} onMouseDown={() => asociar(c.id)}
+                  className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
+                  <span className="font-mono font-semibold text-[#1168F8]">{c.num}</span>
+                  <span className="text-gray-600 ml-2">{c.cliente}</span>
+                  <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded-full ${c.estado==='aprobada'?'bg-green-50 text-green-700':'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {cotsFiltradas.length === 0 && buscar && (
+            <div className="mt-2 text-xs text-gray-400">Sin resultados para "{buscar}"</div>
+          )}
         </div>
       )}
     </div>
