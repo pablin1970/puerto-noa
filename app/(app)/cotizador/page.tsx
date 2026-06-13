@@ -756,12 +756,9 @@ export default function CotizadorPage(){
               {/* Gastos post-entrega Chile — solo B1 y B2 */}
               {s.optTransp!=='A'&&(
                 <>
-                  <div className="border-t border-gray-100 pt-4">
+                  <div className="border-t border-gray-100 pt-3">
                     <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className="text-xs font-semibold text-gray-700">Gastos post-entrega en Chile</div>
-                        <div className="text-[10px] text-gray-400">Descarga, desconsolidacion, almacenaje y carga al camion</div>
-                      </div>
+                      <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Gastos post-entrega en Chile</div>
                       <div className="flex items-center gap-2">
                         {cotsChileDisponibles.length>0&&(
                           <select onChange={e=>{if(e.target.value){agregarGastoChileDesdeSistema(e.target.value);e.target.value=''}}} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
@@ -780,18 +777,18 @@ export default function CotizadorPage(){
                     </div>
                     {/* Almacenaje — solo B2 */}
                     {s.optTransp==='B2'&&(
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-3">
-                        <div className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider mb-3">Almacenaje en Chile</div>
+                      <div className="border border-gray-200 rounded-xl p-3 mb-3">
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Almacenaje en Chile</div>
                         <div className="grid grid-cols-4 gap-3">
                           <Field label="Volumen">
                             <div className="flex gap-1">
                               <select value={s.almModoVol} onChange={e=>u('almModoVol',e.target.value as any)} className={sel+' flex-shrink-0 w-20'}><option value="auto">Auto</option><option value="manual">Manual</option></select>
-                              {s.almModoVol==='manual'?<input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almVolM3} onChange={e=>u('almVolM3',parseNum(e.target.value))} className={inp} placeholder="m3"/>:<div className="px-2.5 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-mono flex-1 text-right">{fmt(totalM3,2)} m3</div>}
+                              {s.almModoVol==='manual'?<input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almVolM3} onChange={e=>u('almVolM3',parseNum(e.target.value))} className={inp} placeholder="m3"/>:<div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono flex-1 text-right">{fmt(totalM3,2)} m3</div>}
                             </div>
                           </Field>
                           <Field label="Costo m3/dia (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almCostoDia} onChange={e=>u('almCostoDia',parseNum(e.target.value))} className={inp}/></Field>
                           <Field label="Dias"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almDias} onChange={e=>u('almDias',parseInt2(e.target.value)||0)} className={inp}/></Field>
-                          <Field label="Subtotal"><div className="px-2.5 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-mono text-right font-semibold text-amber-800">USD {fmt(subAlm)}</div></Field>
+                          <Field label="Subtotal"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(subAlm)}</div></Field>
                         </div>
                       </div>
                     )}
