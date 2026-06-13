@@ -276,7 +276,7 @@ export default function CotizadorPage(){
   const subFW=fwElegida ? fwElegida.items.reduce((t,it)=>t+(parseFloat(it.valor as any)||0),0) : 0
   // Seguro: puede ser % sobre FOB o monto fijo, según define el ForWarder
   const segFW=fwElegida?.segAlcance!=='no'
-    ? (fwElegida?.seguroModo==='pct' ? totalFOB*(fwElegida?.seguroMonto||0)/100 : (fwElegida?.seguroMonto||0))
+    ? (fwElegida?.seguroModo==='pct' ? totalFOB*(parseFloat(String(fwElegida?.seguroMonto||0).replace(',','.'))||0)/100 : (parseFloat(String(fwElegida?.seguroMonto||0).replace(',','.'))||0))
     : 0
   // Seguro terrestre independiente (solo si FW cubre solo tramo maritimo)
   const segIndepCalc=fwElegida?.segAlcance==='maritimo'
@@ -1008,12 +1008,12 @@ export default function CotizadorPage(){
                                   <option value="pct">% sobre FOB</option>
                                   <option value="fijo">Monto fijo USD</option>
                                 </select>
-                                <input type="text" inputMode="decimal" value={fw.seguroMonto||''} onFocus={e=>e.target.select()}
-                                  onChange={e=>updateFW(fw.id,'seguroMonto',parseNum(e.target.value))}
+                                <input type="text" inputMode="decimal" value={fw.seguroMonto===0?'':fw.seguroMonto} onFocus={e=>e.target.select()}
+                                  onChange={e=>updateFW(fw.id,'seguroMonto',e.target.value)}
                                   className="w-24 px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono bg-white" placeholder="0.00"/>
                                 <span className="text-[10px] text-gray-400">{fw.seguroModo==='pct'?'%':'USD'}</span>
                                 {fw.seguroModo==='pct'&&totalFOB>0&&(
-                                  <span className="text-[10px] font-mono text-[#052698] bg-[#EBF2FF] px-2 py-0.5 rounded">= USD {fmt(totalFOB*(fw.seguroMonto||0)/100)}</span>
+                                  <span className="text-[10px] font-mono text-[#052698] bg-[#EBF2FF] px-2 py-0.5 rounded">= USD {fmt(totalFOB*(parseFloat(String(fw.seguroMonto).replace(',','.'))||0)/100)}</span>
                                 )}
                                 {fw.segAlcance==='maritimo'&&<span className="text-[9px] text-amber-600 font-medium">→ Se habilitara seguro terrestre en Bloque 3</span>}
                                 {fw.segAlcance==='punta_a_punta'&&<span className="text-[9px] text-green-600 font-medium">→ No requiere seguro terrestre adicional</span>}
@@ -1049,6 +1049,43 @@ export default function CotizadorPage(){
                   </button>
                 ))}
               </div>
+
+              {/* Gastos adicionales Opcion A */}
+              {s.optTransp==='A'&&(
+                <div className="border-t border-gray-100 pt-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Gastos adicionales en Chile (opcional)</div>
+                    <button onClick={()=>u('gastosChile',[...s.gastosChile,{id:uid2(),desc:'',proveedor:'',tipoCalc:'fijo',valor:0,ivaChile:'exento'}])}
+                      className="text-[10px] text-[#1168F8] hover:underline">+ Agregar</button>
+                  </div>
+                  {s.gastosChile.length===0?(
+                    <div className="text-[10px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">Sin gastos adicionales. Podés agregar THC, handling naviero, etc.</div>
+                  ):(
+                    <>
+                      <div className="grid gap-2 mb-1 text-[9px] text-gray-400 font-semibold uppercase tracking-wide" style={{gridTemplateColumns:'2fr 1.5fr 80px 90px 80px auto'}}>
+                        <div>Descripcion</div><div>Proveedor</div><div>Calculo</div><div className="text-right">Valor</div><div>IVA Chile</div><div></div>
+                      </div>
+                      {s.gastosChile.map((g,i)=>(
+                        <div key={g.id} className="grid gap-2 mb-1.5 items-center" style={{gridTemplateColumns:'2fr 1.5fr 80px 90px 80px auto'}}>
+                          <input value={g.desc} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],desc:e.target.value};u('gastosChile',n)}} className={inp} placeholder="THC, handling..."/>
+                          <input value={g.proveedor} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],proveedor:e.target.value};u('gastosChile',n)}} className={inp} placeholder="Proveedor"/>
+                          <select value={g.tipoCalc} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],tipoCalc:e.target.value as any};u('gastosChile',n)}} className={sel}>
+                            <option value="fijo">Fijo USD</option><option value="m3">Por m3</option>
+                          </select>
+                          <input type="text" inputMode="decimal" value={g.valor||''} onFocus={e=>e.target.select()}
+                            onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],valor:parseNum(e.target.value)};u('gastosChile',n)}}
+                            className={inp+' text-right font-mono'} placeholder={g.tipoCalc==='m3'?'USD/m3':'USD'}/>
+                          <select value={g.ivaChile} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],ivaChile:e.target.value as any};u('gastosChile',n)}} className={sel}>
+                            <option value="exento">Exento</option><option value="gravado">Grav. 19%</option>
+                          </select>
+                          <button onClick={()=>u('gastosChile',s.gastosChile.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs pl-1">X</button>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* Gastos post-entrega Chile — solo B1 y B2 */}
               {s.optTransp!=='A'&&(
                 <>
