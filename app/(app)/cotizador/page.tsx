@@ -138,6 +138,8 @@ export default function CotizadorPage(){
   const [cotsTranspDisponibles,setCotsTranspDisponibles]=useState<any[]>([])
   const [cotsArgDisponibles,setCotsArgDisponibles]=useState<any[]>([])
   const [cotsChileDisponibles,setCotsChileDisponibles]=useState<any[]>([])
+  // Cotizaciones de proveedores seleccionadas por bloque
+  const [provUsado,setProvUsado]=useState<Record<number,string|null>>({1:null,2:null,3:null,4:null})
   const [terceros,setTerceros]=useState<any[]>([])
   const [buscarCliente,setBuscarCliente]=useState('')
   const [showClienteDropdown,setShowClienteDropdown]=useState(false)
@@ -380,6 +382,13 @@ export default function CotizadorPage(){
     alert('Cotizacion duplicada. Revisa los valores y guarda cuando este lista.')
   }
 
+  // Filtra cotizaciones por bloque: especificas del cliente primero, luego genericas
+  function filtrarCotsBloque(cots: any[], clienteId: string|null) {
+    const especificas = cots.filter(c => c.tipo === 'especifica' && c.cotizacion_id === null && clienteId && c.tercero_id === clienteId)
+    const genericas = cots.filter(c => c.tipo === 'generica')
+    return { especificas, genericas }
+  }
+
   async function guardar(){
     if(!s.cliente){alert('Ingresa el nombre del cliente.');return}
     setSaving(true)
@@ -418,6 +427,20 @@ export default function CotizadorPage(){
         ejecutivo_id:uid,creado_por:uid,modificado_por:uid,presupuesto,
       })
       if(error){alert('Error al guardar: '+error.message);setSaving(false);return}
+      // Obtener el id de la cotizacion recien creada
+      const {data:cotGuardada}=await supabase.from('cotizaciones').select('id').eq('num',num).single()
+      if(cotGuardada) {
+        const provUsados=Object.entries(provUsado)
+          .filter(([_,cotProvId])=>cotProvId)
+          .map(([bloque,cotProvId])=>({
+            cotizacion_id:(cotGuardada as any).id,
+            cotizacion_proveedor_id:cotProvId,
+            bloque:parseInt(bloque)
+          }))
+        if(provUsados.length>0){
+          await (supabase.from('cotizacion_proveedores_usados') as any).insert(provUsados)
+        }
+      }
       router.push('/registro')
     } catch(e:any){alert('Error inesperado: '+e.message);setSaving(false)}
   }
@@ -631,20 +654,16 @@ export default function CotizadorPage(){
               <span className="text-[10px] text-gray-400">Flete maritimo + handling + gastos naviero</span>
               <div className="ml-auto flex items-center gap-2">
                 {cotsFWDisponibles.length>0&&(
-                  <select onChange={e=>{if(e.target.value){agregarFWDesdeSistema(e.target.value);e.target.value=''}}} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
+                  <select onChange={e=>{if(e.target.value){agregarFWDesdeSistema(e.target.value);setProvUsado(p=>({...p,1:e.target.value}));e.target.value=''}}} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
                     <option value="">+ Cargar del sistema</option>
-                    {cotsFWDisponibles.filter((c:any)=>c.tipo==='especifica').length>0&&(
-                      <optgroup label="Especificas">
-                        {cotsFWDisponibles.filter((c:any)=>c.tipo==='especifica').map((c:any)=>(
-                          <option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>
-                        ))}
+                    {(()=>{const {especificas,genericas}=filtrarCotsBloque(cotsFWDisponibles,clienteSelId);return(<>
+                      {especificas.length>0&&(<optgroup label="Especificas para este cliente">
+                        {especificas.map((c:any)=>(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
+                      </optgroup>)}
+                      <optgroup label="Genericas vigentes">
+                        {genericas.map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
                       </optgroup>
-                    )}
-                    <optgroup label="Genericas vigentes">
-                      {cotsFWDisponibles.filter((c:any)=>c.tipo==='generica').map((c:any)=>(
-                        <option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>
-                      ))}
-                    </optgroup>
+                    </>)})()}
                   </select>
                 )}
                 <button onClick={agregarFWManual} className="px-3 py-1 bg-[#1168F8] text-white rounded-lg text-[10px] font-bold hover:bg-[#0a4fc4]">+ Manual</button>
@@ -762,9 +781,16 @@ export default function CotizadorPage(){
                       <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Gastos post-entrega en Chile</div>
                       <div className="flex items-center gap-2">
                         {cotsChileDisponibles.length>0&&(
-                          <select onChange={e=>{if(e.target.value){agregarGastoChileDesdeSistema(e.target.value);e.target.value=''}}} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
+                          <select onChange={e=>{if(e.target.value){agregarGastoChileDesdeSistema(e.target.value);setProvUsado(p=>({...p,2:e.target.value}));e.target.value=''}}} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
                             <option value="">+ Del sistema</option>
-                            {cotsChileDisponibles.map((c:any)=><option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>)}
+                            {(()=>{const {especificas,genericas}=filtrarCotsBloque(cotsChileDisponibles,clienteSelId);return(<>
+                              {especificas.length>0&&(<optgroup label="Especificas para este cliente">
+                                {especificas.map((c:any)=>(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
+                              </optgroup>)}
+                              <optgroup label="Genericas vigentes">
+                                {genericas.map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
+                              </optgroup>
+                            </>)})()}
                           </select>
                         )}
                         <button onClick={()=>u('gastosChile',[...s.gastosChile,{id:uid2(),desc:'',proveedor:'',tipoCalc:'fijo',valor:0,ivaChile:'exento'}])}
@@ -875,7 +901,14 @@ export default function CotizadorPage(){
                         e.target.value=''
                       }} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none" defaultValue="">
                         <option value="">— Seleccionar —</option>
-                        {cotsTranspDisponibles.map((c:any)=><option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>)}
+                        {(()=>{const {especificas,genericas}=filtrarCotsBloque(cotsTranspDisponibles,clienteSelId);return(<>
+                          {especificas.length>0&&(<optgroup label="Especificas para este cliente">
+                            {especificas.map((c:any)=>(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
+                          </optgroup>)}
+                          <optgroup label="Genericas vigentes">
+                            {genericas.map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
+                          </optgroup>
+                        </>)})()}
                       </select>
                     </div>
                   )}
@@ -933,10 +966,18 @@ export default function CotizadorPage(){
                       moneda:(it.moneda||'USD') as any,valor:it.valor||0,pisoUsd:it.piso_usd||0,techoUsd:it.techo_usd||0,usd:0,ars:0,
                     }))
                     setS(p=>({...p,gastosArg:[...p.gastosArg,...nuevos]}))
+                    setProvUsado(p=>({...p,4:cot.id}))
                     e.target.value=''
                   }} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none" defaultValue="">
                     <option value="">+ Del sistema</option>
-                    {cotsArgDisponibles.map((c:any)=><option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>)}
+                    {(()=>{const {especificas,genericas}=filtrarCotsBloque(cotsArgDisponibles,clienteSelId);return(<>
+                          {especificas.length>0&&(<optgroup label="Especificas para este cliente">
+                            {especificas.map((c:any)=>(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
+                          </optgroup>)}
+                          <optgroup label="Genericas vigentes">
+                            {genericas.map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
+                          </optgroup>
+                        </>)})()}
                   </select>
                 )}
                 <button onClick={()=>u('gastosArg',[...s.gastosArg,{id:uid2(),desc:'',tipoCalc:'fijo_usd',moneda:'USD',valor:0,pisoUsd:0,techoUsd:0,usd:0,ars:0}])}
