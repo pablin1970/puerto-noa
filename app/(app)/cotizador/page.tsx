@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
 type Tab = 'embarque' | 'logistica' | 'tributos' | 'resumen'
-type OptTransp = 'A1' | 'A2' | 'B'
+type OptTransp = 'A' | 'B1' | 'B2'
 
 interface ItemLog { id: string; desc: string; cant: number; unitario: number; ivaChile?: 'exento'|'gravado'; tipoCalc?: 'fijo'|'m3' }
 interface Proforma {
@@ -28,7 +28,7 @@ interface CotFW {
   proveedor: string
   referencia: string
   fecha: string
-  seguroIncluido: boolean
+  segAlcance: 'no'|'maritimo'|'punta_a_punta'
   seguroMonto: number
   items: CotFWItem[]
   elegida: boolean
@@ -53,7 +53,7 @@ interface CotState {
   proformas: Proforma[]
   // NUEVO: Bloque 1 - ForWarders
   cotsFW: CotFW[]
-  segModoIndep: 'pct'|'fijo'; segValIndep: number; segIndep: boolean
+  segModoIndep: 'pct'|'fijo'; segValIndep: number
   // NUEVO: Bloque 2 - Gastos post-entrega Chile
   gastosChile: GastoChile[]
   // Bloque 3 - Transporte terrestre (igual que antes)
@@ -61,6 +61,7 @@ interface CotState {
   almModoVol: 'auto'|'manual'; almVolM3: number; almCostoDia: number; almDias: number
   cargaModo: 'fijo'|'m3'; cargaValor: number
   ftCamion: number; nCamiones: number; ftIda: number; ftDev: number; ftRt: number
+  estadiaCargaVal: number; estadiaCargaDias: number; estadiaDescargaVal: number; estadiaDescargaDias: number
   // Bloque 4 - Gastos Argentina (igual que antes)
   rowsE: ItemLog[]; gastosArg: GastoArg[]
   // Bloque 5 - Fee
@@ -76,12 +77,13 @@ const INIT: CotState = {
   productos:[{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:'FOB'}],
   exwTransp:0,exwAgente:0,exwOtros:0,precioArgEquiv:0,proformas:[],
   cotsFW:[],
-  segModoIndep:'pct',segValIndep:0.5,segIndep:false,
+  segModoIndep:'pct',segValIndep:0.5,
   gastosChile:[],
-  optTransp:'A1',rowsDescon:[],
+  optTransp:'A',rowsDescon:[],
   almModoVol:'auto',almVolM3:0,almCostoDia:0,almDias:0,
   cargaModo:'fijo',cargaValor:0,
   ftCamion:0,nCamiones:1,ftIda:0,ftDev:0,ftRt:0,
+  estadiaCargaVal:0,estadiaCargaDias:0,estadiaDescargaVal:0,estadiaDescargaDias:0,
   rowsE:[],gastosArg:[],feeCont:0,
   tcClp:950,regimen:'A',tcTrib:1000,derPct:18,
 }
@@ -158,7 +160,7 @@ export default function CotizadorPage(){
       })
     supabase.from('terceros').select('id,razon_social,nombre_fantasia,nro_doc,tipo_doc,condicion_iva,dir_fiscal_ciudad,pais')
       .eq('activo','true')
-      .contains('tipo', ['cliente'])
+      .filter('tipo', 'cs', '{"cliente"}')
       .then(({data})=>{if(data) setTerceros(data)})
     // Cargar cotizaciones de proveedores v2 vigentes por rubro
     supabase.from('cotizaciones_proveedor_v2')
@@ -215,12 +217,12 @@ export default function CotizadorPage(){
   // Bloque 1: ForWarder elegido
   const fwElegida=s.cotsFW.find(c=>c.elegida)
   const subFW=fwElegida ? fwElegida.items.reduce((t,it)=>t+(parseFloat(it.valor as any)||0),0) : 0
-  const segFW=fwElegida?.seguroIncluido ? (fwElegida.seguroMonto||0) : 0
+  const segFW=fwElegida?.segAlcance!=='no' ? (fwElegida?.seguroMonto||0) : 0
   // Seguro independiente (si no viene del FW)
-  const segIndepCalc=s.segIndep
-    ? (s.segModoIndep==='pct'?(totalFOB+subFW)*s.segValIndep/100:s.segValIndep)
+  const segIndepCalc=fwElegida?.segAlcance==='maritimo'
+    ? (s.segModoIndep==='pct'?cif*s.segValIndep/100:s.segValIndep)
     : 0
-  const totalSeg=segFW+segIndepCalc
+  const totalSeg=segFW
 
   // Bloque 2: Gastos Chile post-entrega
   const subGastosChile=s.gastosChile.reduce((t,g)=>{
@@ -230,14 +232,17 @@ export default function CotizadorPage(){
 
   // Bloque 3: Transporte + desconsolidacion
   const volAlm=s.almModoVol==='auto'?totalM3:s.almVolM3
-  const subAlm=s.optTransp==='A2'?volAlm*s.almCostoDia*s.almDias:0
+  const subAlm=s.optTransp==='B2'?volAlm*s.almCostoDia*s.almDias:0
   const subDescon=s.rowsDescon.reduce((t,r)=>t+(r.tipoCalc==='m3'?r.unitario*totalM3:r.cant*r.unitario),0)
-  const subCarga=s.optTransp!=='B'?(s.cargaModo==='m3'?s.cargaValor*totalM3:s.cargaValor):0
+  const subCarga=s.optTransp!=='A'?(s.cargaModo==='m3'?s.cargaValor*totalM3:s.cargaValor):0
   const subD=subDescon+subAlm+subCarga
-  const subTransp=s.optTransp==='B'
+  const subTransp=s.optTransp==='A'
     ?(()=>{const ida=s.ftIda*nc,dev=s.ftDev*nc,rt=s.ftRt*nc;return rt>0&&rt<(ida+dev)?rt:ida+dev})()
     :s.ftCamion*s.nCamiones
 
+  // Estadias
+  const subEstadias=s.estadiaCargaVal*s.estadiaCargaDias+s.estadiaDescargaVal*s.estadiaDescargaDias
+  // Seguro terrestre (solo si seguro FW es maritimo)
   // Bloque 4: Gastos Argentina
   const calcGastoArg=(g:GastoArg,cifUsd:number,tcTrib:number):number=>{
     let usd=0
@@ -269,7 +274,7 @@ export default function CotizadorPage(){
   const tributos=calcTrib(tribCfg,cifARS,s.derPct)
   const totalTribARS=tributos.reduce((t,r)=>t+r.imp,0)
   const totalTribUSD=totalTribARS/s.tcTrib
-  const totalLog=subFW+totalSeg+subGastosChile+subD+subTransp+subE+subGastosArg+fee
+  const totalLog=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+segIndepCalc+subE+subGastosArg+fee
   const totalLanded=totalFOB+totalLog+totalTribUSD
   const cap=calcCapacidad(s.contenedores,s.productos)
 
@@ -280,7 +285,7 @@ export default function CotizadorPage(){
     const nuevaFW:CotFW={
       id:uid2(),cotizacionProvId:cot.id,proveedor:cot.proveedor_nombre,
       referencia:cot.referencia||'',fecha:cot.fecha,
-      seguroIncluido:cot.seguro_incluido||false,seguroMonto:cot.seguro_monto||0,
+      segAlcance:(cot.seguro_incluido?'maritimo':'no') as any,seguroMonto:cot.seguro_monto||0,
       items:(cot.items||[]).map((it:any)=>({id:uid2(),descripcion:it.descripcion,valor:it.valor||0,tipoCalc:it.tipo_calculo||'fijo_usd',tipoContenedor:it.tipo_contenedor||''})),
       elegida:s.cotsFW.length===0,
     }
@@ -291,7 +296,7 @@ export default function CotizadorPage(){
   function agregarFWManual(){
     const nueva:CotFW={
       id:uid2(),cotizacionProvId:'',proveedor:'',referencia:'',fecha:new Date().toISOString().slice(0,10),
-      seguroIncluido:false,seguroMonto:0,
+      segAlcance:'no' as const,seguroMonto:0,
       items:[{id:uid2(),descripcion:'Flete maritimo',valor:0,tipoCalc:'fijo_usd',tipoContenedor:''}],
       elegida:s.cotsFW.length===0,
     }
@@ -390,6 +395,8 @@ export default function CotizadorPage(){
         ...(subGastosChile>0?[{etapa:'chile',tipo:'servicios',concepto:'Gastos post-entrega Chile',usd:subGastosChile}]:[]),
         ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidacion (Opcion ${s.optTransp})`,usd:subD}]:[]),
         ...(subTransp>0?[{etapa:'terrestre',tipo:'flete',concepto:'Transporte terrestre',usd:subTransp}]:[]),
+        ...(subEstadias>0?[{etapa:'terrestre',tipo:'estadia',concepto:'Estadias por demora',usd:subEstadias}]:[]),
+        ...(segIndepCalc>0?[{etapa:'terrestre',tipo:'seguro',concepto:'Seguro terrestre',usd:segIndepCalc}]:[]),
         ...(subE>0?[{etapa:'argentina',tipo:'servicios',concepto:'Gastos Argentina',usd:subE}]:[]),
         ...(subGastosArg>0?[{etapa:'argentina',tipo:'gastos_arg',concepto:'Gastos Argentina (despachante)',usd:subGastosArg}]:[]),
         ...(totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Regimen ${s.regimen}`,usd:totalTribUSD}]:[]),
@@ -695,18 +702,25 @@ export default function CotizadorPage(){
                             </div>
                           ))}
                           <button onClick={()=>addFWItem(fw.id)} className="text-[10px] text-[#1168F8] hover:underline mt-1">+ Item</button>
-                          {/* Seguro toggle */}
-                          <div className="mt-3 pt-2 border-t border-gray-100 flex items-center gap-3">
-                            <label className="flex items-center gap-1.5 cursor-pointer">
-                              <input type="checkbox" checked={fw.seguroIncluido} onChange={e=>updateFW(fw.id,'seguroIncluido',e.target.checked)} className="w-3.5 h-3.5 rounded"/>
-                              <span className="text-[10px] text-gray-600 font-medium">Seguro incluido en esta cotizacion</span>
-                            </label>
-                            {fw.seguroIncluido&&(
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] text-gray-400">USD</span>
+                          {/* Seguro alcance */}
+                          <div className="mt-3 pt-2 border-t border-gray-100">
+                            <div className="text-[10px] text-gray-500 font-medium mb-1.5">Alcance del seguro</div>
+                            <div className="flex gap-2 flex-wrap">
+                              {([{k:'no',l:'Sin seguro'},{k:'maritimo',l:'Solo tramo maritimo'},{k:'punta_a_punta',l:'Origen a destino final'}] as const).map(o=>(
+                                <button key={o.k} onClick={()=>updateFW(fw.id,'segAlcance',o.k)}
+                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-colors ${fw.segAlcance===o.k?'bg-[#1168F8] text-white border-[#1168F8]':'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                  {o.l}
+                                </button>
+                              ))}
+                            </div>
+                            {fw.segAlcance!=='no'&&(
+                              <div className="flex items-center gap-2 mt-2">
+                                <span className="text-[10px] text-gray-400">Monto USD</span>
                                 <input type="text" inputMode="decimal" value={fw.seguroMonto||''} onFocus={e=>e.target.select()}
                                   onChange={e=>updateFW(fw.id,'seguroMonto',parseNum(e.target.value))}
                                   className="w-24 px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono bg-white" placeholder="0.00"/>
+                                {fw.segAlcance==='maritimo'&&<span className="text-[9px] text-amber-600 font-medium">→ Se habilitara seguro terrestre en Bloque 4</span>}
+                                {fw.segAlcance==='punta_a_punta'&&<span className="text-[9px] text-green-600 font-medium">→ No requiere seguro terrestre adicional</span>}
                               </div>
                             )}
                           </div>
@@ -716,20 +730,7 @@ export default function CotizadorPage(){
                   })}
                 </div>
               )}
-              {/* Seguro independiente */}
-              <div className="mt-3 pt-3 border-t border-gray-100">
-                <label className="flex items-center gap-2 cursor-pointer mb-2">
-                  <input type="checkbox" checked={s.segIndep} onChange={e=>u('segIndep',e.target.checked)} className="w-3.5 h-3.5 rounded"/>
-                  <span className="text-[10px] text-gray-600 font-medium">Seguro contratado independientemente (fuera del ForWarder)</span>
-                </label>
-                {s.segIndep&&(
-                  <div className="grid grid-cols-3 gap-3 mt-2 pl-5">
-                    <Field label="Modalidad"><select value={s.segModoIndep} onChange={e=>u('segModoIndep',e.target.value as any)} className={sel}><option value="pct">% sobre FOB+flete</option><option value="fijo">Monto fijo (USD)</option></select></Field>
-                    <Field label={s.segModoIndep==='pct'?'Tasa (%)':'Monto (USD)'}><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.segValIndep} onChange={e=>u('segValIndep',parseNum(e.target.value))} className={inp}/></Field>
-                    <Field label="Seguro calculado"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right font-mono">USD {fmt(segIndepCalc)}</div></Field>
-                  </div>
-                )}
-              </div>
+
             </div>
             <div className="flex justify-between items-center px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
               <span>{fwElegida?`ForWarder elegido: ${fwElegida.proveedor||'Manual'}`:s.cotsFW.length>0?'Ninguno elegido':'Sin cotizaciones'}</span>
@@ -796,19 +797,19 @@ export default function CotizadorPage(){
             </div>
             <div className="px-5 py-4">
               <div className="grid grid-cols-3 gap-3 mb-4">
-                {[{key:'A1',label:'Opcion A1',sub:'Desconsolidar + cargar directo al camion'},{key:'A2',label:'Opcion A2',sub:'Desconsolidar + almacenar + cargar al camion'},{key:'B',label:'Opcion B',sub:'Contenedor completo hasta Argentina'}].map(o=>(
+                {[{key:'A',label:'Opcion A',sub:'Contenedor completo hasta Argentina'},{key:'B1',label:'Opcion B1',sub:'Desconsolidar + cargar directo al camion'},{key:'B2',label:'Opcion B2',sub:'Desconsolidar + almacenar + cargar al camion'}].map(o=>(
                   <button key={o.key} onClick={()=>u('optTransp',o.key as OptTransp)} className={`px-3 py-2.5 rounded-lg border text-left transition-colors ${s.optTransp===o.key?'border-[#b45309] bg-amber-50 text-amber-800':'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
                     <div className="text-xs font-semibold">{o.label}</div><div className="text-[10px] opacity-70 mt-0.5">{o.sub}</div>
                   </button>
                 ))}
               </div>
-              {s.optTransp!=='B'&&(
+              {s.optTransp!=='A'&&(
                 <div className="space-y-4">
                   <div>
                     <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Gastos de desconsolidacion</div>
                     <DesconRows rows={s.rowsDescon} onChange={r=>u('rowsDescon',r)} totalM3={totalM3}/>
                   </div>
-                  {s.optTransp==='A2'&&(
+                  {s.optTransp==='B2'&&(
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                       <div className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider mb-3">Almacenaje en Chile</div>
                       <div className="grid grid-cols-4 gap-3">
@@ -835,7 +836,7 @@ export default function CotizadorPage(){
                   </div>
                 </div>
               )}
-              {s.optTransp==='B'&&(
+              {s.optTransp==='A'&&(
                 <div className="grid grid-cols-4 gap-3">
                   <Field label="Flete ida (USD/cont)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftIda} onChange={e=>u('ftIda',parseNum(e.target.value))} className={inp}/></Field>
                   <Field label="Devolucion (USD/cont)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftDev} onChange={e=>u('ftDev',parseNum(e.target.value))} className={inp}/></Field>
@@ -860,7 +861,7 @@ export default function CotizadorPage(){
                   </select>
                 </div>
               )}
-              {s.optTransp!=='B'&&(
+              {s.optTransp!=='A'&&(
                 <div className="mt-3 pt-3 border-t border-gray-100">
                   <div className="grid grid-cols-3 gap-3">
                     <Field label="Flete terrestre (USD/camion)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftCamion} onChange={e=>u('ftCamion',parseNum(e.target.value))} className={inp}/></Field>
@@ -869,9 +870,33 @@ export default function CotizadorPage(){
                   </div>
                 </div>
               )}
+              {/* Estadias */}
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Estadias por demora</div>
+                <div className="grid grid-cols-4 gap-3">
+                  <Field label="Estadia carga (USD/dia)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.estadiaCargaVal} onChange={e=>u('estadiaCargaVal',parseNum(e.target.value))} className={inp}/></Field>
+                  <Field label="Dias carga"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.estadiaCargaDias} onChange={e=>u('estadiaCargaDias',parseInt2(e.target.value)||0)} className={inp}/></Field>
+                  <Field label="Estadia descarga (USD/dia)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.estadiaDescargaVal} onChange={e=>u('estadiaDescargaVal',parseNum(e.target.value))} className={inp}/></Field>
+                  <Field label="Dias descarga"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.estadiaDescargaDias} onChange={e=>u('estadiaDescargaDias',parseInt2(e.target.value)||0)} className={inp}/></Field>
+                </div>
+              </div>
+              {/* Seguro terrestre - solo si FW elegido tiene alcance maritimo */}
+              {fwElegida?.segAlcance==='maritimo'&&(
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Seguro terrestre</div>
+                    <span className="text-[9px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-medium">Requerido — seguro maritimo no cubre este tramo</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <Field label="Modalidad"><select value={s.segModoIndep} onChange={e=>u('segModoIndep',e.target.value as any)} className={sel}><option value="pct">% sobre CIF</option><option value="fijo">Monto fijo (USD)</option></select></Field>
+                    <Field label={s.segModoIndep==='pct'?'Tasa (%)':'Monto (USD)'}><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.segValIndep} onChange={e=>u('segValIndep',parseNum(e.target.value))} className={inp}/></Field>
+                    <Field label="Seguro calculado"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right font-mono">USD {fmt(segIndepCalc)}</div></Field>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex justify-end items-center gap-2 px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
-              Subtotal bloque 3: <strong className="font-mono text-gray-800">USD {fmt(subD+subTransp)}</strong>
+              Subtotal bloque 3: <strong className="font-mono text-gray-800">USD {fmt(subD+subTransp+subEstadias+segIndepCalc)}</strong>
             </div>
           </div>
 
