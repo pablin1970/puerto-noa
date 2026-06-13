@@ -158,7 +158,6 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
   const fechaEmision = cot.created_at ? new Date(cot.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' }) : ''
   const TOTAL_PAGS = 2
 
-  // Shared cell style
   const th = { padding: '4px 8px', fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.5px', color: '#9ca3af', background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }
   const td = { padding: '5px 8px', fontSize: '10.5px', borderBottom: '1px solid #f1f5f9' }
   const tdGray = { ...td, fontSize: '9.5px', color: '#6b7280' }
@@ -166,25 +165,63 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
   return (
     <>
       <style>{`
+        /* ── VISTA DE PANTALLA ── */
+        .doc-page {
+          width: 210mm;
+          min-height: 297mm;
+          padding: 14mm 16mm 12mm 16mm;
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          background: white;
+          box-shadow: 0 2px 16px rgba(0,0,0,0.10);
+          margin: 24px auto;
+          border-radius: 4px;
+        }
+        .doc-page-wrapper {
+          background: #e5e7eb;
+          padding: 8px 0 32px 0;
+        }
+
+        /* ── IMPRESIÓN ── */
         @media print {
           body * { visibility: hidden; }
           #printable, #printable * { visibility: visible; }
           #printable { position: absolute; left: 0; top: 0; width: 100%; }
           .no-print { display: none !important; }
-          @page { margin: 0; size: A4 portrait; }
-          #printable * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          @page {
+            margin: 0;
+            size: A4 portrait;
+          }
+          #printable * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .doc-page-wrapper {
+            background: white !important;
+            padding: 0 !important;
+          }
           .doc-page {
             width: 210mm;
             height: 297mm;
+            min-height: unset;
             padding: 12mm 14mm;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
             overflow: hidden;
             page-break-after: always;
+            break-after: page;
             page-break-inside: avoid;
+            break-inside: avoid;
+            box-shadow: none !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
           }
-          .doc-page:last-child { page-break-after: auto; }
+          .doc-page:last-child {
+            page-break-after: auto;
+            break-after: auto;
+          }
         }
       `}</style>
 
@@ -221,9 +258,10 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
         </div>
       </div>
 
-      <div id="printable" className="max-w-4xl mx-auto">
+      {/* Fondo gris que envuelve las páginas en pantalla */}
+      <div className="doc-page-wrapper no-print-wrapper" id="printable">
 
-        {/* ══ PÁGINA 1: Propuesta comercial ══ */}
+        {/* ══ PÁGINA 1 ══ */}
         <div className="doc-page bg-white">
           <DocHeader cot={cot} fechaEmision={fechaEmision} pagina={1} total={TOTAL_PAGS} />
 
@@ -369,7 +407,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
           <DocFooter cot={cot} fechaEmision={fechaEmision} pagina={1} total={TOTAL_PAGS} />
         </div>
 
-        {/* ══ PÁGINA 2: Resumen financiero ══ */}
+        {/* ══ PÁGINA 2 ══ */}
         <div className="doc-page bg-white">
           <DocHeader cot={cot} fechaEmision={fechaEmision} pagina={2} total={TOTAL_PAGS} />
 
@@ -415,7 +453,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
             </div>
           </div>
 
-          {/* Comparativa — solo si activada */}
+          {/* Comparativa */}
           {mostrarComparativa && hayComparativa && (
             <div style={{ border: `2px solid ${ahorro > 0 ? '#16a34a' : '#dc2626'}`, borderRadius: '10px', overflow: 'hidden', marginBottom: '16px' }}>
               <div style={{ padding: '8px 16px', background: ahorro > 0 ? '#16a34a' : '#dc2626', color: 'white', fontWeight: 700, fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase' }}>
@@ -446,12 +484,10 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
           {/* Tipo de cambio */}
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '14px 16px', marginBottom: '16px', background: '#f8fafc' }}>
             <div style={{ fontWeight: 700, fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Tipos de cambio aplicados</div>
-            <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-              <div style={{ fontSize: '11px' }}>
-                <span style={{ color: '#9ca3af' }}>TC oficial BNA (ARS/USD): </span>
-                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#374151' }}>ARS {fmt(tcRef, 0)}</span>
-                <span style={{ fontSize: '10px', color: '#9ca3af' }}> — tributos y gastos locales</span>
-              </div>
+            <div style={{ fontSize: '11px' }}>
+              <span style={{ color: '#9ca3af' }}>TC oficial BNA (ARS/USD): </span>
+              <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#374151' }}>ARS {fmt(tcRef, 0)}</span>
+              <span style={{ fontSize: '10px', color: '#9ca3af' }}> — tributos y gastos locales</span>
             </div>
           </div>
 
