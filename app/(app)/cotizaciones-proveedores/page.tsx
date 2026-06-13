@@ -13,6 +13,7 @@ const RUBROS: Record<string, { label: string; color: string; bg: string }> = {
 
 const TIPO_CALCULO: Record<string, string> = {
   fijo_usd:        'Fijo USD',
+  fijo_ars:        'Fijo ARS',
   por_contenedor:  'Por contenedor',
   por_m3:          'Por m3',
   pct_cif:         '% sobre CIF',
@@ -23,6 +24,8 @@ interface Item {
   descripcion: string
   tipo_calculo: string
   valor: number
+  piso_usd?: number
+  techo_usd?: number
   moneda: string
   tipo_contenedor: string
   orden: number
@@ -35,6 +38,7 @@ interface Cotizacion {
   rubro: string
   tipo: string
   cotizacion_id: string | null
+  cliente_id: string | null
   referencia: string
   fecha: string
   fecha_vencimiento: string
@@ -48,10 +52,73 @@ interface Cotizacion {
   tercero?: { razon_social: string }
 }
 
-const ITEM_VACIO: Item = { descripcion: '', tipo_calculo: 'fijo_usd', valor: 0, moneda: 'USD', tipo_contenedor: '', orden: 0 }
+const ITEM_VACIO: Item = { descripcion: '', tipo_calculo: 'fijo_usd', valor: 0, piso_usd: 0, techo_usd: 0, moneda: 'USD', tipo_contenedor: '', orden: 0 }
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
-const fmt = (n: number) => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmtN = (n: number) => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const parseN = (v: string) => { const n = parseFloat(String(v).replace(',', '.').replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n }
+
+// ── Fila de item con piso/techo si es pct_cif ──
+function ItemRow({ it, i, tiposCont, onChange, onRemove, editMode = true }: {
+  it: Item; i: number; tiposCont: any[]; onChange: (i: number, f: string, v: any) => void; onRemove: (i: number) => void; editMode?: boolean
+}) {
+  const esPct = it.tipo_calculo === 'pct_cif'
+  if (!editMode) return (
+    <tr className="border-b border-gray-50 hover:bg-gray-50">
+      <td className="px-3 py-2.5 font-medium text-gray-800">{it.descripcion}</td>
+      <td className="px-3 py-2.5 text-gray-500">{TIPO_CALCULO[it.tipo_calculo] || it.tipo_calculo}</td>
+      <td className="px-3 py-2.5 text-gray-500 font-mono text-[11px]">{it.tipo_contenedor || 'Todos'}</td>
+      <td className="px-3 py-2.5 font-mono text-[#052698] text-right">
+        {esPct ? `${it.valor}%` : `USD ${fmtN(parseN(String(it.valor)))}`}
+        {esPct && (it.piso_usd || it.techo_usd) ? (
+          <div className="text-[9px] text-gray-400">
+            {it.piso_usd ? `Piso USD ${fmtN(it.piso_usd)}` : ''}{it.piso_usd && it.techo_usd ? ' · ' : ''}{it.techo_usd ? `Techo USD ${fmtN(it.techo_usd)}` : ''}
+          </div>
+        ) : null}
+      </td>
+    </tr>
+  )
+  return (
+    <div className="mb-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+      <div className="grid gap-2 items-center mb-2" style={{ gridTemplateColumns: '2fr 140px 100px 110px 24px' }}>
+        <input value={it.descripcion} onChange={e => onChange(i, 'descripcion', e.target.value)}
+          className={inp} placeholder="Descripcion del cargo" />
+        <select value={it.tipo_calculo} onChange={e => onChange(i, 'tipo_calculo', e.target.value)} className={inp}>
+          {Object.entries(TIPO_CALCULO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-gray-400 flex-shrink-0">{esPct ? '%' : it.tipo_calculo === 'fijo_ars' ? 'ARS' : 'USD'}</span>
+          <input type="text" inputMode="decimal" value={it.valor || ''}
+            onFocus={e => e.target.select()}
+            onChange={e => onChange(i, 'valor', e.target.value)}
+            className={inp + ' text-right font-mono'} placeholder="0.00" />
+        </div>
+        <select value={it.tipo_contenedor} onChange={e => onChange(i, 'tipo_contenedor', e.target.value)} className={inp}>
+          <option value="">Todos</option>
+          {tiposCont.map((t: any) => <option key={t.codigo} value={t.codigo}>{t.codigo}</option>)}
+        </select>
+        <button onClick={() => onRemove(i)} className="text-gray-400 hover:text-red-500 text-xs p-1 flex-shrink-0">X</button>
+      </div>
+      {esPct && (
+        <div className="flex gap-3 items-center pl-1">
+          <span className="text-[10px] text-gray-400 flex-shrink-0">Piso USD</span>
+          <input type="text" inputMode="decimal" value={it.piso_usd || ''}
+            onFocus={e => e.target.select()}
+            onChange={e => onChange(i, 'piso_usd', parseN(e.target.value))}
+            className="w-28 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]"
+            placeholder="0 = sin piso" />
+          <span className="text-[10px] text-gray-400 flex-shrink-0">Techo USD</span>
+          <input type="text" inputMode="decimal" value={it.techo_usd || ''}
+            onFocus={e => e.target.select()}
+            onChange={e => onChange(i, 'techo_usd', parseN(e.target.value))}
+            className="w-28 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]"
+            placeholder="0 = sin techo" />
+          <span className="text-[10px] text-gray-400 italic">0 = sin límite</span>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function CotizacionesProveedoresPage() {
   const supabase = useMemo(() => createClient(), [])
@@ -70,14 +137,16 @@ export default function CotizacionesProveedoresPage() {
 
   async function loadAll() {
     setLoading(true)
-    const [cotRes, tercRes] = await Promise.all([
+    const [cotRes, tercRes, cotsRes] = await Promise.all([
       supabase.from('cotizaciones_proveedor_v2')
         .select('*, items:cotizaciones_proveedor_v2_items(*), tercero:terceros(razon_social)')
         .order('created_at', { ascending: false }),
-      supabase.from('terceros').select('id,razon_social').eq('activo', 'true').order('razon_social'),
+      supabase.from('terceros').select('id,razon_social,tipo').eq('activo', 'true').order('razon_social'),
+      supabase.from('cotizaciones').select('id,num,cliente,estado').order('created_at', { ascending: false }).limit(200),
     ])
     if (cotRes.data) setCotizaciones(cotRes.data as any)
     if (tercRes.data) setTerceros(tercRes.data)
+    if (cotsRes.data) setCotsSistema(cotsRes.data)
     setLoading(false)
   }
 
@@ -104,7 +173,6 @@ export default function CotizacionesProveedoresPage() {
     if (selId === id) setView('lista')
   }
 
-  // Totales por rubro para el header
   const stats = Object.keys(RUBROS).map(r => ({
     rubro: r,
     total: cotizaciones.filter(c => c.rubro === r && c.estado === 'vigente').length,
@@ -129,7 +197,6 @@ export default function CotizacionesProveedoresPage() {
         </div>
       </div>
 
-      {/* Stats por rubro */}
       {view === 'lista' && stats.length > 0 && (
         <div className="flex gap-2 mb-5 flex-wrap">
           {stats.map(s => {
@@ -155,7 +222,6 @@ export default function CotizacionesProveedoresPage() {
 
       {view === 'lista' && (
         <>
-          {/* Filtros */}
           <div className="flex gap-3 mb-4 flex-wrap items-center">
             <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar proveedor o referencia..."
               className="flex-1 min-w-48 px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white" />
@@ -179,7 +245,6 @@ export default function CotizacionesProveedoresPage() {
             <span className="text-xs text-gray-400 ml-auto">{filtradas.length} registro(s)</span>
           </div>
 
-          {/* Tabla */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             {loading ? (
               <div className="p-12 text-center text-gray-400">Cargando...</div>
@@ -215,7 +280,7 @@ export default function CotizacionesProveedoresPage() {
                         </td>
                         <td className="px-4 py-3.5">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${c.tipo === 'especifica' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
-                            {c.tipo === 'especifica' ? 'Especifica' : 'Generica'}
+                            {c.tipo === 'especifica' ? '⭐ Especifica' : 'Generica'}
                           </span>
                         </td>
                         <td className="px-4 py-3.5 font-mono text-[11px] text-gray-600">{c.referencia || '-'}</td>
@@ -265,6 +330,7 @@ export default function CotizacionesProveedoresPage() {
         <FormCotizacion
           supabase={supabase}
           terceros={terceros}
+          cotsSistema={cotsSistema}
           onSave={async () => { await loadAll(); setView('lista') }}
           onCancel={() => setView('lista')}
         />
@@ -275,6 +341,7 @@ export default function CotizacionesProveedoresPage() {
           cotizacion={sel}
           supabase={supabase}
           terceros={terceros}
+          cotsSistema={cotsSistema}
           onReload={async () => { await loadAll() }}
           onBack={() => setView('lista')}
           onEliminar={() => eliminar(sel.id)}
@@ -296,6 +363,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
     moneda: 'USD',
     estado: 'vigente',
     seguro_incluido: false,
+    seguro_modo: 'pct',
     seguro_monto: '',
     notas: '',
     cotizacion_id: '',
@@ -306,8 +374,6 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
     paso_id: '',
     ciudad_destino_id: '',
     tipo_contenedor: '',
-    moneda_original: 'USD',
-    valor_total_original: '',
     tc_referencia: '',
     es_tarifa_base: false,
     ...cotizacionInicial,
@@ -323,11 +389,12 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
   const [pasos, setPasos] = useState<any[]>([])
   const [ciudades, setCiudades] = useState<any[]>([])
   const [tiposCont, setTiposCont] = useState<any[]>([])
+
   useEffect(() => {
     Promise.all([
       supabase.from('puertos_china').select('id,locode,nombre,ciudad').eq('activo', 'true').order('orden'),
       supabase.from('puertos_chile').select('id,locode,nombre,ciudad').eq('activo', 'true').order('orden'),
-      supabase.from('pasos_fronterizos').select('id,nombre,provincia_argentina,habilitado_carga').eq('activo', 'true').order('orden'),
+      supabase.from('pasos_fronterizos').select('id,nombre,provincia_argentina').eq('activo', 'true').order('orden'),
       supabase.from('ciudades_destino_arg').select('id,ciudad,provincia').eq('activo', 'true').order('orden'),
       supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo', 'true').order('orden'),
     ]).then(([ch, cl, ps, ci, tc]) => {
@@ -347,14 +414,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
     !buscarProv || t.razon_social.toLowerCase().includes(buscarProv.toLowerCase())
   ).slice(0, 6)
 
-  function addItem() {
-    setItems(prev => [...prev, { ...ITEM_VACIO, orden: prev.length }])
-  }
-
-  function removeItem(i: number) {
-    setItems(prev => prev.filter((_, idx) => idx !== i))
-  }
-
+  function addItem() { setItems(prev => [...prev, { ...ITEM_VACIO, orden: prev.length }]) }
+  function removeItem(i: number) { setItems(prev => prev.filter((_, idx) => idx !== i)) }
   function updateItem(i: number, field: string, value: any) {
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [field]: value } : it))
   }
@@ -375,7 +436,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
       moneda: form.moneda,
       estado: form.estado,
       seguro_incluido: form.rubro === 'forwarder' ? form.seguro_incluido : false,
-      seguro_monto: form.rubro === 'forwarder' && form.seguro_incluido ? parseFloat(form.seguro_monto as any) || null : null,
+      seguro_modo: form.rubro === 'forwarder' && form.seguro_incluido ? form.seguro_modo : null,
+      seguro_monto: form.rubro === 'forwarder' && form.seguro_incluido ? parseN(form.seguro_monto as any) || null : null,
       notas: form.notas || null,
       cotizacion_id: form.cotizacion_id || null,
       cliente_id: form.tipo === 'especifica' ? (form.cliente_id || null) : null,
@@ -385,9 +447,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
       paso_id: form.paso_id || null,
       ciudad_destino_id: form.ciudad_destino_id || null,
       tipo_contenedor: form.tipo_contenedor || null,
-      moneda_original: form.moneda_original || form.moneda,
-      valor_total_original: parseFloat(form.valor_total_original as any) || null,
-      tc_referencia: parseFloat(form.tc_referencia as any) || null,
+      tc_referencia: parseN(form.tc_referencia as any) || null,
       es_tarifa_base: form.es_tarifa_base || false,
     }).select().single()
 
@@ -397,7 +457,9 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
       cotizacion_id: cot.id,
       descripcion: it.descripcion,
       tipo_calculo: it.tipo_calculo,
-      valor: parseFloat(it.valor as any) || 0,
+      valor: parseN(String(it.valor)) || 0,
+      piso_usd: it.tipo_calculo === 'pct_cif' ? (parseN(String(it.piso_usd)) || 0) : null,
+      techo_usd: it.tipo_calculo === 'pct_cif' ? (parseN(String(it.techo_usd)) || 0) : null,
       moneda: it.moneda || 'USD',
       tipo_contenedor: it.tipo_contenedor || null,
       orden: i,
@@ -411,7 +473,12 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
     setSaving(false)
   }
 
-  const totalUSD = items.reduce((t, it) => t + (parseFloat(it.valor as any) || 0), 0)
+  const totalUSD = items.reduce((t, it) => {
+    if (it.tipo_calculo === 'pct_cif') return t
+    return t + (parseN(String(it.valor)) || 0)
+  }, 0)
+
+  const setF = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }))
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -423,60 +490,51 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre del proveedor *</label>
             <input
               value={form.proveedor_nombre}
-              onChange={e => {
-                setForm((f: any) => ({ ...f, proveedor_nombre: e.target.value }))
-                setBuscarProv(e.target.value)
-                setShowProvDropdown(e.target.value.length > 0)
-              }}
+              onChange={e => { setF('proveedor_nombre', e.target.value); setBuscarProv(e.target.value); setShowProvDropdown(e.target.value.length > 0) }}
               onFocus={() => setShowProvDropdown(form.proveedor_nombre.length > 0)}
               onClick={e => e.stopPropagation()}
               className={inp} placeholder="Nombre o buscar en terceros..."
             />
             {showProvDropdown && provsFiltrados.length > 0 && (
-              <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-48 overflow-y-auto"
-                onClick={e => e.stopPropagation()}>
+              <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-48 overflow-y-auto" onClick={e => e.stopPropagation()}>
                 {provsFiltrados.map((t: any) => (
-                  <button key={t.id} onMouseDown={() => {
-                    setForm((f: any) => ({ ...f, proveedor_nombre: t.razon_social, tercero_id: t.id }))
-                    setShowProvDropdown(false)
-                  }} className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
+                  <button key={t.id} onMouseDown={() => { setF('proveedor_nombre', t.razon_social); setF('tercero_id', t.id); setShowProvDropdown(false) }}
+                    className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
                     <span className="font-semibold text-gray-900">{t.razon_social}</span>
                   </button>
                 ))}
               </div>
             )}
-            {form.tercero_id && (
-              <div className="mt-1 text-[10px] text-[#1168F8]">Vinculado al tercero en el sistema</div>
-            )}
+            {form.tercero_id && <div className="mt-1 text-[10px] text-[#1168F8]">Vinculado al tercero en el sistema</div>}
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Referencia (N cotizacion proveedor)</label>
-            <input value={form.referencia} onChange={e => setForm((f: any) => ({ ...f, referencia: e.target.value }))} className={inp} placeholder="ej. Q-2026-001" />
+            <input value={form.referencia} onChange={e => setF('referencia', e.target.value)} className={inp} placeholder="ej. Q-2026-001" />
           </div>
           <div className="col-span-2 relative">
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Asociar a cotizacion del sistema (opcional)</label>
             <input
-              value={form.cotizacion_id ? (cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id) ? `${(cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id)?.num} — ${(cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id)?.cliente}` : form.cotizacion_id : buscarCot}
-              onChange={e => { setBuscarCot(e.target.value); setShowCotDropdown(true); if (!e.target.value) setForm((f:any)=>({...f,cotizacion_id:''})) }}
+              value={form.cotizacion_id
+                ? (cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id)
+                  ? `${(cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id)?.num} — ${(cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id)?.cliente}`
+                  : form.cotizacion_id
+                : buscarCot}
+              onChange={e => { setBuscarCot(e.target.value); setShowCotDropdown(true); if (!e.target.value) setF('cotizacion_id', '') }}
               onFocus={() => setShowCotDropdown(true)}
               className={inp} placeholder="Buscar por N o cliente..."
             />
             {form.cotizacion_id && (
-              <button onClick={() => { setForm((f:any)=>({...f,cotizacion_id:''})); setBuscarCot('') }}
+              <button onClick={() => { setF('cotizacion_id', ''); setBuscarCot('') }}
                 className="absolute right-2 top-8 text-gray-400 hover:text-red-500 text-xs">X</button>
             )}
             {showCotDropdown && cotsFiltradas.length > 0 && !form.cotizacion_id && (
-              <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-48 overflow-y-auto"
-                onClick={e => e.stopPropagation()}>
+              <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-48 overflow-y-auto" onClick={e => e.stopPropagation()}>
                 {cotsFiltradas.map((c: any) => (
-                  <button key={c.id} onMouseDown={() => {
-                    setForm((f:any)=>({...f,cotizacion_id:c.id}))
-                    setShowCotDropdown(false)
-                    setBuscarCot('')
-                  }} className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
+                  <button key={c.id} onMouseDown={() => { setF('cotizacion_id', c.id); setShowCotDropdown(false); setBuscarCot('') }}
+                    className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
                     <span className="font-mono font-semibold text-[#1168F8]">{c.num}</span>
                     <span className="text-gray-600 ml-2">{c.cliente}</span>
-                    <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded-full ${c.estado==='aprobada'?'bg-green-50 text-green-700':'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
+                    <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded-full ${c.estado==='aceptada'?'bg-green-50 text-green-700':'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
                   </button>
                 ))}
               </div>
@@ -484,17 +542,17 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
-            <select value={form.moneda} onChange={e => setForm((f: any) => ({ ...f, moneda: e.target.value }))} className={inp}>
+            <select value={form.moneda} onChange={e => setF('moneda', e.target.value)} className={inp}>
               {['USD', 'ARS', 'CLP'].map(m => <option key={m}>{m}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Fecha</label>
-            <input type="date" value={form.fecha} onChange={e => setForm((f: any) => ({ ...f, fecha: e.target.value }))} className={inp} />
+            <input type="date" value={form.fecha} onChange={e => setF('fecha', e.target.value)} className={inp} />
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Fecha vencimiento</label>
-            <input type="date" value={form.fecha_vencimiento} onChange={e => setForm((f: any) => ({ ...f, fecha_vencimiento: e.target.value }))} className={inp} />
+            <input type="date" value={form.fecha_vencimiento} onChange={e => setF('fecha_vencimiento', e.target.value)} className={inp} />
           </div>
         </div>
       </div>
@@ -507,7 +565,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
             <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Rubro</label>
             <div className="grid grid-cols-2 gap-2">
               {Object.entries(RUBROS).map(([key, r]) => (
-                <button key={key} onClick={() => setForm((f: any) => ({ ...f, rubro: key }))}
+                <button key={key} onClick={() => setF('rubro', key)}
                   className="px-3 py-2 rounded-xl border-2 text-left text-xs font-semibold transition-all"
                   style={form.rubro === key
                     ? { background: r.color, color: 'white', borderColor: r.color }
@@ -522,44 +580,52 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
             <div className="space-y-2">
               {[
                 { key: 'generica', label: 'Generica', desc: 'Valida para cualquier operacion' },
-                { key: 'especifica', label: 'Especifica', desc: 'Para una cotizacion particular' },
+                { key: 'especifica', label: 'Especifica', desc: 'Para un cliente o operacion particular' },
               ].map(o => (
-                <button key={o.key} onClick={() => setForm((f: any) => ({ ...f, tipo: o.key }))}
+                <button key={o.key} onClick={() => setF('tipo', o.key)}
                   className={`w-full px-4 py-2.5 rounded-xl border-2 text-left transition-all ${form.tipo === o.key ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
-                  <div className="text-xs font-bold text-gray-900">{o.label}</div>
+                  <div className="text-xs font-bold text-gray-900">{o.key === 'especifica' ? '⭐ ' : ''}{o.label}</div>
                   <div className="text-[10px] text-gray-400">{o.desc}</div>
                 </button>
               ))}
             </div>
+
             {/* Cliente — solo para especifica */}
             {form.tipo === 'especifica' && (
               <div className="mt-3 pt-3 border-t border-gray-100">
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cliente al que corresponde esta cotizacion</label>
-                <select value={form.cliente_id} onChange={e => setForm((f: any) => ({ ...f, cliente_id: e.target.value }))} className={inp}>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cliente al que corresponde *</label>
+                <select value={form.cliente_id} onChange={e => setF('cliente_id', e.target.value)} className={inp}>
                   <option value="">— Sin vincular a cliente —</option>
-                  {terceros.filter((t: any) => t.tipo?.includes('cliente')).map((t: any) => (
+                  {terceros.map((t: any) => (
                     <option key={t.id} value={t.id}>{t.razon_social}</option>
                   ))}
                 </select>
-                {form.cliente_id && <div className="mt-1 text-[10px] text-[#1168F8]">Esta cotizacion aparecera sugerida al cotizar para ese cliente</div>}
+                {form.cliente_id && <div className="mt-1 text-[10px] text-[#1168F8]">Aparecera sugerida al cotizar para este cliente</div>}
               </div>
             )}
+
             {/* Seguro — solo para forwarder */}
             {form.rubro === 'forwarder' && (
               <div className="mt-4 p-3 bg-[#EBF2FF] rounded-xl border border-[#93B8FC]">
                 <label className="flex items-center gap-2 cursor-pointer mb-2">
                   <input type="checkbox" checked={form.seguro_incluido}
-                    onChange={e => setForm((f: any) => ({ ...f, seguro_incluido: e.target.checked }))}
-                    className="w-4 h-4 rounded" />
+                    onChange={e => setF('seguro_incluido', e.target.checked)} className="w-4 h-4 rounded" />
                   <span className="text-xs font-semibold text-[#052698]">Seguro incluido en esta cotizacion</span>
                 </label>
                 {form.seguro_incluido && (
-                  <div>
-                    <label className="block text-[10px] font-semibold text-[#052698] mb-1 uppercase">Monto seguro (USD)</label>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      {[{k:'pct',l:'% sobre FOB'},{k:'fijo',l:'Monto fijo USD'}].map(o=>(
+                        <button key={o.k} onClick={()=>setF('seguro_modo',o.k)}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-colors ${form.seguro_modo===o.k?'bg-[#1168F8] text-white border-[#1168F8]':'border-[#93B8FC] text-[#052698] bg-white'}`}>
+                          {o.l}
+                        </button>
+                      ))}
+                    </div>
                     <input type="text" inputMode="decimal" value={form.seguro_monto}
-                      onChange={e => setForm((f: any) => ({ ...f, seguro_monto: e.target.value }))}
-                      className="w-full px-2.5 py-1.5 border border-[#93B8FC] rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white"
-                      placeholder="0.00" />
+                      onChange={e => setF('seguro_monto', e.target.value)}
+                      className="w-full px-2.5 py-1.5 border border-[#93B8FC] rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white font-mono text-right"
+                      placeholder={form.seguro_modo==='pct'?'ej. 0.5 (%)':'ej. 1200 (USD)'} />
                   </div>
                 )}
               </div>
@@ -574,22 +640,20 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
           <h3 className="font-bold text-sm text-gray-900">Ruta y alcance</h3>
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={form.es_tarifa_base}
-              onChange={e => setForm((f: any) => ({ ...f, es_tarifa_base: e.target.checked }))}
-              className="w-4 h-4 rounded" />
+              onChange={e => setF('es_tarifa_base', e.target.checked)} className="w-4 h-4 rounded" />
             <span className="text-xs text-gray-600 font-medium">Es tarifa base (referencia permanente)</span>
           </label>
         </div>
-        {/* Tramo */}
         <div className="mb-4">
           <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Tramo que cubre esta cotizacion</label>
           <div className="grid grid-cols-4 gap-2">
             {[
-              { key: 'maritimo', label: 'Maritimo', icon: '🚢', desc: 'Puerto China → Puerto Chile' },
+              { key: 'maritimo',          label: 'Maritimo',           icon: '🚢', desc: 'Puerto China → Puerto Chile' },
               { key: 'post_entrega_chile', label: 'Post-entrega Chile', icon: '🏭', desc: 'Operaciones en puerto Chile' },
-              { key: 'terrestre', label: 'Terrestre', icon: '🚛', desc: 'Chile → Argentina' },
-              { key: 'aduanero', label: 'Aduanero', icon: '📋', desc: 'Gestión en Argentina' },
+              { key: 'terrestre',          label: 'Terrestre',          icon: '🚛', desc: 'Chile → Argentina' },
+              { key: 'aduanero',           label: 'Aduanero',           icon: '📋', desc: 'Gestión en Argentina' },
             ].map(t => (
-              <button key={t.key} onClick={() => setForm((f: any) => ({ ...f, tramo: t.key }))}
+              <button key={t.key} onClick={() => setF('tramo', form.tramo === t.key ? '' : t.key)}
                 className={`px-3 py-2.5 rounded-xl border-2 text-left transition-all ${form.tramo === t.key ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
                 <div className="text-base mb-1">{t.icon}</div>
                 <div className="text-[10px] font-bold text-gray-900">{t.label}</div>
@@ -598,12 +662,11 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
             ))}
           </div>
         </div>
-        {/* Geografía según tramo */}
         <div className="grid grid-cols-2 gap-3">
           {(form.tramo === 'maritimo' || form.tramo === 'post_entrega_chile') && (
             <div>
               <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Puerto China (origen)</label>
-              <select value={form.puerto_china_id} onChange={e => setForm((f: any) => ({ ...f, puerto_china_id: e.target.value }))} className={inp}>
+              <select value={form.puerto_china_id} onChange={e => setF('puerto_china_id', e.target.value)} className={inp}>
                 <option value="">— Cualquier puerto —</option>
                 {puertosCh.map((p: any) => <option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
               </select>
@@ -612,7 +675,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
           {(form.tramo === 'maritimo' || form.tramo === 'post_entrega_chile' || form.tramo === 'terrestre') && (
             <div>
               <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Puerto Chile</label>
-              <select value={form.puerto_chile_id} onChange={e => setForm((f: any) => ({ ...f, puerto_chile_id: e.target.value }))} className={inp}>
+              <select value={form.puerto_chile_id} onChange={e => setF('puerto_chile_id', e.target.value)} className={inp}>
                 <option value="">— Cualquier puerto —</option>
                 {puertosChile.map((p: any) => <option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
               </select>
@@ -621,7 +684,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
           {(form.tramo === 'terrestre' || form.tramo === 'aduanero') && (
             <div>
               <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Paso fronterizo</label>
-              <select value={form.paso_id} onChange={e => setForm((f: any) => ({ ...f, paso_id: e.target.value }))} className={inp}>
+              <select value={form.paso_id} onChange={e => setF('paso_id', e.target.value)} className={inp}>
                 <option value="">— Cualquier paso —</option>
                 {pasos.map((p: any) => <option key={p.id} value={p.id}>{p.nombre} ({p.provincia_argentina})</option>)}
               </select>
@@ -630,7 +693,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
           {(form.tramo === 'terrestre' || form.tramo === 'aduanero') && (
             <div>
               <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Ciudad destino Argentina</label>
-              <select value={form.ciudad_destino_id} onChange={e => setForm((f: any) => ({ ...f, ciudad_destino_id: e.target.value }))} className={inp}>
+              <select value={form.ciudad_destino_id} onChange={e => setF('ciudad_destino_id', e.target.value)} className={inp}>
                 <option value="">— Cualquier ciudad —</option>
                 {ciudades.map((c: any) => <option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
               </select>
@@ -638,7 +701,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
           )}
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo de contenedor</label>
-            <select value={form.tipo_contenedor} onChange={e => setForm((f: any) => ({ ...f, tipo_contenedor: e.target.value }))} className={inp}>
+            <select value={form.tipo_contenedor} onChange={e => setF('tipo_contenedor', e.target.value)} className={inp}>
               <option value="">— Todos los tipos —</option>
               {tiposCont.map((t: any) => <option key={t.codigo} value={t.codigo}>{t.codigo} — {t.nombre}</option>)}
             </select>
@@ -647,7 +710,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
             <div>
               <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">TC referencia (al momento de cotizar)</label>
               <input type="text" inputMode="decimal" value={form.tc_referencia}
-                onChange={e => setForm((f: any) => ({ ...f, tc_referencia: e.target.value }))}
+                onChange={e => setF('tc_referencia', e.target.value)}
                 className={inp} placeholder="ej. 1450 (ARS/USD)" />
             </div>
           )}
@@ -657,42 +720,21 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
       {/* Items */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-sm text-gray-900">Items de la cotizacion</h3>
+          <div>
+            <h3 className="font-bold text-sm text-gray-900">Items de la cotizacion</h3>
+            <p className="text-[10px] text-gray-400 mt-0.5">Si el tipo es "% sobre CIF" aparecen los campos Piso y Techo USD</p>
+          </div>
           <button onClick={addItem} className="px-3 py-1.5 border border-[#1168F8] text-[#1168F8] rounded-xl text-xs font-bold hover:bg-[#EBF2FF]">+ Agregar item</button>
         </div>
 
-        {/* Headers */}
-        <div className="grid gap-2 mb-1 text-[10px] text-gray-400 font-semibold uppercase tracking-wide" style={{ gridTemplateColumns: '2fr 130px 110px 110px auto' }}>
-          <div>Descripcion</div>
-          <div>Tipo calculo</div>
-          <div className="text-right">Valor</div>
-          <div>Contenedor</div>
-          <div></div>
-        </div>
-
         {items.map((it, i) => (
-          <div key={i} className="grid gap-2 mb-2 items-center" style={{ gridTemplateColumns: '2fr 130px 110px 110px auto' }}>
-            <input value={it.descripcion} onChange={e => updateItem(i, 'descripcion', e.target.value)}
-              className={inp} placeholder="Descripcion del cargo" />
-            <select value={it.tipo_calculo} onChange={e => updateItem(i, 'tipo_calculo', e.target.value)} className={inp}>
-              {Object.entries(TIPO_CALCULO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-            <input type="text" inputMode="decimal" value={it.valor || ''}
-              onFocus={e => e.target.select()}
-              onChange={e => updateItem(i, 'valor', e.target.value)}
-              className={inp + ' text-right font-mono'} placeholder="0.00" />
-            <select value={it.tipo_contenedor} onChange={e => updateItem(i, 'tipo_contenedor', e.target.value)} className={inp}>
-              <option value="">Todos</option>
-              {tiposCont.map((t: any) => <option key={t.codigo} value={t.codigo}>{t.codigo}</option>)}
-            </select>
-            <button onClick={() => removeItem(i)} className="text-gray-400 hover:text-red-500 text-xs p-1">X</button>
-          </div>
+          <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} onChange={updateItem} onRemove={removeItem} editMode={true} />
         ))}
 
-        {items.filter(it => it.descripcion && parseFloat(it.valor as any) > 0).length > 0 && (
+        {items.filter(it => it.descripcion).length > 0 && (
           <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
-            <span className="text-xs text-gray-500">Total estimado:</span>
-            <span className="font-mono font-bold text-[#052698] text-sm">USD {fmt(totalUSD)}</span>
+            <span className="text-xs text-gray-500">Total estimado (items fijos):</span>
+            <span className="font-mono font-bold text-[#052698] text-sm">USD {fmtN(totalUSD)}</span>
           </div>
         )}
       </div>
@@ -700,7 +742,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
       {/* Notas */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Notas / Condiciones</label>
-        <textarea value={form.notas} onChange={e => setForm((f: any) => ({ ...f, notas: e.target.value }))}
+        <textarea value={form.notas} onChange={e => setF('notas', e.target.value)}
           className={inp + ' resize-none'} rows={2} placeholder="Condiciones de la cotizacion, vigencia, observaciones..." />
       </div>
 
@@ -719,19 +761,28 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, onRelo
   const [editando, setEditando] = useState(false)
   const [items, setItems] = useState<Item[]>(cotizacion.items || [])
   const [saving, setSaving] = useState(false)
+  const [tiposCont, setTiposCont] = useState<any[]>([])
+
+  useEffect(() => {
+    supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo', 'true').order('orden').then(({ data }: any) => { if (data) setTiposCont(data) })
+  }, [])
 
   const r = RUBROS[cotizacion.rubro] || RUBROS.otro
-  const totalUSD = items.reduce((t, it) => t + (parseFloat(it.valor as any) || 0), 0)
+  const totalUSD = items.reduce((t, it) => {
+    if (it.tipo_calculo === 'pct_cif') return t
+    return t + (parseN(String(it.valor)) || 0)
+  }, 0)
 
   async function saveItems() {
     setSaving(true)
-    // Borrar items viejos e insertar nuevos
     await supabase.from('cotizaciones_proveedor_v2_items').delete().eq('cotizacion_id', cotizacion.id)
     const itemsValidos = items.filter(it => it.descripcion).map((it, i) => ({
       cotizacion_id: cotizacion.id,
       descripcion: it.descripcion,
       tipo_calculo: it.tipo_calculo,
-      valor: parseFloat(it.valor as any) || 0,
+      valor: parseN(String(it.valor)) || 0,
+      piso_usd: it.tipo_calculo === 'pct_cif' ? (parseN(String(it.piso_usd)) || 0) : null,
+      techo_usd: it.tipo_calculo === 'pct_cif' ? (parseN(String(it.techo_usd)) || 0) : null,
       moneda: it.moneda || 'USD',
       tipo_contenedor: it.tipo_contenedor || null,
       orden: i,
@@ -750,28 +801,34 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, onRelo
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [field]: value } : it))
   }
 
+  const clienteVinculado = cotizacion.cliente_id ? terceros.find((t: any) => t.id === cotizacion.cliente_id) : null
+
   return (
     <div className="max-w-3xl">
       {/* Header */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm mb-4">
         <div className="flex items-start justify-between">
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold" style={{ background: r.bg, color: r.color }}>{r.label}</span>
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${cotizacion.tipo === 'especifica' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
-                {cotizacion.tipo === 'especifica' ? 'Especifica' : 'Generica'}
+                {cotizacion.tipo === 'especifica' ? '⭐ Especifica' : 'Generica'}
               </span>
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${cotizacion.estado === 'vigente' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                 {cotizacion.estado}
               </span>
+              {clienteVinculado && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700">
+                  Cliente: {clienteVinculado.razon_social}
+                </span>
+              )}
             </div>
             <h2 className="text-xl font-bold text-gray-900">{cotizacion.proveedor_nombre}</h2>
             <div className="flex gap-4 mt-1 text-xs text-gray-500 flex-wrap">
               {cotizacion.referencia && <span className="font-mono">Ref: {cotizacion.referencia}</span>}
               <span>Fecha: {cotizacion.fecha}</span>
               {cotizacion.fecha_vencimiento && <span>Vence: {cotizacion.fecha_vencimiento}</span>}
-              <span className="font-mono font-semibold text-[#052698]">USD {fmt(totalUSD)} total</span>
-              {cotizacion.cotizacion_id && (cotsSistema||[]).find((c:any)=>c.id===cotizacion.cotizacion_id) && <span className="px-2 py-0.5 bg-[#EBF2FF] text-[#052698] rounded-full text-[9px] font-semibold">Operacion: {(cotsSistema||[]).find((c:any)=>c.id===cotizacion.cotizacion_id)?.num} — {(cotsSistema||[]).find((c:any)=>c.id===cotizacion.cotizacion_id)?.cliente}</span>}
+              {totalUSD > 0 && <span className="font-mono font-semibold text-[#052698]">USD {fmtN(totalUSD)} (items fijos)</span>}
             </div>
           </div>
           <div className="flex gap-2">
@@ -793,20 +850,8 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, onRelo
 
         {editando ? (
           <>
-            <div className="grid gap-2 mb-1 text-[10px] text-gray-400 font-semibold uppercase tracking-wide" style={{ gridTemplateColumns: '2fr 130px 110px 110px auto' }}>
-              <div>Descripcion</div><div>Tipo</div><div className="text-right">Valor</div><div>Contenedor</div><div></div>
-            </div>
             {items.map((it, i) => (
-              <div key={i} className="grid gap-2 mb-2 items-center" style={{ gridTemplateColumns: '2fr 130px 110px 110px auto' }}>
-                <input value={it.descripcion} onChange={e => updateItem(i, 'descripcion', e.target.value)} className={inp} />
-                <select value={it.tipo_calculo} onChange={e => updateItem(i, 'tipo_calculo', e.target.value)} className={inp}>
-                  {Object.entries(TIPO_CALCULO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-                <input type="text" inputMode="decimal" value={it.valor || ''} onFocus={e => e.target.select()}
-                  onChange={e => updateItem(i, 'valor', e.target.value)} className={inp + ' text-right font-mono'} />
-                <input value={it.tipo_contenedor || ''} onChange={e => updateItem(i, 'tipo_contenedor', e.target.value)} className={inp} />
-                <button onClick={() => removeItem(i)} className="text-gray-400 hover:text-red-500 text-xs p-1">X</button>
-              </div>
+              <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} onChange={updateItem} onRemove={removeItem} editMode={true} />
             ))}
             <div className="flex justify-end mt-3">
               <button onClick={saveItems} disabled={saving}
@@ -819,36 +864,33 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, onRelo
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {['Descripcion', 'Tipo calculo', 'Contenedor', 'Valor USD'].map(h => (
+                {['Descripcion', 'Tipo calculo', 'Contenedor', 'Valor'].map(h => (
                   <th key={h} className="text-left px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {items.map((it, i) => (
-                <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="px-3 py-2.5 font-medium text-gray-800">{it.descripcion}</td>
-                  <td className="px-3 py-2.5 text-gray-500">{TIPO_CALCULO[it.tipo_calculo] || it.tipo_calculo}</td>
-                  <td className="px-3 py-2.5 text-gray-500 font-mono text-[11px]">{it.tipo_contenedor || 'Todos'}</td>
-                  <td className="px-3 py-2.5 font-mono font-semibold text-[#052698] text-right">USD {fmt(parseFloat(it.valor as any) || 0)}</td>
-                </tr>
+                <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} onChange={updateItem} onRemove={removeItem} editMode={false} />
               ))}
-              <tr className="bg-[#EBF2FF] border-t-2 border-[#1168F8]">
-                <td colSpan={3} className="px-3 py-2 text-xs font-bold text-[#052698]">TOTAL</td>
-                <td className="px-3 py-2 font-mono font-bold text-[#052698] text-right">USD {fmt(totalUSD)}</td>
-              </tr>
+              {totalUSD > 0 && (
+                <tr className="bg-[#EBF2FF] border-t-2 border-[#1168F8]">
+                  <td colSpan={3} className="px-3 py-2 text-xs font-bold text-[#052698]">TOTAL (items fijos)</td>
+                  <td className="px-3 py-2 font-mono font-bold text-[#052698] text-right">USD {fmtN(totalUSD)}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         )}
 
         {cotizacion.seguro_incluido && (
           <div className="mt-3 px-3 py-2 bg-[#EBF2FF] border border-[#93B8FC] rounded-lg text-xs text-[#052698]">
-            Seguro incluido en esta cotizacion{cotizacion.seguro_monto ? ` — USD ${fmt(cotizacion.seguro_monto)}` : ''}
+            Seguro incluido — {cotizacion.seguro_modo === 'pct' ? `${cotizacion.seguro_monto}% sobre FOB` : `USD ${fmtN(cotizacion.seguro_monto || 0)}`}
           </div>
         )}
       </div>
 
-      {/* Asociacion a cotizacion del sistema */}
+      {/* Cotizacion vinculada */}
       <AsociarCotizacion cotizacion={cotizacion} supabase={supabase} cotsSistema={cotsSistema||[]} onReload={onReload} />
 
       {cotizacion.notas && (
@@ -865,11 +907,10 @@ function AsociarCotizacion({ cotizacion, supabase, cotsSistema, onReload }: any)
   const [buscar, setBuscar] = useState('')
   const [showDrop, setShowDrop] = useState(false)
   const [saving, setSaving] = useState(false)
-  const cotVinculada = cotsSistema.find((c: any) => c.id === cotizacion.cotizacion_id)
-  const cotsFiltradas = cotsSistema.filter((c: any) =>
+  const cotVinculada = (cotsSistema||[]).find((c: any) => c.id === cotizacion.cotizacion_id)
+  const cotsFiltradas = (cotsSistema||[]).filter((c: any) =>
     !buscar || c.num?.toLowerCase().includes(buscar.toLowerCase()) || c.cliente?.toLowerCase().includes(buscar.toLowerCase())
   ).slice(0, 8)
-  const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 
   async function asociar(cotId: string) {
     setSaving(true)
@@ -891,7 +932,7 @@ function AsociarCotizacion({ cotizacion, supabase, cotsSistema, onReload }: any)
               <div className="text-sm font-semibold text-gray-900">{cotVinculada.num}</div>
               <div className="text-[10px] text-gray-400">{cotVinculada.cliente}</div>
             </div>
-            <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold ${cotVinculada.estado==='aprobada'?'bg-green-50 text-green-700':'bg-gray-100 text-gray-500'}`}>{cotVinculada.estado}</span>
+            <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold ${cotVinculada.estado==='aceptada'?'bg-green-50 text-green-700':'bg-gray-100 text-gray-500'}`}>{cotVinculada.estado}</span>
           </div>
           <button onClick={() => asociar('')} disabled={saving}
             className="px-3 py-1.5 border border-red-200 text-red-500 rounded-xl text-xs hover:bg-red-50 transition-colors">
@@ -910,7 +951,7 @@ function AsociarCotizacion({ cotizacion, supabase, cotsSistema, onReload }: any)
                   className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
                   <span className="font-mono font-semibold text-[#1168F8]">{c.num}</span>
                   <span className="text-gray-600 ml-2">{c.cliente}</span>
-                  <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded-full ${c.estado==='aprobada'?'bg-green-50 text-green-700':'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
+                  <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded-full ${c.estado==='aceptada'?'bg-green-50 text-green-700':'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
                 </button>
               ))}
             </div>
