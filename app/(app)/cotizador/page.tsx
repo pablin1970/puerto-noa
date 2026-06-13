@@ -313,13 +313,14 @@ export default function CotizadorPage(){
     else {usd=g.valor/(tcTrib||1)}
     return usd
   }
-  const subE=s.rowsE.reduce((t,r)=>t+calcGastoArg(r,cif,s.tcTrib),0)
   const cif=totalFOB+subFW+totalSeg
   const cifARS=cif*s.tcTrib
   // Honorario + gastos adicionales despachante (sección A)
   const subHon=calcGastoArg({id:'hon',desc:'',tipoCalc:s.honTipo,moneda:'USD',valor:s.honValor,pisoUsd:s.honPiso,techoUsd:s.honTecho,usd:0,ars:0},cif,s.tcTrib)
   const subGastosDesp=s.gastosDesp.reduce((t,g)=>t+calcGastoArg(g,cif,s.tcTrib),0)
   const subGastosArg=subHon+subGastosDesp
+  // Otros gastos Argentina sección B
+  const subE=s.rowsE.reduce((t,r)=>t+calcGastoArg(r,cif,s.tcTrib),0)
   // Base logística para el fee (sin FOB, sin ARCA, sin el propio fee)
   const baseLogFee=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+segIndepCalc+subE+subGastosArg
   const fee=s.feeModo==='pct' ? baseLogFee*s.feePct/100 : s.feeCont*nc
