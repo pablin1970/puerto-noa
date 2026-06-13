@@ -130,21 +130,33 @@ export default function CotizacionesProveedoresPage() {
   const [selId, setSelId] = useState<string | null>(null)
   const [filtroRubro, setFiltroRubro] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
-  const [filtroEstado, setFiltroEstado] = useState('vigente')
+  const [filtroEstado, setFiltroEstado] = useState('')
   const [buscar, setBuscar] = useState('')
 
   useEffect(() => { loadAll() }, [])
 
   async function loadAll() {
     setLoading(true)
-    const [cotRes, tercRes, cotsRes] = await Promise.all([
+    // Queries separadas para evitar joins que pueden fallar por RLS
+    const [cotRes, itemsRes, tercRes, cotsRes] = await Promise.all([
       supabase.from('cotizaciones_proveedor_v2')
-        .select('*, items:cotizaciones_proveedor_v2_items(*), tercero:terceros(razon_social)')
+        .select('*')
         .order('created_at', { ascending: false }),
+      supabase.from('cotizaciones_proveedor_v2_items')
+        .select('*')
+        .order('orden', { ascending: true }),
       supabase.from('terceros').select('id,razon_social,tipo').eq('activo', 'true').order('razon_social'),
       supabase.from('cotizaciones').select('id,num,cliente,estado').order('created_at', { ascending: false }).limit(200),
     ])
-    if (cotRes.data) setCotizaciones(cotRes.data as any)
+    if (cotRes.data && itemsRes.data) {
+      // Combinar items con sus cotizaciones manualmente
+      const itemsPorCot: Record<string, Item[]> = {}
+      for (const it of itemsRes.data as any[]) {
+        if (!itemsPorCot[it.cotizacion_id]) itemsPorCot[it.cotizacion_id] = []
+        itemsPorCot[it.cotizacion_id].push(it)
+      }
+      setCotizaciones((cotRes.data as any[]).map(c => ({ ...c, items: itemsPorCot[c.id] || [] })))
+    }
     if (tercRes.data) setTerceros(tercRes.data)
     if (cotsRes.data) setCotsSistema(cotsRes.data)
     setLoading(false)
