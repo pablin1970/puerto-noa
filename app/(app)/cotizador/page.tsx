@@ -582,7 +582,7 @@ export default function CotizadorPage(){
               {/* Tramo marítimo */}
               <div>
                 <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Tramo maritimo</div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   <Field label="Puerto de origen (China)">
                     <select value={s.puertoChiId} onChange={e=>{
                       u('puertoChiId',e.target.value)
@@ -603,17 +603,13 @@ export default function CotizadorPage(){
                       {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
                     </select>
                   </Field>
-                  <Field label="Incoterm">
-                    <select value={s.incoterm} onChange={e=>u('incoterm',e.target.value)} className={sel}>
-                      {['FOB','EXW','CIF','CFR'].map(v=><option key={v}>{v}</option>)}
-                    </select>
-                  </Field>
+
                 </div>
               </div>
               {/* Tramo terrestre */}
               <div className="pt-3 border-t border-gray-100">
                 <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Tramo terrestre</div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   <Field label="Paso fronterizo">
                     <select value={s.pasoId} onChange={e=>{u('pasoId',e.target.value)}} className={sel}>
                       <option value="">— Seleccionar paso —</option>
@@ -634,9 +630,7 @@ export default function CotizadorPage(){
                       {ciudadesArg.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
                     </select>
                   </Field>
-                  <Field label="Transito estimado">
-                    <input value={s.transito} onChange={e=>u('transito',e.target.value)} className={inp} placeholder="ej. 44-46 dias"/>
-                  </Field>
+
                 </div>
               </div>
             </div>
