@@ -738,104 +738,116 @@ export default function CotizadorPage(){
             </div>
           </div>
 
-          {/* ── BLOQUE 2: GASTOS POST-ENTREGA CHILE ── */}
-          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#0a9e6e] text-white text-[10px] font-bold">2</span>
-              <span className="font-medium text-sm text-gray-900">Gastos post-entrega en Chile</span>
-              <span className="text-[10px] text-gray-400">Desde que la naviera entrega el contenedor</span>
-              <div className="ml-auto flex items-center gap-2">
-                {cotsChileDisponibles.length>0&&(
-                  <select onChange={e=>{if(e.target.value){agregarGastoChileDesdeSistema(e.target.value);e.target.value=''}}} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
-                    <option value="">+ Del sistema</option>
-                    {cotsChileDisponibles.map((c:any)=><option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>)}
-                  </select>
-                )}
-                <button onClick={()=>u('gastosChile',[...s.gastosChile,{id:uid2(),desc:'',proveedor:'',tipoCalc:'fijo',valor:0,ivaChile:'exento'}])}
-                  className="text-[10px] text-[#1168F8] hover:underline">+ Agregar item</button>
-              </div>
-            </div>
-            <div className="px-5 py-4">
-              {s.gastosChile.length===0?(
-                <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 text-center">
-                  Sin gastos cargados. Incluye descarga, desconsolidacion, almacenaje, carga. Puerto NOA puede ser proveedor de estos servicios.
-                </div>
-              ):(
-                <>
-                  <div className="grid gap-2 mb-1 text-[9px] text-gray-400 font-semibold uppercase tracking-wide" style={{gridTemplateColumns:'2fr 1.5fr 80px 90px 80px auto'}}>
-                    <div>Descripcion</div><div>Proveedor</div><div>Calculo</div><div className="text-right">Valor</div><div>IVA Chile</div><div></div>
-                  </div>
-                  {s.gastosChile.map((g,i)=>(
-                    <div key={g.id} className="grid gap-2 mb-1.5 items-center" style={{gridTemplateColumns:'2fr 1.5fr 80px 90px 80px auto'}}>
-                      <input value={g.desc} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],desc:e.target.value};u('gastosChile',n)}} className={inp} placeholder="Descarga, almacenaje..."/>
-                      <input value={g.proveedor} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],proveedor:e.target.value};u('gastosChile',n)}} className={inp} placeholder="Proveedor"/>
-                      <select value={g.tipoCalc} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],tipoCalc:e.target.value as any};u('gastosChile',n)}} className={sel}>
-                        <option value="fijo">Fijo USD</option><option value="m3">Por m3</option>
-                      </select>
-                      <input type="text" inputMode="decimal" value={g.valor||''} onFocus={e=>e.target.select()}
-                        onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],valor:parseNum(e.target.value)};u('gastosChile',n)}}
-                        className={inp+' text-right font-mono'} placeholder={g.tipoCalc==='m3'?'USD/m3':'USD'}/>
-                      <select value={g.ivaChile} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],ivaChile:e.target.value as any};u('gastosChile',n)}} className={sel}>
-                        <option value="exento">Exento</option><option value="gravado">Grav. 19%</option>
-                      </select>
-                      <button onClick={()=>u('gastosChile',s.gastosChile.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs pl-1">X</button>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-            <div className="flex justify-end items-center gap-2 px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
-              Subtotal bloque 2: <strong className="font-mono text-gray-800">USD {fmt(subGastosChile)}</strong>
-            </div>
-          </div>
-
-          {/* ── BLOQUE 3: TRANSPORTE TERRESTRE ── */}
+          {/* ── BLOQUE 2: MODALIDAD + GASTOS POST-ENTREGA CHILE ── */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#b45309] text-white text-[10px] font-bold">3</span>
-              <span className="font-medium text-sm text-gray-900">Transporte terrestre Chile - NOA</span>
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#0a9e6e] text-white text-[10px] font-bold">2</span>
+              <span className="font-medium text-sm text-gray-900">Modalidad de transporte Chile - NOA</span>
             </div>
             <div className="px-5 py-4">
+              {/* Opciones A / B1 / B2 */}
               <div className="grid grid-cols-3 gap-3 mb-4">
                 {[{key:'A',label:'Opcion A',sub:'Contenedor completo hasta Argentina'},{key:'B1',label:'Opcion B1',sub:'Desconsolidar + cargar directo al camion'},{key:'B2',label:'Opcion B2',sub:'Desconsolidar + almacenar + cargar al camion'}].map(o=>(
-                  <button key={o.key} onClick={()=>u('optTransp',o.key as OptTransp)} className={`px-3 py-2.5 rounded-lg border text-left transition-colors ${s.optTransp===o.key?'border-[#b45309] bg-amber-50 text-amber-800':'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                  <button key={o.key} onClick={()=>u('optTransp',o.key as OptTransp)} className={`px-3 py-2.5 rounded-lg border text-left transition-colors ${s.optTransp===o.key?'border-[#0a9e6e] bg-green-50 text-green-800':'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
                     <div className="text-xs font-semibold">{o.label}</div><div className="text-[10px] opacity-70 mt-0.5">{o.sub}</div>
                   </button>
                 ))}
               </div>
+              {/* Gastos post-entrega Chile — solo B1 y B2 */}
               {s.optTransp!=='A'&&(
-                <div className="space-y-4">
-                  <div>
-                    <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Gastos de desconsolidacion</div>
-                    <DesconRows rows={s.rowsDescon} onChange={r=>u('rowsDescon',r)} totalM3={totalM3}/>
-                  </div>
-                  {s.optTransp==='B2'&&(
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                      <div className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider mb-3">Almacenaje en Chile</div>
-                      <div className="grid grid-cols-4 gap-3">
-                        <Field label="Volumen">
-                          <div className="flex gap-1">
-                            <select value={s.almModoVol} onChange={e=>u('almModoVol',e.target.value as any)} className={sel+' flex-shrink-0 w-20'}><option value="auto">Auto</option><option value="manual">Manual</option></select>
-                            {s.almModoVol==='manual'?<input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almVolM3} onChange={e=>u('almVolM3',parseNum(e.target.value))} className={inp} placeholder="m3"/>:<div className="px-2.5 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-mono flex-1 text-right">{fmt(totalM3,2)} m3</div>}
-                          </div>
-                        </Field>
-                        <Field label="Costo m3/dia (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almCostoDia} onChange={e=>u('almCostoDia',parseNum(e.target.value))} className={inp}/></Field>
-                        <Field label="Dias"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almDias} onChange={e=>u('almDias',parseInt2(e.target.value)||0)} className={inp}/></Field>
-                        <Field label="Subtotal"><div className="px-2.5 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-mono text-right font-semibold text-amber-800">USD {fmt(subAlm)}</div></Field>
+                <>
+                  <div className="border-t border-gray-100 pt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="text-xs font-semibold text-gray-700">Gastos post-entrega en Chile</div>
+                        <div className="text-[10px] text-gray-400">Descarga, desconsolidacion, almacenaje y carga al camion</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {cotsChileDisponibles.length>0&&(
+                          <select onChange={e=>{if(e.target.value){agregarGastoChileDesdeSistema(e.target.value);e.target.value=''}}} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
+                            <option value="">+ Del sistema</option>
+                            {cotsChileDisponibles.map((c:any)=><option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>)}
+                          </select>
+                        )}
+                        <button onClick={()=>u('gastosChile',[...s.gastosChile,{id:uid2(),desc:'',proveedor:'',tipoCalc:'fijo',valor:0,ivaChile:'exento'}])}
+                          className="text-[10px] text-[#1168F8] hover:underline">+ Agregar item</button>
                       </div>
                     </div>
-                  )}
-                  <div>
-                    <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Carga al camion</div>
-                    <div className="grid grid-cols-4 gap-3">
-                      <Field label="Modalidad"><select value={s.cargaModo} onChange={e=>u('cargaModo',e.target.value as any)} className={sel}><option value="fijo">Importe fijo</option><option value="m3">Por m3</option></select></Field>
-                      <Field label={s.cargaModo==='fijo'?'Importe fijo (USD)':'USD por m3'}><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.cargaValor} onChange={e=>u('cargaValor',parseNum(e.target.value))} className={inp}/></Field>
-                      {s.cargaModo==='m3'&&<Field label="m3 totales"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">{fmt(totalM3,2)}</div></Field>}
-                      <Field label="Subtotal carga"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(subCarga)}</div></Field>
+                    {/* Desconsolidacion */}
+                    <div className="mb-3">
+                      <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Gastos de desconsolidacion</div>
+                      <DesconRows rows={s.rowsDescon} onChange={r=>u('rowsDescon',r)} totalM3={totalM3}/>
                     </div>
+                    {/* Almacenaje — solo B2 */}
+                    {s.optTransp==='B2'&&(
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-3">
+                        <div className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider mb-3">Almacenaje en Chile</div>
+                        <div className="grid grid-cols-4 gap-3">
+                          <Field label="Volumen">
+                            <div className="flex gap-1">
+                              <select value={s.almModoVol} onChange={e=>u('almModoVol',e.target.value as any)} className={sel+' flex-shrink-0 w-20'}><option value="auto">Auto</option><option value="manual">Manual</option></select>
+                              {s.almModoVol==='manual'?<input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almVolM3} onChange={e=>u('almVolM3',parseNum(e.target.value))} className={inp} placeholder="m3"/>:<div className="px-2.5 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-mono flex-1 text-right">{fmt(totalM3,2)} m3</div>}
+                            </div>
+                          </Field>
+                          <Field label="Costo m3/dia (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almCostoDia} onChange={e=>u('almCostoDia',parseNum(e.target.value))} className={inp}/></Field>
+                          <Field label="Dias"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almDias} onChange={e=>u('almDias',parseInt2(e.target.value)||0)} className={inp}/></Field>
+                          <Field label="Subtotal"><div className="px-2.5 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-mono text-right font-semibold text-amber-800">USD {fmt(subAlm)}</div></Field>
+                        </div>
+                      </div>
+                    )}
+                    {/* Carga al camion */}
+                    <div className="mb-2">
+                      <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Carga al camion</div>
+                      <div className="grid grid-cols-4 gap-3">
+                        <Field label="Modalidad"><select value={s.cargaModo} onChange={e=>u('cargaModo',e.target.value as any)} className={sel}><option value="fijo">Importe fijo</option><option value="m3">Por m3</option></select></Field>
+                        <Field label={s.cargaModo==='fijo'?'Importe fijo (USD)':'USD por m3'}><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.cargaValor} onChange={e=>u('cargaValor',parseNum(e.target.value))} className={inp}/></Field>
+                        {s.cargaModo==='m3'&&<Field label="m3 totales"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">{fmt(totalM3,2)}</div></Field>}
+                        <Field label="Subtotal carga"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(subCarga)}</div></Field>
+                      </div>
+                    </div>
+                    {/* Items adicionales */}
+                    {s.gastosChile.length>0&&(
+                      <>
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2 mt-3">Otros gastos en Chile</div>
+                        <div className="grid gap-2 mb-1 text-[9px] text-gray-400 font-semibold uppercase tracking-wide" style={{gridTemplateColumns:'2fr 1.5fr 80px 90px 80px auto'}}>
+                          <div>Descripcion</div><div>Proveedor</div><div>Calculo</div><div className="text-right">Valor</div><div>IVA Chile</div><div></div>
+                        </div>
+                        {s.gastosChile.map((g,i)=>(
+                          <div key={g.id} className="grid gap-2 mb-1.5 items-center" style={{gridTemplateColumns:'2fr 1.5fr 80px 90px 80px auto'}}>
+                            <input value={g.desc} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],desc:e.target.value};u('gastosChile',n)}} className={inp} placeholder="Descarga, almacenaje..."/>
+                            <input value={g.proveedor} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],proveedor:e.target.value};u('gastosChile',n)}} className={inp} placeholder="Proveedor"/>
+                            <select value={g.tipoCalc} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],tipoCalc:e.target.value as any};u('gastosChile',n)}} className={sel}>
+                              <option value="fijo">Fijo USD</option><option value="m3">Por m3</option>
+                            </select>
+                            <input type="text" inputMode="decimal" value={g.valor||''} onFocus={e=>e.target.select()}
+                              onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],valor:parseNum(e.target.value)};u('gastosChile',n)}}
+                              className={inp+' text-right font-mono'} placeholder={g.tipoCalc==='m3'?'USD/m3':'USD'}/>
+                            <select value={g.ivaChile} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],ivaChile:e.target.value as any};u('gastosChile',n)}} className={sel}>
+                              <option value="exento">Exento</option><option value="gravado">Grav. 19%</option>
+                            </select>
+                            <button onClick={()=>u('gastosChile',s.gastosChile.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs pl-1">X</button>
+                          </div>
+                        ))}
+                      </>
+                    )}
                   </div>
-                </div>
+                </>
               )}
+            </div>
+            <div className="flex justify-end items-center gap-2 px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
+              Subtotal bloque 2: <strong className="font-mono text-gray-800">USD {fmt(subD+subGastosChile)}</strong>
+            </div>
+          </div>
+
+          {/* ── BLOQUE 3: FLETE TERRESTRE ── */}
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#b45309] text-white text-[10px] font-bold">3</span>
+              <span className="font-medium text-sm text-gray-900">Flete terrestre</span>
+              <span className="text-[10px] text-gray-400">{s.optTransp==='A'?'Contenedor completo — ida / devolucion / round trip':'Camion de carga — flete ida'}</span>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              {/* Opcion A: ida / devolucion / round trip */}
               {s.optTransp==='A'&&(
                 <div className="grid grid-cols-4 gap-3">
                   <Field label="Flete ida (USD/cont)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftIda} onChange={e=>u('ftIda',parseNum(e.target.value))} className={inp}/></Field>
@@ -844,25 +856,25 @@ export default function CotizadorPage(){
                   <Field label="Elegido (USD total)"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(subTransp)}</div></Field>
                 </div>
               )}
-              {/* Transporte elegido del sistema */}
-              {cotsTranspDisponibles.length>0&&(
-                <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
-                  <span className="text-[10px] text-gray-500">Cargar tarifa de transportista:</span>
-                  <select onChange={e=>{
-                    if(!e.target.value) return
-                    const cot=cotsTranspDisponibles.find(c=>c.id===e.target.value)
-                    if(!cot) return
-                    const item=(cot.items||[]).find((it:any)=>it.descripcion.toLowerCase().includes(s.destinoNoa.toLowerCase()))||(cot.items||[])[0]
-                    if(item) setS(p=>({...p,ftCamion:item.valor||p.ftCamion,nCamiones:nc}))
-                    e.target.value=''
-                  }} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none" defaultValue="">
-                    <option value="">— Seleccionar —</option>
-                    {cotsTranspDisponibles.map((c:any)=><option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>)}
-                  </select>
-                </div>
-              )}
+              {/* Opciones B1/B2: flete por camion */}
               {s.optTransp!=='A'&&(
-                <div className="mt-3 pt-3 border-t border-gray-100">
+                <div>
+                  {cotsTranspDisponibles.length>0&&(
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-[10px] text-gray-500">Cargar tarifa:</span>
+                      <select onChange={e=>{
+                        if(!e.target.value) return
+                        const cot=cotsTranspDisponibles.find(c=>c.id===e.target.value)
+                        if(!cot) return
+                        const item=(cot.items||[]).find((it:any)=>it.descripcion.toLowerCase().includes(s.destinoNoa.toLowerCase()))||(cot.items||[])[0]
+                        if(item) setS(p=>({...p,ftCamion:item.valor||p.ftCamion,nCamiones:nc}))
+                        e.target.value=''
+                      }} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none" defaultValue="">
+                        <option value="">— Seleccionar —</option>
+                        {cotsTranspDisponibles.map((c:any)=><option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <div className="grid grid-cols-3 gap-3">
                     <Field label="Flete terrestre (USD/camion)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftCamion} onChange={e=>u('ftCamion',parseNum(e.target.value))} className={inp}/></Field>
                     <Field label="N camiones"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.nCamiones} onChange={e=>u('nCamiones',parseInt2(e.target.value)||1)} className={inp}/></Field>
@@ -870,8 +882,8 @@ export default function CotizadorPage(){
                   </div>
                 </div>
               )}
-              {/* Estadias */}
-              <div className="mt-3 pt-3 border-t border-gray-100">
+              {/* Estadias por demora */}
+              <div className="pt-3 border-t border-gray-100">
                 <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Estadias por demora</div>
                 <div className="grid grid-cols-4 gap-3">
                   <Field label="Estadia carga (USD/dia)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.estadiaCargaVal} onChange={e=>u('estadiaCargaVal',parseNum(e.target.value))} className={inp}/></Field>
@@ -880,9 +892,9 @@ export default function CotizadorPage(){
                   <Field label="Dias descarga"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.estadiaDescargaDias} onChange={e=>u('estadiaDescargaDias',parseInt2(e.target.value)||0)} className={inp}/></Field>
                 </div>
               </div>
-              {/* Seguro terrestre - solo si FW elegido tiene alcance maritimo */}
+              {/* Seguro terrestre — solo si FW elegido tiene alcance maritimo */}
               {fwElegida?.segAlcance==='maritimo'&&(
-                <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="pt-3 border-t border-gray-100">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Seguro terrestre</div>
                     <span className="text-[9px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-medium">Requerido — seguro maritimo no cubre este tramo</span>
@@ -896,7 +908,7 @@ export default function CotizadorPage(){
               )}
             </div>
             <div className="flex justify-end items-center gap-2 px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
-              Subtotal bloque 3: <strong className="font-mono text-gray-800">USD {fmt(subD+subTransp+subEstadias+segIndepCalc)}</strong>
+              Subtotal bloque 3: <strong className="font-mono text-gray-800">USD {fmt(subTransp+subEstadias+segIndepCalc)}</strong>
             </div>
           </div>
 
