@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt, calcCapacidad, CONT_CAPS, PUERTOS_L, nextCotNum } from '@/lib/utils'
-import type { ContenedorCot, ProductoCot, Tarifa } from '@/types'
+import type { ContenedorCot, ProductoCot } from '@/types'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
@@ -149,7 +149,6 @@ export default function CotizadorPage(){
   const topRef=useRef<HTMLDivElement>(null)
   const [s,setS]=useState<CotState>(INIT)
   const [tab,setTab]=useState<Tab>('embarque')
-  const [tarifas,setTarifas]=useState<Tarifa[]>([])
   // Catálogos geográficos
   const [puertosChi,setPuertosChi]=useState<any[]>([])
   const [puertosChile,setPuertosChile]=useState<any[]>([])
@@ -232,30 +231,15 @@ export default function CotizadorPage(){
       if(tc.data) setTiposCont(tc.data)
       if(tca.data) setTiposCamion(tca.data)
     })
-    supabase.from('tarifas').select('*').eq('activo',true).then(({data})=>{
-      if(data){
-        setTarifas(data as Tarifa[])
-        const gastosArgTarifas=(data as any[]).filter((t:any)=>t.tipo==='argentina')
-        if(gastosArgTarifas.length>0){
-          setS(p=>({...p,gastosArg:gastosArgTarifas.map((t:any)=>({
-            id:uid2(),desc:t.ruta,tipoCalc:t.tipo_calculo||'fijo_usd',
-            moneda:t.moneda||'USD',valor:t.valor||0,pisoUsd:t.piso_usd||0,
-            techoUsd:t.techo_usd||0,usd:0,ars:0,
-          }))}))
-        }
-      }
-    })
   },[])
   useEffect(()=>{loadTrib()},[s.regimen])
   useEffect(()=>{
-    if(tarifas.length===0) return
+    // Pre-cargar nCamiones según contenedores seleccionados
     setS(p=>{
-      const tarifaTerrestre=tarifas.find(t=>t.tipo==='terrestre'&&t.ruta.toLowerCase().includes(p.destinoNoa.toLowerCase()))||tarifas.find(t=>t.tipo==='terrestre')
-      const precioTerrestre=tarifaTerrestre?.valor||0
       const ncTotal=p.contenedores.reduce((s,c)=>s+c.cantidad,0)||1
-      return {...p,ftCamion:p.ftCamion===0?precioTerrestre:p.ftCamion,nCamiones:p.nCamiones===1?ncTotal:p.nCamiones}
+      return {...p,nCamiones:p.nCamiones===1?ncTotal:p.nCamiones}
     })
-  },[s.contenedores,s.destinoNoa,tarifas])
+  },[s.contenedores])
 
   async function loadTrib(){
     const {data}=await supabase.from('tributos_config').select('*').eq('regimen',s.regimen).eq('aplica',true).order('orden')
