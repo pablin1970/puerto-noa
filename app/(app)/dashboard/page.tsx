@@ -23,7 +23,7 @@ export default function DashboardPage() {
     const [cotsRes, opsRes, tcRes, facEmitRes, facRecRes] = await Promise.all([
       supabase.from('cotizaciones').select('id,estado,total_landed,total_fob,created_at,cliente').order('created_at', { ascending: false }).limit(100),
       supabase.from('operaciones').select('id,estado,created_at,cotizacion:cotizaciones(num,cliente,total_landed,destino_noa)').order('created_at', { ascending: false }),
-      supabase.from('tipos_cambio_eventos').select('ars,clp,cny,fecha,created_at').order('created_at', { ascending: false }).limit(1).single(),
+      supabase.from('tipos_cambio_eventos').select('ars,clp,cny,fecha,created_at').order('created_at', { ascending: false }).limit(1),
       supabase.from('facturas_emitidas').select('id,total,estado,created_at').order('created_at', { ascending: false }).limit(100),
       supabase.from('facturas_recibidas').select('id,total,estado,created_at').order('created_at', { ascending: false }).limit(100),
     ])
@@ -33,7 +33,7 @@ export default function DashboardPage() {
     const facEmit = facEmitRes.data || []
     const facRec = facRecRes.data || []
 
-    if (tcRes.data) setTc(tcRes.data)
+    if (tcRes.data && tcRes.data.length > 0) setTc(tcRes.data[0])
 
     // KPIs cotizaciones
     const ahora = Date.now()
