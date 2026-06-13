@@ -300,6 +300,16 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
     notas: '',
     cotizacion_id: '',
     cliente_id: '',
+    tramo: '',
+    puerto_china_id: '',
+    puerto_chile_id: '',
+    paso_id: '',
+    ciudad_destino_id: '',
+    tipo_contenedor: '',
+    moneda_original: 'USD',
+    valor_total_original: '',
+    tc_referencia: '',
+    es_tarifa_base: false,
     ...cotizacionInicial,
   })
   const [items, setItems] = useState<Item[]>(cotizacionInicial?.items || [{ ...ITEM_VACIO }])
@@ -308,6 +318,27 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
   const [showProvDropdown, setShowProvDropdown] = useState(false)
   const [buscarCot, setBuscarCot] = useState('')
   const [showCotDropdown, setShowCotDropdown] = useState(false)
+  const [puertosCh, setPuertosCh] = useState<any[]>([])
+  const [puertosChile, setPuertosChile] = useState<any[]>([])
+  const [pasos, setPasos] = useState<any[]>([])
+  const [ciudades, setCiudades] = useState<any[]>([])
+  const [tiposCont, setTiposCont] = useState<any[]>([])
+  useEffect(() => {
+    Promise.all([
+      supabase.from('puertos_china').select('id,locode,nombre,ciudad').eq('activo', 'true').order('orden'),
+      supabase.from('puertos_chile').select('id,locode,nombre,ciudad').eq('activo', 'true').order('orden'),
+      supabase.from('pasos_fronterizos').select('id,nombre,provincia_argentina,habilitado_carga').eq('activo', 'true').order('orden'),
+      supabase.from('ciudades_destino_arg').select('id,ciudad,provincia').eq('activo', 'true').order('orden'),
+      supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo', 'true').order('orden'),
+    ]).then(([ch, cl, ps, ci, tc]) => {
+      if (ch.data) setPuertosCh(ch.data)
+      if (cl.data) setPuertosChile(cl.data)
+      if (ps.data) setPasos(ps.data)
+      if (ci.data) setCiudades(ci.data)
+      if (tc.data) setTiposCont(tc.data)
+    })
+  }, [])
+
   const cotsFiltradas = (cotsSistema || []).filter((c: any) =>
     !buscarCot || c.num?.toLowerCase().includes(buscarCot.toLowerCase()) || c.cliente?.toLowerCase().includes(buscarCot.toLowerCase())
   ).slice(0, 8)
@@ -348,6 +379,16 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
       notas: form.notas || null,
       cotizacion_id: form.cotizacion_id || null,
       cliente_id: form.tipo === 'especifica' ? (form.cliente_id || null) : null,
+      tramo: form.tramo || null,
+      puerto_china_id: form.puerto_china_id || null,
+      puerto_chile_id: form.puerto_chile_id || null,
+      paso_id: form.paso_id || null,
+      ciudad_destino_id: form.ciudad_destino_id || null,
+      tipo_contenedor: form.tipo_contenedor || null,
+      moneda_original: form.moneda_original || form.moneda,
+      valor_total_original: parseFloat(form.valor_total_original as any) || null,
+      tc_referencia: parseFloat(form.tc_referencia as any) || null,
+      es_tarifa_base: form.es_tarifa_base || false,
     }).select().single()
 
     if (error) { alert('Error: ' + error.message); setSaving(false); return }
@@ -527,6 +568,92 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
         </div>
       </div>
 
+      {/* Ruta y tramo */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-sm text-gray-900">Ruta y alcance</h3>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.es_tarifa_base}
+              onChange={e => setForm((f: any) => ({ ...f, es_tarifa_base: e.target.checked }))}
+              className="w-4 h-4 rounded" />
+            <span className="text-xs text-gray-600 font-medium">Es tarifa base (referencia permanente)</span>
+          </label>
+        </div>
+        {/* Tramo */}
+        <div className="mb-4">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Tramo que cubre esta cotizacion</label>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { key: 'maritimo', label: 'Maritimo', icon: '🚢', desc: 'Puerto China → Puerto Chile' },
+              { key: 'post_entrega_chile', label: 'Post-entrega Chile', icon: '🏭', desc: 'Operaciones en puerto Chile' },
+              { key: 'terrestre', label: 'Terrestre', icon: '🚛', desc: 'Chile → Argentina' },
+              { key: 'aduanero', label: 'Aduanero', icon: '📋', desc: 'Gestión en Argentina' },
+            ].map(t => (
+              <button key={t.key} onClick={() => setForm((f: any) => ({ ...f, tramo: t.key }))}
+                className={`px-3 py-2.5 rounded-xl border-2 text-left transition-all ${form.tramo === t.key ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
+                <div className="text-base mb-1">{t.icon}</div>
+                <div className="text-[10px] font-bold text-gray-900">{t.label}</div>
+                <div className="text-[9px] text-gray-400 mt-0.5">{t.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Geografía según tramo */}
+        <div className="grid grid-cols-2 gap-3">
+          {(form.tramo === 'maritimo' || form.tramo === 'post_entrega_chile') && (
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Puerto China (origen)</label>
+              <select value={form.puerto_china_id} onChange={e => setForm((f: any) => ({ ...f, puerto_china_id: e.target.value }))} className={inp}>
+                <option value="">— Cualquier puerto —</option>
+                {puertosCh.map((p: any) => <option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
+              </select>
+            </div>
+          )}
+          {(form.tramo === 'maritimo' || form.tramo === 'post_entrega_chile' || form.tramo === 'terrestre') && (
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Puerto Chile</label>
+              <select value={form.puerto_chile_id} onChange={e => setForm((f: any) => ({ ...f, puerto_chile_id: e.target.value }))} className={inp}>
+                <option value="">— Cualquier puerto —</option>
+                {puertosChile.map((p: any) => <option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
+              </select>
+            </div>
+          )}
+          {(form.tramo === 'terrestre' || form.tramo === 'aduanero') && (
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Paso fronterizo</label>
+              <select value={form.paso_id} onChange={e => setForm((f: any) => ({ ...f, paso_id: e.target.value }))} className={inp}>
+                <option value="">— Cualquier paso —</option>
+                {pasos.map((p: any) => <option key={p.id} value={p.id}>{p.nombre} ({p.provincia_argentina})</option>)}
+              </select>
+            </div>
+          )}
+          {(form.tramo === 'terrestre' || form.tramo === 'aduanero') && (
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Ciudad destino Argentina</label>
+              <select value={form.ciudad_destino_id} onChange={e => setForm((f: any) => ({ ...f, ciudad_destino_id: e.target.value }))} className={inp}>
+                <option value="">— Cualquier ciudad —</option>
+                {ciudades.map((c: any) => <option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo de contenedor</label>
+            <select value={form.tipo_contenedor} onChange={e => setForm((f: any) => ({ ...f, tipo_contenedor: e.target.value }))} className={inp}>
+              <option value="">— Todos los tipos —</option>
+              {tiposCont.map((t: any) => <option key={t.codigo} value={t.codigo}>{t.codigo} — {t.nombre}</option>)}
+            </select>
+          </div>
+          {form.moneda !== 'USD' && (
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">TC referencia (al momento de cotizar)</label>
+              <input type="text" inputMode="decimal" value={form.tc_referencia}
+                onChange={e => setForm((f: any) => ({ ...f, tc_referencia: e.target.value }))}
+                className={inp} placeholder="ej. 1450 (ARS/USD)" />
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Items */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
@@ -554,8 +681,10 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
               onFocus={e => e.target.select()}
               onChange={e => updateItem(i, 'valor', e.target.value)}
               className={inp + ' text-right font-mono'} placeholder="0.00" />
-            <input value={it.tipo_contenedor} onChange={e => updateItem(i, 'tipo_contenedor', e.target.value)}
-              className={inp} placeholder="20DV / 40HC / -" />
+            <select value={it.tipo_contenedor} onChange={e => updateItem(i, 'tipo_contenedor', e.target.value)} className={inp}>
+              <option value="">Todos</option>
+              {tiposCont.map((t: any) => <option key={t.codigo} value={t.codigo}>{t.codigo}</option>)}
+            </select>
             <button onClick={() => removeItem(i)} className="text-gray-400 hover:text-red-500 text-xs p-1">X</button>
           </div>
         ))}
