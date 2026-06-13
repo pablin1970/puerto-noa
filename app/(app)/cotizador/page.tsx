@@ -50,7 +50,7 @@ interface CotState {
   transito: string; notas: string
   // IDs de catálogos geográficos
   puertoChiId: string; puertoChileId: string; pasoId: string; ciudadDestinoId: string
-  modalidadCarga: 'contenedor' | 'bulk'
+  modalidadCarga: 'contenedor' | 'bulk' | 'mixta'
   contenedores: ContenedorCot[]; productos: ProductoCot[]
   exwTransp: number; exwAgente: number; exwOtros: number; precioArgEquiv: number
   proformas: Proforma[]
@@ -644,13 +644,14 @@ export default function CotizadorPage(){
             </div>
             <div className="px-5 py-4">
               {/* Modalidad */}
-              <div className="flex gap-3 mb-4">
+              <div className="grid grid-cols-3 gap-3 mb-4">
                 {[
-                  {key:'contenedor',label:'Contenedorizada',icon:'📦',desc:'Carga en contenedores ISO'},
-                  {key:'bulk',label:'Bulk cargo',icon:'⚓',desc:'Carga a granel sin contenedor'},
+                  {key:'contenedor',label:'Contenedorizada',icon:'📦',desc:'Todo en contenedores ISO'},
+                  {key:'bulk',label:'Bulk cargo',icon:'⚓',desc:'Todo a granel sin contenedor'},
+                  {key:'mixta',label:'Mixta',icon:'🔀',desc:'Contenedores + carga suelta'},
                 ].map(m=>(
                   <button key={m.key} onClick={()=>u('modalidadCarga',m.key as any)}
-                    className={`flex-1 px-4 py-3 rounded-xl border-2 text-left transition-all ${s.modalidadCarga===m.key?'border-[#0a9e6e] bg-green-50':'border-gray-200 hover:bg-gray-50'}`}>
+                    className={`px-4 py-3 rounded-xl border-2 text-left transition-all ${s.modalidadCarga===m.key?'border-[#0a9e6e] bg-green-50':'border-gray-200 hover:bg-gray-50'}`}>
                     <div className="text-xl mb-1">{m.icon}</div>
                     <div className="text-xs font-bold text-gray-900">{m.label}</div>
                     <div className="text-[10px] text-gray-400 mt-0.5">{m.desc}</div>
