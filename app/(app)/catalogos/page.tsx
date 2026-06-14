@@ -183,7 +183,7 @@ function CatalogoABM({
             </thead>
             <tbody>
               {rows.map(row => (
-                <tr key={row.id} className={`border-b border-gray-50 transition-colors ${row.activo === false ? 'opacity-40' : 'hover:bg-blue-50/20'}`}>
+                <tr key={row.id} className={`border-b border-gray-50 transition-colors group ${row.activo === false ? 'opacity-40' : 'hover:bg-blue-50/20'}`}>
                   {editId === row.id ? (
                     <>
                       {cols.map(c => (
@@ -258,7 +258,7 @@ function CatalogoABM({
                         </td>
                       )}
                       <td className="px-4 py-3">
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex gap-1">
                           <button onClick={() => startEdit(row)}
                             className="px-3 py-1 border border-gray-200 rounded-lg text-[10px] text-gray-500 hover:bg-[#EBF2FF] hover:text-[#1168F8] hover:border-[#93B8FC] transition-all">
                             Editar
