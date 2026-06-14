@@ -34,6 +34,7 @@ const NAV: NavItem[] = [
   // ── 3. COMPRAS & PROVEEDORES ───────────────────────
   // Gestión de costos y proveedores de servicio
   { label: 'COMPRAS', section: true },
+  { href: '/precios', label: 'Inteligencia de precios', icon: '📊' },
   { href: '/cotizaciones-proveedores', label: 'Cotizaciones proveedores', icon: '📋' },
 
   // ── 4. FINANZAS ────────────────────────────────────
