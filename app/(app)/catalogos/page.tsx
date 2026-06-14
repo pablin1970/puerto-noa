@@ -296,10 +296,10 @@ export default function CatalogosPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-white border border-gray-100 rounded-2xl p-1.5 shadow-sm w-fit flex-wrap">
+      <div className="flex gap-1 mb-6 bg-white border border-gray-100 rounded-2xl p-1.5 shadow-sm overflow-x-auto">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key as Tab)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap flex-shrink-0 ${
               tab === t.key ? 'bg-[#1168F8] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             }`}>
             <span>{t.icon}</span>{t.label}
