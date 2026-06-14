@@ -213,7 +213,7 @@ function GastosTab({ opId, cot, gastos, reload }: { opId: string; cot: Cotizacio
   useEffect(() => { loadTerceros(); loadFacturasPropia() }, [])
 
   async function loadTerceros() {
-    const { data } = await supabase.from('terceros').select('id,razon_social,nombre_fantasia').eq('activo', 'true').order('razon_social')
+    const { data } = await supabase.from('terceros').select('id,razon_social,nombre_fantasia').eq('activo', 'true').contains('tipo', ['proveedor']).order('razon_social')
     if (data) setTerceros(data)
   }
 
@@ -710,7 +710,7 @@ function ComparativoTab({ presup, gastos }: { presup: any[]; gastos: Gasto[] }) 
   const rows: React.ReactNode[] = []
   ETAPAS_ORD.forEach(e => {
     const pi = presup.filter((i: any) => i.etapa === e)
-    const ri = gastos.filter(g => g.etapa === e && !(g as any).es_factura_propia)
+    const ri = gastos.filter(g => g.etapa === e)
     const p = pi.reduce((s: number, i: any) => s + i.usd, 0)
     const r = ri.reduce((s, g) => s + g.usd, 0)
     if (!p && !r) return
