@@ -44,7 +44,10 @@ export default function FondosCustodiaPage() {
     if (cRes.data) setCuentas(cRes.data)
     if (mRes.data) setMovimientos(mRes.data)
     if (oRes.data) setOperaciones(oRes.data)
-    if (tcRes.data && tcRes.data[0]) setTcActual({ ARS: tcRes.data[0].ars || 1450, CLP: tcRes.data[0].clp || 910 })
+    if (tcRes.data && tcRes.data.length > 0) {
+      const tc = tcRes.data[0] as any
+      setTcActual({ ARS: tc.ars || 1450, CLP: tc.clp || 910 })
+    }
     setLoading(false)
   }
 
