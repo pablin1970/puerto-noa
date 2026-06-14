@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 
-type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'rubros_bloques'
+type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'rubros_bloques' | 'rubros_proveedor'
 
 const TABS = [
   { key: 'categorias',    label: 'Categorías de precio', icon: '🏷' },
@@ -13,7 +13,8 @@ const TABS = [
   { key: 'contenedores',  label: 'Tipos de contenedor',  icon: '📦' },
   { key: 'camiones',      label: 'Tipos de camión',      icon: '🚛' },
   { key: 'fondos',        label: 'Fondos en custodia',   icon: '🏦' },
-  { key: 'rubros_bloques', label: 'Rubros por bloque',    icon: '⚙️' },
+  { key: 'rubros_bloques',   label: 'Rubros por bloque',    icon: '⚙️' },
+  { key: 'rubros_proveedor', label: 'Rubros de proveedor',  icon: '🏷️' },
 ] as const
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -433,6 +434,9 @@ export default function CatalogosPage() {
 
       {/* ── RUBROS POR BLOQUE ── */}
       {tab === 'rubros_bloques' && <RubrosBloqueABM />}
+
+      {/* ── RUBROS DE PROVEEDOR ── */}
+      {tab === 'rubros_proveedor' && <RubrosProveedorABM />}
     </div>
   )
 }
@@ -952,6 +956,255 @@ function RubrosBloqueABM() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── ABM de rubros de proveedores ──────────────────────────────────────────────
+const RUBROS_DEFAULT = [
+  { icono: '🚢', nombre: 'Freight Forwarder',       descripcion: 'Agentes de carga marítima internacional', color: '#1168F8' },
+  { icono: '🚛', nombre: 'Transporte terrestre',     descripcion: 'Empresas de transporte Chile - NOA',       color: '#b45309' },
+  { icono: '🏭', nombre: 'Deposito fiscal',          descripcion: 'Depósitos fiscales y almacenes en Chile',  color: '#0891b2' },
+  { icono: '📋', nombre: 'Despachante de aduana',    descripcion: 'Despachantes aduaneros en Argentina',      color: '#6b21a8' },
+  { icono: '⚓', nombre: 'Naviera',                  descripcion: 'Líneas navieras y agencias marítimas',     color: '#0a9e6e' },
+  { icono: '🛡',  nombre: 'Seguro de carga',          descripcion: 'Aseguradoras de mercadería en tránsito',  color: '#be185d' },
+  { icono: '📦', nombre: 'Otro',                     descripcion: 'Otros servicios relacionados',             color: '#6b7280' },
+]
+
+function RubrosProveedorABM() {
+  const supabase = useMemo(() => createClient(), [])
+  const [rubros, setRubros] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showNew, setShowNew] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const inpCls = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+
+  const vacio = { icono: '', nombre: '', descripcion: '', color: '#6b7280', activo: true }
+  const [form, setForm] = useState<any>({ ...vacio })
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase.from('proveedor_rubros').select('*').order('orden', { ascending: true })
+    if (data) setRubros(data)
+    setLoading(false)
+  }
+
+  async function poblarDefaults() {
+    if (!confirm('¿Cargar los rubros predeterminados? Solo agrega los que no existen.')) return
+    setSaving(true)
+    for (let i = 0; i < RUBROS_DEFAULT.length; i++) {
+      const r = RUBROS_DEFAULT[i]
+      const existe = rubros.find(x => x.nombre.toLowerCase() === r.nombre.toLowerCase())
+      if (!existe) {
+        await (supabase.from('proveedor_rubros') as any).insert({
+          ...r, activo: true, orden: rubros.length + i + 1
+        })
+      }
+    }
+    await load()
+    setSaving(false)
+  }
+
+  function startEdit(r: any) {
+    setEditId(r.id)
+    setForm({ icono: r.icono || '', nombre: r.nombre || '', descripcion: r.descripcion || '', color: r.color || '#6b7280', activo: r.activo !== false })
+    setShowNew(false)
+  }
+
+  function cancelForm() { setEditId(null); setShowNew(false); setForm({ ...vacio }) }
+
+  async function guardar() {
+    if (!form.nombre.trim()) { alert('Ingresá el nombre del rubro'); return }
+    setSaving(true)
+    const payload = {
+      icono: form.icono || null,
+      nombre: form.nombre.trim(),
+      descripcion: form.descripcion || null,
+      color: form.color || '#6b7280',
+      activo: form.activo,
+      orden: editId ? undefined : (rubros.length + 1),
+    }
+    if (editId) {
+      await (supabase.from('proveedor_rubros') as any).update(payload).eq('id', editId)
+    } else {
+      await (supabase.from('proveedor_rubros') as any).insert(payload)
+    }
+    await load()
+    cancelForm()
+    setSaving(false)
+  }
+
+  async function toggleActivo(r: any) {
+    await (supabase.from('proveedor_rubros') as any).update({ activo: !r.activo }).eq('id', r.id)
+    setRubros(prev => prev.map(x => x.id === r.id ? { ...x, activo: !x.activo } : x))
+  }
+
+  async function eliminar(id: string) {
+    if (!confirm('¿Eliminar este rubro? Verificá que no esté asignado a proveedores o bloques del cotizador.')) return
+    const { error } = await supabase.from('proveedor_rubros').delete().eq('id', id)
+    if (error) { alert('No se puede eliminar: ' + error.message); return }
+    setRubros(prev => prev.filter(r => r.id !== id))
+  }
+
+  const FormRubro = () => (
+    <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-5 mb-4">
+      <div className="text-xs font-bold text-[#052698] mb-4">{editId ? 'Editar rubro' : 'Nuevo rubro'}</div>
+      <div className="grid grid-cols-5 gap-3 mb-3">
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Ícono</label>
+          <input value={form.icono} onChange={e => setForm((f: any) => ({ ...f, icono: e.target.value }))}
+            className={inpCls} placeholder="🚢" maxLength={4}/>
+        </div>
+        <div className="col-span-3">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre del rubro *</label>
+          <input value={form.nombre} onChange={e => setForm((f: any) => ({ ...f, nombre: e.target.value }))}
+            className={inpCls} placeholder="ej. Freight Forwarder"/>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Color</label>
+          <div className="flex gap-1.5 items-center">
+            <input type="color" value={form.color || '#6b7280'}
+              onChange={e => setForm((f: any) => ({ ...f, color: e.target.value }))}
+              className="w-9 h-9 rounded-lg border border-gray-200 cursor-pointer flex-shrink-0"/>
+            <input value={form.color || ''} onChange={e => setForm((f: any) => ({ ...f, color: e.target.value }))}
+              className={inpCls} placeholder="#6b7280"/>
+          </div>
+        </div>
+      </div>
+      <div className="mb-4">
+        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Descripción — se muestra en la ficha del proveedor</label>
+        <input value={form.descripcion} onChange={e => setForm((f: any) => ({ ...f, descripcion: e.target.value }))}
+          className={inpCls} placeholder="ej. Agentes de carga marítima internacional"/>
+      </div>
+      <div className="flex items-center justify-between">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={form.activo} onChange={e => setForm((f: any) => ({ ...f, activo: e.target.checked }))} className="w-4 h-4 rounded"/>
+          <span className="text-xs text-gray-600 font-medium">Rubro activo</span>
+        </label>
+        <div className="flex gap-2">
+          <button onClick={cancelForm}
+            className="px-4 py-2 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50 bg-white">Cancelar</button>
+          <button onClick={guardar} disabled={saving}
+            className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-bold text-base text-gray-900">Rubros de proveedores</h2>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Determina en qué bloque del cotizador aparece cada proveedor ·{' '}
+            {rubros.length} rubro(s) · {rubros.filter(r => r.activo !== false).length} activos
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {rubros.length === 0 && !showNew && (
+            <button onClick={poblarDefaults} disabled={saving}
+              className="px-4 py-2 border border-[#1168F8] text-[#1168F8] rounded-xl text-xs font-semibold hover:bg-[#EBF2FF] disabled:opacity-50">
+              {saving ? 'Cargando...' : '+ Cargar predeterminados'}
+            </button>
+          )}
+          {!showNew && !editId && (
+            <button onClick={() => { setShowNew(true); setForm({ ...vacio }) }}
+              className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-semibold hover:bg-[#0a4fc4] shadow-sm">
+              + Nuevo rubro
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700">
+        💡 Asignás estos rubros a cada proveedor en <strong>Clientes y Proveedores</strong>.
+        Luego en <strong>Rubros por bloque</strong> configurás en qué bloque del cotizador aparece cada rubro.
+      </div>
+
+      {(showNew || editId) && <FormRubro />}
+
+      <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+        {loading ? (
+          <div className="p-8 text-center text-gray-400">Cargando...</div>
+        ) : rubros.length === 0 ? (
+          <div className="p-8 text-center">
+            <div className="text-2xl mb-2">🏷️</div>
+            <div className="text-gray-500 text-sm mb-1 font-medium">Sin rubros cargados</div>
+            <div className="text-gray-400 text-xs mb-4">Podés cargar los rubros predeterminados o crear uno nuevo</div>
+            <button onClick={poblarDefaults} disabled={saving}
+              className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
+              + Cargar rubros predeterminados
+            </button>
+          </div>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                {['', 'Rubro', 'Descripción', 'Color', 'Estado', ''].map((h, i) => (
+                  <th key={i} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rubros.map(r => (
+                <tr key={r.id} className={`border-b border-gray-50 transition-colors group ${r.activo === false ? 'opacity-40' : 'hover:bg-blue-50/20'}`}>
+                  {/* Ícono */}
+                  <td className="px-4 py-3 text-xl w-12">{r.icono || '—'}</td>
+                  {/* Nombre con badge de color */}
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                        style={{ background: (r.color || '#6b7280') + '20', color: r.color || '#6b7280' }}>
+                        {r.nombre}
+                      </span>
+                    </div>
+                  </td>
+                  {/* Descripción */}
+                  <td className="px-4 py-3 text-gray-500">{r.descripcion || '—'}</td>
+                  {/* Color */}
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-md border border-gray-200 flex-shrink-0"
+                        style={{ background: r.color || '#6b7280' }}/>
+                      <span className="font-mono text-[10px] text-gray-400">{r.color || '—'}</span>
+                    </div>
+                  </td>
+                  {/* Estado toggle */}
+                  <td className="px-4 py-3">
+                    <button onClick={() => toggleActivo(r)}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold cursor-pointer transition-all ${
+                        r.activo !== false
+                          ? 'bg-green-50 text-green-700 hover:bg-red-50 hover:text-red-600'
+                          : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-700'
+                      }`}>
+                      {r.activo !== false ? 'Activo' : 'Inactivo'}
+                    </button>
+                  </td>
+                  {/* Acciones */}
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => startEdit(r)}
+                        className="px-3 py-1 border border-gray-200 rounded-lg text-[10px] text-gray-500 hover:bg-[#EBF2FF] hover:text-[#1168F8] hover:border-[#93B8FC] transition-all">
+                        Editar
+                      </button>
+                      <button onClick={() => eliminar(r.id)}
+                        className="px-3 py-1 border border-red-100 rounded-lg text-[10px] text-gray-400 hover:bg-red-50 hover:text-red-600 transition-all">
+                        Eliminar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   )
 }
