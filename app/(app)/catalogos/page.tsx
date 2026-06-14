@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 
-type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones'
+type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos'
 
 const TABS = [
   { key: 'categorias',    label: 'Categorías de precio', icon: '🏷' },
@@ -12,6 +12,7 @@ const TABS = [
   { key: 'ciudades',      label: 'Ciudades Argentina',   icon: '🇦🇷' },
   { key: 'contenedores',  label: 'Tipos de contenedor',  icon: '📦' },
   { key: 'camiones',      label: 'Tipos de camión',      icon: '🚛' },
+  { key: 'fondos',        label: 'Fondos en custodia',   icon: '🏦' },
 ] as const
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -425,6 +426,256 @@ export default function CatalogosPage() {
           ]}
         />
       )}
+
+      {/* ── FONDOS EN CUSTODIA ── */}
+      {tab === 'fondos' && <FondosCuentasABM />}
+    </div>
+  )
+}
+
+// ── ABM especializado para cuentas de fondos en custodia ───────
+function FondosCuentasABM() {
+  const supabase = useMemo(() => createClient(), [])
+  const [cuentas, setCuentas] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showNew, setShowNew] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const vacio = {
+    nombre: '', tipo: 'banco', moneda: 'USD', pais: 'Argentina',
+    banco: '', nro_cuenta: '', cbu_iban: '', swift: '',
+    titular: '', notas: '', activo: true, orden: 0,
+  }
+  const [form, setForm] = useState<any>({ ...vacio })
+  const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase.from('fondos_cuentas').select('*').order('orden', { ascending: true })
+    if (data) setCuentas(data)
+    setLoading(false)
+  }
+
+  function startEdit(c: any) {
+    setEditId(c.id)
+    setForm({ ...c })
+    setShowNew(false)
+  }
+
+  function cancelEdit() { setEditId(null); setForm({ ...vacio }) }
+
+  async function guardar() {
+    if (!form.nombre) { alert('Ingresá el nombre'); return }
+    setSaving(true)
+    const payload = {
+      nombre: form.nombre, tipo: form.tipo, moneda: form.moneda, pais: form.pais,
+      banco: form.banco || null, nro_cuenta: form.nro_cuenta || null,
+      cbu_iban: form.cbu_iban || null, swift: form.swift || null,
+      titular: form.titular || null, notas: form.notas || null,
+      activo: form.activo, orden: parseInt(form.orden) || 0,
+    }
+    if (editId) {
+      await (supabase.from('fondos_cuentas') as any).update(payload).eq('id', editId)
+    } else {
+      await (supabase.from('fondos_cuentas') as any).insert(payload)
+    }
+    await load()
+    setEditId(null)
+    setShowNew(false)
+    setForm({ ...vacio })
+    setSaving(false)
+  }
+
+  async function toggleActivo(c: any) {
+    await (supabase.from('fondos_cuentas') as any).update({ activo: !c.activo }).eq('id', c.id)
+    setCuentas(prev => prev.map(x => x.id === c.id ? { ...x, activo: !x.activo } : x))
+  }
+
+  async function eliminar(id: string) {
+    if (!confirm('¿Eliminar esta cuenta? Solo si no tiene movimientos registrados.')) return
+    await supabase.from('fondos_cuentas').delete().eq('id', id)
+    setCuentas(prev => prev.filter(c => c.id !== id))
+  }
+
+  const FormCuenta = () => (
+    <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-5 mb-4">
+      <div className="text-xs font-bold text-[#052698] mb-4">{editId ? 'Editar cuenta' : 'Nueva cuenta'}</div>
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        <div className="col-span-2">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre descriptivo *</label>
+          <input value={form.nombre} onChange={e => setForm((f: any) => ({ ...f, nombre: e.target.value }))}
+            className={inp} placeholder="ej. Caja efectivo Argentina USD"/>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Orden</label>
+          <input type="number" value={form.orden} onChange={e => setForm((f: any) => ({ ...f, orden: e.target.value }))}
+            className={inp} placeholder="1"/>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
+          <select value={form.tipo} onChange={e => setForm((f: any) => ({ ...f, tipo: e.target.value }))} className={inp}>
+            <option value="banco">🏦 Banco</option>
+            <option value="caja">💵 Caja efectivo</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
+          <select value={form.moneda} onChange={e => setForm((f: any) => ({ ...f, moneda: e.target.value }))} className={inp}>
+            <option value="ARS">ARS — Peso argentino</option>
+            <option value="USD">USD — Dólar</option>
+            <option value="CLP">CLP — Peso chileno</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">País</label>
+          <select value={form.pais} onChange={e => setForm((f: any) => ({ ...f, pais: e.target.value }))} className={inp}>
+            <option value="Argentina">🇦🇷 Argentina</option>
+            <option value="Chile">🇨🇱 Chile</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Datos bancarios — solo si es banco */}
+      {form.tipo === 'banco' && (
+        <>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco</label>
+              <input value={form.banco || ''} onChange={e => setForm((f: any) => ({ ...f, banco: e.target.value }))}
+                className={inp} placeholder="ej. Banco Nación Argentina"/>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Titular de la cuenta</label>
+              <input value={form.titular || ''} onChange={e => setForm((f: any) => ({ ...f, titular: e.target.value }))}
+                className={inp} placeholder="ej. Puerto NOA SpA"/>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N° de cuenta</label>
+              <input value={form.nro_cuenta || ''} onChange={e => setForm((f: any) => ({ ...f, nro_cuenta: e.target.value }))}
+                className={inp} placeholder="Número de cuenta bancaria"/>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">CBU / IBAN</label>
+              <input value={form.cbu_iban || ''} onChange={e => setForm((f: any) => ({ ...f, cbu_iban: e.target.value }))}
+                className={inp} placeholder="CBU o IBAN"/>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">SWIFT / BIC</label>
+              <input value={form.swift || ''} onChange={e => setForm((f: any) => ({ ...f, swift: e.target.value }))}
+                className={inp} placeholder="Código SWIFT"/>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="mb-3">
+        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas / observaciones</label>
+        <input value={form.notas || ''} onChange={e => setForm((f: any) => ({ ...f, notas: e.target.value }))}
+          className={inp} placeholder="Información adicional"/>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={form.activo} onChange={e => setForm((f: any) => ({ ...f, activo: e.target.checked }))} className="w-4 h-4 rounded"/>
+          <span className="text-xs text-gray-600 font-medium">Cuenta activa</span>
+        </label>
+        <div className="flex gap-2">
+          <button onClick={() => { setShowNew(false); cancelEdit() }}
+            className="px-4 py-2 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50 bg-white">Cancelar</button>
+          <button onClick={guardar} disabled={saving}
+            className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-bold text-base text-gray-900">Cuentas y cajas — Fondos en custodia</h2>
+          <p className="text-xs text-gray-400 mt-0.5">{cuentas.length} cuenta(s) · {cuentas.filter(c => c.activo).length} activas</p>
+        </div>
+        {!showNew && !editId && (
+          <button onClick={() => { setShowNew(true); setForm({ ...vacio, orden: cuentas.length + 1 }) }}
+            className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-semibold hover:bg-[#0a4fc4] shadow-sm">
+            + Agregar cuenta
+          </button>
+        )}
+      </div>
+
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700">
+        💡 Estas son las cajas y cuentas bancarias donde Puerto NOA administra <strong>fondos de clientes a rendir</strong>. No corresponden a las finanzas propias de Puerto NOA.
+      </div>
+
+      {(showNew || editId) && <FormCuenta />}
+
+      <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+        {loading ? (
+          <div className="p-8 text-center text-gray-400">Cargando...</div>
+        ) : cuentas.length === 0 ? (
+          <div className="p-8 text-center text-gray-400">Sin cuentas cargadas aún.</div>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                {['#','Nombre','País','Tipo','Moneda','Banco','N° Cuenta','CBU/IBAN','SWIFT','Titular','Estado',''].map(h => (
+                  <th key={h} className="text-left px-3 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {cuentas.map(c => (
+                <tr key={c.id} className={`border-b border-gray-50 transition-colors ${!c.activo ? 'opacity-40' : 'hover:bg-blue-50/20'}`}>
+                  <td className="px-3 py-3 text-gray-400 font-mono text-[10px]">{c.orden}</td>
+                  <td className="px-3 py-3 font-semibold text-gray-800">{c.nombre}</td>
+                  <td className="px-3 py-3 text-gray-500">{c.pais === 'Argentina' ? '🇦🇷' : '🇨🇱'}</td>
+                  <td className="px-3 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${c.tipo === 'banco' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>
+                      {c.tipo === 'banco' ? '🏦 Banco' : '💵 Caja'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 font-mono text-[11px] font-bold text-[#052698]">{c.moneda}</td>
+                  <td className="px-3 py-3 text-gray-600">{c.banco || '—'}</td>
+                  <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.nro_cuenta || '—'}</td>
+                  <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.cbu_iban || '—'}</td>
+                  <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.swift || '—'}</td>
+                  <td className="px-3 py-3 text-gray-500">{c.titular || '—'}</td>
+                  <td className="px-3 py-3">
+                    <button onClick={() => toggleActivo(c)}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold cursor-pointer transition-all ${
+                        c.activo ? 'bg-green-50 text-green-700 hover:bg-red-50 hover:text-red-600' : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-700'
+                      }`}>
+                      {c.activo ? 'Activa' : 'Inactiva'}
+                    </button>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex gap-1">
+                      <button onClick={() => startEdit(c)}
+                        className="px-3 py-1 border border-gray-200 rounded-lg text-[10px] text-gray-500 hover:bg-[#EBF2FF] hover:text-[#1168F8] hover:border-[#93B8FC] transition-all">
+                        Editar
+                      </button>
+                      <button onClick={() => eliminar(c.id)}
+                        className="px-3 py-1 border border-red-100 rounded-lg text-[10px] text-gray-400 hover:bg-red-50 hover:text-red-600 transition-all">
+                        Eliminar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   )
 }
