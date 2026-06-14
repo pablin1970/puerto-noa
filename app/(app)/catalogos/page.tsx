@@ -756,8 +756,8 @@ function RubrosBloqueABM() {
     setSaving(true)
     // Calcular diferencias
     const existentes = new Set<string>(asignaciones.map((a: any) => `${a.bloque}-${a.rubro_id}`))
-    const agregar = [...activosLocal].filter(k => !existentes.has(k))
-    const quitar  = [...existentes].filter(k => !activosLocal.has(k))
+    const agregar = Array.from(activosLocal).filter(k => !existentes.has(k))
+    const quitar  = Array.from(existentes).filter(k => !activosLocal.has(k))
 
     // Insertar nuevos
     if (agregar.length > 0) {
@@ -796,7 +796,7 @@ function RubrosBloqueABM() {
   }
 
   const countBloque = (num: number) =>
-    [...activosLocal].filter(k => k.startsWith(`${num}-`)).length
+    Array.from(activosLocal).filter(k => k.startsWith(`${num}-`)).length
 
   return (
     <div className="space-y-4">
@@ -925,7 +925,7 @@ function RubrosBloqueABM() {
           <div className="text-xs font-bold text-gray-700 mb-3">Configuración actual</div>
           <div className="space-y-2">
             {BLOQUES_COTIZADOR.map(bloque => {
-              const rubrosDelBloque = [...activosLocal]
+              const rubrosDelBloque = Array.from(activosLocal)
                 .filter(k => k.startsWith(`${bloque.num}-`))
                 .map(k => {
                   const rubroId = k.substring(k.indexOf('-') + 1)
