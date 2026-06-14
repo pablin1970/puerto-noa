@@ -84,7 +84,7 @@ export default function InteligenciaPreciosPage() {
 
   const proveedoresDisp = useMemo(() => {
     const cats = items.filter(it => it.categoria === filtCat && it.tipo_calculo !== 'pct_cif')
-    return [...new Set(cats.map(it => it.cotizacion?.proveedor_nombre).filter(Boolean))] as string[]
+    return Array.from(new Set(cats.map(it => it.cotizacion?.proveedor_nombre).filter(Boolean))) as string[]
   }, [items, filtCat])
 
   // Agrupar por proveedor para líneas del gráfico
@@ -109,7 +109,7 @@ export default function InteligenciaPreciosPage() {
   const minVal = todosValores.length ? Math.min(...todosValores) * 0.85 : 0
   const maxVal = todosValores.length ? Math.max(...todosValores) * 1.1 : 1000
 
-  const todasFechas = [...new Set(itemsFiltrados1.map(it => it.cotizacion?.fecha).filter(Boolean))].sort() as string[]
+  const todasFechas = Array.from(new Set(itemsFiltrados1.map(it => it.cotizacion?.fecha).filter(Boolean))).sort() as string[]
   const minFecha = todasFechas[0] || ''
   const maxFecha = todasFechas[todasFechas.length - 1] || ''
 
