@@ -197,6 +197,11 @@ export default function CotizadorPage(){
   const [clienteSelId,setClienteSelId]=useState<string|null>(null)
   const [histCliente,setHistCliente]=useState<any[]>([])
   const [showHist,setShowHist]=useState(false)
+  // Inputs manuales para agregar proveedores sin cotización del sistema
+  const [fwManualProv,setFwManualProv]=useState('')
+  const [fwManualMonto,setFwManualMonto]=useState('')
+  const [transpManualProv,setTranspManualProv]=useState('')
+  const [transpManualMonto,setTranspManualMonto]=useState('')
   const [tribCfg,setTribCfg]=useState<TribCfg[]>([])
   const [saving,setSaving]=useState(false)
   const supabase=createClient()
@@ -1214,29 +1219,19 @@ export default function CotizadorPage(){
               )}
               {/* Fila manual FW */}
               <div className="flex items-center gap-2 px-3 py-2.5 border border-dashed border-gray-200 rounded-xl bg-gray-50/50 mt-2">
-                <div className="w-4 h-4 rounded border-2 border-gray-300 flex-shrink-0"/>
-                <span className="text-xs text-gray-400 flex-1 italic">Proveedor sin cotización en el sistema</span>
-                <input className="w-40 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Nombre ForWarder"
-                  id="fw-manual-prov"/>
+                <span className="text-xs text-gray-400 flex-shrink-0">Sin cotización del sistema:</span>
+                <input value={fwManualProv} onChange={e=>setFwManualProv(e.target.value)}
+                  className="flex-1 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Nombre ForWarder"/>
                 <span className="text-[10px] text-gray-400">USD</span>
-                <input type="text" inputMode="decimal" className="w-24 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:border-[#1168F8] bg-white"
-                  placeholder="0.00" id="fw-manual-monto"/>
-                <button onClick={()=>{
-                  const pEl=document.getElementById('fw-manual-prov') as HTMLInputElement
-                  const mEl=document.getElementById('fw-manual-monto') as HTMLInputElement
-                  if(!pEl?.value||!mEl?.value) return
-                  const nueva:CotProvSel={
-                    uid:uid2(),cotProvId:'',proveedorNombre:pEl.value,referencia:'',
-                    fechaEmision:'',fechaVencimiento:'',tipo:'generica',clienteId:null,
-                    estado:'vigente',usadaEnCots:[],items:[],
-                    elegida:s.cotsProvFW.length===0,
-                    seguroIncluido:false,seguroModo:'pct',seguroMonto:0,segAlcance:'no',
-                    esManual:true,manualMonto:parseNum(mEl.value),
-                  }
+                <input type="text" inputMode="decimal" value={fwManualMonto} onFocus={e=>e.target.select()}
+                  onChange={e=>setFwManualMonto(e.target.value)}
+                  className="w-28 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:border-[#1168F8] bg-white" placeholder="0.00"/>
+                <button disabled={!fwManualProv||!fwManualMonto} onClick={()=>{
+                  const nueva:CotProvSel={uid:uid2(),cotProvId:'',proveedorNombre:fwManualProv,referencia:'',fechaEmision:'',fechaVencimiento:'',tipo:'generica',clienteId:null,estado:'vigente',usadaEnCots:[],items:[],elegida:s.cotsProvFW.length===0,seguroIncluido:false,seguroModo:'pct',seguroMonto:0,segAlcance:'no',esManual:true,manualMonto:parseNum(fwManualMonto)}
                   setS(p=>({...p,cotsProvFW:[...p.cotsProvFW,nueva]}))
-                  pEl.value='';mEl.value=''
-                }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-white hover:border-[#1168F8] hover:text-[#1168F8] whitespace-nowrap">
-                  + Agregar manual
+                  setFwManualProv('');setFwManualMonto('')
+                }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-white hover:border-[#1168F8] hover:text-[#1168F8] disabled:opacity-40 whitespace-nowrap transition-all">
+                  + Agregar
                 </button>
               </div>
             </div>
@@ -1608,20 +1603,19 @@ export default function CotizadorPage(){
 
                   {/* Fila manual */}
                   <div className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-200 rounded-xl bg-gray-50/50 mb-3">
-                    <div className="w-4 h-4 rounded border-2 border-gray-300 flex-shrink-0"/>
-                    <span className="text-xs text-gray-400 flex-1 italic">Proveedor sin cotización en el sistema</span>
-                    <input className="w-40 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#b45309] bg-white" placeholder="Transportista" id="transp-manual-prov"/>
+                    <span className="text-xs text-gray-400 flex-shrink-0">Sin cotización del sistema:</span>
+                    <input value={transpManualProv} onChange={e=>setTranspManualProv(e.target.value)}
+                      className="flex-1 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#b45309] bg-white" placeholder="Transportista"/>
                     <span className="text-[10px] text-gray-400">USD</span>
-                    <input type="text" inputMode="decimal" className="w-24 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:border-[#b45309] bg-white" placeholder="0.00" id="transp-manual-monto"/>
-                    <button onClick={()=>{
-                      const pEl=document.getElementById('transp-manual-prov') as HTMLInputElement
-                      const mEl=document.getElementById('transp-manual-monto') as HTMLInputElement
-                      if(!pEl?.value||!mEl?.value) return
-                      const nueva:CotProvSel={uid:uid2(),cotProvId:'',proveedorNombre:pEl.value,referencia:'',fechaEmision:'',fechaVencimiento:'',tipo:'generica',clienteId:null,estado:'vigente',usadaEnCots:[],items:[],elegida:s.cotsProvTransp.length===0,seguroIncluido:false,seguroModo:'pct',seguroMonto:0,segAlcance:'no',esManual:true,manualMonto:parseNum(mEl.value)}
+                    <input type="text" inputMode="decimal" value={transpManualMonto} onFocus={e=>e.target.select()}
+                      onChange={e=>setTranspManualMonto(e.target.value)}
+                      className="w-28 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:border-[#b45309] bg-white" placeholder="0.00"/>
+                    <button disabled={!transpManualProv||!transpManualMonto} onClick={()=>{
+                      const nueva:CotProvSel={uid:uid2(),cotProvId:'',proveedorNombre:transpManualProv,referencia:'',fechaEmision:'',fechaVencimiento:'',tipo:'generica',clienteId:null,estado:'vigente',usadaEnCots:[],items:[],elegida:s.cotsProvTransp.length===0,seguroIncluido:false,seguroModo:'pct',seguroMonto:0,segAlcance:'no',esManual:true,manualMonto:parseNum(transpManualMonto)}
                       setS(p=>({...p,cotsProvTransp:[...p.cotsProvTransp,nueva]}))
-                      pEl.value='';mEl.value=''
-                    }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-white hover:border-[#b45309] hover:text-[#b45309] whitespace-nowrap">
-                      + Agregar manual
+                      setTranspManualProv('');setTranspManualMonto('')
+                    }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-white hover:border-[#b45309] hover:text-[#b45309] disabled:opacity-40 whitespace-nowrap transition-all">
+                      + Agregar
                     </button>
                   </div>
 
