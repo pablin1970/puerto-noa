@@ -21,24 +21,40 @@ interface GastoArg {
 }
 interface TribCfg { id: string; codigo: string; concepto: string; tipo: 'pct'|'fijo'; valor: number; aplica: boolean; orden: number }
 
-// Nueva estructura para cotizaciones ForWarder en el cotizador
-interface CotFW {
-  id: string                // id local temporal
-  cotizacionProvId: string  // id en cotizaciones_proveedor_v2 (si viene del sistema)
-  proveedor: string
+// Ítem seleccionado de una cotización de proveedor
+interface ItemSelProv {
+  itemId: string
+  descripcion: string
+  tipo_calculo: string
+  valorUnit: number
+  cantCotizada: number
+  cantUsar: number
+  tipoContenedor: string
+  subtotal: number
+  seleccionado: boolean
+}
+// Cotización de proveedor seleccionada (FW, transporte Chile, transporte terrestre)
+interface CotProvSel {
+  uid: string
+  cotProvId: string
+  proveedorNombre: string
   referencia: string
-  fecha: string
-  segAlcance: 'no'|'maritimo'|'punta_a_punta'
+  fechaEmision: string
+  fechaVencimiento: string
+  tipo: 'generica'|'especifica'
+  clienteId: string|null
+  estado: string
+  usadaEnCots: string[]
+  items: ItemSelProv[]
+  elegida: boolean
+  seguroIncluido: boolean
   seguroModo: 'pct'|'fijo'
   seguroMonto: number
-  items: CotFWItem[]
-  elegida: boolean
+  segAlcance: 'no'|'maritimo'|'punta_a_punta'
+  esManual?: boolean
+  manualMonto?: number
 }
-interface CotFWItem {
-  id: string; descripcion: string; valor: number; tipoCalc: string; tipoContenedor: string
-}
-
-// Nueva estructura para gastos post-entrega Chile
+// Gastos post-entrega Chile (modo manual, cuando no hay cotización del sistema)
 interface GastoChile {
   id: string; desc: string; proveedor: string
   tipoCalc: 'fijo'|'m3'; valor: number; ivaChile: 'exento'|'gravado'
@@ -56,11 +72,14 @@ interface CotState {
   contenedores: ContenedorCot[]; productos: ProductoCot[]
   exwTransp: number; exwAgente: number; exwOtros: number; precioArgEquiv: number
   proformas: Proforma[]
-  // NUEVO: Bloque 1 - ForWarders
-  cotsFW: CotFW[]
+  // Bloque 1 - ForWarders (nuevo sistema item-a-item)
+  cotsProvFW: CotProvSel[]
   segModoIndep: 'pct'|'fijo'; segValIndep: number
-  // NUEVO: Bloque 2 - Gastos post-entrega Chile
+  // Bloque 2 - Transporte Chile-NOA
+  cotsProvChile: CotProvSel[]
   gastosChile: GastoChile[]
+  // Bloque 3 - Transporte terrestre
+  cotsProvTransp: CotProvSel[]
   // Bloque 3 - Transporte terrestre (igual que antes)
   optTransp: OptTransp; rowsDescon: ItemLog[]
   almModoVol: 'auto'|'manual'; almVolM3: number; almCostoDia: number; almDias: number
@@ -91,9 +110,11 @@ const INIT: CotState = {
   contenedores:[{tipo:'40HC',cantidad:1} as any],
   productos:[{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:'FOB'}],
   exwTransp:0,exwAgente:0,exwOtros:0,precioArgEquiv:0,proformas:[],
-  cotsFW:[],
+  cotsProvFW:[],
   segModoIndep:'pct',segValIndep:0.5,
+  cotsProvChile:[],
   gastosChile:[],
+  cotsProvTransp:[],
   optTransp:'A',rowsDescon:[],
   almModoVol:'auto',almVolM3:0,almCostoDia:0,almDias:0,
   cargaModo:'fijo',cargaValor:0,
@@ -160,6 +181,8 @@ export default function CotizadorPage(){
   const [cotsTranspDisponibles,setCotsTranspDisponibles]=useState<any[]>([])
   const [cotsArgDisponibles,setCotsArgDisponibles]=useState<any[]>([])
   const [cotsChileDisponibles,setCotsChileDisponibles]=useState<any[]>([])
+  // Cotizaciones de operaciones usadas (para detectar "ya usada en X")
+  const [cotsSistemaUsadas,setCotsSistemaUsadas]=useState<Record<string,string[]>>({})
   // Cotizaciones de proveedores seleccionadas por bloque
   const [provUsado,setProvUsado]=useState<Record<number,string|null>>({1:null,2:null,3:null,4:null})
   const [terceros,setTerceros]=useState<any[]>([])
@@ -256,17 +279,36 @@ export default function CotizadorPage(){
   const totalFOB=s.productos.reduce((t,p)=>t+p.subtotal,0)+(s.incoterm==='EXW'?s.exwTransp+s.exwAgente+s.exwOtros:0)
   const totalM3=s.productos.reduce((t,p)=>t+p.vol_unit*p.cantidad,0)
 
-  const fwElegida=s.cotsFW.find(c=>c.elegida)
-  const subFW=fwElegida ? fwElegida.items.reduce((t,it)=>t+(parseFloat(it.valor as any)||0),0) : 0
-  // Seguro: puede ser % sobre FOB o monto fijo, según define el ForWarder
-  const segFW=fwElegida?.segAlcance!=='no'
-    ? (fwElegida?.seguroModo==='pct' ? totalFOB*(parseFloat(String(fwElegida?.seguroMonto||0).replace(',','.'))||0)/100 : (parseFloat(String(fwElegida?.seguroMonto||0).replace(',','.'))||0))
+  // Bloque 1: ForWarder elegido y sus ítems seleccionados
+  const fwElegida = s.cotsProvFW.find(c=>c.elegida)
+  const subFW = fwElegida
+    ? fwElegida.esManual
+      ? (fwElegida.manualMonto||0)
+      : fwElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
     : 0
-  // Seguro terrestre independiente (solo si FW cubre solo tramo maritimo)
-  const segIndepCalc=fwElegida?.segAlcance==='maritimo'
+  const segFW = fwElegida?.segAlcance!=='no'
+    ? (fwElegida?.seguroModo==='pct'
+        ? totalFOB*(fwElegida?.seguroMonto||0)/100
+        : (fwElegida?.seguroMonto||0))
+    : 0
+  const segIndepCalc = fwElegida?.segAlcance==='maritimo'
     ? (s.segModoIndep==='pct'?(totalFOB+subFW)*s.segValIndep/100:s.segValIndep)
     : 0
-  const totalSeg=segFW
+  const totalSeg = segFW
+  // Bloque 2: Transporte Chile-NOA (cotizaciones del sistema)
+  const transpChileElegida = s.cotsProvChile.find(c=>c.elegida)
+  const subTranspChile = transpChileElegida
+    ? transpChileElegida.esManual
+      ? (transpChileElegida.manualMonto||0)
+      : transpChileElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
+    : 0
+  // Bloque 3: Flete terrestre (cotizaciones del sistema para B1/B2)
+  const transpTerrElegida = s.cotsProvTransp.find(c=>c.elegida)
+  const subTranspTerr = transpTerrElegida
+    ? transpTerrElegida.esManual
+      ? (transpTerrElegida.manualMonto||0)
+      : transpTerrElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
+    : 0
 
   // Bloque 2: Gastos Chile post-entrega
   const subGastosChile=s.gastosChile.reduce((t,g)=>{
@@ -280,9 +322,12 @@ export default function CotizadorPage(){
   const subDescon=s.rowsDescon.reduce((t,r)=>t+(r.tipoCalc==='m3'?r.unitario*totalM3:r.cant*r.unitario),0)
   const subCarga=s.optTransp!=='A'?(s.cargaModo==='m3'?s.cargaValor*totalM3:s.cargaValor):0
   const subD=subDescon+subAlm+subCarga
+  // subTransp: usa cotizaciones del sistema si hay, sino cálculo manual
   const subTransp=s.optTransp==='A'
+    // Opción A: ida/dev/rt manual (+ subTranspChile si hay cotizaciones Chile-NOA para Opción A)
     ?(()=>{const ida=s.ftIda*nc,dev=s.ftDev*nc,rt=s.ftRt*nc;return rt>0&&rt<(ida+dev)?rt:ida+dev})()
-    :s.ftCamion*s.nCamiones
+    // B1/B2: usa cotizaciones del sistema si hay, sino inputs manuales
+    :(transpTerrElegida?subTranspTerr:s.ftCamion*s.nCamiones)
 
   // Estadias
   const subEstadias=s.estadiaCargaVal*s.estadiaCargaDias+s.estadiaDescargaVal*s.estadiaDescargaDias
@@ -328,70 +373,130 @@ export default function CotizadorPage(){
   const totalLanded=totalFOB+totalLog+totalTribUSD
   const cap=calcCapacidad(s.contenedores,s.productos)
 
-  // Agregar ForWarder desde cotizaciones del sistema
+  // ── Helpers para manejar CotProvSel genéricamente ──────────────
+  const isVigente = (fv:string) => !fv || new Date(fv) >= new Date()
+  const fmtFecha = (f:string) => f ? f.split('-').reverse().join('/') : '—'
+
+  function cotProvDesdeSistema(cot:any, contenedoresH1:{tipo:string;cantidad:number}[], usadas:string[]): CotProvSel {
+    const items: ItemSelProv[] = (cot.items||[]).map((it:any)=>{
+      const cantSug = contenedoresH1.find(c=>c.tipo===it.tipo_contenedor)?.cantidad || 1
+      const valorUnit = parseNum(String(it.valor||0))
+      return {
+        itemId: it.id||uid2(),
+        descripcion: it.descripcion||'',
+        tipo_calculo: it.tipo_calculo||'fijo_usd',
+        valorUnit,
+        cantCotizada: cantSug,
+        cantUsar: cantSug,
+        tipoContenedor: it.tipo_contenedor||'',
+        subtotal: valorUnit * cantSug,
+        seleccionado: false,
+      }
+    })
+    return {
+      uid: uid2(),
+      cotProvId: cot.id,
+      proveedorNombre: cot.proveedor_nombre||'',
+      referencia: cot.referencia||'',
+      fechaEmision: cot.fecha||'',
+      fechaVencimiento: cot.fecha_vencimiento||'',
+      tipo: cot.tipo==='especifica'?'especifica':'generica',
+      clienteId: cot.cliente_id||null,
+      estado: isVigente(cot.fecha_vencimiento||'')?'vigente':'vencida',
+      usadaEnCots: usadas,
+      items,
+      elegida: false,
+      seguroIncluido: cot.seguro_incluido||false,
+      seguroModo: (cot.seguro_modo||'pct') as 'pct'|'fijo',
+      seguroMonto: parseNum(String(cot.seguro_monto||0)),
+      segAlcance: (cot.seguro_incluido?'maritimo':'no') as any,
+    }
+  }
+
+  // FW desde sistema
   function agregarFWDesdeSistema(cotId:string){
-    const cot=cotsFWDisponibles.find(c=>c.id===cotId)
+    const cot = cotsFWDisponibles.find(c=>c.id===cotId)
     if(!cot) return
-    const nuevaFW:CotFW={
-      id:uid2(),cotizacionProvId:cot.id,proveedor:cot.proveedor_nombre,
-      referencia:cot.referencia||'',fecha:cot.fecha,
-      segAlcance:(cot.seguro_incluido?'maritimo':'no') as any,seguroModo:(cot.seguro_modo||'pct') as 'pct'|'fijo',seguroMonto:cot.seguro_monto||0,
-      items:(cot.items||[]).map((it:any)=>({id:uid2(),descripcion:it.descripcion,valor:it.valor||0,tipoCalc:it.tipo_calculo||'fijo_usd',tipoContenedor:it.tipo_contenedor||''})),
-      elegida:s.cotsFW.length===0,
-    }
-    setS(p=>({...p,cotsFW:[...p.cotsFW,nuevaFW]}))
+    const usadas = cotsSistemaUsadas[cotId]||[]
+    const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
+    nueva.elegida = s.cotsProvFW.length===0
+    setS(p=>({...p, cotsProvFW:[...p.cotsProvFW, nueva]}))
+    setProvUsado(pv=>({...pv,1:cotId}))
   }
 
-  // Agregar ForWarder manual
   function agregarFWManual(){
-    const nueva:CotFW={
-      id:uid2(),cotizacionProvId:'',proveedor:'',referencia:'',fecha:new Date().toISOString().slice(0,10),
-      segAlcance:'no' as const,seguroModo:'pct' as const,seguroMonto:0,
-      items:[{id:uid2(),descripcion:'Flete maritimo',valor:0,tipoCalc:'fijo_usd',tipoContenedor:''}],
-      elegida:s.cotsFW.length===0,
+    const nueva: CotProvSel = {
+      uid:uid2(), cotProvId:'', proveedorNombre:'', referencia:'',
+      fechaEmision:new Date().toISOString().slice(0,10), fechaVencimiento:'',
+      tipo:'generica', clienteId:null, estado:'vigente', usadaEnCots:[],
+      items:[{itemId:uid2(),descripcion:'Flete marítimo',tipo_calculo:'fijo_usd',valorUnit:0,cantCotizada:nc,cantUsar:nc,tipoContenedor:'',subtotal:0,seleccionado:true}],
+      elegida:s.cotsProvFW.length===0,
+      seguroIncluido:false, seguroModo:'pct', seguroMonto:0, segAlcance:'no',
+      esManual:false,
     }
-    setS(p=>({...p,cotsFW:[...p.cotsFW,nueva]}))
+    setS(p=>({...p, cotsProvFW:[...p.cotsProvFW, nueva]}))
   }
 
-  function elegirFW(id:string){
-    setS(p=>({...p,cotsFW:p.cotsFW.map(c=>({...c,elegida:c.id===id}))}))
+  function elegirCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', uid:string){
+    setS(p=>({...p, [campo]:p[campo].map((c:CotProvSel)=>({...c,elegida:c.uid===uid}))}))
   }
 
-  function eliminarFW(id:string){
+  function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', uid:string){
     setS(p=>{
-      const nuevas=p.cotsFW.filter(c=>c.id!==id)
+      const nuevas = (p[campo] as CotProvSel[]).filter(c=>c.uid!==uid)
       if(nuevas.length>0&&!nuevas.some(c=>c.elegida)) nuevas[0].elegida=true
-      return {...p,cotsFW:nuevas}
+      return {...p,[campo]:nuevas}
     })
   }
 
-  function updateFW(id:string,field:string,value:any){
-    setS(p=>({...p,cotsFW:p.cotsFW.map(c=>c.id===id?{...c,[field]:value}:c)}))
-  }
-
-  function updateFWItem(fwId:string,itemIdx:number,field:string,value:any){
-    setS(p=>({...p,cotsFW:p.cotsFW.map(c=>{
-      if(c.id!==fwId) return c
-      const items=[...c.items];items[itemIdx]={...items[itemIdx],[field]:value}
-      return {...c,items}
+  function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', cotUid:string, itemId:string){
+    setS(p=>({...p,[campo]:(p[campo] as CotProvSel[]).map(c=>{
+      if(c.uid!==cotUid) return c
+      return {...c,items:c.items.map(i=>{
+        if(i.itemId!==itemId) return i
+        const sel = !i.seleccionado
+        return {...i,seleccionado:sel,subtotal:sel?i.valorUnit*i.cantUsar:0}
+      })}
     })}))
   }
 
-  function addFWItem(fwId:string){
-    setS(p=>({...p,cotsFW:p.cotsFW.map(c=>{
-      if(c.id!==fwId) return c
-      return {...c,items:[...c.items,{id:uid2(),descripcion:'',valor:0,tipoCalc:'fijo_usd',tipoContenedor:''}]}
+  function setCantUsarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', cotUid:string, itemId:string, cant:number){
+    setS(p=>({...p,[campo]:(p[campo] as CotProvSel[]).map(c=>{
+      if(c.uid!==cotUid) return c
+      return {...c,items:c.items.map(i=>{
+        if(i.itemId!==itemId) return i
+        return {...i,cantUsar:cant,subtotal:i.seleccionado?i.valorUnit*cant:0}
+      })}
     })}))
   }
 
-  function removeFWItem(fwId:string,itemIdx:number){
-    setS(p=>({...p,cotsFW:p.cotsFW.map(c=>{
-      if(c.id!==fwId) return c
-      return {...c,items:c.items.filter((_,i)=>i!==itemIdx)}
-    })}))
+  function updateSegAlcanceFW(cotUid:string, segAlcance:'no'|'maritimo'|'punta_a_punta'){
+    setS(p=>({...p,cotsProvFW:p.cotsProvFW.map(c=>c.uid===cotUid?{...c,segAlcance}:c)}))
   }
 
-  // Gastos Chile desde cotizaciones
+  // Transporte Chile desde sistema
+  function agregarTranspChileDesdeSistema(cotId:string){
+    const cot = cotsChileDisponibles.find(c=>c.id===cotId)
+    if(!cot) return
+    const usadas = cotsSistemaUsadas[cotId]||[]
+    const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
+    nueva.elegida = s.cotsProvChile.length===0
+    setS(p=>({...p, cotsProvChile:[...p.cotsProvChile, nueva]}))
+    setProvUsado(pv=>({...pv,2:cotId}))
+  }
+
+  // Transporte terrestre desde sistema
+  function agregarTranspTerrDesdeSistema(cotId:string){
+    const cot = cotsTranspDisponibles.find(c=>c.id===cotId)
+    if(!cot) return
+    const usadas = cotsSistemaUsadas[cotId]||[]
+    const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
+    nueva.elegida = s.cotsProvTransp.length===0
+    setS(p=>({...p, cotsProvTransp:[...p.cotsProvTransp, nueva]}))
+    setProvUsado(pv=>({...pv,3:cotId}))
+  }
+
+  // Gastos Chile manual (cuando no hay cotización del sistema)
   function agregarGastoChileDesdeSistema(cotId:string){
     const cot=cotsChileDisponibles.find(c=>c.id===cotId)
     if(!cot) return
@@ -902,127 +1007,264 @@ export default function CotizadorPage(){
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1168F8] text-white text-[10px] font-bold">1</span>
               <span className="font-medium text-sm text-gray-900">Cotizaciones ForWarder</span>
-              <span className="text-[10px] text-gray-400">Flete maritimo + handling + gastos naviero</span>
-              <div className="ml-auto flex items-center gap-2">
+              <span className="text-[10px] text-gray-400">Flete marítimo · handling · gastos naviero</span>
+              <div className="ml-auto flex items-center gap-2 flex-wrap">
+                {/* Info hoja 1 */}
+                {s.contenedores.length>0&&(
+                  <div className="flex gap-1.5">
+                    {s.contenedores.map((c,i)=>(
+                      <span key={i} className="px-2 py-0.5 bg-[#EBF2FF] text-[#052698] rounded-full text-[10px] font-bold">{c.cantidad}×{c.tipo}</span>
+                    ))}
+                  </div>
+                )}
                 {cotsFWDisponibles.length>0&&(
-                  <select onChange={e=>{if(e.target.value){agregarFWDesdeSistema(e.target.value);setProvUsado(p=>({...p,1:e.target.value}));e.target.value=''}}} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
+                  <select onChange={e=>{if(e.target.value){agregarFWDesdeSistema(e.target.value);e.target.value=''}}}
+                    className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
                     <option value="">+ Cargar del sistema</option>
-                    {(()=>{const {especificas,genericas}=filtrarCotsBloque(cotsFWDisponibles,clienteSelId);return(<>
-                      {especificas.length>0&&(<optgroup label="Especificas para este cliente">
-                        {especificas.map((c:any)=>(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
-                      </optgroup>)}
-                      <optgroup label="Genericas vigentes">
-                        {genericas.map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
-                      </optgroup>
-                    </>)})()}
+                    {(()=>{
+                      const especificas=cotsFWDisponibles.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                      const genericas=cotsFWDisponibles.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                      return(<>
+                        {especificas.length>0&&(<optgroup label="⭐ Específicas para este cliente">
+                          {especificas.map((c:any)=>(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre} — {c.referencia||c.fecha}{!isVigente(c.fecha_vencimiento||'')?'  (VENCIDA)':''}</option>))}
+                        </optgroup>)}
+                        <optgroup label="Genéricas vigentes">
+                          {genericas.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
+                        </optgroup>
+                      </>)
+                    })()}
                   </select>
                 )}
                 <button onClick={agregarFWManual} className="px-3 py-1 bg-[#1168F8] text-white rounded-lg text-[10px] font-bold hover:bg-[#0a4fc4]">+ Manual</button>
               </div>
             </div>
             <div className="px-5 py-4">
-              {s.cotsFW.length===0?(
+              {s.cotsProvFW.length===0?(
                 <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 text-center">
                   Sin cotizaciones de ForWarder. Cargalas del sistema o ingresalas manualmente.
                 </div>
               ):(
-                <div className="space-y-3">
-                  {s.cotsFW.map(fw=>{
-                    const totalFWItem=fw.items.reduce((t,it)=>t+(parseFloat(it.valor as any)||0),0)
+                <div>
+                  {s.cotsProvFW.map(fw=>{
+                    const vigente=isVigente(fw.fechaVencimiento)
+                    const totalSel=fw.esManual?(fw.manualMonto||0):fw.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
                     return (
-                      <div key={fw.id} className={`border-2 rounded-xl overflow-hidden transition-all ${fw.elegida?'border-[#1168F8]':'border-gray-200'}`}>
-                        {/* Header FW */}
-                        <div className={`px-4 py-2.5 flex items-center gap-3 flex-wrap ${fw.elegida?'bg-[#EBF2FF]':'bg-gray-50'}`}>
-                          <button onClick={()=>elegirFW(fw.id)}
-                            className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-all ${fw.elegida?'border-[#1168F8] bg-[#1168F8]':'border-gray-300 bg-white hover:border-[#1168F8]'}`}>
-                            {fw.elegida&&<div className="w-2 h-2 bg-white rounded-full mx-auto mt-0.5"/>}
+                      <div key={fw.uid} className={`border-2 rounded-xl overflow-hidden mb-3 transition-all ${fw.elegida?'border-[#1168F8]':!vigente?'border-red-200 opacity-60':'border-gray-200'}`}>
+                        {/* Header */}
+                        <div className={`flex items-center gap-0 ${fw.elegida?'bg-[#EBF2FF]':!vigente?'bg-red-50':'bg-gray-50'}`}>
+                          <button onClick={()=>elegirCotProv('cotsProvFW',fw.uid)} disabled={!vigente}
+                            className="w-10 flex-shrink-0 flex items-center justify-center self-stretch hover:bg-black/5">
+                            <div className={`w-4 h-4 rounded-full border-2 transition-all ${fw.elegida?'border-[#1168F8] bg-[#1168F8]':'border-gray-300 bg-white'}`}>
+                              {fw.elegida&&<div className="w-1.5 h-1.5 bg-white rounded-full mx-auto mt-0.5"/>}
+                            </div>
                           </button>
-                          <div className="flex-1 grid grid-cols-3 gap-2">
-                            <input value={fw.proveedor} onChange={e=>updateFW(fw.id,'proveedor',e.target.value)}
-                              className={`px-2 py-1 border rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white ${fw.elegida?'border-[#93B8FC]':'border-gray-200'}`}
-                              placeholder="Nombre ForWarder"/>
-                            <input value={fw.referencia} onChange={e=>updateFW(fw.id,'referencia',e.target.value)}
-                              className={`px-2 py-1 border rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white ${fw.elegida?'border-[#93B8FC]':'border-gray-200'}`}
-                              placeholder="Ref. cotizacion"/>
-                            <input type="date" value={fw.fecha} onChange={e=>updateFW(fw.id,'fecha',e.target.value)}
-                              className={`px-2 py-1 border rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white ${fw.elegida?'border-[#93B8FC]':'border-gray-200'}`}/>
+                          <div className="flex-1 px-3 py-2.5 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              {fw.esManual?(
+                                <input value={fw.proveedorNombre}
+                                  onChange={e=>setS(p=>({...p,cotsProvFW:p.cotsProvFW.map(c=>c.uid===fw.uid?{...c,proveedorNombre:e.target.value}:c)}))}
+                                  className="font-semibold text-sm text-gray-900 bg-transparent border-b border-dashed border-gray-300 focus:outline-none focus:border-[#1168F8] min-w-32"
+                                  placeholder="Nombre ForWarder"/>
+                              ):(
+                                <span className="font-semibold text-sm text-gray-900">{fw.proveedorNombre}</span>
+                              )}
+                              {fw.tipo==='especifica'?(
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEEDFE] text-[#3C3489]">⭐ Específica</span>
+                              ):(
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500">Genérica</span>
+                              )}
+                              {vigente?(
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700">vigente</span>
+                              ):(
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700">vencida {fmtFecha(fw.fechaVencimiento)}</span>
+                              )}
+                              {fw.usadaEnCots.length>0&&(
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">⚠ Usada en {fw.usadaEnCots.join(', ')}</span>
+                              )}
+                              {fw.elegida&&<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#1168F8] text-white">ELEGIDA</span>}
+                            </div>
+                            {!fw.esManual&&(
+                              <div className="flex gap-4 text-[10px] text-gray-500 flex-wrap">
+                                {fw.referencia&&<span className="font-mono">Ref: {fw.referencia}</span>}
+                                {fw.fechaEmision&&<span>Emitida: {fmtFecha(fw.fechaEmision)}</span>}
+                                {fw.fechaVencimiento&&<span className={!vigente?'text-red-500 font-semibold':''}>Vence: {fmtFecha(fw.fechaVencimiento)}</span>}
+                              </div>
+                            )}
                           </div>
-                          <div className="flex items-center gap-3">
-                            {fw.elegida&&<span className="text-[10px] font-bold text-[#1168F8] bg-[#1168F8]/10 px-2 py-0.5 rounded-full">ELEGIDA</span>}
-                            <span className="font-mono text-xs font-bold text-[#052698]">USD {fmt(totalFWItem)}</span>
-                            <button onClick={()=>eliminarFW(fw.id)} className="text-gray-400 hover:text-red-500 text-xs">X</button>
+                          <div className="flex items-center gap-3 px-3 flex-shrink-0">
+                            {fw.elegida&&totalSel>0&&(
+                              <div className="text-right">
+                                <div className="text-[10px] text-gray-400">Seleccionado</div>
+                                <div className="font-mono font-bold text-[#052698] text-sm">USD {fmt(totalSel)}</div>
+                              </div>
+                            )}
+                            <button onClick={()=>eliminarCotProv('cotsProvFW',fw.uid)} className="text-gray-300 hover:text-red-500 text-xs">✕</button>
                           </div>
                         </div>
-                        {/* Items FW */}
-                        <div className="px-4 py-3">
-                          <div className="grid gap-1 mb-1 text-[9px] text-gray-400 font-semibold uppercase tracking-wide" style={{gridTemplateColumns:'2fr 110px 90px auto'}}>
-                            <div>Descripcion</div><div>Tipo</div><div className="text-right">USD</div><div></div>
-                          </div>
-                          {fw.items.map((it,idx)=>(
-                            <div key={it.id} className="grid gap-1 mb-1 items-center" style={{gridTemplateColumns:'2fr 110px 90px auto'}}>
-                              <input value={it.descripcion} onChange={e=>updateFWItem(fw.id,idx,'descripcion',e.target.value)} className={inp} placeholder="Flete, THC, handling..."/>
-                              <select value={it.tipoCalc} onChange={e=>updateFWItem(fw.id,idx,'tipoCalc',e.target.value)} className={sel}>
-                                <option value="fijo_usd">Fijo USD</option>
-                                <option value="por_contenedor">x Contenedor</option>
-                                <option value="por_m3">Por m3</option>
-                              </select>
-                              <input type="text" inputMode="decimal" value={it.valor||''} onFocus={e=>e.target.select()}
-                                onChange={e=>updateFWItem(fw.id,idx,'valor',e.target.value)}
-                                className={inp+' text-right font-mono'} placeholder="0.00"/>
-                              <button onClick={()=>removeFWItem(fw.id,idx)} className="text-gray-400 hover:text-red-500 text-[10px] pl-1">X</button>
+
+                        {/* Items o manual */}
+                        <div className="border-t border-gray-100">
+                          {fw.esManual?(
+                            <div className="px-4 py-3 flex items-center gap-3">
+                              <span className="text-xs text-gray-500">Monto total USD</span>
+                              <input type="text" inputMode="decimal" value={fw.manualMonto||''} onFocus={e=>e.target.select()}
+                                onChange={e=>setS(p=>({...p,cotsProvFW:p.cotsProvFW.map(c=>c.uid===fw.uid?{...c,manualMonto:parseNum(e.target.value)}:c)}))}
+                                className="w-32 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:border-[#1168F8] bg-white" placeholder="0.00"/>
+                              <span className="text-xs text-gray-400">USD</span>
                             </div>
-                          ))}
-                          <button onClick={()=>addFWItem(fw.id)} className="text-[10px] text-[#1168F8] hover:underline mt-1">+ Item</button>
+                          ):(
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="bg-gray-50 border-b border-gray-100">
+                                  <th className="w-8 px-2 py-2"></th>
+                                  <th className="text-left px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase">Ítem cotizado</th>
+                                  <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Precio unit.</th>
+                                  <th className="text-center px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-24">Cant. cot.</th>
+                                  <th className="text-center px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Cant. a usar</th>
+                                  <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Subtotal</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {fw.items.map(it=>{
+                                  const coincide=s.contenedores.some(c=>c.tipo===it.tipoContenedor)
+                                  const cantSug=s.contenedores.find(c=>c.tipo===it.tipoContenedor)?.cantidad
+                                  return (
+                                    <tr key={it.itemId} className={`border-b border-gray-50 ${it.seleccionado?'bg-[#EBF2FF]/60':'hover:bg-gray-50'}`}>
+                                      <td className="px-2 py-2.5 text-center">
+                                        <button onClick={()=>toggleItemCotProv('cotsProvFW',fw.uid,it.itemId)}>
+                                          <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${it.seleccionado?'bg-[#1168F8] border-[#1168F8]':'border-gray-300 hover:border-[#1168F8]'}`}>
+                                            {it.seleccionado&&<div className="w-2 h-1.5 border-l-2 border-b-2 border-white" style={{transform:'rotate(-45deg) translate(1px,-1px)'}}/>}
+                                          </div>
+                                        </button>
+                                      </td>
+                                      <td className="px-3 py-2.5">
+                                        <div className="font-medium text-gray-800">{it.descripcion}</div>
+                                        <div className="flex gap-1.5 mt-0.5 flex-wrap">
+                                          {it.tipoContenedor&&<span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{it.tipoContenedor}</span>}
+                                          {coincide&&<span className="text-[9px] bg-[#EBF2FF] text-[#052698] border border-[#93B8FC] px-1.5 py-0.5 rounded-full font-semibold">✓ coincide hoja 1</span>}
+                                        </div>
+                                      </td>
+                                      <td className="px-3 py-2.5 text-right font-mono text-gray-700">USD {fmt(it.valorUnit)}</td>
+                                      <td className="px-3 py-2.5 text-center text-gray-400 font-mono">{it.cantCotizada>0?it.cantCotizada:'—'}</td>
+                                      <td className="px-3 py-2.5 text-center">
+                                        {it.seleccionado?(
+                                          <div className="flex flex-col items-center gap-0.5">
+                                            <input type="text" inputMode="decimal" value={it.cantUsar} onFocus={e=>e.target.select()}
+                                              onChange={e=>setCantUsarCotProv('cotsProvFW',fw.uid,it.itemId,parseNum(e.target.value)||1)}
+                                              className="w-16 px-2 py-1 border border-[#93B8FC] rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]"/>
+                                            {cantSug&&cantSug!==it.cantUsar&&<div className="text-[9px] text-amber-600">hoja 1: {cantSug}</div>}
+                                          </div>
+                                        ):<span className="text-gray-300">—</span>}
+                                      </td>
+                                      <td className="px-3 py-2.5 text-right">
+                                        {it.seleccionado?<span className="font-mono font-semibold text-[#052698]">USD {fmt(it.subtotal)}</span>:<span className="text-gray-300">—</span>}
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          )}
+
                           {/* Seguro alcance */}
-                          <div className="mt-3 pt-2 border-t border-gray-100">
-                            <div className="text-[10px] text-gray-500 font-medium mb-1.5">Alcance del seguro</div>
+                          <div className="px-4 py-3 border-t border-gray-100 bg-gray-50">
+                            <div className="text-[10px] text-gray-500 font-medium mb-2">Alcance del seguro</div>
                             <div className="flex gap-2 flex-wrap">
-                              {([{k:'no',l:'Sin seguro'},{k:'maritimo',l:'Solo tramo maritimo'},{k:'punta_a_punta',l:'Origen a destino final'}] as const).map(o=>(
-                                <button key={o.k} onClick={()=>updateFW(fw.id,'segAlcance',o.k)}
+                              {([{k:'no',l:'Sin seguro'},{k:'maritimo',l:'Solo tramo marítimo'},{k:'punta_a_punta',l:'Origen a destino final'}] as const).map(o=>(
+                                <button key={o.k} onClick={()=>updateSegAlcanceFW(fw.uid,o.k)}
                                   className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-colors ${fw.segAlcance===o.k?'bg-[#1168F8] text-white border-[#1168F8]':'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
                                   {o.l}
                                 </button>
                               ))}
+                              {fw.segAlcance!=='no'&&(
+                                <div className="flex items-center gap-2 mt-2 w-full flex-wrap">
+                                  <select value={fw.seguroModo} onChange={e=>setS(p=>({...p,cotsProvFW:p.cotsProvFW.map(c=>c.uid===fw.uid?{...c,seguroModo:e.target.value as any}:c)}))}
+                                    className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none bg-white">
+                                    <option value="pct">% sobre FOB</option><option value="fijo">Monto fijo USD</option>
+                                  </select>
+                                  <input type="text" inputMode="decimal" value={fw.seguroMonto||''} onFocus={e=>e.target.select()}
+                                    onChange={e=>setS(p=>({...p,cotsProvFW:p.cotsProvFW.map(c=>c.uid===fw.uid?{...c,seguroMonto:parseNum(e.target.value)}:c)}))}
+                                    className="w-24 px-2 py-1 border border-[#93B8FC] rounded text-xs text-right font-mono bg-white focus:outline-none" placeholder="0.00"/>
+                                  <span className="text-[10px] text-gray-400">{fw.seguroModo==='pct'?'%':'USD'}</span>
+                                  {fw.seguroModo==='pct'&&totalFOB>0&&(
+                                    <span className="text-[10px] font-mono text-[#052698] bg-[#EBF2FF] px-2 py-0.5 rounded">= USD {fmt(totalFOB*fw.seguroMonto/100)}</span>
+                                  )}
+                                  {fw.segAlcance==='maritimo'&&<span className="text-[9px] text-amber-600 font-medium">→ Se habilitará seguro terrestre en Bloque 3</span>}
+                                  {fw.segAlcance==='punta_a_punta'&&<span className="text-[9px] text-green-600 font-medium">→ No requiere seguro terrestre adicional</span>}
+                                </div>
+                              )}
                             </div>
-                            {fw.segAlcance!=='no'&&(
-                              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                <span className="text-[10px] text-gray-400">Modalidad</span>
-                                <select value={fw.seguroModo||'pct'} onChange={e=>updateFW(fw.id,'seguroModo',e.target.value)}
-                                  className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white">
-                                  <option value="pct">% sobre FOB</option>
-                                  <option value="fijo">Monto fijo USD</option>
-                                </select>
-                                <input type="text" inputMode="decimal" value={fw.seguroMonto===0?'':fw.seguroMonto} onFocus={e=>e.target.select()}
-                                  onChange={e=>updateFW(fw.id,'seguroMonto',e.target.value)}
-                                  className="w-24 px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] text-right font-mono bg-white" placeholder="0.00"/>
-                                <span className="text-[10px] text-gray-400">{fw.seguroModo==='pct'?'%':'USD'}</span>
-                                {fw.seguroModo==='pct'&&totalFOB>0&&(
-                                  <span className="text-[10px] font-mono text-[#052698] bg-[#EBF2FF] px-2 py-0.5 rounded">= USD {fmt(totalFOB*(parseFloat(String(fw.seguroMonto).replace(',','.'))||0)/100)}</span>
-                                )}
-                                {fw.segAlcance==='maritimo'&&<span className="text-[9px] text-amber-600 font-medium">→ Se habilitara seguro terrestre en Bloque 3</span>}
-                                {fw.segAlcance==='punta_a_punta'&&<span className="text-[9px] text-green-600 font-medium">→ No requiere seguro terrestre adicional</span>}
-                              </div>
-                            )}
                           </div>
+
+                          {/* Fila total */}
+                          {fw.elegida&&(
+                            <div className="flex justify-end px-4 py-2 border-t border-gray-100">
+                              <span className="font-mono font-bold text-[#052698] text-sm">
+                                Total seleccionado: USD {fmt(totalSel)}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )
                   })}
                 </div>
               )}
-
+              {/* Fila manual FW */}
+              <div className="flex items-center gap-2 px-3 py-2.5 border border-dashed border-gray-200 rounded-xl bg-gray-50/50 mt-2">
+                <div className="w-4 h-4 rounded border-2 border-gray-300 flex-shrink-0"/>
+                <span className="text-xs text-gray-400 flex-1 italic">Proveedor sin cotización en el sistema</span>
+                <input className="w-40 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Nombre ForWarder"
+                  id="fw-manual-prov"/>
+                <span className="text-[10px] text-gray-400">USD</span>
+                <input type="text" inputMode="decimal" className="w-24 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:border-[#1168F8] bg-white"
+                  placeholder="0.00" id="fw-manual-monto"/>
+                <button onClick={()=>{
+                  const pEl=document.getElementById('fw-manual-prov') as HTMLInputElement
+                  const mEl=document.getElementById('fw-manual-monto') as HTMLInputElement
+                  if(!pEl?.value||!mEl?.value) return
+                  const nueva:CotProvSel={
+                    uid:uid2(),cotProvId:'',proveedorNombre:pEl.value,referencia:'',
+                    fechaEmision:'',fechaVencimiento:'',tipo:'generica',clienteId:null,
+                    estado:'vigente',usadaEnCots:[],items:[],
+                    elegida:s.cotsProvFW.length===0,
+                    seguroIncluido:false,seguroModo:'pct',seguroMonto:0,segAlcance:'no',
+                    esManual:true,manualMonto:parseNum(mEl.value),
+                  }
+                  setS(p=>({...p,cotsProvFW:[...p.cotsProvFW,nueva]}))
+                  pEl.value='';mEl.value=''
+                }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-white hover:border-[#1168F8] hover:text-[#1168F8] whitespace-nowrap">
+                  + Agregar manual
+                </button>
+              </div>
             </div>
             <div className="flex justify-between items-center px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
-              <span>{fwElegida?`ForWarder elegido: ${fwElegida.proveedor||'Manual'}`:s.cotsFW.length>0?'Ninguno elegido':'Sin cotizaciones'}</span>
+              <span>{fwElegida?`ForWarder elegido: ${fwElegida.proveedorNombre||'Manual'}`:s.cotsProvFW.length>0?'Ninguno elegido':'Sin cotizaciones'}</span>
               <span>Flete: <strong className="font-mono text-gray-800">USD {fmt(subFW)}</strong> + Seguro: <strong className="font-mono text-gray-800">USD {fmt(totalSeg)}</strong></span>
             </div>
           </div>
 
-          {/* ── BLOQUE 2: MODALIDAD + GASTOS POST-ENTREGA CHILE ── */}
+                    {/* ── BLOQUE 2: MODALIDAD + GASTOS POST-ENTREGA CHILE ── */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#0a9e6e] text-white text-[10px] font-bold">2</span>
               <span className="font-medium text-sm text-gray-900">Modalidad de transporte Chile - NOA</span>
+              {cotsChileDisponibles.length>0&&s.optTransp==='A'&&(
+                <div className="ml-auto flex items-center gap-2">
+                  <select onChange={e=>{if(e.target.value){agregarTranspChileDesdeSistema(e.target.value);e.target.value=''}}}
+                    className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
+                    <option value="">+ Cotización transporte del sistema</option>
+                    {(()=>{
+                      const esp=cotsChileDisponibles.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                      const gen=cotsChileDisponibles.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                      return(<>
+                        {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>)}
+                        <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
+                      </>)
+                    })()}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="px-5 py-4">
               {/* Opciones A / B1 / B2 */}
@@ -1033,6 +1275,86 @@ export default function CotizadorPage(){
                   </button>
                 ))}
               </div>
+
+              {/* Cotizaciones transporte Chile-NOA (Opción A) */}
+              {s.optTransp==='A'&&s.cotsProvChile.length>0&&(
+                <div className="border-t border-gray-100 pt-3 mb-3">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Cotizaciones de transporte Chile-NOA</div>
+                  {s.cotsProvChile.map(ct=>{
+                    const vigente=isVigente(ct.fechaVencimiento)
+                    const totalSel=ct.esManual?(ct.manualMonto||0):ct.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
+                    return (
+                      <div key={ct.uid} className={`border-2 rounded-xl overflow-hidden mb-2 ${ct.elegida?'border-[#0a9e6e]':'border-gray-200'}`}>
+                        <div className={`flex items-center gap-0 ${ct.elegida?'bg-green-50':'bg-gray-50'}`}>
+                          <button onClick={()=>elegirCotProv('cotsProvChile',ct.uid)} className="w-10 flex-shrink-0 flex items-center justify-center self-stretch hover:bg-black/5">
+                            <div className={`w-4 h-4 rounded-full border-2 ${ct.elegida?'border-[#0a9e6e] bg-[#0a9e6e]':'border-gray-300 bg-white'}`}>{ct.elegida&&<div className="w-1.5 h-1.5 bg-white rounded-full mx-auto mt-0.5"/>}</div>
+                          </button>
+                          <div className="flex-1 px-3 py-2.5">
+                            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                              <span className="font-semibold text-sm text-gray-900">{ct.proveedorNombre}</span>
+                              {ct.tipo==='especifica'?<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEEDFE] text-[#3C3489]">⭐ Específica</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500">Genérica</span>}
+                              {vigente?<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700">vigente</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700">vencida {fmtFecha(ct.fechaVencimiento)}</span>}
+                              {ct.usadaEnCots.length>0&&<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">⚠ Usada en {ct.usadaEnCots.join(', ')}</span>}
+                              {ct.elegida&&<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0a9e6e] text-white">ELEGIDA</span>}
+                            </div>
+                            <div className="flex gap-4 text-[10px] text-gray-500">
+                              {ct.referencia&&<span className="font-mono">Ref: {ct.referencia}</span>}
+                              {ct.fechaEmision&&<span>Emitida: {fmtFecha(ct.fechaEmision)}</span>}
+                              {ct.fechaVencimiento&&<span>Vence: {fmtFecha(ct.fechaVencimiento)}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 px-3">
+                            {ct.elegida&&totalSel>0&&<span className="font-mono font-bold text-[#0a9e6e] text-sm">USD {fmt(totalSel)}</span>}
+                            <button onClick={()=>eliminarCotProv('cotsProvChile',ct.uid)} className="text-gray-300 hover:text-red-500 text-xs">✕</button>
+                          </div>
+                        </div>
+                        <table className="w-full text-xs border-t border-gray-100">
+                          <thead><tr className="bg-gray-50 border-b border-gray-100">
+                            <th className="w-8 px-2 py-2"></th>
+                            <th className="text-left px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase">Ítem</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Precio unit.</th>
+                            <th className="text-center px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-24">Cant. cot.</th>
+                            <th className="text-center px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Cant. a usar</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Subtotal</th>
+                          </tr></thead>
+                          <tbody>
+                            {ct.items.map(it=>{
+                              const coincide=s.contenedores.some(c=>c.tipo===it.tipoContenedor)
+                              return (
+                                <tr key={it.itemId} className={`border-b border-gray-50 ${it.seleccionado?'bg-green-50/40':'hover:bg-gray-50'}`}>
+                                  <td className="px-2 py-2 text-center">
+                                    <button onClick={()=>toggleItemCotProv('cotsProvChile',ct.uid,it.itemId)}>
+                                      <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${it.seleccionado?'bg-[#0a9e6e] border-[#0a9e6e]':'border-gray-300 hover:border-[#0a9e6e]'}`}>
+                                        {it.seleccionado&&<div className="w-2 h-1.5 border-l-2 border-b-2 border-white" style={{transform:'rotate(-45deg) translate(1px,-1px)'}}/>}
+                                      </div>
+                                    </button>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <div className="font-medium text-gray-800">{it.descripcion}</div>
+                                    {coincide&&<span className="text-[9px] bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full font-semibold">✓ coincide hoja 1</span>}
+                                  </td>
+                                  <td className="px-3 py-2 text-right font-mono text-gray-700">USD {fmt(it.valorUnit)}</td>
+                                  <td className="px-3 py-2 text-center text-gray-400 font-mono">{it.cantCotizada>0?it.cantCotizada:'—'}</td>
+                                  <td className="px-3 py-2 text-center">
+                                    {it.seleccionado?(
+                                      <input type="text" inputMode="decimal" value={it.cantUsar} onFocus={e=>e.target.select()}
+                                        onChange={e=>setCantUsarCotProv('cotsProvChile',ct.uid,it.itemId,parseNum(e.target.value)||1)}
+                                        className="w-16 px-2 py-1 border border-green-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#0a9e6e]"/>
+                                    ):<span className="text-gray-300">—</span>}
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    {it.seleccionado?<span className="font-mono font-semibold text-[#0a9e6e]">USD {fmt(it.subtotal)}</span>:<span className="text-gray-300">—</span>}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
 
               {/* Gastos adicionales Opcion A */}
               {s.optTransp==='A'&&(
@@ -1183,37 +1505,130 @@ export default function CotizadorPage(){
                   <Field label="Elegido (USD total)"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(subTransp)}</div></Field>
                 </div>
               )}
-              {/* Opciones B1/B2: flete por camion */}
+              {/* Opciones B1/B2: cotizaciones de flete terrestre */}
               {s.optTransp!=='A'&&(
                 <div>
+                  {/* Selector del sistema */}
                   {cotsTranspDisponibles.length>0&&(
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-[10px] text-gray-500">Cargar tarifa:</span>
-                      <select onChange={e=>{
-                        if(!e.target.value) return
-                        const cot=cotsTranspDisponibles.find(c=>c.id===e.target.value)
-                        if(!cot) return
-                        const item=(cot.items||[]).find((it:any)=>it.descripcion.toLowerCase().includes(s.destinoNoa.toLowerCase()))||(cot.items||[])[0]
-                        if(item) setS(p=>({...p,ftCamion:item.valor||p.ftCamion,nCamiones:nc}))
-                        e.target.value=''
-                      }} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none" defaultValue="">
-                        <option value="">— Seleccionar —</option>
-                        {(()=>{const {especificas,genericas}=filtrarCotsBloque(cotsTranspDisponibles,clienteSelId);return(<>
-                          {especificas.length>0&&(<optgroup label="Especificas para este cliente">
-                            {especificas.map((c:any)=>(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
-                          </optgroup>)}
-                          <optgroup label="Genericas vigentes">
-                            {genericas.map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
-                          </optgroup>
-                        </>)})()}
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
+                      <span className="text-[10px] text-gray-500">Cotizaciones del sistema:</span>
+                      <select onChange={e=>{if(e.target.value){agregarTranspTerrDesdeSistema(e.target.value);e.target.value=''}}}
+                        className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#b45309]" defaultValue="">
+                        <option value="">+ Cargar cotización</option>
+                        {(()=>{
+                          const esp=cotsTranspDisponibles.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                          const gen=cotsTranspDisponibles.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                          return(<>
+                            {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>)}
+                            <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
+                          </>)
+                        })()}
                       </select>
                     </div>
                   )}
-                  <div className="grid grid-cols-3 gap-3">
-                    <Field label="Flete terrestre (USD/camion)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftCamion} onChange={e=>u('ftCamion',parseNum(e.target.value))} className={inp}/></Field>
-                    <Field label="N camiones"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.nCamiones} onChange={e=>u('nCamiones',parseInt2(e.target.value)||1)} className={inp}/></Field>
-                    <Field label="Subtotal transporte"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(subTransp)}</div></Field>
+
+                  {/* Paneles de cotizaciones cargadas */}
+                  {s.cotsProvTransp.map(ct=>{
+                    const vigente=isVigente(ct.fechaVencimiento)
+                    const totalSel=ct.esManual?(ct.manualMonto||0):ct.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
+                    return (
+                      <div key={ct.uid} className={`border-2 rounded-xl overflow-hidden mb-3 ${ct.elegida?'border-[#b45309]':'border-gray-200'}`}>
+                        <div className={`flex items-center gap-0 ${ct.elegida?'bg-amber-50':'bg-gray-50'}`}>
+                          <button onClick={()=>elegirCotProv('cotsProvTransp',ct.uid)} className="w-10 flex-shrink-0 flex items-center justify-center self-stretch hover:bg-black/5">
+                            <div className={`w-4 h-4 rounded-full border-2 ${ct.elegida?'border-[#b45309] bg-[#b45309]':'border-gray-300 bg-white'}`}>{ct.elegida&&<div className="w-1.5 h-1.5 bg-white rounded-full mx-auto mt-0.5"/>}</div>
+                          </button>
+                          <div className="flex-1 px-3 py-2.5">
+                            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                              <span className="font-semibold text-sm text-gray-900">{ct.proveedorNombre}</span>
+                              {ct.tipo==='especifica'?<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEEDFE] text-[#3C3489]">⭐ Específica</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500">Genérica</span>}
+                              {vigente?<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700">vigente</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700">vencida {fmtFecha(ct.fechaVencimiento)}</span>}
+                              {ct.usadaEnCots.length>0&&<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">⚠ Usada en {ct.usadaEnCots.join(', ')}</span>}
+                              {ct.elegida&&<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#b45309] text-white">ELEGIDA</span>}
+                            </div>
+                            <div className="flex gap-4 text-[10px] text-gray-500">
+                              {ct.referencia&&<span className="font-mono">Ref: {ct.referencia}</span>}
+                              {ct.fechaEmision&&<span>Emitida: {fmtFecha(ct.fechaEmision)}</span>}
+                              {ct.fechaVencimiento&&<span>Vence: {fmtFecha(ct.fechaVencimiento)}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 px-3">
+                            {ct.elegida&&totalSel>0&&<span className="font-mono font-bold text-[#b45309] text-sm">USD {fmt(totalSel)}</span>}
+                            <button onClick={()=>eliminarCotProv('cotsProvTransp',ct.uid)} className="text-gray-300 hover:text-red-500 text-xs">✕</button>
+                          </div>
+                        </div>
+                        <table className="w-full text-xs border-t border-gray-100">
+                          <thead><tr className="bg-gray-50 border-b border-gray-100">
+                            <th className="w-8 px-2 py-2"></th>
+                            <th className="text-left px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase">Ítem</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Precio unit.</th>
+                            <th className="text-center px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-24">Cant. cot.</th>
+                            <th className="text-center px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Cant. a usar</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Subtotal</th>
+                          </tr></thead>
+                          <tbody>
+                            {ct.items.map(it=>{
+                              const coincide=s.contenedores.some(c=>c.tipo===it.tipoContenedor)
+                              return (
+                                <tr key={it.itemId} className={`border-b border-gray-50 ${it.seleccionado?'bg-amber-50/40':'hover:bg-gray-50'}`}>
+                                  <td className="px-2 py-2 text-center">
+                                    <button onClick={()=>toggleItemCotProv('cotsProvTransp',ct.uid,it.itemId)}>
+                                      <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${it.seleccionado?'bg-[#b45309] border-[#b45309]':'border-gray-300 hover:border-[#b45309]'}`}>
+                                        {it.seleccionado&&<div className="w-2 h-1.5 border-l-2 border-b-2 border-white" style={{transform:'rotate(-45deg) translate(1px,-1px)'}}/>}
+                                      </div>
+                                    </button>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <div className="font-medium text-gray-800">{it.descripcion}</div>
+                                    {coincide&&<span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full font-semibold">✓ coincide hoja 1</span>}
+                                  </td>
+                                  <td className="px-3 py-2 text-right font-mono text-gray-700">USD {fmt(it.valorUnit)}</td>
+                                  <td className="px-3 py-2 text-center text-gray-400 font-mono">{it.cantCotizada>0?it.cantCotizada:'—'}</td>
+                                  <td className="px-3 py-2 text-center">
+                                    {it.seleccionado?(
+                                      <input type="text" inputMode="decimal" value={it.cantUsar} onFocus={e=>e.target.select()}
+                                        onChange={e=>setCantUsarCotProv('cotsProvTransp',ct.uid,it.itemId,parseNum(e.target.value)||1)}
+                                        className="w-16 px-2 py-1 border border-amber-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#b45309]"/>
+                                    ):<span className="text-gray-300">—</span>}
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    {it.seleccionado?<span className="font-mono font-semibold text-[#b45309]">USD {fmt(it.subtotal)}</span>:<span className="text-gray-300">—</span>}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )
+                  })}
+
+                  {/* Fila manual */}
+                  <div className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-200 rounded-xl bg-gray-50/50 mb-3">
+                    <div className="w-4 h-4 rounded border-2 border-gray-300 flex-shrink-0"/>
+                    <span className="text-xs text-gray-400 flex-1 italic">Proveedor sin cotización en el sistema</span>
+                    <input className="w-40 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#b45309] bg-white" placeholder="Transportista" id="transp-manual-prov"/>
+                    <span className="text-[10px] text-gray-400">USD</span>
+                    <input type="text" inputMode="decimal" className="w-24 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:border-[#b45309] bg-white" placeholder="0.00" id="transp-manual-monto"/>
+                    <button onClick={()=>{
+                      const pEl=document.getElementById('transp-manual-prov') as HTMLInputElement
+                      const mEl=document.getElementById('transp-manual-monto') as HTMLInputElement
+                      if(!pEl?.value||!mEl?.value) return
+                      const nueva:CotProvSel={uid:uid2(),cotProvId:'',proveedorNombre:pEl.value,referencia:'',fechaEmision:'',fechaVencimiento:'',tipo:'generica',clienteId:null,estado:'vigente',usadaEnCots:[],items:[],elegida:s.cotsProvTransp.length===0,seguroIncluido:false,seguroModo:'pct',seguroMonto:0,segAlcance:'no',esManual:true,manualMonto:parseNum(mEl.value)}
+                      setS(p=>({...p,cotsProvTransp:[...p.cotsProvTransp,nueva]}))
+                      pEl.value='';mEl.value=''
+                    }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-white hover:border-[#b45309] hover:text-[#b45309] whitespace-nowrap">
+                      + Agregar manual
+                    </button>
                   </div>
+
+                  {/* Inputs manual de flete (fallback si no hay cotizaciones del sistema) */}
+                  {s.cotsProvTransp.length===0&&(
+                    <div className="grid grid-cols-3 gap-3">
+                      <Field label="Flete terrestre (USD/camión)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.ftCamion} onChange={e=>u('ftCamion',parseNum(e.target.value))} className={inp}/></Field>
+                      <Field label="N° camiones"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.nCamiones} onChange={e=>u('nCamiones',parseInt2(e.target.value)||1)} className={inp}/></Field>
+                      <Field label="Subtotal transporte"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(subTransp)}</div></Field>
+                    </div>
+                  )}
                 </div>
               )}
               {/* Estadias por demora */}
