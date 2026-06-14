@@ -34,7 +34,6 @@ const NAV: NavItem[] = [
   // ── 3. COMPRAS & PROVEEDORES ───────────────────────
   // Gestión de costos y proveedores de servicio
   { label: 'COMPRAS', section: true },
-  { href: '/precios', label: 'Inteligencia de precios', icon: '📊' },
   { href: '/cotizaciones-proveedores', label: 'Cotizaciones proveedores', icon: '📋' },
 
   // ── 4. FINANZAS ────────────────────────────────────
@@ -44,10 +43,9 @@ const NAV: NavItem[] = [
   { href: '/facturacion/recibidas',       label: 'Facturas recibidas',     icon: '📥' },
   { href: '/facturacion/cte-clientes',    label: 'Cta. cte. clientes',     icon: '👥' },
   { href: '/facturacion/cte-proveedores', label: 'Cta. cte. proveedores',  icon: '📦' },
-  { href: '/tesoreria/caja',              label: 'Caja',                   icon: '💵', soon: true },
-  { href: '/tesoreria/bancos',            label: 'Bancos',                 icon: '🏦', soon: true },
-  { href: '/tesoreria/fondos',            label: 'Fondos por operacion',   icon: '💰', soon: true },
-  { href: '/tesoreria/puertonoa-arg',     label: 'Cta. Puerto NOA Arg.',   icon: '🇦🇷', soon: true },
+  { href: '/fondos',                      label: 'Fondos en custodia',     icon: '🏦' },
+  { href: '/tesoreria/caja',              label: 'Caja Puerto NOA',        icon: '💵', soon: true },
+  { href: '/tesoreria/bancos',            label: 'Bancos Puerto NOA',      icon: '🏛', soon: true },
 
   // ── 5. CONTABILIDAD ────────────────────────────────
   // Registros contables y resultados
@@ -59,10 +57,11 @@ const NAV: NavItem[] = [
   // ── 6. CONFIGURACION ───────────────────────────────
   // Parámetros del sistema — solo admin o técnico
   { label: 'CONFIGURACION', section: true },
-{ href: '/catalogos',              label: 'Catálogos',        icon: '📚' },
-{ href: '/tipos-cambio',           label: 'Tipos de cambio',  icon: '💱' },
-{ href: '/tributos-config',        label: 'Tributos ARCA',    icon: '§',  adminOnly: true },
-{ href: '/usuarios',               label: 'Usuarios',         icon: '◎',  adminOnly: true },
+  { href: '/tipos-cambio',               label: 'Tipos de cambio',  icon: '💱' },
+  { href: '/tributos-config',            label: 'Tributos ARCA',    icon: '§',  adminOnly: true },
+  { href: '/configuracion/rubros',       label: 'Rubros',           icon: '🏷' },
+  { href: '/configuracion/tipos-camion', label: 'Tipos de camion',  icon: '🚛' },
+  { href: '/usuarios',                   label: 'Usuarios',         icon: '◎',  adminOnly: true },
 ]
 
 interface TCWidget {
