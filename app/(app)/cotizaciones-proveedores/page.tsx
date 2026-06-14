@@ -58,6 +58,20 @@ const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:ou
 const fmtN = (n: number) => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const parseN = (v: string) => { const n = parseFloat(String(v).replace(',', '.').replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n }
 
+const CATEGORIAS_ITEM: Record<string, string> = {
+  flete_maritimo:         '🚢 Flete marítimo',
+  thc_destino:            '⚓ THC destino',
+  bl_fee:                 '📄 BL Fee',
+  handling:               '🏗 Handling / Estiba',
+  flete_terrestre:        '🚛 Flete terrestre',
+  desconsolidacion:       '📦 Desconsolidación',
+  almacenaje:             '🏭 Almacenaje',
+  honorarios_despachante: '📋 Honorarios despachante',
+  gastos_aduana:          '🏛 Gastos aduana',
+  seguro:                 '🛡 Seguro',
+  otro:                   '· Otro',
+}
+
 // ── Fila de item con piso/techo si es pct_cif ──
 function ItemRow({ it, i, tiposCont, onChange, onRemove, editMode = true }: {
   it: Item; i: number; tiposCont: any[]; onChange: (i: number, f: string, v: any) => void; onRemove: (i: number) => void; editMode?: boolean
@@ -67,6 +81,7 @@ function ItemRow({ it, i, tiposCont, onChange, onRemove, editMode = true }: {
     <tr className="border-b border-gray-50 hover:bg-gray-50">
       <td className="px-3 py-2.5 font-medium text-gray-800">{it.descripcion}</td>
       <td className="px-3 py-2.5 text-gray-500">{TIPO_CALCULO[it.tipo_calculo] || it.tipo_calculo}</td>
+      <td className="px-3 py-2.5 text-gray-400 text-[10px]">{CATEGORIAS_ITEM[(it as any).categoria] || '—'}</td>
       <td className="px-3 py-2.5 text-gray-500 font-mono text-[11px]">{it.tipo_contenedor || 'Todos'}</td>
       <td className="px-3 py-2.5 font-mono text-[#052698] text-right">
         {esPct ? `${it.valor}%` : `USD ${fmtN(parseN(String(it.valor)))}`}
@@ -80,11 +95,15 @@ function ItemRow({ it, i, tiposCont, onChange, onRemove, editMode = true }: {
   )
   return (
     <div className="mb-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
-      <div className="grid gap-2 items-center mb-2" style={{ gridTemplateColumns: '2fr 140px 100px 110px 24px' }}>
+      <div className="grid gap-2 items-center mb-2" style={{ gridTemplateColumns: '2fr 140px 140px 100px 110px 24px' }}>
         <input value={it.descripcion} onChange={e => onChange(i, 'descripcion', e.target.value)}
           className={inp} placeholder="Descripcion del cargo" />
         <select value={it.tipo_calculo} onChange={e => onChange(i, 'tipo_calculo', e.target.value)} className={inp}>
           {Object.entries(TIPO_CALCULO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <select value={(it as any).categoria || ''} onChange={e => onChange(i, 'categoria', e.target.value)} className={inp}>
+          <option value="">— Categoría —</option>
+          {Object.entries(CATEGORIAS_ITEM).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         <div className="flex items-center gap-1">
           <span className="text-[10px] text-gray-400 flex-shrink-0">{esPct ? '%' : it.tipo_calculo === 'fijo_ars' ? 'ARS' : 'USD'}</span>
@@ -474,6 +493,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
       techo_usd: it.tipo_calculo === 'pct_cif' ? (parseN(String(it.techo_usd)) || 0) : null,
       moneda: it.moneda || 'USD',
       tipo_contenedor: it.tipo_contenedor || null,
+      categoria: (it as any).categoria || null,
       orden: i,
     }))
 
@@ -797,6 +817,7 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, onRelo
       techo_usd: it.tipo_calculo === 'pct_cif' ? (parseN(String(it.techo_usd)) || 0) : null,
       moneda: it.moneda || 'USD',
       tipo_contenedor: it.tipo_contenedor || null,
+      categoria: (it as any).categoria || null,
       orden: i,
     }))
     if (itemsValidos.length > 0) {
@@ -876,7 +897,7 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, onRelo
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {['Descripcion', 'Tipo calculo', 'Contenedor', 'Valor'].map(h => (
+                {['Descripcion', 'Tipo calculo', 'Categoría', 'Contenedor', 'Valor'].map(h => (
                   <th key={h} className="text-left px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
