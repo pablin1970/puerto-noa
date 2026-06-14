@@ -91,7 +91,6 @@ export default function ClientesPage() {
   }
 
   const sel = terceros.find(t => t.id === selId)
-
   const filtrados = terceros.filter(t => {
     const b = buscar.toLowerCase()
     const matchB = !b || t.razon_social.toLowerCase().includes(b) || (t.nombre_fantasia || '').toLowerCase().includes(b) || (t.nro_doc || '').includes(b)
@@ -269,14 +268,8 @@ function FormTercero({ supabase, currentUser, onSave, onCancel }: any) {
     setForm(f => ({ ...f, tipo: f.tipo.includes(t) ? f.tipo.filter(x => x !== t) : [...f.tipo, t] }))
   }
 
-  function addCuenta() {
-    setCuentas(c => [...c, { banco: '', cuenta: '', cbu_iban: '', swift: '', moneda: 'USD', principal: false, notas: '' }])
-  }
-
-  function removeCuenta(i: number) {
-    setCuentas(c => c.filter((_, idx) => idx !== i))
-  }
-
+  function addCuenta() { setCuentas(c => [...c, { banco: '', cuenta: '', cbu_iban: '', swift: '', moneda: 'USD', principal: false, notas: '' }]) }
+  function removeCuenta(i: number) { setCuentas(c => c.filter((_, idx) => idx !== i)) }
   function updateCuenta(i: number, field: string, value: any) {
     setCuentas(c => c.map((ct, idx) => idx === i ? { ...ct, [field]: value } : ct))
   }
@@ -285,7 +278,9 @@ function FormTercero({ supabase, currentUser, onSave, onCancel }: any) {
     if (!form.razon_social) { alert('La razon social es obligatoria'); return }
     if (form.tipo.length === 0) { alert('Selecciona al menos un tipo'); return }
     setSaving(true)
-    const { data: tercero } = await (supabase.from('terceros') as any).insert({ ...form, creado_por: currentUser?.nombre, creado_por_id: currentUser?.id }).select().single()
+    const { data: tercero } = await (supabase.from('terceros') as any).insert({
+      ...form, creado_por: currentUser?.nombre, creado_por_id: currentUser?.id
+    }).select().single()
     if (tercero) {
       const cuentasValidas = cuentas.filter(c => c.banco || c.cuenta || c.cbu_iban)
       if (cuentasValidas.length > 0) {
@@ -407,7 +402,7 @@ function FormTercero({ supabase, currentUser, onSave, onCancel }: any) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco</label>
-                  <input value={c.banco} onChange={e => updateCuenta(i, 'banco', e.target.value)} className={inp} placeholder="ej. Banco Nacion Argentina" />
+                  <input value={c.banco} onChange={e => updateCuenta(i, 'banco', e.target.value)} className={inp} />
                 </div>
                 <div>
                   <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
@@ -465,7 +460,10 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
   const [rubros, setRubros] = useState<any[]>([])
   const [todosRubros, setTodosRubros] = useState<any[]>([])
   const [editando, setEditando] = useState(false)
-  const [form, setForm] = useState({ ...tercero })
+  const [form, setForm] = useState<any>({
+    ...tercero,
+    tipo: Array.isArray(tercero.tipo) ? [...tercero.tipo] : [tercero.tipo].filter(Boolean),
+  })
   const [newContacto, setNewContacto] = useState({ nombre: '', cargo: '', email: '', telefono: '', whatsapp: '', principal: false })
   const [newCuenta, setNewCuenta] = useState({ banco: '', cuenta: '', cbu_iban: '', swift: '', moneda: 'USD', principal: false, notas: '' })
   const [saving, setSaving] = useState(false)
@@ -474,9 +472,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 
   useEffect(() => {
-    loadDocs()
-    loadOps()
-    loadCuentas()
+    loadDocs(); loadOps(); loadCuentas()
     if (tercero.tipo?.includes('proveedor')) loadRubros()
   }, [])
 
@@ -516,9 +512,29 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
     if (data) setOps(data)
   }
 
+  // ── FIX: guardar tipo como array explícito ──
   async function saveData() {
     setSaving(true)
-    await (supabase.from('terceros') as any).update({ ...form, updated_at: new Date().toISOString() }).eq('id', tercero.id)
+    const tipoArray = Array.isArray(form.tipo) ? form.tipo : [form.tipo].filter(Boolean)
+    const { error } = await (supabase.from('terceros') as any).update({
+      razon_social:        form.razon_social,
+      nombre_fantasia:     form.nombre_fantasia    || null,
+      pais:                form.pais,
+      tipo:                tipoArray,
+      tipo_doc:            form.tipo_doc            || null,
+      nro_doc:             form.nro_doc             || null,
+      condicion_iva:       form.condicion_iva       || null,
+      actividad:           form.actividad           || null,
+      nro_importador:      form.nro_importador      || null,
+      dir_fiscal_calle:    form.dir_fiscal_calle    || null,
+      dir_fiscal_ciudad:   form.dir_fiscal_ciudad   || null,
+      dir_fiscal_provincia:form.dir_fiscal_provincia|| null,
+      dir_fiscal_pais:     form.dir_fiscal_pais     || null,
+      dir_fiscal_cp:       form.dir_fiscal_cp       || null,
+      notas:               form.notas               || null,
+      activo:              form.activo,
+    }).eq('id', tercero.id)
+    if (error) console.error('Error guardando tercero:', error)
     await onReload()
     setEditando(false)
     setSaving(false)
@@ -607,7 +623,6 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                 <span>{tercero.pais}</span>
                 {tercero.nro_doc && <span className="font-mono">{tercero.tipo_doc}: {tercero.nro_doc}</span>}
                 {tercero.dir_fiscal_ciudad && <span>{tercero.dir_fiscal_ciudad}</span>}
-                {tercero.dir_fiscal_provincia && <span>{tercero.dir_fiscal_provincia}</span>}
               </div>
               {rubros.length > 0 && (
                 <div className="flex gap-1.5 mt-2 flex-wrap">
@@ -620,7 +635,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
               )}
             </div>
           </div>
-          <button onClick={() => setEditando(!editando)}
+          <button onClick={() => { setForm({ ...tercero, tipo: Array.isArray(tercero.tipo) ? [...tercero.tipo] : [tercero.tipo].filter(Boolean) }); setEditando(!editando) }}
             className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-colors ${editando ? 'bg-gray-100 border-gray-200 text-gray-600' : 'border-[#1168F8] text-[#1168F8] hover:bg-[#EBF2FF]'}`}>
             {editando ? 'Cancelar' : 'Editar'}
           </button>
@@ -647,31 +662,36 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
         <div className="space-y-4">
           {editando ? (
             <>
-              {/* Tipo de tercero — editable */}
               <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
                 <h3 className="font-bold text-sm text-gray-900 mb-3">Tipo de tercero</h3>
                 <div className="flex gap-3">
                   {[
                     { key: 'cliente', label: 'Cliente', icon: '🤝', desc: 'Contrata servicios a Puerto NOA' },
                     { key: 'proveedor', label: 'Proveedor', icon: '📦', desc: 'Presta servicios a Puerto NOA' },
-                  ].map(o => (
-                    <button key={o.key} onClick={() => {
-                      const tipos = form.tipo || []
-                      const nuevos = tipos.includes(o.key) ? tipos.filter((x: string) => x !== o.key) : [...tipos, o.key]
-                      if (nuevos.length === 0) return // al menos uno
-                      setForm((f: any) => ({ ...f, tipo: nuevos }))
-                    }}
-                      className={`flex-1 px-4 py-3 rounded-xl border-2 text-left transition-all ${(form.tipo || []).includes(o.key) ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
-                      <div className="text-base mb-1">{o.icon}</div>
-                      <div className="font-bold text-sm text-gray-900">{o.label}</div>
-                      <div className="text-[10px] text-gray-400">{o.desc}</div>
-                    </button>
-                  ))}
+                  ].map(o => {
+                    const tipoActual = Array.isArray(form.tipo) ? form.tipo : []
+                    const seleccionado = tipoActual.includes(o.key)
+                    return (
+                      <button key={o.key} onClick={() => {
+                        const nuevos = seleccionado
+                          ? tipoActual.filter((x: string) => x !== o.key)
+                          : [...tipoActual, o.key]
+                        if (nuevos.length === 0) return
+                        setForm((f: any) => ({ ...f, tipo: nuevos }))
+                      }}
+                        className={`flex-1 px-4 py-3 rounded-xl border-2 text-left transition-all ${seleccionado ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
+                        <div className="text-base mb-1">{o.icon}</div>
+                        <div className="font-bold text-sm text-gray-900">{o.label}</div>
+                        <div className="text-[10px] text-gray-400">{o.desc}</div>
+                      </button>
+                    )
+                  })}
                 </div>
-                {(form.tipo || []).includes('cliente') && (form.tipo || []).includes('proveedor') && (
+                {Array.isArray(form.tipo) && form.tipo.includes('cliente') && form.tipo.includes('proveedor') && (
                   <div className="mt-2 text-[10px] text-amber-600 font-medium">↔️ Registrado como cliente y proveedor simultáneamente</div>
                 )}
               </div>
+
               <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
                 <h3 className="font-bold text-sm text-gray-900 mb-4">Datos generales</h3>
                 <div className="grid grid-cols-2 gap-3">
@@ -715,6 +735,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                   </div>
                 </div>
               </div>
+
               <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
                 <h3 className="font-bold text-sm text-gray-900 mb-4">Direccion fiscal</h3>
                 <div className="grid grid-cols-2 gap-3">
@@ -742,11 +763,13 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                   </div>
                 </div>
               </div>
+
               <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
                 <h3 className="font-bold text-sm text-gray-900 mb-3">Notas</h3>
                 <textarea value={form.notas || ''} onChange={e => setForm((f: any) => ({ ...f, notas: e.target.value }))}
                   className={inp + ' resize-none'} rows={2} />
               </div>
+
               <div className="flex justify-end gap-2">
                 <button onClick={() => setEditando(false)} className="px-4 py-2 border border-gray-200 rounded-xl text-xs">Cancelar</button>
                 <button onClick={saveData} disabled={saving} className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
@@ -791,26 +814,16 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
             <h3 className="font-bold text-sm text-gray-900 mb-4">Agregar contacto</h3>
             <div className="grid grid-cols-3 gap-3 mb-3">
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre *</label>
-                <input value={newContacto.nombre} onChange={e => setNewContacto(f => ({ ...f, nombre: e.target.value }))} className={inp} placeholder="Nombre completo" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cargo</label>
-                <input value={newContacto.cargo} onChange={e => setNewContacto(f => ({ ...f, cargo: e.target.value }))} className={inp} />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Email</label>
-                <input type="email" value={newContacto.email} onChange={e => setNewContacto(f => ({ ...f, email: e.target.value }))} className={inp} />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Telefono</label>
-                <input value={newContacto.telefono} onChange={e => setNewContacto(f => ({ ...f, telefono: e.target.value }))} className={inp} />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">WhatsApp</label>
-                <input value={newContacto.whatsapp} onChange={e => setNewContacto(f => ({ ...f, whatsapp: e.target.value }))} className={inp} />
-              </div>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre *</label>
+                <input value={newContacto.nombre} onChange={e => setNewContacto(f => ({ ...f, nombre: e.target.value }))} className={inp} /></div>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cargo</label>
+                <input value={newContacto.cargo} onChange={e => setNewContacto(f => ({ ...f, cargo: e.target.value }))} className={inp} /></div>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Email</label>
+                <input type="email" value={newContacto.email} onChange={e => setNewContacto(f => ({ ...f, email: e.target.value }))} className={inp} /></div>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Telefono</label>
+                <input value={newContacto.telefono} onChange={e => setNewContacto(f => ({ ...f, telefono: e.target.value }))} className={inp} /></div>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">WhatsApp</label>
+                <input value={newContacto.whatsapp} onChange={e => setNewContacto(f => ({ ...f, whatsapp: e.target.value }))} className={inp} /></div>
               <div className="flex items-end">
                 <label className="flex items-center gap-2 cursor-pointer pb-2">
                   <input type="checkbox" checked={newContacto.principal} onChange={e => setNewContacto(f => ({ ...f, principal: e.target.checked }))} className="w-4 h-4 rounded" />
@@ -819,33 +832,26 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
               </div>
             </div>
             <div className="flex justify-end">
-              <button onClick={addContacto} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Agregar</button>
+              <button onClick={addContacto} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold">+ Agregar</button>
             </div>
           </div>
           {contactos.length > 0 && (
             <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
               <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
-                    {['Nombre', 'Cargo', 'Email', 'Telefono', 'WhatsApp', ''].map(h => (
-                      <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
+                <thead><tr className="bg-gray-50 border-b border-gray-100">
+                  {['Nombre','Cargo','Email','Telefono','WhatsApp',''].map(h => (
+                    <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr></thead>
                 <tbody>
                   {contactos.map(c => (
                     <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50">
-                      <td className="px-4 py-3 font-semibold text-gray-800">
-                        {c.nombre}
-                        {c.principal && <span className="ml-1.5 px-1.5 py-0.5 bg-[#EBF2FF] text-[#052698] rounded text-[9px] font-bold">Principal</span>}
-                      </td>
+                      <td className="px-4 py-3 font-semibold text-gray-800">{c.nombre}{c.principal && <span className="ml-1.5 px-1.5 py-0.5 bg-[#EBF2FF] text-[#052698] rounded text-[9px] font-bold">Principal</span>}</td>
                       <td className="px-4 py-3 text-gray-500">{c.cargo || '-'}</td>
                       <td className="px-4 py-3 text-[#1168F8]">{c.email || '-'}</td>
                       <td className="px-4 py-3 font-mono text-[10px]">{c.telefono || '-'}</td>
                       <td className="px-4 py-3 font-mono text-[10px] text-green-700">{c.whatsapp || '-'}</td>
-                      <td className="px-4 py-3">
-                        <button onClick={() => deleteContacto(c.id)} className="text-gray-400 hover:text-red-500 transition-colors">X</button>
-                      </td>
+                      <td className="px-4 py-3"><button onClick={() => deleteContacto(c.id)} className="text-gray-400 hover:text-red-500">X</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -860,28 +866,18 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
             <h3 className="font-bold text-sm text-gray-900 mb-4">Agregar cuenta bancaria</h3>
             <div className="grid grid-cols-2 gap-3 mb-3">
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco</label>
-                <input value={newCuenta.banco} onChange={e => setNewCuenta(f => ({ ...f, banco: e.target.value }))} className={inp} placeholder="ej. Banco Nacion Argentina" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco</label>
+                <input value={newCuenta.banco} onChange={e => setNewCuenta(f => ({ ...f, banco: e.target.value }))} className={inp} /></div>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
                 <select value={newCuenta.moneda} onChange={e => setNewCuenta(f => ({ ...f, moneda: e.target.value }))} className={inp}>
                   {MONEDAS.map(m => <option key={m}>{m}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N cuenta</label>
-                <input value={newCuenta.cuenta} onChange={e => setNewCuenta(f => ({ ...f, cuenta: e.target.value }))} className={inp} />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">CBU / IBAN</label>
-                <input value={newCuenta.cbu_iban} onChange={e => setNewCuenta(f => ({ ...f, cbu_iban: e.target.value }))} className={inp} />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">SWIFT / BIC</label>
-                <input value={newCuenta.swift} onChange={e => setNewCuenta(f => ({ ...f, swift: e.target.value }))} className={inp} />
-              </div>
+                </select></div>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N cuenta</label>
+                <input value={newCuenta.cuenta} onChange={e => setNewCuenta(f => ({ ...f, cuenta: e.target.value }))} className={inp} /></div>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">CBU / IBAN</label>
+                <input value={newCuenta.cbu_iban} onChange={e => setNewCuenta(f => ({ ...f, cbu_iban: e.target.value }))} className={inp} /></div>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">SWIFT / BIC</label>
+                <input value={newCuenta.swift} onChange={e => setNewCuenta(f => ({ ...f, swift: e.target.value }))} className={inp} /></div>
               <div className="flex items-end">
                 <label className="flex items-center gap-2 cursor-pointer pb-2">
                   <input type="checkbox" checked={newCuenta.principal} onChange={e => setNewCuenta(f => ({ ...f, principal: e.target.checked }))} className="w-4 h-4 rounded" />
@@ -890,43 +886,33 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
               </div>
             </div>
             <div className="flex justify-end">
-              <button onClick={addCuenta} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Agregar</button>
+              <button onClick={addCuenta} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold">+ Agregar</button>
             </div>
           </div>
-          {cuentas.length > 0 && (
+          {cuentas.length > 0 ? (
             <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
               <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
-                    {['Banco', 'Moneda', 'N Cuenta', 'CBU / IBAN', 'SWIFT', ''].map(h => (
-                      <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
+                <thead><tr className="bg-gray-50 border-b border-gray-100">
+                  {['Banco','Moneda','N Cuenta','CBU / IBAN','SWIFT',''].map(h => (
+                    <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr></thead>
                 <tbody>
                   {cuentas.map(c => (
                     <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50">
-                      <td className="px-4 py-3 font-semibold text-gray-800">
-                        {c.banco || '-'}
-                        {c.principal && <span className="ml-1.5 px-1.5 py-0.5 bg-[#EBF2FF] text-[#052698] rounded text-[9px] font-bold">Principal</span>}
-                      </td>
+                      <td className="px-4 py-3 font-semibold text-gray-800">{c.banco || '-'}{c.principal && <span className="ml-1.5 px-1.5 py-0.5 bg-[#EBF2FF] text-[#052698] rounded text-[9px] font-bold">Principal</span>}</td>
                       <td className="px-4 py-3"><span className="px-2 py-0.5 bg-gray-100 rounded-full text-[10px] font-bold text-gray-600">{c.moneda}</span></td>
-                      <td className="px-4 py-3 font-mono text-[11px] text-gray-700">{c.cuenta || '-'}</td>
+                      <td className="px-4 py-3 font-mono text-[11px]">{c.cuenta || '-'}</td>
                       <td className="px-4 py-3 font-mono text-[10px] text-gray-500">{c.cbu_iban || '-'}</td>
                       <td className="px-4 py-3 font-mono text-[10px] text-gray-500">{c.swift || '-'}</td>
-                      <td className="px-4 py-3">
-                        <button onClick={() => deleteCuenta(c.id)} className="text-gray-400 hover:text-red-500 transition-colors">X</button>
-                      </td>
+                      <td className="px-4 py-3"><button onClick={() => deleteCuenta(c.id)} className="text-gray-400 hover:text-red-500">X</button></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          )}
-          {cuentas.length === 0 && (
-            <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center text-gray-400 text-sm shadow-sm">
-              Sin cuentas bancarias cargadas aun.
-            </div>
+          ) : (
+            <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center text-gray-400 text-sm shadow-sm">Sin cuentas bancarias cargadas.</div>
           )}
         </div>
       )}
@@ -936,29 +922,21 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
             <h3 className="font-bold text-sm text-gray-900 mb-4">Agregar documento</h3>
             <div className="grid grid-cols-4 gap-3 mb-3">
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
                 <select value={docForm.tipo} onChange={e => setDocForm(f => ({ ...f, tipo: e.target.value }))} className={inp}>
                   {Object.entries(TIPOS_DOC_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </div>
+                </select></div>
               {docForm.tipo === 'otro' && (
-                <div>
-                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre *</label>
-                  <input value={docForm.nombre_custom} onChange={e => setDocForm(f => ({ ...f, nombre_custom: e.target.value }))} className={inp} />
-                </div>
+                <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre *</label>
+                  <input value={docForm.nombre_custom} onChange={e => setDocForm(f => ({ ...f, nombre_custom: e.target.value }))} className={inp} /></div>
               )}
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Referencia</label>
-                <input value={docForm.referencia} onChange={e => setDocForm(f => ({ ...f, referencia: e.target.value }))} className={inp} placeholder="N o codigo" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Fecha</label>
-                <input type="date" value={docForm.fecha} onChange={e => setDocForm(f => ({ ...f, fecha: e.target.value }))} className={inp} />
-              </div>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Referencia</label>
+                <input value={docForm.referencia} onChange={e => setDocForm(f => ({ ...f, referencia: e.target.value }))} className={inp} /></div>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Fecha</label>
+                <input type="date" value={docForm.fecha} onChange={e => setDocForm(f => ({ ...f, fecha: e.target.value }))} className={inp} /></div>
             </div>
             <label className={`flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-[#93B8FC] rounded-xl text-xs text-[#1168F8] hover:bg-[#EBF2FF] cursor-pointer transition-colors ${uploading ? 'opacity-60' : ''} w-fit`}>
-              📎 {uploading ? 'Subiendo...' : 'Seleccionar y subir archivo (PDF / imagen)'}
+              📎 {uploading ? 'Subiendo...' : 'Seleccionar y subir archivo'}
               <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" disabled={uploading}
                 onChange={e => { const f = e.target.files?.[0]; if (f) subirDoc(f) }} />
             </label>
@@ -991,26 +969,20 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
       {tab === 'operaciones' && (
         <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
           {ops.length === 0 ? (
-            <div className="p-8 text-center text-gray-400 text-sm">Sin operaciones vinculadas aun.</div>
+            <div className="p-8 text-center text-gray-400 text-sm">Sin operaciones vinculadas.</div>
           ) : (
             <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  {['N Cotizacion', 'Cliente', 'Estado', 'Fecha'].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
-                  ))}
-                </tr>
-              </thead>
+              <thead><tr className="bg-gray-50 border-b border-gray-100">
+                {['N Cotizacion','Cliente','Estado','Fecha'].map(h => (
+                  <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
+                ))}
+              </tr></thead>
               <tbody>
                 {ops.map((o: any) => (
                   <tr key={o.num} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <Link href={`/registro/${o.id}`} className="font-mono text-[#1168F8] hover:underline font-bold">{o.num}</Link>
-                    </td>
+                    <td className="px-4 py-3"><Link href={`/registro/${o.id}`} className="font-mono text-[#1168F8] hover:underline font-bold">{o.num}</Link></td>
                     <td className="px-4 py-3 text-gray-700">{o.cliente}</td>
-                    <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600">{o.estado}</span>
-                    </td>
+                    <td className="px-4 py-3"><span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600">{o.estado}</span></td>
                     <td className="px-4 py-3 text-gray-400 font-mono text-[10px]">{o.created_at?.slice(0, 10)}</td>
                   </tr>
                 ))}
@@ -1027,9 +999,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
             <div className="text-[10px] text-gray-400">Determina en que bloque del cotizador aparece este proveedor</div>
           </div>
           {todosRubros.length === 0 ? (
-            <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 text-center">
-              No hay rubros configurados. Configuralos en Rubros proveedores desde el menu lateral.
-            </div>
+            <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 text-center">No hay rubros configurados.</div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {todosRubros.map(r => {
@@ -1043,24 +1013,10 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                       <div className="text-xs font-semibold truncate" style={asignado ? { color: r.color } : { color: '#374151' }}>{r.nombre}</div>
                       {r.descripcion && <div className="text-[10px] text-gray-400 truncate mt-0.5">{r.descripcion}</div>}
                     </div>
-                    {asignado && (
-                      <span className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: r.color }}>v</span>
-                    )}
+                    {asignado && <span className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style={{ background: r.color }}>v</span>}
                   </button>
                 )
               })}
-            </div>
-          )}
-          {rubros.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Aparece en el cotizador como:</div>
-              <div className="flex flex-wrap gap-2">
-                {rubros.map((r: any) => (
-                  <div key={r.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white" style={{ background: r.color }}>
-                    <span>{r.icono}</span><span>{r.nombre}</span>
-                  </div>
-                ))}
-              </div>
             </div>
           )}
         </div>
