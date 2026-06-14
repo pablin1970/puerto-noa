@@ -960,6 +960,133 @@ function RubrosBloqueABM() {
   )
 }
 
+// ── Formulario de rubro (FUERA del componente para evitar re-mount en cada keystroke) ──
+const ICONOS_RUBRO = [
+  { icono: '🚢', label: 'Barco' },
+  { icono: '🚛', label: 'Camión' },
+  { icono: '🏭', label: 'Depósito' },
+  { icono: '📋', label: 'Trámite' },
+  { icono: '⚓', label: 'Ancla' },
+  { icono: '🛡',  label: 'Escudo' },
+  { icono: '📦', label: 'Caja' },
+  { icono: '✈️', label: 'Avión' },
+  { icono: '🏗',  label: 'Grúa' },
+  { icono: '🔧', label: 'Herramienta' },
+  { icono: '📄', label: 'Documento' },
+  { icono: '🏦', label: 'Banco' },
+  { icono: '💼', label: 'Maletín' },
+  { icono: '🌐', label: 'Global' },
+  { icono: '⚖️', label: 'Balanza' },
+  { icono: '🔍', label: 'Lupa' },
+]
+
+interface FormRubroProps {
+  form: any
+  setForm: (fn: (f: any) => any) => void
+  editId: string | null
+  saving: boolean
+  onGuardar: () => void
+  onCancelar: () => void
+}
+
+function FormRubro({ form, setForm, editId, saving, onGuardar, onCancelar }: FormRubroProps) {
+  const inpCls = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+  return (
+    <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-5 mb-4">
+      <div className="text-xs font-bold text-[#052698] mb-4">{editId ? 'Editar rubro' : 'Nuevo rubro'}</div>
+
+      {/* Selector de ícono */}
+      <div className="mb-3">
+        <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Ícono del rubro</label>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {ICONOS_RUBRO.map(op => (
+            <button key={op.icono} type="button"
+              onClick={() => setForm(f => ({ ...f, icono: op.icono }))}
+              title={op.label}
+              className={`w-9 h-9 rounded-xl text-lg flex items-center justify-center transition-all border-2 ${
+                form.icono === op.icono
+                  ? 'border-[#1168F8] bg-[#1168F8]/10 shadow-sm'
+                  : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+              }`}>
+              {op.icono}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-gray-400">O escribí uno personalizado:</span>
+          <input
+            value={form.icono}
+            onChange={e => setForm(f => ({ ...f, icono: e.target.value }))}
+            className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:border-[#1168F8] bg-white"
+            placeholder="🚢"
+            maxLength={4}
+          />
+          {form.icono && (
+            <span className="text-2xl">{form.icono}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Nombre y color */}
+      <div className="grid grid-cols-4 gap-3 mb-3">
+        <div className="col-span-3">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre del rubro *</label>
+          <input
+            value={form.nombre}
+            onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
+            className={inpCls}
+            placeholder="ej. Freight Forwarder"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Color</label>
+          <div className="flex gap-1.5 items-center">
+            <input type="color" value={form.color || '#6b7280'}
+              onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
+              className="w-9 h-9 rounded-lg border border-gray-200 cursor-pointer flex-shrink-0"/>
+            <input
+              value={form.color || ''}
+              onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
+              className={inpCls}
+              placeholder="#6b7280"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Descripción */}
+      <div className="mb-4">
+        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Descripción — se muestra en la ficha del proveedor</label>
+        <input
+          value={form.descripcion}
+          onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))}
+          className={inpCls}
+          placeholder="ej. Agentes de carga marítima internacional"
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={form.activo}
+            onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))}
+            className="w-4 h-4 rounded"/>
+          <span className="text-xs text-gray-600 font-medium">Rubro activo</span>
+        </label>
+        <div className="flex gap-2">
+          <button type="button" onClick={onCancelar}
+            className="px-4 py-2 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50 bg-white">
+            Cancelar
+          </button>
+          <button type="button" onClick={onGuardar} disabled={saving}
+            className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── ABM de rubros de proveedores ──────────────────────────────────────────────
 const RUBROS_DEFAULT = [
   { icono: '🚢', nombre: 'Freight Forwarder',       descripcion: 'Agentes de carga marítima internacional', color: '#1168F8' },
@@ -971,6 +1098,8 @@ const RUBROS_DEFAULT = [
   { icono: '📦', nombre: 'Otro',                     descripcion: 'Otros servicios relacionados',             color: '#6b7280' },
 ]
 
+const RUBRO_VACIO = { icono: '', nombre: '', descripcion: '', color: '#6b7280', activo: true }
+
 function RubrosProveedorABM() {
   const supabase = useMemo(() => createClient(), [])
   const [rubros, setRubros] = useState<any[]>([])
@@ -978,10 +1107,7 @@ function RubrosProveedorABM() {
   const [showNew, setShowNew] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const inpCls = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
-
-  const vacio = { icono: '', nombre: '', descripcion: '', color: '#6b7280', activo: true }
-  const [form, setForm] = useState<any>({ ...vacio })
+  const [form, setForm] = useState<any>({ ...RUBRO_VACIO })
 
   useEffect(() => { load() }, [])
 
@@ -999,9 +1125,7 @@ function RubrosProveedorABM() {
       const r = RUBROS_DEFAULT[i]
       const existe = rubros.find(x => x.nombre.toLowerCase() === r.nombre.toLowerCase())
       if (!existe) {
-        await (supabase.from('proveedor_rubros') as any).insert({
-          ...r, activo: true, orden: rubros.length + i + 1
-        })
+        await (supabase.from('proveedor_rubros') as any).insert({ ...r, activo: true, orden: rubros.length + i + 1 })
       }
     }
     await load()
@@ -1014,19 +1138,19 @@ function RubrosProveedorABM() {
     setShowNew(false)
   }
 
-  function cancelForm() { setEditId(null); setShowNew(false); setForm({ ...vacio }) }
+  function cancelForm() { setEditId(null); setShowNew(false); setForm({ ...RUBRO_VACIO }) }
 
   async function guardar() {
     if (!form.nombre.trim()) { alert('Ingresá el nombre del rubro'); return }
     setSaving(true)
-    const payload = {
+    const payload: any = {
       icono: form.icono || null,
       nombre: form.nombre.trim(),
       descripcion: form.descripcion || null,
       color: form.color || '#6b7280',
       activo: form.activo,
-      orden: editId ? undefined : (rubros.length + 1),
     }
+    if (!editId) payload.orden = rubros.length + 1
     if (editId) {
       await (supabase.from('proveedor_rubros') as any).update(payload).eq('id', editId)
     } else {
@@ -1049,53 +1173,6 @@ function RubrosProveedorABM() {
     setRubros(prev => prev.filter(r => r.id !== id))
   }
 
-  const FormRubro = () => (
-    <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-5 mb-4">
-      <div className="text-xs font-bold text-[#052698] mb-4">{editId ? 'Editar rubro' : 'Nuevo rubro'}</div>
-      <div className="grid grid-cols-5 gap-3 mb-3">
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Ícono</label>
-          <input value={form.icono} onChange={e => setForm((f: any) => ({ ...f, icono: e.target.value }))}
-            className={inpCls} placeholder="🚢" maxLength={4}/>
-        </div>
-        <div className="col-span-3">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre del rubro *</label>
-          <input value={form.nombre} onChange={e => setForm((f: any) => ({ ...f, nombre: e.target.value }))}
-            className={inpCls} placeholder="ej. Freight Forwarder"/>
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Color</label>
-          <div className="flex gap-1.5 items-center">
-            <input type="color" value={form.color || '#6b7280'}
-              onChange={e => setForm((f: any) => ({ ...f, color: e.target.value }))}
-              className="w-9 h-9 rounded-lg border border-gray-200 cursor-pointer flex-shrink-0"/>
-            <input value={form.color || ''} onChange={e => setForm((f: any) => ({ ...f, color: e.target.value }))}
-              className={inpCls} placeholder="#6b7280"/>
-          </div>
-        </div>
-      </div>
-      <div className="mb-4">
-        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Descripción — se muestra en la ficha del proveedor</label>
-        <input value={form.descripcion} onChange={e => setForm((f: any) => ({ ...f, descripcion: e.target.value }))}
-          className={inpCls} placeholder="ej. Agentes de carga marítima internacional"/>
-      </div>
-      <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={form.activo} onChange={e => setForm((f: any) => ({ ...f, activo: e.target.checked }))} className="w-4 h-4 rounded"/>
-          <span className="text-xs text-gray-600 font-medium">Rubro activo</span>
-        </label>
-        <div className="flex gap-2">
-          <button onClick={cancelForm}
-            className="px-4 py-2 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50 bg-white">Cancelar</button>
-          <button onClick={guardar} disabled={saving}
-            className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
-            {saving ? 'Guardando...' : 'Guardar'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -1114,7 +1191,7 @@ function RubrosProveedorABM() {
             </button>
           )}
           {!showNew && !editId && (
-            <button onClick={() => { setShowNew(true); setForm({ ...vacio }) }}
+            <button onClick={() => { setShowNew(true); setForm({ ...RUBRO_VACIO }) }}
               className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-semibold hover:bg-[#0a4fc4] shadow-sm">
               + Nuevo rubro
             </button>
@@ -1127,7 +1204,16 @@ function RubrosProveedorABM() {
         Luego en <strong>Rubros por bloque</strong> configurás en qué bloque del cotizador aparece cada rubro.
       </div>
 
-      {(showNew || editId) && <FormRubro />}
+      {(showNew || editId) && (
+        <FormRubro
+          form={form}
+          setForm={setForm}
+          editId={editId}
+          saving={saving}
+          onGuardar={guardar}
+          onCancelar={cancelForm}
+        />
+      )}
 
       <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
         {loading ? (
@@ -1154,28 +1240,20 @@ function RubrosProveedorABM() {
             <tbody>
               {rubros.map(r => (
                 <tr key={r.id} className={`border-b border-gray-50 transition-colors group ${r.activo === false ? 'opacity-40' : 'hover:bg-blue-50/20'}`}>
-                  {/* Ícono */}
                   <td className="px-4 py-3 text-xl w-12">{r.icono || '—'}</td>
-                  {/* Nombre con badge de color */}
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold"
-                        style={{ background: (r.color || '#6b7280') + '20', color: r.color || '#6b7280' }}>
-                        {r.nombre}
-                      </span>
-                    </div>
+                    <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                      style={{ background: (r.color || '#6b7280') + '20', color: r.color || '#6b7280' }}>
+                      {r.nombre}
+                    </span>
                   </td>
-                  {/* Descripción */}
                   <td className="px-4 py-3 text-gray-500">{r.descripcion || '—'}</td>
-                  {/* Color */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-md border border-gray-200 flex-shrink-0"
-                        style={{ background: r.color || '#6b7280' }}/>
+                      <div className="w-5 h-5 rounded-md border border-gray-200 flex-shrink-0" style={{ background: r.color || '#6b7280' }}/>
                       <span className="font-mono text-[10px] text-gray-400">{r.color || '—'}</span>
                     </div>
                   </td>
-                  {/* Estado toggle */}
                   <td className="px-4 py-3">
                     <button onClick={() => toggleActivo(r)}
                       className={`px-2 py-0.5 rounded-full text-[10px] font-semibold cursor-pointer transition-all ${
@@ -1186,7 +1264,6 @@ function RubrosProveedorABM() {
                       {r.activo !== false ? 'Activo' : 'Inactivo'}
                     </button>
                   </td>
-                  {/* Acciones */}
                   <td className="px-4 py-3">
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={() => startEdit(r)}
