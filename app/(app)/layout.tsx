@@ -59,11 +59,10 @@ const NAV: NavItem[] = [
   // ── 6. CONFIGURACION ───────────────────────────────
   // Parámetros del sistema — solo admin o técnico
   { label: 'CONFIGURACION', section: true },
-  { href: '/tipos-cambio',               label: 'Tipos de cambio',  icon: '💱' },
-  { href: '/tributos-config',            label: 'Tributos ARCA',    icon: '§',  adminOnly: true },
-  { href: '/configuracion/rubros',       label: 'Rubros',           icon: '🏷' },
-  { href: '/configuracion/tipos-camion', label: 'Tipos de camion',  icon: '🚛' },
-  { href: '/usuarios',                   label: 'Usuarios',         icon: '◎',  adminOnly: true },
+{ href: '/catalogos',              label: 'Catálogos',        icon: '📚' },
+{ href: '/tipos-cambio',           label: 'Tipos de cambio',  icon: '💱' },
+{ href: '/tributos-config',        label: 'Tributos ARCA',    icon: '§',  adminOnly: true },
+{ href: '/usuarios',               label: 'Usuarios',         icon: '◎',  adminOnly: true },
 ]
 
 interface TCWidget {
