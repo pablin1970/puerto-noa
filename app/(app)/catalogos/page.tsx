@@ -718,7 +718,11 @@ function RubrosBloqueABM() {
   const [rubros, setRubros] = useState<any[]>([])
   const [asignaciones, setAsignaciones] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState<string | null>(null)
+  const [guardando, setGuardando] = useState(false)
+  // Set de keys "bloque-rubroId" que están activos localmente
+  const [activosLocal, setActivosLocal] = useState<Set<string>>(new Set())
+  const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -726,54 +730,101 @@ function RubrosBloqueABM() {
     setLoading(true)
     const [rubRes, asnRes] = await Promise.all([
       supabase.from('proveedor_rubros').select('id,nombre').order('nombre'),
-      supabase.from('cotizador_bloque_rubros').select('*'),
+      supabase.from('cotizador_bloque_rubros').select('*').eq('activo', true),
     ])
     if (rubRes.data) setRubros(rubRes.data)
-    if (asnRes.data) setAsignaciones(asnRes.data)
+    if (asnRes.data) {
+      setAsignaciones(asnRes.data)
+      const keys = new Set<string>(asnRes.data.map((a: any) => `${a.bloque}-${a.rubro_id}`))
+      setActivosLocal(keys)
+    }
+    setDirty(false)
     setLoading(false)
   }
 
-  function isAsignado(bloque: number, rubroId: string) {
-    return asignaciones.some(a => a.bloque === bloque && a.rubro_id === rubroId && a.activo !== false)
-  }
-
-  async function toggleAsignacion(bloque: number, bloqueNombre: string, rubroId: string) {
+  function toggleLocal(bloque: number, rubroId: string) {
     const key = `${bloque}-${rubroId}`
-    setSaving(key)
-    const existente = asignaciones.find(a => a.bloque === bloque && a.rubro_id === rubroId)
-
-    if (existente) {
-      // Toggle activo
-      const nuevoActivo = !existente.activo
-      await (supabase.from('cotizador_bloque_rubros') as any)
-        .update({ activo: nuevoActivo })
-        .eq('id', existente.id)
-      setAsignaciones(prev => prev.map(a =>
-        a.id === existente.id ? { ...a, activo: nuevoActivo } : a
-      ))
-    } else {
-      // Crear nueva asignación
-      const { data } = await (supabase.from('cotizador_bloque_rubros') as any)
-        .insert({ bloque, bloque_nombre: bloqueNombre, rubro_id: rubroId, activo: true })
-        .select()
-        .single()
-      if (data) setAsignaciones(prev => [...prev, data])
-    }
-    setSaving(null)
+    setActivosLocal(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) { next.delete(key) } else { next.add(key) }
+      return next
+    })
+    setDirty(true)
   }
+
+  async function guardarCambios() {
+    setSaving(true)
+    // Calcular diferencias
+    const existentes = new Set<string>(asignaciones.map((a: any) => `${a.bloque}-${a.rubro_id}`))
+    const agregar = [...activosLocal].filter(k => !existentes.has(k))
+    const quitar  = [...existentes].filter(k => !activosLocal.has(k))
+
+    // Insertar nuevos
+    if (agregar.length > 0) {
+      const rows = agregar.map(k => {
+        const [bloqueStr, rubroId] = k.split('-').reduce((acc: string[], v, i, arr) => {
+          if (i === 0) return [v, arr.slice(1).join('-')]
+          return acc
+        }, [] as string[])
+        const bloqueNum = parseInt(bloqueStr)
+        const bloqueNombre = BLOQUES_COTIZADOR.find(b => b.num === bloqueNum)?.label || ''
+        return { bloque: bloqueNum, bloque_nombre: bloqueNombre, rubro_id: rubroId, activo: true }
+      })
+      await (supabase.from('cotizador_bloque_rubros') as any).insert(rows)
+    }
+
+    // Eliminar los que se quitaron
+    if (quitar.length > 0) {
+      for (const k of quitar) {
+        const asnExistente = asignaciones.find((a: any) => `${a.bloque}-${a.rubro_id}` === k)
+        if (asnExistente) {
+          await supabase.from('cotizador_bloque_rubros').delete().eq('id', asnExistente.id)
+        }
+      }
+    }
+
+    await load()
+    setSaving(false)
+    setDirty(false)
+  }
+
+  function cancelarCambios() {
+    // Restaurar desde asignaciones actuales
+    const keys = new Set<string>(asignaciones.map((a: any) => `${a.bloque}-${a.rubro_id}`))
+    setActivosLocal(keys)
+    setDirty(false)
+  }
+
+  const countBloque = (num: number) =>
+    [...activosLocal].filter(k => k.startsWith(`${num}-`)).length
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="font-bold text-base text-gray-900">Rubros por bloque del cotizador</h2>
-        <p className="text-xs text-gray-400 mt-0.5">
-          Configurá qué rubros de proveedores aparecen disponibles en cada bloque al armar un presupuesto
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-bold text-base text-gray-900">Rubros por bloque del cotizador</h2>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Tildá los rubros que aplican a cada bloque. Los cambios se guardan con el botón "Guardar cambios".
+          </p>
+        </div>
+        {dirty && (
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-amber-600 font-medium">Cambios sin guardar</span>
+            <button onClick={cancelarCambios}
+              className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button onClick={guardarCambios} disabled={saving}
+              className="px-4 py-1.5 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
+              {saving ? 'Guardando...' : 'Guardar cambios'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700">
-        💡 Tildá los rubros que aplican a cada bloque. Al cargar una cotización de proveedor en el cotizador,
-        el sistema filtrará proveedores y cotizaciones según esta configuración.
+        💡 Tildá los rubros que aplican a cada bloque y presioná <strong>Guardar cambios</strong>.
+        Podés modificar la configuración cuando quieras volviendo a este tab.
       </div>
 
       {loading ? (
@@ -785,10 +836,7 @@ function RubrosBloqueABM() {
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {BLOQUES_COTIZADOR.map(bloque => {
-            const asignadosEnBloque = asignaciones
-              .filter(a => a.bloque === bloque.num && a.activo !== false)
-              .length
-
+            const cant = countBloque(bloque.num)
             return (
               <div key={bloque.num}
                 className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
@@ -805,7 +853,7 @@ function RubrosBloqueABM() {
                   </div>
                   <div className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
                     style={{ background: bloque.color + '20', color: bloque.color }}>
-                    {asignadosEnBloque} rubro(s) asignado(s)
+                    {cant} rubro(s)
                   </div>
                 </div>
 
@@ -813,39 +861,39 @@ function RubrosBloqueABM() {
                 <div className="px-5 py-4">
                   <div className="grid grid-cols-3 gap-2">
                     {rubros.map(rubro => {
-                      const asignado = isAsignado(bloque.num, rubro.id)
                       const key = `${bloque.num}-${rubro.id}`
-                      const guardando = saving === key
+                      const activo = activosLocal.has(key)
 
                       return (
                         <button
                           key={rubro.id}
-                          onClick={() => toggleAsignacion(bloque.num, bloque.label, rubro.id)}
-                          disabled={guardando}
-                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all text-xs font-medium ${
-                            asignado
-                              ? 'border-current text-white'
+                          onClick={() => toggleLocal(bloque.num, rubro.id)}
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all text-xs font-medium cursor-pointer ${
+                            activo
+                              ? 'text-white'
                               : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                          } ${guardando ? 'opacity-50' : ''}`}
-                          style={asignado ? { background: bloque.color, borderColor: bloque.color } : {}}
+                          }`}
+                          style={activo
+                            ? { background: bloque.color, borderColor: bloque.color }
+                            : {}}
                         >
                           {/* Checkbox visual */}
-                          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
-                            asignado ? 'bg-white border-white' : 'border-gray-300 bg-white'
-                          }`}>
-                            {asignado && (
-                              <div className="w-2 h-1.5 border-l-2 border-b-2 border-current"
-                                style={{ color: bloque.color, transform: 'rotate(-45deg) translate(1px,-1px)' }}/>
+                          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                            activo ? 'bg-white' : 'border-gray-300 bg-white'
+                          }`}
+                            style={activo ? { borderColor: 'white' } : {}}>
+                            {activo && (
+                              <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                                <path d="M1 4L3.5 6.5L9 1" stroke={bloque.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
                             )}
                           </div>
-                          <span className="truncate">
-                            {guardando ? '...' : rubro.nombre}
-                          </span>
+                          <span className="truncate">{rubro.nombre}</span>
                         </button>
                       )
                     })}
                   </div>
-                  {asignadosEnBloque === 0 && (
+                  {cant === 0 && (
                     <div className="mt-3 text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                       ⚠ Sin rubros asignados — este bloque no mostrará proveedores del sistema al cotizar
                     </div>
@@ -857,17 +905,33 @@ function RubrosBloqueABM() {
         </div>
       )}
 
-      {/* Preview de la configuración actual */}
-      {!loading && rubros.length > 0 && (
+      {/* Botón guardar también al pie si hay cambios */}
+      {dirty && (
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={cancelarCambios}
+            className="px-4 py-2 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50">
+            Cancelar
+          </button>
+          <button onClick={guardarCambios} disabled={saving}
+            className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
+            {saving ? 'Guardando...' : 'Guardar cambios'}
+          </button>
+        </div>
+      )}
+
+      {/* Resumen */}
+      {!loading && rubros.length > 0 && !dirty && (
         <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-          <div className="text-xs font-bold text-gray-700 mb-3">Resumen de configuración actual</div>
+          <div className="text-xs font-bold text-gray-700 mb-3">Configuración actual</div>
           <div className="space-y-2">
             {BLOQUES_COTIZADOR.map(bloque => {
-              const rubrosDelBloque = asignaciones
-                .filter(a => a.bloque === bloque.num && a.activo !== false)
-                .map(a => rubros.find(r => r.id === a.rubro_id)?.nombre)
+              const rubrosDelBloque = [...activosLocal]
+                .filter(k => k.startsWith(`${bloque.num}-`))
+                .map(k => {
+                  const rubroId = k.substring(k.indexOf('-') + 1)
+                  return rubros.find(r => r.id === rubroId)?.nombre
+                })
                 .filter(Boolean)
-
               return (
                 <div key={bloque.num} className="flex items-start gap-3 text-xs">
                   <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5"
