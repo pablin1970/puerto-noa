@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 
-type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos'
+type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'rubros_bloques'
 
 const TABS = [
   { key: 'categorias',    label: 'Categorías de precio', icon: '🏷' },
@@ -13,6 +13,7 @@ const TABS = [
   { key: 'contenedores',  label: 'Tipos de contenedor',  icon: '📦' },
   { key: 'camiones',      label: 'Tipos de camión',      icon: '🚛' },
   { key: 'fondos',        label: 'Fondos en custodia',   icon: '🏦' },
+  { key: 'rubros_bloques', label: 'Rubros por bloque',    icon: '⚙️' },
 ] as const
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -429,6 +430,9 @@ export default function CatalogosPage() {
 
       {/* ── FONDOS EN CUSTODIA ── */}
       {tab === 'fondos' && <FondosCuentasABM />}
+
+      {/* ── RUBROS POR BLOQUE ── */}
+      {tab === 'rubros_bloques' && <RubrosBloqueABM />}
     </div>
   )
 }
@@ -697,6 +701,193 @@ function FondosCuentasABM() {
           </table>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── Configuración de rubros por bloque del cotizador ─────────────────────────
+const BLOQUES_COTIZADOR = [
+  { num: 1, label: 'Bloque 1 — ForWarder',            color: '#1168F8', bg: '#EBF2FF', desc: 'Flete marítimo, handling, gastos naviero' },
+  { num: 2, label: 'Bloque 2 — Transporte Chile-NOA', color: '#0a9e6e', bg: '#E1F5EE', desc: 'Transporte de carga Chile a Argentina' },
+  { num: 3, label: 'Bloque 3 — Flete terrestre',      color: '#b45309', bg: '#FEF3C7', desc: 'Camiones, contenedores, estadías' },
+  { num: 4, label: 'Bloque 4 — Gastos Argentina',     color: '#6b21a8', bg: '#F3E8FF', desc: 'Despachante, gastos aduaneros, otros ARG' },
+]
+
+function RubrosBloqueABM() {
+  const supabase = useMemo(() => createClient(), [])
+  const [rubros, setRubros] = useState<any[]>([])
+  const [asignaciones, setAsignaciones] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState<string | null>(null)
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    const [rubRes, asnRes] = await Promise.all([
+      supabase.from('proveedor_rubros').select('id,nombre').order('nombre'),
+      supabase.from('cotizador_bloque_rubros').select('*'),
+    ])
+    if (rubRes.data) setRubros(rubRes.data)
+    if (asnRes.data) setAsignaciones(asnRes.data)
+    setLoading(false)
+  }
+
+  function isAsignado(bloque: number, rubroId: string) {
+    return asignaciones.some(a => a.bloque === bloque && a.rubro_id === rubroId && a.activo !== false)
+  }
+
+  async function toggleAsignacion(bloque: number, bloqueNombre: string, rubroId: string) {
+    const key = `${bloque}-${rubroId}`
+    setSaving(key)
+    const existente = asignaciones.find(a => a.bloque === bloque && a.rubro_id === rubroId)
+
+    if (existente) {
+      // Toggle activo
+      const nuevoActivo = !existente.activo
+      await (supabase.from('cotizador_bloque_rubros') as any)
+        .update({ activo: nuevoActivo })
+        .eq('id', existente.id)
+      setAsignaciones(prev => prev.map(a =>
+        a.id === existente.id ? { ...a, activo: nuevoActivo } : a
+      ))
+    } else {
+      // Crear nueva asignación
+      const { data } = await (supabase.from('cotizador_bloque_rubros') as any)
+        .insert({ bloque, bloque_nombre: bloqueNombre, rubro_id: rubroId, activo: true })
+        .select()
+        .single()
+      if (data) setAsignaciones(prev => [...prev, data])
+    }
+    setSaving(null)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="font-bold text-base text-gray-900">Rubros por bloque del cotizador</h2>
+        <p className="text-xs text-gray-400 mt-0.5">
+          Configurá qué rubros de proveedores aparecen disponibles en cada bloque al armar un presupuesto
+        </p>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700">
+        💡 Tildá los rubros que aplican a cada bloque. Al cargar una cotización de proveedor en el cotizador,
+        el sistema filtrará proveedores y cotizaciones según esta configuración.
+      </div>
+
+      {loading ? (
+        <div className="p-8 text-center text-gray-400">Cargando...</div>
+      ) : rubros.length === 0 ? (
+        <div className="p-8 text-center text-gray-400">
+          No hay rubros de proveedores cargados. Agregá rubros en el módulo de Clientes y Proveedores primero.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4">
+          {BLOQUES_COTIZADOR.map(bloque => {
+            const asignadosEnBloque = asignaciones
+              .filter(a => a.bloque === bloque.num && a.activo !== false)
+              .length
+
+            return (
+              <div key={bloque.num}
+                className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                {/* Header del bloque */}
+                <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3"
+                  style={{ background: bloque.bg }}>
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                    style={{ background: bloque.color }}>
+                    {bloque.num}
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-sm" style={{ color: bloque.color }}>{bloque.label}</div>
+                    <div className="text-[10px] text-gray-500">{bloque.desc}</div>
+                  </div>
+                  <div className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                    style={{ background: bloque.color + '20', color: bloque.color }}>
+                    {asignadosEnBloque} rubro(s) asignado(s)
+                  </div>
+                </div>
+
+                {/* Grid de rubros */}
+                <div className="px-5 py-4">
+                  <div className="grid grid-cols-3 gap-2">
+                    {rubros.map(rubro => {
+                      const asignado = isAsignado(bloque.num, rubro.id)
+                      const key = `${bloque.num}-${rubro.id}`
+                      const guardando = saving === key
+
+                      return (
+                        <button
+                          key={rubro.id}
+                          onClick={() => toggleAsignacion(bloque.num, bloque.label, rubro.id)}
+                          disabled={guardando}
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all text-xs font-medium ${
+                            asignado
+                              ? 'border-current text-white'
+                              : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                          } ${guardando ? 'opacity-50' : ''}`}
+                          style={asignado ? { background: bloque.color, borderColor: bloque.color } : {}}
+                        >
+                          {/* Checkbox visual */}
+                          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                            asignado ? 'bg-white border-white' : 'border-gray-300 bg-white'
+                          }`}>
+                            {asignado && (
+                              <div className="w-2 h-1.5 border-l-2 border-b-2 border-current"
+                                style={{ color: bloque.color, transform: 'rotate(-45deg) translate(1px,-1px)' }}/>
+                            )}
+                          </div>
+                          <span className="truncate">
+                            {guardando ? '...' : rubro.nombre}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {asignadosEnBloque === 0 && (
+                    <div className="mt-3 text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                      ⚠ Sin rubros asignados — este bloque no mostrará proveedores del sistema al cotizar
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Preview de la configuración actual */}
+      {!loading && rubros.length > 0 && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+          <div className="text-xs font-bold text-gray-700 mb-3">Resumen de configuración actual</div>
+          <div className="space-y-2">
+            {BLOQUES_COTIZADOR.map(bloque => {
+              const rubrosDelBloque = asignaciones
+                .filter(a => a.bloque === bloque.num && a.activo !== false)
+                .map(a => rubros.find(r => r.id === a.rubro_id)?.nombre)
+                .filter(Boolean)
+
+              return (
+                <div key={bloque.num} className="flex items-start gap-3 text-xs">
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5"
+                    style={{ background: bloque.color }}>
+                    {bloque.num}
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-medium text-gray-700">{bloque.label.split('—')[1]?.trim()}: </span>
+                    {rubrosDelBloque.length > 0 ? (
+                      <span className="text-gray-500">{rubrosDelBloque.join(', ')}</span>
+                    ) : (
+                      <span className="text-amber-500 italic">sin rubros asignados</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
