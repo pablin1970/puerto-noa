@@ -445,7 +445,7 @@ function FondosCuentasABM() {
   const vacio = {
     nombre: '', tipo: 'banco', moneda: 'USD', pais: 'Argentina',
     banco: '', nro_cuenta: '', cbu_iban: '', swift: '',
-    titular: '', notas: '', activo: true, orden: 0,
+    titular: '', responsable: '', firmantes: '', notas: '', activo: true, orden: 0,
   }
   const [form, setForm] = useState<any>({ ...vacio })
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -474,7 +474,8 @@ function FondosCuentasABM() {
       nombre: form.nombre, tipo: form.tipo, moneda: form.moneda, pais: form.pais,
       banco: form.banco || null, nro_cuenta: form.nro_cuenta || null,
       cbu_iban: form.cbu_iban || null, swift: form.swift || null,
-      titular: form.titular || null, notas: form.notas || null,
+      titular: form.titular || null, responsable: form.responsable || null,
+      firmantes: form.firmantes || null, notas: form.notas || null,
       activo: form.activo, orden: parseInt(form.orden) || 0,
     }
     if (editId) {
@@ -575,6 +576,24 @@ function FondosCuentasABM() {
         </>
       )}
 
+      {/* Responsable — siempre visible */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">
+            {form.tipo === 'caja' ? 'Responsable de la caja' : 'Responsable / Apoderado'}
+          </label>
+          <input value={form.responsable || ''} onChange={e => setForm((f: any) => ({ ...f, responsable: e.target.value }))}
+            className={inp} placeholder="Nombre del responsable"/>
+        </div>
+        {form.tipo === 'banco' && (
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Usuarios / Firmantes autorizados</label>
+            <input value={form.firmantes || ''} onChange={e => setForm((f: any) => ({ ...f, firmantes: e.target.value }))}
+              className={inp} placeholder="ej. Pablo Mealla, Rene Mealla"/>
+          </div>
+        )}
+      </div>
+
       <div className="mb-3">
         <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas / observaciones</label>
         <input value={form.notas || ''} onChange={e => setForm((f: any) => ({ ...f, notas: e.target.value }))}
@@ -628,7 +647,7 @@ function FondosCuentasABM() {
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {['#','Nombre','País','Tipo','Moneda','Banco','N° Cuenta','CBU/IBAN','SWIFT','Titular','Estado',''].map(h => (
+                {['#','Nombre','País','Tipo','Moneda','Banco','N° Cuenta','CBU/IBAN','SWIFT','Titular','Responsable','Firmantes','Estado',''].map(h => (
                   <th key={h} className="text-left px-3 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -650,6 +669,8 @@ function FondosCuentasABM() {
                   <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.cbu_iban || '—'}</td>
                   <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.swift || '—'}</td>
                   <td className="px-3 py-3 text-gray-500">{c.titular || '—'}</td>
+                  <td className="px-3 py-3 text-gray-500">{c.responsable || '—'}</td>
+                  <td className="px-3 py-3 text-gray-400 text-[10px]">{c.firmantes || '—'}</td>
                   <td className="px-3 py-3">
                     <button onClick={() => toggleActivo(c)}
                       className={`px-2 py-0.5 rounded-full text-[10px] font-semibold cursor-pointer transition-all ${
