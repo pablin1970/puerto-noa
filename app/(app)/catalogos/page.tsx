@@ -27,15 +27,15 @@ interface ColDef {
 }
 
 function CatalogoABM({
-  supabase, tabla, titulo, cols, orden, extra
+  tabla, titulo, cols, orden, extra
 }: {
-  supabase: any
   tabla: string
   titulo: string
   cols: ColDef[]
   orden: string
   extra?: React.ReactNode
 }) {
+  const supabase = useMemo(() => createClient(), [])
   const [rows, setRows] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [editId, setEditId] = useState<string | null>(null)
@@ -48,8 +48,14 @@ function CatalogoABM({
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase.from(tabla).select('*').order(orden, { ascending: true })
-    if (data) setRows(data)
+    const { data, error } = await supabase.from(tabla).select('*').order(orden, { ascending: true })
+    if (error) {
+      // Si falla el orden (columna no existe), intentar sin orden
+      const { data: data2 } = await supabase.from(tabla).select('*')
+      if (data2) setRows(data2)
+    } else if (data) {
+      setRows(data)
+    }
     setLoading(false)
   }
 
@@ -283,7 +289,6 @@ function CatalogoABM({
 
 // ── Página principal ────────────────────────────────────────────────
 export default function CatalogosPage() {
-  const supabase = useMemo(() => createClient(), [])
   const [tab, setTab] = useState<Tab>('categorias')
 
   return (
@@ -310,7 +315,6 @@ export default function CatalogosPage() {
       {/* ── CATEGORÍAS DE PRECIO ── */}
       {tab === 'categorias' && (
         <CatalogoABM
-          supabase={supabase}
           tabla="categorias_precio"
           titulo="Categorías de precio"
           orden="orden"
@@ -333,7 +337,6 @@ export default function CatalogosPage() {
       {/* ── PUERTOS CHINA ── */}
       {tab === 'puertos_china' && (
         <CatalogoABM
-          supabase={supabase}
           tabla="puertos_china"
           titulo="Puertos de China"
           orden="orden"
@@ -349,7 +352,6 @@ export default function CatalogosPage() {
       {/* ── PUERTOS CHILE ── */}
       {tab === 'puertos_chile' && (
         <CatalogoABM
-          supabase={supabase}
           tabla="puertos_chile"
           titulo="Puertos de Chile"
           orden="orden"
@@ -365,7 +367,6 @@ export default function CatalogosPage() {
       {/* ── PASOS FRONTERIZOS ── */}
       {tab === 'pasos' && (
         <CatalogoABM
-          supabase={supabase}
           tabla="pasos_fronterizos"
           titulo="Pasos fronterizos"
           orden="orden"
@@ -381,7 +382,6 @@ export default function CatalogosPage() {
       {/* ── CIUDADES ARGENTINA ── */}
       {tab === 'ciudades' && (
         <CatalogoABM
-          supabase={supabase}
           tabla="ciudades_destino_arg"
           titulo="Ciudades destino Argentina"
           orden="orden"
@@ -396,7 +396,6 @@ export default function CatalogosPage() {
       {/* ── TIPOS DE CONTENEDOR ── */}
       {tab === 'contenedores' && (
         <CatalogoABM
-          supabase={supabase}
           tabla="tipos_contenedor"
           titulo="Tipos de contenedor"
           orden="orden"
@@ -416,7 +415,6 @@ export default function CatalogosPage() {
       {/* ── TIPOS DE CAMIÓN ── */}
       {tab === 'camiones' && (
         <CatalogoABM
-          supabase={supabase}
           tabla="tipos_camion"
           titulo="Tipos de camión"
           orden="orden"
