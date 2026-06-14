@@ -585,7 +585,7 @@ export default function CotizadorPage(){
       const {data:uDB}=await supabase.from('usuarios').select('id').eq('auth_id',user.user.id).single()
       const uid=(uDB as any)?.id||''
       const presupuesto=[
-        ...(subFW>0?[{etapa:'forwarder',tipo:'flete',concepto:`ForWarder: ${fwElegida?.proveedor||'Manual'}`,usd:subFW}]:[]),
+        ...(subFW>0?[{etapa:'forwarder',tipo:'flete',concepto:`ForWarder: ${fwElegida?.proveedorNombre||'Manual'}`,usd:subFW}]:[]),
         ...(totalSeg>0?[{etapa:'forwarder',tipo:'seguro',concepto:'Seguro mercaderia',usd:totalSeg}]:[]),
         ...(subGastosChile>0?[{etapa:'chile',tipo:'servicios',concepto:'Gastos post-entrega Chile',usd:subGastosChile}]:[]),
         ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidacion (Opcion ${s.optTransp})`,usd:subD}]:[]),
@@ -2025,7 +2025,7 @@ export default function CotizadorPage(){
                 {[
                   {sec:'Producto',concepto:`Precio mercaderia China (${s.incoterm})`,v:totalFOB},
                   ...(s.incoterm==='EXW'?[{sec:'Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros}]:[]),
-                  ...(subFW>0?[{sec:'1 — ForWarder',concepto:fwElegida?.proveedor?`${fwElegida.proveedor}${fwElegida.referencia?` — ${fwElegida.referencia}`:''}`:'Manual',v:subFW}]:[]),
+                  ...(subFW>0?[{sec:'1 — ForWarder',concepto:fwElegida?.proveedorNombre?`${fwElegida.proveedorNombre}${fwElegida.referencia?` — ${fwElegida.referencia}`:''}`:'Manual',v:subFW}]:[]),
                   ...(totalSeg>0?[{sec:'1 — Seguro',concepto:segFW>0?'Incluido en cotizacion ForWarder':'Contratado independientemente',v:totalSeg}]:[]),
                   ...(subGastosChile>0?[{sec:'2 — Gastos Chile',concepto:'Post-entrega naviera',v:subGastosChile}]:[]),
                   ...(subDescon>0?[{sec:'3 — Desconsolidacion',concepto:'Opcion '+s.optTransp,v:subDescon}]:[]),
@@ -2056,7 +2056,7 @@ export default function CotizadorPage(){
             <div className="p-4 space-y-2">
               {[
                 {label:'Valor mercaderia China',sub:`${s.incoterm}`,v:totalFOB},
-                {label:'ForWarder + Seguro',sub:`${fwElegida?.proveedor||'No asignado'}`,v:subFW+totalSeg},
+                {label:'ForWarder + Seguro',sub:`${fwElegida?.proveedorNombre||'No asignado'}`,v:subFW+totalSeg},
                 {label:'Gastos post-entrega Chile',sub:'Bloque 2',v:subGastosChile},
                 {label:'Transporte terrestre',sub:'Bloque 3',v:subD+subTransp},
                 {label:'Gastos Argentina',sub:'Bloque 4',v:subE+subGastosArg},
