@@ -1427,26 +1427,6 @@ export default function CotizadorPage(){
               {s.optTransp!=='A'&&(
                 <>
                   <div className="border-t border-gray-100 pt-3">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Gastos post-entrega en Chile</div>
-                      <div className="flex items-center gap-2">
-                        {cotsChileDisponibles.length>0&&(
-                          <select onChange={e=>{if(e.target.value){agregarGastoChileDesdeSistema(e.target.value);setProvUsado(p=>({...p,2:e.target.value}));e.target.value=''}}} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
-                            <option value="">+ Del sistema</option>
-                            {(()=>{const {especificas,genericas}=filtrarCotsBloque(cotsChileDisponibles,clienteSelId);return(<>
-                              {especificas.length>0&&(<optgroup label="Especificas para este cliente">
-                                {especificas.map((c:any)=>(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
-                              </optgroup>)}
-                              <optgroup label="Genericas vigentes">
-                                {genericas.map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
-                              </optgroup>
-                            </>)})()}
-                          </select>
-                        )}
-                        <button onClick={()=>u('gastosChile',[...s.gastosChile,{id:uid2(),desc:'',proveedor:'',tipoCalc:'fijo',valor:0,ivaChile:'exento'}])}
-                          className="text-[10px] text-[#1168F8] hover:underline">+ Agregar item</button>
-                      </div>
-                    </div>
                     {/* Desconsolidacion */}
                     <div className="mb-3">
                       <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Gastos de desconsolidacion</div>
@@ -1485,31 +1465,7 @@ export default function CotizadorPage(){
                         <Field label="Subtotal carga"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(subCarga)}</div></Field>
                       </div>
                     </div>
-                    {/* Items adicionales */}
-                    {s.gastosChile.length>0&&(
-                      <>
-                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2 mt-3">Otros gastos en Chile</div>
-                        <div className="grid gap-2 mb-1 text-[9px] text-gray-400 font-semibold uppercase tracking-wide" style={{gridTemplateColumns:'2fr 1.5fr 80px 90px 80px auto'}}>
-                          <div>Descripcion</div><div>Proveedor</div><div>Calculo</div><div className="text-right">Valor</div><div>IVA Chile</div><div></div>
-                        </div>
-                        {s.gastosChile.map((g,i)=>(
-                          <div key={g.id} className="grid gap-2 mb-1.5 items-center" style={{gridTemplateColumns:'2fr 1.5fr 80px 90px 80px auto'}}>
-                            <input value={g.desc} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],desc:e.target.value};u('gastosChile',n)}} className={inp} placeholder="Descarga, almacenaje..."/>
-                            <input value={g.proveedor} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],proveedor:e.target.value};u('gastosChile',n)}} className={inp} placeholder="Proveedor"/>
-                            <select value={g.tipoCalc} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],tipoCalc:e.target.value as any};u('gastosChile',n)}} className={sel}>
-                              <option value="fijo">Fijo USD</option><option value="m3">Por m3</option>
-                            </select>
-                            <input type="text" inputMode="decimal" value={g.valor||''} onFocus={e=>e.target.select()}
-                              onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],valor:parseNum(e.target.value)};u('gastosChile',n)}}
-                              className={inp+' text-right font-mono'} placeholder={g.tipoCalc==='m3'?'USD/m3':'USD'}/>
-                            <select value={g.ivaChile} onChange={e=>{const n=[...s.gastosChile];n[i]={...n[i],ivaChile:e.target.value as any};u('gastosChile',n)}} className={sel}>
-                              <option value="exento">Exento</option><option value="gravado">Grav. 19%</option>
-                            </select>
-                            <button onClick={()=>u('gastosChile',s.gastosChile.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs pl-1">X</button>
-                          </div>
-                        ))}
-                      </>
-                    )}
+
                   </div>
                 </>
               )}
