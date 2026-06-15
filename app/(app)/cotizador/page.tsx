@@ -155,7 +155,183 @@ function Card({title,children}:{title:string;children:React.ReactNode}){
 }
 
 function DesconRows({rows,onChange,totalM3}:{rows:ItemLog[];onChange:(r:ItemLog[])=>void;totalM3:number}){
-  return (
+  function generarImpresion() {
+    const nc2 = s.contenedores?.length ? s.contenedores.reduce((t:number,c:any)=>t+(c.cantidad||1),0) : nc
+    const filas = [
+      ...(totalFOB>0?[{sec:'Producto',concepto:`Mercadería (${s.incoterm})`,v:totalFOB}]:[]),
+      ...(s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0?[{sec:'Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros}]:[]),
+      ...(bloqueActivo(0)&&subFW>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:fwElegida?.proveedorNombre||'ForWarder',v:subFW}]:[]),
+      ...(bloqueActivo(0)&&totalSeg>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:'Seguro',v:totalSeg}]:[]),
+      ...(bloqueActivo(1)&&subGastosChile>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Gastos en Chile',v:subGastosChile}]:[]),
+      ...(bloqueActivo(1)&&subDescon>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:`Desconsolidación (Op. ${s.optTransp})`,v:subDescon}]:[]),
+      ...(bloqueActivo(1)&&subAlm>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:`Almacenaje ${fmt(volAlm,2)} m3 × ${s.almDias} días`,v:subAlm}]:[]),
+      ...(bloqueActivo(1)&&subCarga>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Carga al camión',v:subCarga}]:[]),
+      ...(bloqueActivo(2)&&subTransp>0?[{sec:bloques[2]?.nombre||'Bloque 3',concepto:'Flete terrestre',v:subTransp}]:[]),
+      ...(bloqueActivo(3)&&(subE+subGastosArg)>0?[{sec:bloques[3]?.nombre||'Bloque 4',concepto:'Gastos Argentina',v:subE+subGastosArg}]:[]),
+      ...(bloqueActivo(4)&&fee>0?[{sec:bloques[4]?.nombre||'Bloque 5 — Fee PN',concepto:`Fee Puerto NOA`,v:fee}]:[]),
+      ...(s.incluirArca&&totalTribUSD>0?[{sec:'Tributos ARCA',concepto:`Régimen ${s.regimen}`,v:totalTribUSD,ars:Math.round(totalTribARS).toLocaleString('es-AR')}]:[]),
+    ].filter(r=>r.v>0)
+
+    const ruta = s.sentido==='exportacion'
+      ? [s.destinoNoa||'Argentina', s.pasoId?pasosFront.find((p:any)=>p.id===s.pasoId)?.nombre||'Paso fronterizo':'', s.ptoChile||'Puerto Chile'].filter(Boolean).join(' → ')
+      : [s.origen||'Origen', s.ptoChile||'Puerto Chile', s.pasoId?pasosFront.find((p:any)=>p.id===s.pasoId)?.nombre||'Paso fronterizo':'', s.destinoNoa||'Destino'].filter(Boolean).join(' → ')
+
+    const fecha = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'long',year:'numeric'})
+    const totalPct = (v:number) => totalLanded>0?`${((v/totalLanded)*100).toFixed(1)}%`:''
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Cotización ${s.num||''} — Puerto NOA SpA</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: 'Arial', sans-serif; font-size: 11px; color: #1a1a1a; background: white; padding: 20mm 18mm; }
+    /* Header */
+    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px; padding-bottom:16px; border-bottom:3px solid #1168F8; }
+    .logo { font-size:22px; font-weight:900; color:#052698; letter-spacing:-0.5px; }
+    .logo span { color:#1168F8; }
+    .header-right { text-align:right; }
+    .num-cot { font-size:16px; font-weight:700; color:#052698; font-family:monospace; }
+    .fecha { font-size:10px; color:#666; margin-top:2px; }
+    /* Datos cliente */
+    .seccion { margin-bottom:16px; }
+    .sec-title { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#666; margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:3px; }
+    .dato-row { display:flex; gap:32px; flex-wrap:wrap; }
+    .dato { margin-bottom:4px; }
+    .dato label { font-size:9px; color:#888; display:block; }
+    .dato span { font-size:11px; font-weight:600; color:#1a1a1a; }
+    /* Ruta */
+    .ruta-box { background:#EBF2FF; border-radius:8px; padding:10px 14px; margin-bottom:16px; }
+    .ruta-label { font-size:9px; color:#1168F8; font-weight:700; text-transform:uppercase; margin-bottom:4px; }
+    .ruta-val { font-size:13px; font-weight:700; color:#052698; }
+    .sentido-badge { display:inline-block; background:#052698; color:white; font-size:9px; font-weight:700; padding:2px 8px; border-radius:20px; margin-right:8px; }
+    /* Tabla */
+    table { width:100%; border-collapse:collapse; margin-bottom:16px; }
+    thead tr { background:#052698; }
+    thead th { color:white; font-size:9px; font-weight:700; text-transform:uppercase; padding:7px 10px; text-align:left; }
+    thead th:last-child, thead th:nth-last-child(2) { text-align:right; }
+    tbody tr { border-bottom:1px solid #f0f0f0; }
+    tbody tr:hover { background:#fafafa; }
+    tbody td { padding:6px 10px; font-size:11px; vertical-align:middle; }
+    .td-sec { font-size:9px; color:#666; font-weight:600; }
+    .td-usd { text-align:right; font-family:monospace; font-weight:600; }
+    .td-pct { text-align:right; color:#888; font-size:10px; }
+    .td-ars { font-size:9px; color:#1168F8; font-family:monospace; }
+    .total-row { background:#052698 !important; }
+    .total-row td { color:white; font-weight:700; font-size:12px; padding:9px 10px; }
+    .total-row td:last-child, .total-row td:nth-last-child(2) { text-align:right; font-family:monospace; font-size:13px; }
+    /* Observaciones */
+    .obs-list { list-style:none; }
+    .obs-list li { padding:4px 0; border-bottom:1px solid #f5f5f5; font-size:11px; color:#333; }
+    .obs-list li::before { content:counter(item) '. '; counter-increment:item; color:#888; font-weight:600; }
+    .obs-list { counter-reset:item; }
+    /* Footer */
+    .footer { margin-top:24px; padding-top:12px; border-top:1px solid #eee; display:flex; justify-content:space-between; align-items:flex-end; }
+    .footer-left { font-size:10px; color:#444; }
+    .footer-left .validez { font-weight:700; color:#052698; }
+    .footer-right { font-size:9px; color:#aaa; font-style:italic; font-family:Georgia, serif; }
+    .tc-row { display:flex; gap:16px; font-size:10px; color:#666; margin-top:4px; }
+    .tc-val { font-family:monospace; font-weight:600; color:#333; }
+    @media print { body { padding:10mm 12mm; } @page { margin:0; size:A4; } }
+  </style>
+</head>
+<body>
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <div class="logo">Puerto<span>NOA</span></div>
+      <div style="font-size:10px;color:#666;margin-top:2px;">SpA · Servicios logísticos de importación</div>
+    </div>
+    <div class="header-right">
+      <div class="num-cot">${s.num||'BORRADOR'}</div>
+      <div class="fecha">${fecha}</div>
+      ${s.validez?`<div style="font-size:10px;color:#666;margin-top:4px;">Válida por ${s.validez}</div>`:''}
+    </div>
+  </div>
+
+  <!-- CLIENTE -->
+  <div class="seccion">
+    <div class="sec-title">Cliente</div>
+    <div class="dato-row">
+      <div class="dato"><label>Razón social</label><span>${s.cliente||'—'}</span></div>
+      ${s.cuit?`<div class="dato"><label>CUIT</label><span>${s.cuit}</span></div>`:''}
+    </div>
+  </div>
+
+  <!-- RUTA -->
+  <div class="ruta-box">
+    <div class="ruta-label">Ruta de la operación</div>
+    <div>
+      <span class="sentido-badge">${s.sentido==='exportacion'?'EXPORTACIÓN':'IMPORTACIÓN'}</span>
+      <span class="ruta-val">${ruta}</span>
+    </div>
+  </div>
+
+  <!-- DESGLOSE -->
+  <div class="seccion">
+    <div class="sec-title">Desglose de costos</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Bloque</th>
+          <th>Concepto</th>
+          <th>USD</th>
+          ${s.incluirArca?'<th>ARS</th>':''}
+          <th>%</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filas.map(r=>`
+          <tr>
+            <td class="td-sec">${r.sec}</td>
+            <td>${r.concepto}</td>
+            <td class="td-usd">USD ${fmt(r.v)}</td>
+            ${s.incluirArca?`<td class="td-ars">${(r as any).ars||''}</td>`:''}
+            <td class="td-pct">${totalPct(r.v)}</td>
+          </tr>
+        `).join('')}
+        <tr class="total-row">
+          <td colspan="2">TOTAL ${s.sentido==='exportacion'?'SERVICIO LOGÍSTICO':'LANDED EN DESTINO'}</td>
+          <td>USD ${fmt(totalLanded)}</td>
+          ${s.incluirArca?`<td></td>`:''}
+          <td>100%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  ${s.observaciones.filter((o:string)=>o.trim()).length>0?`
+  <!-- OBSERVACIONES -->
+  <div class="seccion">
+    <div class="sec-title">Observaciones</div>
+    <ol class="obs-list">
+      ${s.observaciones.filter((o:string)=>o.trim()).map((obs:string)=>`<li>${obs}</li>`).join('')}
+    </ol>
+  </div>
+  `:''}
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="footer-left">
+      ${s.validez?`<div>Oferta <span class="validez">válida por ${s.validez}</span> desde la fecha de emisión</div>`:''}
+      <div class="tc-row">
+        ${s.tcTrib?`<span>TC BNA (ARS/USD): <span class="tc-val">ARS ${fmt(s.tcTrib,0)}</span></span>`:''}
+        ${s.tcClp?`<span>TC (CLP/USD): <span class="tc-val">CLP ${fmt(s.tcClp,0)}</span></span>`:''}
+      </div>
+    </div>
+    <div class="footer-right">Developed by Pablin</div>
+  </div>
+
+  <script>window.onload=()=>{window.print();}</script>
+</body>
+</html>`
+
+    const win = window.open('','_blank','width=900,height=700')
+    if(win){ win.document.write(html); win.document.close() }
+  }
+
+    return (
     <div>
       {rows.map((r,i)=>(
         <div key={r.id} style={{display:'grid',gridTemplateColumns:'2.5fr 100px 1fr 1fr auto',gap:'7px',alignItems:'end'}} className="mb-2">
@@ -2287,7 +2463,7 @@ export default function CotizadorPage(){
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={()=>window.print()}
+                <button onClick={generarImpresion}
                   className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50 flex items-center gap-1.5">
                   🖨 Imprimir / PDF
                 </button>
@@ -2415,7 +2591,7 @@ export default function CotizadorPage(){
             <button onClick={()=>cambiarTab(s.incluirArca?'tributos':'logistica')}
               className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
             <div className="flex gap-2">
-              <button onClick={()=>window.print()}
+              <button onClick={generarImpresion}
                 className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50">
                 🖨 Imprimir / PDF
               </button>
