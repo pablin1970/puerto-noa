@@ -67,8 +67,12 @@ interface CotState {
   transito: string; notas: string
   // IDs de catálogos geográficos
   puertoChiId: string; puertoChileId: string; pasoId: string; ciudadDestinoId: string
+  sentido: 'importacion' | 'exportacion'
+  bloquesActivos: string[]
+  observaciones: string[]
   modalidadCarga: 'contenedor' | 'bulk' | 'mixta'
   bulkDescripcion: string; bulkPesoTon: number; bulkVolM3: number
+  cantBigbags: number
   contenedores: ContenedorCot[]; productos: ProductoCot[]
   exwTransp: number; exwAgente: number; exwOtros: number; precioArgEquiv: number
   proformas: Proforma[]
@@ -105,8 +109,12 @@ const INIT: CotState = {
   cliente:'',cuit:'',email:'',telefono:'',despachante:'',ivaCondicion:'Responsable Inscripto',validez:'',
   origen:'Dalian, China (CNDAG)',ptoChile:'IQQ',destinoNoa:'Jujuy',incoterm:'FOB',transito:'44-46 dias',notas:'',
   puertoChiId:'',puertoChileId:'',pasoId:'',ciudadDestinoId:'',
+  sentido: 'importacion' as 'importacion'|'exportacion',
+  bloquesActivos: [] as string[],  // IDs de bloques activos — vacío = todos activos
+  observaciones: [] as string[],   // Filas de observaciones al final
   modalidadCarga:'contenedor',
   bulkDescripcion:'',bulkPesoTon:0,bulkVolM3:0,
+  cantBigbags: 0,
   contenedores:[{tipo:'40HC',cantidad:1} as any],
   productos:[{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:'FOB'}],
   exwTransp:0,exwAgente:0,exwOtros:0,precioArgEquiv:0,proformas:[],
@@ -420,11 +428,22 @@ export default function CotizadorPage(){
 
   // ── Helpers para manejar CotProvSel genéricamente ──────────────
   const isVigente = (fv:string) => !fv || new Date(fv) >= new Date()
+
+  // Verificar si un bloque está activo (por índice 0-based en array de bloques cargados)
+  const bloqueActivo = (idx: number): boolean => {
+    if (s.bloquesActivos.length === 0) return true
+    const bloque = bloques[idx]
+    if (!bloque) return true
+    return s.bloquesActivos.includes((bloque as any).id)
+  }
   const fmtFecha = (f:string) => f ? f.split('-').reverse().join('/') : '—'
 
   function cotProvDesdeSistema(cot:any, contenedoresH1:{tipo:string;cantidad:number}[], usadas:string[]): CotProvSel {
     const items: ItemSelProv[] = (cot.items||[]).map((it:any)=>{
-      const cantSug = contenedoresH1.find(c=>c.tipo===it.tipo_contenedor)?.cantidad || 1
+      const esBigbag = it.tipo_calculo === 'por_bigbag'
+      const cantSug = esBigbag
+        ? (contenedoresH1 as any).__bigbags__ || 1
+        : contenedoresH1.find(c=>c.tipo===it.tipo_contenedor)?.cantidad || 1
       const valorUnit = parseNum(String(it.valor||0))
       return {
         itemId: it.id||uid2(),
@@ -741,6 +760,69 @@ export default function CotizadorPage(){
       {/* ── EMBARQUE (sin cambios) ── */}
       {tab==='embarque'&&(
         <div className="space-y-4">
+
+          {/* ── PANEL: SENTIDO Y BLOQUES ACTIVOS ── */}
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+              <span className="font-semibold text-sm text-gray-900">Configuración de la operación</span>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              {/* Sentido */}
+              <div>
+                <div className="text-[10px] font-semibold text-gray-500 uppercase mb-2">Sentido de la operación</div>
+                <div className="flex gap-3">
+                  {[
+                    { key:'importacion', label:'📦 Importación', desc:'Origen → Argentina/NOA' },
+                    { key:'exportacion', label:'🚢 Exportación', desc:'Argentina/NOA → Destino' },
+                  ].map(o => (
+                    <button key={o.key} onClick={()=>u('sentido',o.key as any)}
+                      className={`flex-1 px-4 py-3 rounded-xl border-2 text-left transition-all ${s.sentido===o.key?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 hover:bg-gray-50'}`}>
+                      <div className="text-xs font-bold text-gray-900">{o.label}</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">{o.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Bloques activos */}
+              <div>
+                <div className="text-[10px] font-semibold text-gray-500 uppercase mb-2">
+                  Bloques que incluye esta cotización
+                  <span className="ml-2 text-gray-400 normal-case font-normal">(destildá los que no aplican)</span>
+                </div>
+                {bloques.length === 0 ? (
+                  <div className="text-xs text-gray-400">Cargando bloques...</div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {bloques.map((b:any) => {
+                      const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(b.id)
+                      return (
+                        <button key={b.id} onClick={()=>{
+                          if (s.bloquesActivos.length === 0) {
+                            // Primera vez que se destilda: inicializar con todos menos este
+                            u('bloquesActivos', bloques.filter((x:any)=>x.id!==b.id).map((x:any)=>x.id))
+                          } else if (activo) {
+                            u('bloquesActivos', s.bloquesActivos.filter((id:string)=>id!==b.id))
+                          } else {
+                            u('bloquesActivos', [...s.bloquesActivos, b.id])
+                          }
+                        }}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-left transition-all ${activo?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 bg-gray-50 opacity-50'}`}>
+                          <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${activo?'bg-[#1168F8] border-[#1168F8]':'border-gray-300 bg-white'}`}>
+                            {activo&&<div className="w-2 h-1.5 border-l-2 border-b-2 border-white" style={{transform:'rotate(-45deg) translate(1px,-1px)'}}/>}
+                          </div>
+                          <div>
+                            <div className="text-xs font-semibold text-gray-800">{b.nombre}</div>
+                            {b.descripcion&&<div className="text-[9px] text-gray-400">{b.descripcion}</div>}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           <Card title="Cliente">
             {/* Buscador */}
             <div className="relative mb-3">
@@ -998,6 +1080,21 @@ export default function CotizadorPage(){
                   </div>
                 </div>
               )}
+              {/* Big bags — siempre visible independiente de la modalidad */}
+              <div className="pt-3 border-t border-gray-100">
+                <div className="flex items-center gap-3">
+                  <Field label="Cantidad de big bags (si aplica)">
+                    <input type="text" inputMode="decimal" value={s.cantBigbags||''} onFocus={e=>e.target.select()}
+                      onChange={e=>u('cantBigbags',parseNum(e.target.value))}
+                      className={inp} placeholder="0 — completar si se cobra por big bag"/>
+                  </Field>
+                  {s.cantBigbags > 0 && (
+                    <div className="text-[10px] text-gray-400 mt-4">
+                      Se usará como cantidad en ítems cotizados <strong>por big bag</strong>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1065,6 +1162,31 @@ export default function CotizadorPage(){
               <Field label="Precio equivalente en Argentina (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.precioArgEquiv||''} onChange={e=>u('precioArgEquiv',parseNum(e.target.value))} className={inp} placeholder="0.00"/></Field>
             </div>
           </Card>
+          {/* ── OBSERVACIONES ── */}
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+              <span className="font-semibold text-sm text-gray-900">Observaciones</span>
+              <button onClick={()=>u('observaciones',[...s.observaciones,''])}
+                className="text-[10px] text-[#1168F8] hover:underline font-semibold">+ Agregar línea</button>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              {s.observaciones.length === 0 ? (
+                <div className="text-xs text-gray-400 text-center py-3">
+                  Sin observaciones. Hacé click en <strong>+ Agregar línea</strong> para agregar notas visibles en la cotización.
+                </div>
+              ) : s.observaciones.map((obs:string, i:number) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-400 font-mono w-4 flex-shrink-0">{i+1}.</span>
+                  <input value={obs}
+                    onChange={e=>{const n=[...s.observaciones];n[i]=e.target.value;u('observaciones',n)}}
+                    className={inp+' flex-1'} placeholder={`Observación ${i+1}...`}/>
+                  <button onClick={()=>u('observaciones',s.observaciones.filter((_:string,j:number)=>j!==i))}
+                    className="text-gray-300 hover:text-red-500 text-xs flex-shrink-0">✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="flex justify-end"><button onClick={()=>cambiarTab('logistica')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Logistica</button></div>
         </div>
       )}
@@ -1080,7 +1202,7 @@ export default function CotizadorPage(){
           </div>
 
           {/* ── BLOQUE 1: COTIZACIONES FORWARDER ── */}
-          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+          <div className={`bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm ${!bloqueActivo(0)?'hidden':''}`}>
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1168F8] text-white text-[10px] font-bold">1</span>
               <span className="font-medium text-sm text-gray-900">Bloque 1 — Cotizaciones ForWarder</span>
@@ -1299,7 +1421,7 @@ export default function CotizadorPage(){
           </div>
 
                     {/* ── BLOQUE 2: MODALIDAD + GASTOS POST-ENTREGA CHILE ── */}
-          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+          <div className={`bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm ${!bloqueActivo(1)?'hidden':''}`}>
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#0a9e6e] text-white text-[10px] font-bold">2</span>
               <span className="font-medium text-sm text-gray-900">Bloque 2 — Transporte Chile NOA</span>
@@ -1428,7 +1550,7 @@ export default function CotizadorPage(){
           </div>
 
           {/* ── BLOQUE 3: FLETE TERRESTRE ── */}
-          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+          <div className={`bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm ${!bloqueActivo(2)?'hidden':''}`}>
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#b45309] text-white text-[10px] font-bold">3</span>
               <span className="font-medium text-sm text-gray-900">Bloque 3 — Flete terrestre</span>
@@ -1671,7 +1793,7 @@ export default function CotizadorPage(){
           </div>
 
           {/* ── BLOQUE 4: GASTOS ARGENTINA ── */}
-          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+          <div className={`bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm ${!bloqueActivo(3)?'hidden':''}`}>
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#6b21a8] text-white text-[10px] font-bold">4</span>
               <span className="font-medium text-sm text-gray-900">Bloque 4 — Gastos en Argentina</span>
@@ -1888,7 +2010,7 @@ export default function CotizadorPage(){
           </div>
 
           {/* ── BLOQUE 5: FEE PUERTO NOA ── */}
-          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+          <div className={`bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm ${!bloqueActivo(4)?'hidden':''}`}>
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#052698] text-white text-[10px] font-bold">5</span>
               <span className="font-medium text-sm text-gray-900">Bloque 5 — Fee Puerto NOA</span>
