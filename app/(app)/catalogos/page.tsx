@@ -890,6 +890,17 @@ function BloquesCotizacionABM() {
 
 const RUBRO_VACIO = { nombre: '', codigo: '', descripcion: '', icono: '', color: '#6b7280' }
 
+const RUBROS_DEFAULT = [
+  { nombre: 'Freight Forwarder',    codigo: 'forwarder',            icono: '🚢', color: '#1168F8', descripcion: 'Flete marítimo, handling, gastos naviero' },
+  { nombre: 'Agente',               codigo: 'transporte_chile',     icono: '🏭', color: '#0a9e6e', descripcion: 'Transporte Chile-NOA' },
+  { nombre: 'Transporte terrestre', codigo: 'transporte_terrestre', icono: '🚛', color: '#b45309', descripcion: 'Flete terrestre Argentina' },
+  { nombre: 'Despachante de aduana',codigo: 'gastos_argentina',     icono: '📋', color: '#6b21a8', descripcion: 'Honorarios y gastos de despacho' },
+  { nombre: 'Deposito fiscal',      codigo: 'deposito',             icono: '🏭', color: '#0891b2', descripcion: 'Almacenaje en depósito fiscal' },
+  { nombre: 'Naviera',              codigo: 'naviera',              icono: '⚓', color: '#0e7490', descripcion: 'Línea naviera' },
+  { nombre: 'Seguro de carga',      codigo: 'seguro',               icono: '🛡', color: '#15803d', descripcion: 'Seguro de mercadería' },
+  { nombre: 'Otro',                 codigo: 'otro',                 icono: '·',  color: '#6b7280', descripcion: 'Otro proveedor de servicios' },
+]
+
 function RubrosProveedorABM() {
   const supabase = useMemo(() => createClient(), [])
   const [rubros, setRubros] = useState<any[]>([])
