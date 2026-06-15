@@ -50,9 +50,9 @@ const NAV: NavItem[] = [
   // ── 5. CONTABILIDAD ────────────────────────────────
   // Registros contables y resultados
   { label: 'CONTABILIDAD', section: true },
-  { href: '/contabilidad/iva',        label: 'Libro IVA',       icon: '📊', soon: true },
-  { href: '/contabilidad/gastos',     label: 'Gastos y costos', icon: '📉', soon: true },
-  { href: '/contabilidad/resultados', label: 'Resultados',      icon: '📈', soon: true },
+  { href: '/contabilidad/iva',        label: 'Libro IVA',       icon: '📊' },
+  { href: '/contabilidad/gastos',     label: 'Gastos y costos', icon: '📉' },
+  { href: '/contabilidad/resultados', label: 'Resultados',      icon: '📈' },
 
   // ── 6. CONFIGURACION ───────────────────────────────
   // Parámetros del sistema — solo admin o técnico
