@@ -1094,7 +1094,7 @@ export default function CotizadorPage(){
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1168F8] text-white text-[10px] font-bold">1</span>
-              <span className="font-medium text-sm text-gray-900">Cotizaciones ForWarder</span>
+              <span className="font-medium text-sm text-gray-900">Bloque 1 — Cotizaciones ForWarder</span>
               <span className="text-[10px] text-gray-400">Flete marítimo · handling · gastos naviero</span>
               <div className="ml-auto flex items-center gap-2 flex-wrap">
                 {/* Info hoja 1 */}
@@ -1315,7 +1315,7 @@ export default function CotizadorPage(){
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#0a9e6e] text-white text-[10px] font-bold">2</span>
-              <span className="font-medium text-sm text-gray-900">Modalidad de transporte Chile - NOA</span>
+              <span className="font-medium text-sm text-gray-900">Bloque 2 — Transporte Chile NOA</span>
             </div>
             <div className="px-5 py-4">
               {/* Opciones A / B1 / B2 */}
@@ -1570,7 +1570,7 @@ export default function CotizadorPage(){
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#b45309] text-white text-[10px] font-bold">3</span>
-              <span className="font-medium text-sm text-gray-900">Flete terrestre</span>
+              <span className="font-medium text-sm text-gray-900">Bloque 3 — Flete terrestre</span>
               <span className="text-[10px] text-gray-400">{s.optTransp==='A'?'Contenedor completo — ida / devolucion / round trip':'Camion de carga — flete ida'}</span>
             </div>
             <div className="px-5 py-4 space-y-4">
@@ -1838,7 +1838,7 @@ export default function CotizadorPage(){
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#6b21a8] text-white text-[10px] font-bold">4</span>
-              <span className="font-medium text-sm text-gray-900">Gastos en Argentina</span>
+              <span className="font-medium text-sm text-gray-900">Bloque 4 — Gastos en Argentina</span>
             </div>
             <div className="px-5 py-4">
               {/* Seccion A — Despachante de aduana */}
@@ -2059,7 +2059,7 @@ export default function CotizadorPage(){
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#052698] text-white text-[10px] font-bold">5</span>
-              <span className="font-medium text-sm text-gray-900">Fee Puerto NOA</span>
+              <span className="font-medium text-sm text-gray-900">Bloque 5 — Fee Puerto NOA</span>
             </div>
             <div className="px-5 py-4">
               {/* Selector de modalidad */}
