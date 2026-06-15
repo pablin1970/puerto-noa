@@ -1094,8 +1094,7 @@ export default function CotizadorPage(){
                     ))}
                   </div>
                 )}
-                {cotsFWDisponibles.length>0&&(
-                  <select onChange={e=>{if(e.target.value){agregarFWDesdeSistema(e.target.value);e.target.value=''}}}
+                <select onChange={e=>{if(e.target.value){agregarFWDesdeSistema(e.target.value);e.target.value=''}}}
                     className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
                     <option value="">+ Cargar del sistema</option>
                     {(()=>{
@@ -1111,7 +1110,6 @@ export default function CotizadorPage(){
                       </>)
                     })()}
                   </select>
-                )}
                 <button onClick={()=>{
                   const rubroCod=(rubrosBloque[1]||[]).length>0?(rubrosBloque[1][0]).toLowerCase().replace(/ /g,'_'):'forwarder'
                   window.open(`/cotizaciones-proveedores?nuevo=1&bloque=1&rubro=${rubroCod}&cliente_id=${clienteSelId||''}&cliente_nombre=${encodeURIComponent(s.cliente||'')}`, '_blank')
