@@ -708,7 +708,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cliente al que corresponde *</label>
               <select value={form.cliente_id} onChange={e => setF('cliente_id', e.target.value)} className={inp}>
                 <option value="">— Sin vincular a cliente —</option>
-                {terceros.map((t: any) => (
+                {terceros.filter((t:any)=>Array.isArray(t.tipo)?t.tipo.includes('cliente'):t.tipo==='cliente').map((t: any) => (
                   <option key={t.id} value={t.id}>{t.razon_social}</option>
                 ))}
               </select>
