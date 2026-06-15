@@ -207,7 +207,7 @@ function FilaManualExpandida({estado,setEstado,terceros,color,placeholder,rubroL
           onFocus={()=>st('showDrop',true)}
           onBlur={()=>setTimeout(()=>st('showDrop',false),200)}
           className={inpCls} placeholder={`Buscar o escribir nombre de ${placeholder}...`}
-          style={{focusBorderColor:color}}
+          
         />
         {estado.showDrop&&(
           <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-44 overflow-y-auto">
