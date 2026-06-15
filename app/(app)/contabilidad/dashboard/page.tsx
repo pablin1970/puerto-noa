@@ -1,200 +1,162 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
+import Link from 'next/link'
 
-const fmtN = (n: number) => (n||0).toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const fmtCLP = (n: number) => `$ ${(n||0).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-const fmtUSD = (n: number) => `USD ${fmtN(n)}`
+const fmtCLP = (n: number) => `$ ${(n||0).toLocaleString('es-CL',{maximumFractionDigits:0})}`
+const fmtUSD = (n: number) => `USD ${(n||0).toLocaleString('es-CL',{minimumFractionDigits:2,maximumFractionDigits:2})}`
+const MESES = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
 export default function DashboardFinancieroPage() {
   const supabase = useMemo(() => createClient(), [])
   const [loading, setLoading] = useState(true)
-  const [tc, setTc] = useState<{usd:number,ars:number,clp:number}>({usd:908,ars:1450,clp:908})
-  const [data, setData] = useState({
-    ivaVentas: 0, ivaCompras: 0, ivaSaldo: 0,
-    facturasEmitidas: 0, facturasRecibidas: 0,
-    gastosFixosMes: 0,
-    utilidadMes: 0, utilidadAnio: 0,
-    cuentasCLP: 0, cuentasUSD: 0, cuentasARS: 0,
-    custodiaTotal: 0,
-    ctaCtePendiente: 0,
-    operacionesAbiertas: 0,
+  const [tc, setTc] = useState({ usd: 908, ars: 1450 })
+  const [d, setD] = useState({
+    ivaVentas:0, ivaCompras:0, ivaSaldo:0,
+    facEmitidas:0, facRecibidas:0,
+    gastosFixosMes:0,
+    margenAnio:0,
+    cuentasCLP:0, cuentasUSD:0, cuentasARS:0,
+    custodiaUSD:0,
+    opsAbiertas:0,
   })
 
   const anio = new Date().getFullYear()
   const mes  = new Date().getMonth() + 1
 
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => { load() }, [])
 
-  async function loadAll() {
+  async function load() {
     setLoading(true)
-    const [tcRes, ivavRes, ivacRes, feRes, frRes, gfRes, uRes, cpRes, ccRes, opRes] = await Promise.all([
-      (supabase.from('tipos_cambio_eventos') as any).select('clp,ars').order('created_at',{ascending:false}).limit(1),
+    const [tcRes, ivavRes, ivacRes, feRes, frRes, gfRes, uRes, cpRes, mvRes, opRes] = await Promise.all([
+      supabase.from('tipos_cambio_eventos').select('clp,ars').order('created_at',{ascending:false}).limit(1),
       (supabase.from('libro_iva_ventas') as any).select('iva_clp').eq('anio',anio).eq('mes',mes),
       (supabase.from('libro_iva_compras') as any).select('credito_fiscal_clp').eq('anio',anio).eq('mes',mes),
-      supabase.from('facturas_emitidas').select('total_usd,total_clp').gte('fecha', `${anio}-01-01`),
-      supabase.from('facturas_recibidas').select('total_usd,total_clp').gte('fecha', `${anio}-01-01`),
+      supabase.from('facturas_emitidas').select('total,estado,moneda').gte('fecha',`${anio}-01-01`),
+      supabase.from('facturas_recibidas').select('total,estado,moneda').gte('fecha',`${anio}-01-01`),
       (supabase.from('gastos_fijos_pn') as any).select('monto_clp_equiv').eq('periodo_anio',anio).eq('periodo_mes',mes),
-      (supabase.from('utilidad_operacion') as any).select('margen_bruto_usd,resultado_neto_usd').gte('fecha_cierre',`${anio}-01-01`),
+      (supabase.from('utilidad_operacion') as any).select('margen_bruto_usd').gte('fecha_cierre',`${anio}-01-01`),
       (supabase.from('cuentas_pn') as any).select('moneda,saldo_actual').eq('activo',true),
-      supabase.from('fondos_custodia').select('moneda,saldo'),
+      (supabase.from('fondos_movimientos') as any).select('tipo,monto,moneda'),
       supabase.from('cotizaciones').select('id').eq('estado','en_proceso'),
     ])
 
-    const tcVal = tcRes.data?.[0] || {clp:908,ars:1450}
-    setTc({usd:tcVal.clp||908, ars:tcVal.ars||1450, clp:tcVal.clp||908})
+    const tcVal = tcRes.data?.[0] || { clp:908, ars:1450 }
+    setTc({ usd: tcVal.clp||908, ars: tcVal.ars||1450 })
 
-    const ivaV = (ivavRes.data||[]).reduce((t,r) => t+(r.iva_clp||0), 0)
-    const ivaC = (ivacRes.data||[]).reduce((t,r) => t+(r.credito_fiscal_clp||0), 0)
+    const ivaV = (ivavRes.data||[]).reduce((t:number,r:any)=>t+(r.iva_clp||0),0)
+    const ivaC = (ivacRes.data||[]).reduce((t:number,r:any)=>t+(r.credito_fiscal_clp||0),0)
+    const gfMes = (gfRes.data||[]).reduce((t:number,r:any)=>t+(r.monto_clp_equiv||0),0)
+    const margen = (uRes.data||[]).reduce((t:number,r:any)=>t+(r.margen_bruto_usd||0),0)
+    const cp = cpRes.data||[]
+    const movs = mvRes.data||[]
+    const custUSD = (movs as any[]).reduce((t:number,m:any)=>{
+      const v = m.monto||0
+      return ['ingreso','deposito','credito'].includes(m.tipo)?t+v:t-v
+    },0)
 
-    const totGf = (gfRes.data||[]).reduce((t,r) => t+(r.monto_clp_equiv||0), 0)
-    const uMes  = (uRes.data||[]).reduce((t,r) => t+(r.margen_bruto_usd||0), 0)
-    const uAnio = (uRes.data||[]).reduce((t,r) => t+(r.margen_bruto_usd||0), 0)
-
-    const cpData = cpRes.data || []
-    const cClp = cpData.filter(c=>c.moneda==='CLP').reduce((t,c)=>t+(c.saldo_actual||0),0)
-    const cUsd = cpData.filter(c=>c.moneda==='USD').reduce((t,c)=>t+(c.saldo_actual||0),0)
-    const cArs = cpData.filter(c=>c.moneda==='ARS').reduce((t,c)=>t+(c.saldo_actual||0),0)
-
-    const ccData = ccRes.data || []
-    const custTotal = ccData.reduce((t,c) => {
-      const s = c.saldo||0
-      if (c.moneda==='USD') return t + s
-      if (c.moneda==='CLP') return t + s/(tcVal.clp||908)
-      if (c.moneda==='ARS') return t + s/(tcVal.ars||1450)
-      return t
-    }, 0)
-
-    setData({
-      ivaVentas: ivaV, ivaCompras: ivaC, ivaSaldo: ivaV - ivaC,
-      facturasEmitidas: (feRes.data||[]).reduce((t,r)=>t+(r.total_usd||r.total_clp/(tcVal.clp||908)||0),0),
-      facturasRecibidas: (frRes.data||[]).reduce((t,r)=>t+(r.total_usd||r.total_clp/(tcVal.clp||908)||0),0),
-      gastosFixosMes: totGf,
-      utilidadMes: uMes, utilidadAnio: uAnio,
-      cuentasCLP: cClp, cuentasUSD: cUsd, cuentasARS: cArs,
-      custodiaTotal: custTotal,
-      ctaCtePendiente: 0,
-      operacionesAbiertas: opRes.data?.length || 0,
+    setD({
+      ivaVentas:ivaV, ivaCompras:ivaC, ivaSaldo:ivaV-ivaC,
+      facEmitidas:(feRes.data||[]).reduce((t:number,r:any)=>t+(r.total||0),0),
+      facRecibidas:(frRes.data||[]).reduce((t:number,r:any)=>t+(r.total||0),0),
+      gastosFixosMes:gfMes, margenAnio:margen,
+      cuentasCLP:(cp as any[]).filter((c:any)=>c.moneda==='CLP').reduce((t:number,c:any)=>t+(c.saldo_actual||0),0),
+      cuentasUSD:(cp as any[]).filter((c:any)=>c.moneda==='USD').reduce((t:number,c:any)=>t+(c.saldo_actual||0),0),
+      cuentasARS:(cp as any[]).filter((c:any)=>c.moneda==='ARS').reduce((t:number,c:any)=>t+(c.saldo_actual||0),0),
+      custodiaUSD:custUSD,
+      opsAbiertas:opRes.data?.length||0,
     })
     setLoading(false)
   }
 
-  const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+  if (loading) return <div className="p-12 text-center text-gray-400">Cargando...</div>
 
-  if (loading) return <div className="p-12 text-center text-gray-400">Cargando dashboard financiero...</div>
+  const ivaNegativo = d.ivaSaldo < 0
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Dashboard financiero</h1>
-        <p className="text-xs text-gray-400 mt-0.5">Puerto NOA SpA — visión consolidada · TC USD/CLP {fmtN(tc.usd)} · USD/ARS {fmtN(tc.ars)}</p>
-      </div>
-
-      {/* Fila 1: IVA del mes */}
-      <div className="mb-4">
-        <div className="text-[10px] font-semibold text-gray-400 uppercase mb-2">{MESES[mes]} {anio} — Posición IVA</div>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Débito fiscal</div>
-            <div className="text-xl font-bold font-mono text-orange-700">{fmtCLP(data.ivaVentas)}</div>
-            <div className="text-[10px] text-gray-400 mt-1">IVA cobrado en ventas</div>
-          </div>
-          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Crédito fiscal</div>
-            <div className="text-xl font-bold font-mono text-green-700">{fmtCLP(data.ivaCompras)}</div>
-            <div className="text-[10px] text-gray-400 mt-1">IVA pagado en compras</div>
-          </div>
-          <div className={`border rounded-2xl p-4 shadow-sm ${data.ivaSaldo >= 0 ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
-            <div className={`text-[10px] font-semibold uppercase mb-1 ${data.ivaSaldo >= 0 ? 'text-red-700' : 'text-green-700'}`}>
-              {data.ivaSaldo >= 0 ? 'A pagar SII' : 'Remanente CF'}
-            </div>
-            <div className={`text-xl font-bold font-mono ${data.ivaSaldo >= 0 ? 'text-red-800' : 'text-green-800'}`}>{fmtCLP(Math.abs(data.ivaSaldo))}</div>
-            <div className={`text-[10px] mt-1 ${data.ivaSaldo >= 0 ? 'text-red-600' : 'text-green-600'}`}>F29 — Línea 48</div>
-          </div>
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Dashboard financiero</h1>
+          <p className="text-xs text-gray-400 mt-0.5">Puerto NOA SpA · {MESES[mes]} {anio} · TC USD/CLP {tc.usd.toLocaleString('es-CL')}</p>
+        </div>
+        <div className="flex gap-2">
+          {[
+            { label:'Libro IVA', href:'/contabilidad/iva' },
+            { label:'Gastos', href:'/contabilidad/gastos' },
+            { label:'Resultados', href:'/contabilidad/resultados' },
+          ].map(l => (
+            <Link key={l.href} href={l.href} className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 hover:border-[#1168F8] hover:text-[#1168F8] bg-white">
+              {l.label}
+            </Link>
+          ))}
         </div>
       </div>
 
-      {/* Fila 2: Facturación del año */}
-      <div className="mb-4">
-        <div className="text-[10px] font-semibold text-gray-400 uppercase mb-2">Facturación {anio}</div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Facturas emitidas PN</div>
-            <div className="text-xl font-bold font-mono text-[#052698]">{fmtUSD(data.facturasEmitidas)}</div>
-            <div className="text-[10px] text-gray-400 mt-1">Ingresos totales facturados</div>
+      {/* FILA 1 — IVA del mes */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+          <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Débito fiscal</div>
+          <div className="text-xl font-bold font-mono text-orange-700">{fmtCLP(d.ivaVentas)}</div>
+          <div className="text-[10px] text-gray-400 mt-1">IVA ventas {MESES[mes]}</div>
+        </div>
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+          <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Crédito fiscal</div>
+          <div className="text-xl font-bold font-mono text-green-700">{fmtCLP(d.ivaCompras)}</div>
+          <div className="text-[10px] text-gray-400 mt-1">IVA compras {MESES[mes]}</div>
+        </div>
+        <div className={`border rounded-2xl p-4 shadow-sm ${ivaNegativo?'bg-green-50 border-green-100':'bg-red-50 border-red-100'}`}>
+          <div className={`text-[10px] font-semibold uppercase mb-1 ${ivaNegativo?'text-green-700':'text-red-700'}`}>
+            {ivaNegativo?'Remanente CF':'IVA a pagar SII'}
           </div>
-          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Facturas recibidas PN</div>
-            <div className="text-xl font-bold font-mono text-red-700">{fmtUSD(data.facturasRecibidas)}</div>
-            <div className="text-[10px] text-gray-400 mt-1">Costos totales facturados</div>
-          </div>
+          <div className={`text-xl font-bold font-mono ${ivaNegativo?'text-green-800':'text-red-800'}`}>{fmtCLP(Math.abs(d.ivaSaldo))}</div>
+          <div className={`text-[10px] mt-1 ${ivaNegativo?'text-green-600':'text-red-600'}`}>F29 línea 48</div>
         </div>
       </div>
 
-      {/* Fila 3: Utilidades */}
-      <div className="mb-4">
-        <div className="text-[10px] font-semibold text-gray-400 uppercase mb-2">Resultado operativo</div>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Margen bruto {anio}</div>
-            <div className="text-xl font-bold font-mono text-gray-900">{fmtUSD(data.utilidadAnio)}</div>
-            <div className="text-[10px] text-gray-400 mt-1">Ingresos − costos directos</div>
-          </div>
-          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Gastos fijos {MESES[mes]}</div>
-            <div className="text-xl font-bold font-mono text-orange-700">{fmtCLP(data.gastosFixosMes)}</div>
-            <div className="text-[10px] text-gray-400 mt-1">Estructura fija del mes</div>
-          </div>
-          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Ops. abiertas</div>
-            <div className="text-3xl font-bold text-[#1168F8]">{data.operacionesAbiertas}</div>
-            <div className="text-[10px] text-gray-400 mt-1">En proceso actualmente</div>
-          </div>
+      {/* FILA 2 — Facturación + Resultado */}
+      <div className="grid grid-cols-4 gap-3 mb-4">
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+          <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Fact. emitidas {anio}</div>
+          <div className="text-lg font-bold font-mono text-[#052698]">{fmtUSD(d.facEmitidas)}</div>
+        </div>
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+          <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Fact. recibidas {anio}</div>
+          <div className="text-lg font-bold font-mono text-red-700">{fmtUSD(d.facRecibidas)}</div>
+        </div>
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+          <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Margen bruto {anio}</div>
+          <div className="text-lg font-bold font-mono text-gray-900">{fmtUSD(d.margenAnio)}</div>
+        </div>
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+          <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Gastos fijos {MESES[mes]}</div>
+          <div className="text-lg font-bold font-mono text-orange-700">{fmtCLP(d.gastosFixosMes)}</div>
         </div>
       </div>
 
-      {/* Fila 4: Cuentas */}
-      <div className="mb-4">
-        <div className="text-[10px] font-semibold text-gray-400 uppercase mb-2">Posición de cuentas Puerto NOA</div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3">Cuentas propias PN</div>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-xs text-gray-600">🇨🇱 CLP</span>
-                <span className="font-mono text-xs font-bold">{fmtCLP(data.cuentasCLP)}</span>
+      {/* FILA 3 — Posición de cuentas */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+          <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3">Cuentas propias Puerto NOA</div>
+          <div className="space-y-2">
+            {[
+              { flag:'🇨🇱', label:'CLP', val:fmtCLP(d.cuentasCLP) },
+              { flag:'💵', label:'USD', val:fmtUSD(d.cuentasUSD) },
+              { flag:'🇦🇷', label:'ARS', val:`AR$ ${d.cuentasARS.toLocaleString('es-CL',{maximumFractionDigits:0})}` },
+            ].map(r => (
+              <div key={r.label} className="flex justify-between items-center py-1 border-b border-gray-50 last:border-0">
+                <span className="text-xs text-gray-600">{r.flag} {r.label}</span>
+                <span className="font-mono text-xs font-bold text-gray-900">{r.val}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-xs text-gray-600">💵 USD</span>
-                <span className="font-mono text-xs font-bold">{fmtUSD(data.cuentasUSD)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-xs text-gray-600">🇦🇷 ARS</span>
-                <span className="font-mono text-xs font-bold">AR$ {fmtN(data.cuentasARS)}</span>
-              </div>
-            </div>
-          </div>
-          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 shadow-sm">
-            <div className="text-[10px] font-semibold text-blue-600 uppercase mb-3">Fondos en custodia (clientes)</div>
-            <div className="text-2xl font-bold font-mono text-blue-800">{fmtUSD(data.custodiaTotal)}</div>
-            <div className="text-[10px] text-blue-500 mt-1">Total administrado para clientes</div>
+            ))}
           </div>
         </div>
-      </div>
-
-      {/* Accesos rápidos */}
-      <div className="grid grid-cols-4 gap-3">
-        {[
-          { label:'Libro IVA', href:'/contabilidad/iva', desc:'Compras y ventas' },
-          { label:'Gastos fijos', href:'/contabilidad/gastos', desc:'Estructura PN' },
-          { label:'Utilidades', href:'/contabilidad/resultados', desc:'Por operación' },
-          { label:'Flujo cuentas', href:'/tesoreria/flujo', desc:'ARG ↔ Chile' },
-        ].map(a => (
-          <a key={a.href} href={a.href} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:border-[#1168F8] transition-colors group">
-            <div className="font-semibold text-sm text-gray-900 group-hover:text-[#1168F8]">{a.label}</div>
-            <div className="text-xs text-gray-400 mt-1">{a.desc}</div>
-          </a>
-        ))}
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 shadow-sm">
+          <div className="text-[10px] font-semibold text-blue-600 uppercase mb-3">Fondos en custodia (clientes)</div>
+          <div className="text-2xl font-bold font-mono text-blue-800 mb-1">{fmtUSD(d.custodiaUSD)}</div>
+          <div className="text-[10px] text-blue-500">Total administrado para clientes</div>
+          <Link href="/fondos" className="mt-3 inline-block text-[10px] text-blue-600 hover:underline">Ver detalle →</Link>
+        </div>
       </div>
     </div>
   )
