@@ -16,52 +16,47 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: '⊞' },
+  // ── INICIO ─────────────────────────────────────────
+  { href: '/dashboard',              label: 'Dashboard logístico',  icon: '⊞' },
+  { href: '/contabilidad/dashboard', label: 'Dashboard financiero', icon: '💹' },
 
-  // ── 1. VENTAS & CLIENTES ───────────────────────────
-  // Todo lo que genera ingreso y relación con el cliente
+  // ── VENTAS ─────────────────────────────────────────
   { label: 'VENTAS', section: true },
-  { href: '/cotizador',  label: 'Nueva cotizacion',       icon: '✦' },
-  { href: '/registro',   label: 'Cotizaciones',            icon: '☰' },
-  { href: '/clientes',   label: 'Clientes y proveedores',  icon: '🏢' },
+  { href: '/cotizador', label: 'Nueva cotizacion', icon: '✦' },
+  { href: '/registro',  label: 'Cotizaciones',     icon: '☰' },
+  { href: '/clientes',  label: 'Clientes',         icon: '🏢' },
 
-  // ── 2. OPERACIONES ─────────────────────────────────
-  // Ejecución del servicio logístico
+  // ── OPERACIONES ────────────────────────────────────
   { label: 'OPERACIONES', section: true },
-  { href: '/operaciones', label: 'Operaciones activas',    icon: '🚢' },
-  { href: '/cierre',      label: 'Liquidacion y cierre',   icon: '✓' },
-
-  // ── 3. COMPRAS & PROVEEDORES ───────────────────────
-  // Gestión de costos y proveedores de servicio
-  { label: 'COMPRAS', section: true },
+  { href: '/operaciones',              label: 'Operaciones activas',      icon: '🚢' },
+  { href: '/cierre',                   label: 'Liquidacion y cierre',     icon: '✓' },
   { href: '/cotizaciones-proveedores', label: 'Cotizaciones proveedores', icon: '📋' },
+  { href: '/clientes',                 label: 'Proveedores',              icon: '📦' },
 
-  // ── 4. FINANZAS ────────────────────────────────────
-  // Facturación + cuentas corrientes + tesorería
-  { label: 'FINANZAS', section: true },
-  { href: '/facturacion/emitidas',        label: 'Facturas emitidas',      icon: '📄' },
-  { href: '/facturacion/recibidas',       label: 'Facturas recibidas',     icon: '📥' },
-  { href: '/facturacion/cte-clientes',    label: 'Cta. cte. clientes',     icon: '👥' },
-  { href: '/facturacion/cte-proveedores', label: 'Cta. cte. proveedores',  icon: '📦' },
-  { href: '/fondos',                      label: 'Fondos en custodia',     icon: '🏦' },
-  { href: '/tesoreria/caja',              label: 'Caja Puerto NOA',        icon: '💵', soon: true },
-  { href: '/tesoreria/bancos',            label: 'Bancos Puerto NOA',      icon: '🏛', soon: true },
-  { href: '/tesoreria/flujo',             label: 'Flujo cuentas', icon: '↔' },
+  // ── FINANZAS CLIENTES ──────────────────────────────
+  { label: 'FINANZAS CLIENTES', section: true },
+  { href: '/facturacion/emitidas',        label: 'Facturas emitidas',     icon: '📄' },
+  { href: '/facturacion/recibidas',       label: 'Facturas recibidas',    icon: '📥' },
+  { href: '/facturacion/cte-clientes',    label: 'Cta. cte. clientes',    icon: '👥' },
+  { href: '/facturacion/cte-proveedores', label: 'Cta. cte. proveedores', icon: '🤝' },
+  { href: '/fondos',                      label: 'Fondos en custodia',    icon: '🏦' },
 
-  // ── 5. CONTABILIDAD ────────────────────────────────
-  // Registros contables y resultados
+  // ── TESORERÍA ──────────────────────────────────────
+  { label: 'TESORERÍA', section: true },
+  { href: '/tesoreria/flujo', label: 'Flujo cuentas',   icon: '↔' },
+  { href: '/tipos-cambio',    label: 'Tipos de cambio', icon: '💱' },
+
+  // ── CONTABILIDAD ───────────────────────────────────
   { label: 'CONTABILIDAD', section: true },
-  { href: '/contabilidad/iva',        label: 'Libro IVA',       icon: '📊' },
+  { href: '/contabilidad/iva',        label: 'Libro IVA',       icon: '📖' },
   { href: '/contabilidad/gastos',     label: 'Gastos y costos', icon: '📉' },
   { href: '/contabilidad/resultados', label: 'Resultados',      icon: '📈' },
 
-  // ── 6. CONFIGURACION ───────────────────────────────
-  // Parámetros del sistema — solo admin o técnico
+  // ── CONFIGURACIÓN ──────────────────────────────────
   { label: 'CONFIGURACION', section: true },
-  { href: '/catalogos',       label: 'Catálogos',       icon: '📚' },
-  { href: '/tipos-cambio',    label: 'Tipos de cambio', icon: '💱' },
-  { href: '/tributos-config', label: 'Tributos ARCA',   icon: '§',  adminOnly: true },
-  { href: '/usuarios',        label: 'Usuarios',        icon: '◎',  adminOnly: true },
+  { href: '/catalogos',       label: 'Catálogos',    icon: '📚' },
+  { href: '/tributos-config', label: 'Tributos ARCA', icon: '§', adminOnly: true },
+  { href: '/usuarios',        label: 'Usuarios',      icon: '◎', adminOnly: true },
 ]
 interface TCWidget {
   ARS: number | null
