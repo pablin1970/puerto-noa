@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
 const RUBROS: Record<string, { label: string; color: string; bg: string }> = {
@@ -44,6 +45,7 @@ interface Cotizacion {
   fecha_vencimiento: string
   moneda: string
   estado: string
+  origen: string
   seguro_incluido: boolean
   seguro_monto: number | null
   notas: string
@@ -141,18 +143,35 @@ function ItemRow({ it, i, tiposCont, onChange, onRemove, editMode = true }: {
 
 export default function CotizacionesProveedoresPage() {
   const supabase = useMemo(() => createClient(), [])
+  const searchParams = useSearchParams()
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
   const [terceros, setTerceros] = useState<any[]>([])
   const [cotsSistema, setCotsSistema] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'lista' | 'nueva' | 'detalle'>('lista')
+  // Params prellenados desde el cotizador
+  const [initParams, setInitParams] = useState<any>(null)
   const [selId, setSelId] = useState<string | null>(null)
   const [filtroRubro, setFiltroRubro] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
   const [buscar, setBuscar] = useState('')
 
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => {
+    loadAll()
+    // Detectar si viene del cotizador con params prellenados
+    const esNuevo = searchParams.get('nuevo')
+    if(esNuevo === '1') {
+      const params = {
+        rubro: searchParams.get('rubro') || '',
+        bloque: searchParams.get('bloque') || '',
+        cliente_id: searchParams.get('cliente_id') || '',
+        cliente_nombre: searchParams.get('cliente_nombre') || '',
+      }
+      setInitParams(params)
+      setView('nueva')
+    }
+  }, [])
 
   async function loadAll() {
     setLoading(true)
@@ -313,6 +332,9 @@ export default function CotizacionesProveedoresPage() {
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${c.tipo === 'especifica' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
                             {c.tipo === 'especifica' ? '⭐ Especifica' : 'Generica'}
                           </span>
+                          {c.origen === 'estimada' && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700">✏️ Estimada</span>
+                          )}
                         </td>
                         <td className="px-4 py-3.5 font-mono text-[11px] text-gray-600">{c.referencia || '-'}</td>
                         <td className="px-4 py-3.5 font-mono text-[11px] text-gray-600">{c.fecha}</td>
@@ -364,6 +386,7 @@ export default function CotizacionesProveedoresPage() {
           cotsSistema={cotsSistema}
           onSave={async () => { await loadAll(); setView('lista') }}
           onCancel={() => setView('lista')}
+          initParams={initParams}
         />
       )}
 
@@ -382,23 +405,26 @@ export default function CotizacionesProveedoresPage() {
   )
 }
 
-function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cotizacionInicial }: any) {
+function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cotizacionInicial, initParams }: any) {
+  // Prellenar con params del cotizador si vienen
+  const preInit = initParams || {}
   const [form, setForm] = useState({
     proveedor_nombre: '',
     tercero_id: '',
-    rubro: 'forwarder',
-    tipo: 'generica',
+    rubro: preInit.rubro || 'forwarder',
+    tipo: preInit.cliente_id ? 'especifica' : 'generica',
     referencia: '',
     fecha: new Date().toISOString().slice(0, 10),
     fecha_vencimiento: '',
     moneda: 'USD',
     estado: 'vigente',
+    origen: 'recibida',
     seguro_incluido: false,
     seguro_modo: 'pct',
     seguro_monto: '',
     notas: '',
     cotizacion_id: '',
-    cliente_id: '',
+    cliente_id: preInit.cliente_id || '',
     tramo: '',
     puerto_china_id: '',
     puerto_chile_id: '',
@@ -461,6 +487,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
       tercero_id: form.tercero_id || null,
       rubro: form.rubro,
       tipo: form.tipo,
+      origen: form.origen || 'recibida',
       referencia: form.referencia || null,
       fecha: form.fecha,
       fecha_vencimiento: form.fecha_vencimiento || null,
@@ -516,7 +543,18 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
     <div className="max-w-3xl space-y-4">
       {/* Proveedor */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-        <h3 className="font-bold text-sm text-gray-900 mb-4">Proveedor</h3>
+        {initParams?.bloque && (
+        <div className="mb-4 px-4 py-3 bg-[#EBF2FF] border border-[#93B8FC] rounded-xl text-xs text-[#052698] flex items-center gap-3">
+          <span className="text-lg">📋</span>
+          <div>
+            <div className="font-bold mb-0.5">Carga iniciada desde el Cotizador — Bloque {initParams.bloque}</div>
+            <div className="text-[10px] text-[#1168F8]">
+              El rubro y cliente fueron preseleccionados. Completá los datos y guardá — podrás usar esta cotización al volver al cotizador.
+            </div>
+          </div>
+        </div>
+      )}
+      <h3 className="font-bold text-sm text-gray-900 mb-4">Proveedor</h3>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2 relative">
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre del proveedor *</label>
@@ -635,6 +673,34 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
                 {form.cliente_id && <div className="mt-1 text-[10px] text-[#1168F8]">Aparecera sugerida al cotizar para este cliente</div>}
               </div>
             )}
+
+            {/* Origen de la cotización */}
+            <div className="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+              <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Origen de esta cotización</label>
+              <div className="space-y-2">
+                {[
+                  { key: 'recibida', label: 'Recibida', desc: 'Cotización real enviada por el proveedor', icon: '📨' },
+                  { key: 'estimada', label: 'Estimada', desc: 'Generada internamente por Puerto NOA — sin cotización formal del proveedor', icon: '✏️' },
+                ].map(o => (
+                  <button key={o.key} onClick={() => setF('origen', o.key)}
+                    className={`w-full px-4 py-2.5 rounded-xl border-2 text-left transition-all ${form.origen === o.key ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{o.icon}</span>
+                      <div>
+                        <div className="text-xs font-bold text-gray-900">{o.label}</div>
+                        <div className="text-[10px] text-gray-400">{o.desc}</div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {form.origen === 'estimada' && (
+                <div className="mt-2 px-3 py-2 bg-amber-50 border border-amber-100 rounded-lg text-[10px] text-amber-700">
+                  ⚠ Las cotizaciones estimadas se usarán para análisis de precios y evolución de tarifas. 
+                  El proveedor será el usuario logueado en el sistema.
+                </div>
+              )}
+            </div>
 
             {/* Seguro — solo para forwarder */}
             {form.rubro === 'forwarder' && (
