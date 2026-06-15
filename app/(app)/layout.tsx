@@ -31,6 +31,7 @@ const NAV: NavItem[] = [
   { href: '/operaciones',              label: 'Operaciones activas',      icon: '🚢' },
   { href: '/cierre',                   label: 'Liquidacion y cierre',     icon: '✓' },
   { href: '/cotizaciones-proveedores', label: 'Cotizaciones proveedores', icon: '📋' },
+  { href: '/precios',                  label: 'Inteligencia de precios',  icon: '📊' },
   { href: '/clientes',                 label: 'Proveedores',              icon: '📦' },
 
   // ── FINANZAS CLIENTES ──────────────────────────────
