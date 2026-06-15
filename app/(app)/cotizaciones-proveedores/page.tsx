@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
@@ -141,7 +141,7 @@ function ItemRow({ it, i, tiposCont, onChange, onRemove, editMode = true }: {
   )
 }
 
-export default function CotizacionesProveedoresPage() {
+function CotizacionesProveedoresInner() {
   const supabase = useMemo(() => createClient(), [])
   const searchParams = useSearchParams()
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
@@ -1061,5 +1061,14 @@ function AsociarCotizacion({ cotizacion, supabase, cotsSistema, onReload }: any)
         </div>
       )}
     </div>
+  )
+}
+
+
+export default function CotizacionesProveedoresPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-gray-400 text-sm">Cargando...</div>}>
+      <CotizacionesProveedoresInner />
+    </Suspense>
   )
 }
