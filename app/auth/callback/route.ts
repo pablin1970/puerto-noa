@@ -1,44 +1,57 @@
+'use client'
+import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { useRouter } from 'next/navigation'
 
-export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url)
-  const code = searchParams.get('code')
-  const error = searchParams.get('error')
+export default function AuthCallbackPage() {
+  const router = useRouter()
+  const supabase = createClient()
 
-  if (error) {
-    return NextResponse.redirect(`${origin}/?error=auth_error`)
-  }
+  useEffect(() => {
+    async function handleCallback() {
+      const { data, error } = await supabase.auth.getSession()
 
-  if (code) {
-    const supabase = createClient()
-    const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+      if (error || !data.session) {
+        router.push('/?error=auth_error')
+        return
+      }
 
-    if (!exchangeError && data.user) {
-      // Verificar que el usuario existe en la tabla usuarios y está activo
+      const user = data.session.user
+
+      // Verificar que el usuario existe y está activo
       const { data: u } = await supabase
         .from('usuarios')
         .select('id, activo')
-        .eq('email', data.user.email)
+        .eq('email', user.email)
         .single()
 
       if (!u || !(u as any).activo) {
         await supabase.auth.signOut()
-        return NextResponse.redirect(`${origin}/?error=usuario_inactivo`)
+        router.push('/?error=usuario_inactivo')
+        return
       }
 
       // Vincular auth_id y registrar login
       await (supabase.from('usuarios') as any)
         .update({
-          auth_id: data.user.id,
+          auth_id: user.id,
           last_login_at: new Date().toISOString()
         })
-        .eq('email', data.user.email)
+        .eq('email', user.email)
 
-      return NextResponse.redirect(`${origin}/dashboard`)
+      router.push('/dashboard')
     }
-  }
 
-  return NextResponse.redirect(`${origin}/?error=auth_error`)
+    handleCallback()
+  }, [])
+
+  return (
+    <div className="min-h-screen flex items-center justify-center"
+      style={{ background: 'linear-gradient(135deg, #052698 0%, #1168F8 100%)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl p-8 text-center">
+        <div className="w-8 h-8 border-4 border-[#1168F8] border-t-transparent rounded-full animate-spin mx-auto mb-4"/>
+        <p className="text-sm text-gray-600">Verificando acceso...</p>
+      </div>
+    </div>
+  )
 }
