@@ -46,6 +46,7 @@ const NAV: NavItem[] = [
   { href: '/fondos',                      label: 'Fondos en custodia',     icon: '🏦' },
   { href: '/tesoreria/caja',              label: 'Caja Puerto NOA',        icon: '💵', soon: true },
   { href: '/tesoreria/bancos',            label: 'Bancos Puerto NOA',      icon: '🏛', soon: true },
+  { href: '/tesoreria/flujo',             label: 'Flujo cuentas', icon: '↔' },
 
   // ── 5. CONTABILIDAD ────────────────────────────────
   // Registros contables y resultados
