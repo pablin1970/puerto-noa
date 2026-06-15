@@ -69,6 +69,7 @@ interface CotState {
   puertoChiId: string; puertoChileId: string; pasoId: string; ciudadDestinoId: string
   sentido: 'importacion' | 'exportacion'
   bloquesActivos: string[]
+  incluirArca: boolean
   observaciones: string[]
   modalidadCarga: 'contenedor' | 'bulk' | 'mixta'
   bulkDescripcion: string; bulkPesoTon: number; bulkVolM3: number
@@ -111,6 +112,7 @@ const INIT: CotState = {
   puertoChiId:'',puertoChileId:'',pasoId:'',ciudadDestinoId:'',
   sentido: 'importacion' as 'importacion'|'exportacion',
   bloquesActivos: [] as string[],  // IDs de bloques activos — vacío = todos activos
+  incluirArca: true,
   observaciones: [] as string[],   // Filas de observaciones al final
   modalidadCarga:'contenedor',
   bulkDescripcion:'',bulkPesoTon:0,bulkVolM3:0,
@@ -423,7 +425,7 @@ export default function CotizadorPage(){
   }
   const tributos=calcTrib(tribCfg,cifARS,s.derPct)
   const totalTribARS=tributos.reduce((t,r)=>t+r.imp,0)
-  const totalTribUSD=totalTribARS/s.tcTrib
+  const totalTribUSD=s.incluirArca?totalTribARS/s.tcTrib:0
   const totalLog=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+segIndepCalc+subE+subGastosArg+fee
   const totalLanded=totalFOB+totalLog+totalTribUSD
   const cap=calcCapacidad(s.contenedores,s.productos)
@@ -751,7 +753,7 @@ export default function CotizadorPage(){
       </div>
 
       <div className="flex gap-2 mb-5 flex-wrap items-center">
-        {([{key:'embarque',label:'Embarque'},{key:'logistica',label:'Logistica'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as const).map(t=>(
+        {([{key:'embarque',label:'Embarque'},{key:'logistica',label:'Logistica'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as {key:string,label:string}[]).filter(t=>t.key!=='tributos'||s.incluirArca).map(t=>(
           <button key={t.key} onClick={()=>{setTab(t.key as Tab);setTimeout(()=>{topRef.current?.scrollIntoView({behavior:'smooth',block:'start'})},50)}} className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm ${tab===t.key?'bg-[#1168F8] text-white shadow-md':'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{t.label}</button>
         ))}
         <div className="ml-auto">
@@ -821,6 +823,20 @@ export default function CotizadorPage(){
                     })}
                   </div>
                 )}
+              </div>
+              {/* ARCA */}
+              <div className="pt-3 border-t border-gray-100">
+                <div className="text-[10px] font-semibold text-gray-500 uppercase mb-2">Tributos</div>
+                <button onClick={()=>u('incluirArca',!s.incluirArca)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-left transition-all w-full ${s.incluirArca?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 bg-gray-50 opacity-50'}`}>
+                  <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${s.incluirArca?'bg-[#1168F8] border-[#1168F8]':'border-gray-300 bg-white'}`}>
+                    {s.incluirArca&&<div className="w-2 h-1.5 border-l-2 border-b-2 border-white" style={{transform:'rotate(-45deg) translate(1px,-1px)'}}/>}
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-gray-800">Tributos ARCA</div>
+                    <div className="text-[9px] text-gray-400">Derechos de importación, IVA, tasa estadística (aduana Argentina)</div>
+                  </div>
+                </button>
               </div>
             </div>
           </div>
@@ -2185,7 +2201,7 @@ export default function CotizadorPage(){
 
           <div className="flex justify-between">
             <button onClick={()=>cambiarTab('embarque')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
-            <button onClick={()=>cambiarTab('tributos')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Tributos ARCA</button>
+            <button onClick={()=>cambiarTab(s.incluirArca?'tributos':'resumen')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">{s.incluirArca?'Tributos ARCA':'Ver resumen'}</button>
           </div>
         </div>
       )}
