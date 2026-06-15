@@ -19,6 +19,7 @@ interface OpData {
   id: string
   num: string
   cliente: string
+  estado: string
   fecha_cierre: string
   // Financiero
   ingresos_usd: number      // facturas emitidas PN→cliente
@@ -125,6 +126,7 @@ export default function UtilidadesPage() {
         id: op.id,
         num: cot?.num || '—',
         cliente: cot?.cliente || '—',
+        estado: op.estado || 'activa',
         fecha_cierre: op.updated_at?.slice(0,10) || '',
         ingresos_usd, costos_usd, fee_usd, markup_usd,
         iva_debito, iva_credito, iva_neto,
@@ -261,7 +263,12 @@ export default function UtilidadesPage() {
                   const pctMB = o.ingresos_usd > 0 ? (o.margen_bruto / o.ingresos_usd) * 100 : 0
                   return (
                     <tr key={o.id} className="border-b border-gray-50 hover:bg-gray-50">
-                      <td className="px-3 py-3 font-mono font-bold text-[#052698]">{o.num}</td>
+                      <td className="px-3 py-3">
+                        <div className="font-mono font-bold text-[#052698]">{o.num}</div>
+                        {o.estado !== 'cerrada' && (
+                          <span className="text-[9px] px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded-full font-semibold">en curso</span>
+                        )}
+                      </td>
                       <td className="px-3 py-3 font-medium text-gray-800">{o.cliente}</td>
                       <td className="px-3 py-3 text-right font-mono text-[#052698]">{fmtN(o.fee_usd)}</td>
                       <td className="px-3 py-3 text-right font-mono text-teal-700">{fmtN(o.markup_usd)}</td>
@@ -321,7 +328,12 @@ export default function UtilidadesPage() {
             <tbody>
               {ops.map(o => (
                 <tr key={o.id} className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="px-3 py-3 font-mono font-bold text-[#052698]">{o.num}</td>
+                  <td className="px-3 py-3">
+                    <div className="font-mono font-bold text-[#052698]">{o.num}</div>
+                    {o.estado !== 'cerrada' && (
+                      <span className="text-[9px] px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded-full font-semibold">en curso</span>
+                    )}
+                  </td>
                   <td className="px-3 py-3 font-medium text-gray-800">{o.cliente}</td>
                   <td className="px-3 py-3 text-right font-mono font-bold text-gray-900">{fmtN(o.margen_bruto)}</td>
                   <td className={`px-3 py-3 text-right font-mono ${criterioElegido==='ingresos'?'font-bold':''}`}>
@@ -383,10 +395,15 @@ export default function UtilidadesPage() {
             </div>
           </div>
 
-          <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700">
+          <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700 mb-3">
             💡 El criterio activo es <strong>{CRITERIOS.find(c=>c.key===criterioElegido)?.label}</strong>.
             Cambialo desde el selector arriba para ver cómo varía el margen neto por operación.
           </div>
+          {ops.some(o => o.estado !== 'cerrada') && (
+            <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-[11px] text-amber-700">
+              ⚠ Hay operaciones <strong>en curso</strong> incluidas. Los números son parciales y cambiarán al registrar más movimientos.
+            </div>
+          )}
         </div>
       )}
     </div>
