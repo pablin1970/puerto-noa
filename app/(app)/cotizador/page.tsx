@@ -1307,6 +1307,8 @@ export default function CotizadorPage(){
             <div className="flex items-center gap-2"><label className="text-gray-500">USD/CLP</label><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.tcClp} onChange={e=>u('tcClp',parseNum(e.target.value)||950)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]"/></div>
           </div>
 
+          {/* Bloques 1-4: orden normal en impo, invertido en expo */}
+          <div className={`flex flex-col gap-4 ${s.sentido==='exportacion'?'flex-col-reverse':''}`}>
           {/* ── BLOQUE 1: COTIZACIONES FORWARDER ── */}
           <div className={`bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm ${!bloqueActivo(0)?'hidden':''}`}>
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
@@ -2117,6 +2119,8 @@ export default function CotizadorPage(){
               Subtotal bloque 4: <strong className="font-mono text-gray-800">USD {fmt(subE+subGastosArg)}</strong>
             </div>
           </div>
+
+          </div>{/* fin wrapper bloques 1-4 */}
 
           {/* ── BLOQUE 5: FEE PUERTO NOA ── */}
           <div className={`bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm ${!bloqueActivo(4)?'hidden':''}`}>
