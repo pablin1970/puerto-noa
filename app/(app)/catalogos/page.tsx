@@ -888,6 +888,8 @@ function BloquesCotizacionABM() {
 }
 
 
+const RUBRO_VACIO = { nombre: '', codigo: '', descripcion: '', icono: '', color: '#6b7280' }
+
 function RubrosProveedorABM() {
   const supabase = useMemo(() => createClient(), [])
   const [rubros, setRubros] = useState<any[]>([])
