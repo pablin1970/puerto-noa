@@ -62,8 +62,8 @@ export default function UtilidadesPage() {
 
     const [opRes, feRes, frRes, gfRes, tcRes] = await Promise.all([
       supabase.from('operaciones').select('id, estado, cotizacion:cotizaciones(num, cliente, tipo_contenedores, presupuesto)').order('created_at', { ascending: false }),
-      supabase.from('facturas_emitidas').select('operacion_id, total_usd, neto_usd, iva_monto, moneda, tc_referencia, a_recuperar').not('operacion_id', 'is', null),
-      supabase.from('facturas_recibidas').select('operacion_id, total_usd, neto_usd, iva_monto, moneda, tc_referencia, a_recuperar, credito_fiscal').not('operacion_id', 'is', null),
+      supabase.from('facturas_emitidas').select('operacion_id, total_usd, neto_usd, iva_monto, moneda, tc_referencia, a_recuperar').not('operacion_id', 'is', null).gte('fecha_emision', fechaInicio).lte('fecha_emision', fechaFin),
+      supabase.from('facturas_recibidas').select('operacion_id, total_usd, neto_usd, iva_monto, moneda, tc_referencia, a_recuperar, credito_fiscal').not('operacion_id', 'is', null).gte('fecha_emision', fechaInicio).lte('fecha_emision', fechaFin),
       (supabase.from('gastos_fijos_pn') as any).select('monto_clp_equiv').eq('periodo_anio', anio).eq('periodo_mes', mes),
       supabase.from('tipos_cambio_eventos').select('clp').order('created_at', { ascending: false }).limit(1),
     ])
