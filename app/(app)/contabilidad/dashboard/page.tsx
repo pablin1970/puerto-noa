@@ -41,7 +41,7 @@ export default function DashboardFinancieroPage() {
       supabase.from('cotizaciones').select('id').eq('estado','en_proceso'),
     ])
 
-    const tcVal = tcRes.data?.[0] || { clp:908, ars:1450 }
+    const tcVal = (tcRes.data?.[0] as any) || { clp:908, ars:1450 }
     setTc({ usd: tcVal.clp||908, ars: tcVal.ars||1450 })
 
     const ivaV = (ivavRes.data||[]).reduce((t:number,r:any)=>t+(r.iva_clp||0),0)
