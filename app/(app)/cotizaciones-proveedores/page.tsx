@@ -490,22 +490,21 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       if (ci.data) setCiudades(ci.data)
       if (tc.data) setTiposCont(tc.data)
     })
-    // Cargar terceros con sus rubros para filtro por rubro
-    supabase.from('tercero_rubros')
-      .select('tercero_id, rubro:proveedor_rubros!inner(codigo,nombre)')
-      .then(({data})=>{
-        if(data){
-          const map:Record<string,string[]>={}
-          for(const r of data as any[]){
-            if(!map[r.tercero_id]) map[r.tercero_id]=[]
-            map[r.tercero_id].push((r.rubro as any)?.codigo||'')
-          }
-          setTercerosConRubro(prev=>{
-            // enriquecer la lista de terceros ya cargada
-            return terceros.map((t:any)=>({...t, rubros: map[t.id]||[]}))
-          })
+    // Cargar terceros + sus rubros juntos (query independiente, no depende del closure)
+    Promise.all([
+      supabase.from('terceros').select('id,razon_social').eq('activo','true').order('razon_social'),
+      supabase.from('tercero_rubros').select('tercero_id, rubro:proveedor_rubros!inner(codigo)'),
+    ]).then(([tRes, trRes])=>{
+      if(tRes.data){
+        const map:Record<string,string[]>={}
+        for(const r of (trRes.data||[]) as any[]){
+          if(!map[r.tercero_id]) map[r.tercero_id]=[]
+          const cod=(r.rubro as any)?.codigo||''
+          if(cod) map[r.tercero_id].push(cod)
         }
-      })
+        setTercerosConRubro(tRes.data.map((t:any)=>({...t, rubros: map[t.id]||[]})))
+      }
+    })
     // Cargar nombre del usuario logueado para cotizaciones estimadas
     supabase.auth.getUser().then(({data})=>{
       if(data?.user){
