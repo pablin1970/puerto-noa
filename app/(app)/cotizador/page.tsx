@@ -155,6 +155,595 @@ function Card({title,children}:{title:string;children:React.ReactNode}){
 }
 
 function DesconRows({rows,onChange,totalM3}:{rows:ItemLog[];onChange:(r:ItemLog[])=>void;totalM3:number}){
+  return (<div className="space-y-2">
+    {rows.map((r,i)=>(
+      <div key={r.id} className="grid grid-cols-4 gap-2 items-center">
+        <input value={r.desc} onChange={e=>{const n=[...rows];n[i]={...n[i],desc:e.target.value};onChange(n)}}
+          className="col-span-1 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="Descripción"/>
+        <select value={r.tipoCalc} onChange={e=>{const n=[...rows];n[i]={...n[i],tipoCalc:e.target.value as any};onChange(n)}}
+          className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:border-[#1168F8]">
+          <option value="fijo">Fijo (USD)</option><option value="m3">Por m3</option>
+        </select>
+        {r.tipoCalc==='m3'
+          ?<div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right font-mono">{(totalM3||0).toFixed(2)} m3</div>
+          :<input type="text" inputMode="decimal" value={r.cant||''} onFocus={e=>e.target.select()}
+              onChange={e=>{const n=[...rows];n[i]={...n[i],cant:parseFloat(e.target.value)||0};onChange(n)}}
+              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:border-[#1168F8]" placeholder="Cant."/>}
+        <input type="text" inputMode="decimal" value={r.unitario||''} onFocus={e=>e.target.select()}
+          onChange={e=>{const n=[...rows];n[i]={...n[i],unitario:parseFloat(e.target.value)||0};onChange(n)}}
+          className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:border-[#1168F8]" placeholder={r.tipoCalc==='m3'?'USD/m3':'USD'}/>
+        <button onClick={()=>onChange(rows.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs">✕</button>
+      </div>
+    ))}
+    <button onClick={()=>onChange([...rows,{id:Math.random().toString(36).slice(2),desc:'',cant:1,unitario:0,ivaChile:'exento',tipoCalc:'fijo'}])}
+      className="text-[10px] text-[#1168F8] hover:underline">+ Agregar item</button>
+  </div>)
+}
+
+export default function CotizadorPage(){
+const topRef=useRef<HTMLDivElement>(null)
+const [s,setS]=useState<CotState>(INIT)
+const [tab,setTab]=useState<Tab>('embarque')
+// Catálogos geográficos
+const [puertosChi,setPuertosChi]=useState<any[]>([])
+const [puertosChile,setPuertosChile]=useState<any[]>([])
+const [pasosFront,setPasosFront]=useState<any[]>([])
+const [ciudadesArg,setCiudadesArg]=useState<any[]>([])
+const [tiposCont,setTiposCont]=useState<any[]>([])
+const [tiposCamion,setTiposCamion]=useState<any[]>([])
+const [cotsFWDisponibles,setCotsFWDisponibles]=useState<any[]>([])
+const [cotsTranspDisponibles,setCotsTranspDisponibles]=useState<any[]>([])
+const [cotsArgDisponibles,setCotsArgDisponibles]=useState<any[]>([])
+const [cotsChileDisponibles,setCotsChileDisponibles]=useState<any[]>([])
+// Cotizaciones de operaciones usadas (para detectar "ya usada en X")
+const [cotsSistemaUsadas,setCotsSistemaUsadas]=useState<Record<string,string[]>>({})
+// Rubros por bloque (desde cotizador_bloque_rubros)
+const [rubrosBloque,setRubrosBloque]=useState<Record<number,string[]>>({1:[],2:[],3:[],4:[]})
+const [bloques,setBloques]=useState<any[]>([])
+// Terceros proveedores por rubro (para búsqueda en carga manual)
+const [tercerosProv,setTercerosProv]=useState<any[]>([])
+
+
+
+// Cotizaciones de proveedores seleccionadas por bloque
+const [provUsado,setProvUsado]=useState<Record<number,string|null>>({1:null,2:null,3:null,4:null})
+const [terceros,setTerceros]=useState<any[]>([])
+const [despachantes,setDespachantes]=useState<any[]>([])
+const [despachanteSelId,setDespachanteSelId]=useState<string|null>(null)
+const [cotDesp,setCotDesp]=useState<{id:string;referencia:string;fecha:string;tipo:'generica'|'especifica'}|null>(null)
+const [buscarDespachante,setBuscarDespachante]=useState('')
+const [showDespachanteDropdown,setShowDespachanteDropdown]=useState(false)
+const [loadingDesp,setLoadingDesp]=useState(false)
+const [buscarCliente,setBuscarCliente]=useState('')
+const [showClienteDropdown,setShowClienteDropdown]=useState(false)
+const [clienteSelId,setClienteSelId]=useState<string|null>(null)
+const [histCliente,setHistCliente]=useState<any[]>([])
+const [showHist,setShowHist]=useState(false)
+
+const [tribCfg,setTribCfg]=useState<TribCfg[]>([])
+const [saving,setSaving]=useState(false)
+const supabase=createClient()
+const router=useRouter()
+
+useEffect(()=>{
+  supabase.from('tipos_cambio_eventos').select('ars,clp').order('created_at',{ascending:false}).limit(1)
+    .then(({data})=>{
+      if(data&&data.length>0){
+        const row=data[0] as any
+        if(row.ars) setS(p=>({...p,tcTrib:row.ars}))
+        if(row.clp) setS(p=>({...p,tcClp:row.clp}))
+      }
+    })
+  supabase.from('terceros').select('id,razon_social,nombre_fantasia,nro_doc,tipo_doc,condicion_iva,dir_fiscal_ciudad,pais,contactos:tercero_contactos(email,telefono,principal)')
+    .eq('activo','true')
+    .filter('tipo', 'cs', '{"cliente"}')
+    .then(({data})=>{if(data) setTerceros(data)})
+  // Cargar despachantes (proveedores con rubro despachante de aduana)
+  supabase.from('tercero_rubros')
+    .select('tercero_id, rubro:proveedor_rubros!inner(nombre), tercero:terceros!inner(id,razon_social,activo)')
+    .eq('rubro.nombre','Despachante de aduana')
+    .then(({data})=>{
+      if(data){
+        const desps=(data as any[]).filter(r=>r.tercero?.activo!==false).map(r=>r.tercero)
+        setDespachantes(desps)
+      }
+    })
+  // Cargar cotizaciones por bloque_id + usadas + terceros
+  Promise.all([
+    supabase.from('cotizador_bloques').select('id,numero,nombre').eq('activo',true).order('numero'),
+    supabase.from('cotizaciones_proveedor_v2')
+      .select('*, items:cotizaciones_proveedor_v2_items(*)')
+      .eq('estado','vigente')
+      .order('fecha',{ascending:false}),
+    supabase.from('cotizacion_proveedores_usados')
+      .select('cotizacion_proveedor_id, cotizacion:cotizaciones!inner(num)')
+      .limit(500),
+    supabase.from('tercero_rubros')
+      .select('tercero_id, rubro:proveedor_rubros!inner(nombre), tercero:terceros!inner(id,razon_social,activo)')
+      .filter('tercero.activo','eq','true'),
+  ]).then(([bloqRes,cotRes,usadasRes,trRes])=>{
+    // Guardar nombres de bloques para UI
+    const rb:Record<number,string[]>={1:[],2:[],3:[],4:[]}
+    if(bloqRes.data){
+      for(const b of bloqRes.data as any[]) rb[b.numero]=[b.nombre]
+    }
+    if(bloqRes.data) setBloques(bloqRes.data as any[])
+    setRubrosBloque(rb)
+    // Terceros proveedores
+    if(trRes.data){
+      const provs=(trRes.data as any[])
+        .filter(r=>r.tercero?.activo!==false)
+        .map(r=>({...r.tercero, rubro:(r.rubro as any)?.nombre||''}))
+      setTercerosProv(provs)
+    }
+    // Mapa de cotizaciones usadas
+    const usadasMap:Record<string,string[]>={}
+    if(usadasRes.data){
+      for(const u of usadasRes.data as any[]){
+        const pid=u.cotizacion_proveedor_id
+        const num=(u.cotizacion as any)?.num||''
+        if(!usadasMap[pid]) usadasMap[pid]=[]
+        if(num) usadasMap[pid].push(num)
+      }
+    }
+    setCotsSistemaUsadas(usadasMap)
+    // Filtrar por bloque_id — directo y limpio
+    if(cotRes.data && bloqRes.data){
+      const cots=cotRes.data as any[]
+      const idPorNum:Record<number,string>={}
+      for(const b of bloqRes.data as any[]) idPorNum[b.numero]=b.id
+      setCotsFWDisponibles(cots.filter(c=>c.bloque_id===idPorNum[1]))
+      setCotsChileDisponibles(cots.filter(c=>c.bloque_id===idPorNum[2]))
+      setCotsTranspDisponibles(cots.filter(c=>c.bloque_id===idPorNum[3]))
+      setCotsArgDisponibles(cots.filter(c=>c.bloque_id===idPorNum[4]))
+    }
+  })
+  // Catálogos geográficos y tipos de camión
+  Promise.all([
+    supabase.from('puertos_china').select('id,locode,nombre,ciudad').eq('activo','true').order('orden'),
+    supabase.from('puertos_chile').select('id,locode,nombre,ciudad').eq('activo','true').order('orden'),
+    supabase.from('pasos_fronterizos').select('id,nombre,provincia_argentina,restriccion_invierno').eq('activo','true').order('orden'),
+    supabase.from('ciudades_destino_arg').select('id,ciudad,provincia').eq('activo','true').order('orden'),
+    supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo','true').order('orden'),
+    supabase.from('tipos_camion').select('id,nombre,icono').eq('activo','true').order('orden'),
+  ]).then(([ch,cl,ps,ci,tc,tca])=>{
+    if(ch.data) setPuertosChi(ch.data)
+    if(cl.data) setPuertosChile(cl.data)
+    if(ps.data) setPasosFront(ps.data)
+    if(ci.data) setCiudadesArg(ci.data)
+    if(tc.data) setTiposCont(tc.data)
+    if(tca.data) setTiposCamion(tca.data)
+  })
+},[])
+useEffect(()=>{loadTrib()},[s.regimen])
+useEffect(()=>{
+  // Pre-cargar nCamiones según contenedores seleccionados
+  setS(p=>{
+    const ncTotal=p.contenedores.reduce((s,c)=>s+c.cantidad,0)||1
+    return {...p,nCamiones:p.nCamiones===1?ncTotal:p.nCamiones}
+  })
+},[s.contenedores])
+
+async function loadTrib(){
+  const {data}=await supabase.from('tributos_config').select('*').eq('regimen',s.regimen).eq('aplica',true).order('orden')
+  if(data){
+    setTribCfg(data as TribCfg[])
+    const der=(data as TribCfg[]).find(t=>t.codigo==='010')
+    if(der) setS(p=>({...p,derPct:der.valor}))
+  }
+}
+
+const u=<K extends keyof CotState>(k:K,v:CotState[K])=>setS(p=>({...p,[k]:v}))
+const cambiarTab=(t:Tab)=>{setTab(t);setTimeout(()=>{topRef.current?.scrollIntoView({behavior:'smooth',block:'start'})},50)}
+const nc=s.contenedores.reduce((t,c)=>t+c.cantidad,0)||1
+const totalFOB=s.productos.reduce((t,p)=>t+p.subtotal,0)+(s.incoterm==='EXW'?s.exwTransp+s.exwAgente+s.exwOtros:0)
+const totalM3=s.productos.reduce((t,p)=>t+p.vol_unit*p.cantidad,0)
+
+// Bloque 1: ForWarder elegido y sus ítems seleccionados
+const fwElegida = s.cotsProvFW.find(c=>c.elegida)
+const subFW = fwElegida
+  ? fwElegida.esManual
+    ? (fwElegida.manualMonto||0)
+    : fwElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
+  : 0
+const segFW = fwElegida?.segAlcance!=='no'
+  ? (fwElegida?.seguroModo==='pct'
+      ? totalFOB*(fwElegida?.seguroMonto||0)/100
+      : (fwElegida?.seguroMonto||0))
+  : 0
+const segIndepCalc = fwElegida?.segAlcance==='maritimo'
+  ? (s.segModoIndep==='pct'?(totalFOB+subFW)*s.segValIndep/100:s.segValIndep)
+  : 0
+const totalSeg = segFW
+// Bloque 2: Transporte Chile-NOA (cotizaciones del sistema)
+// Bloque 2: Transporte Chile-NOA (cotizaciones del sistema)
+const transpChileElegida = s.cotsProvChile.find(c=>c.elegida)
+const subTranspChile = transpChileElegida
+  ? transpChileElegida.esManual
+    ? (transpChileElegida.manualMonto||0)
+    : transpChileElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
+  : 0
+// Bloque 3: Flete terrestre (cotizaciones del sistema para B1/B2)
+const transpTerrElegida = s.cotsProvTransp.find(c=>c.elegida)
+const subTranspTerr = transpTerrElegida
+  ? transpTerrElegida.esManual
+    ? (transpTerrElegida.manualMonto||0)
+    : transpTerrElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
+  : 0
+
+// Bloque 2: Gastos Chile post-entrega
+const subGastosChile=s.gastosChile.reduce((t,g)=>{
+  const b=(g.tipoCalc==='m3'?g.valor*totalM3:g.valor)
+  return t+(g.ivaChile==='gravado'?b*1.19:b)
+},0)
+
+// Bloque 3: Transporte + desconsolidacion
+const volAlm=s.almModoVol==='auto'?totalM3:s.almVolM3
+const subAlm=s.optTransp==='B2'?volAlm*s.almCostoDia*s.almDias:0
+const subDescon=s.rowsDescon.reduce((t,r)=>t+(r.tipoCalc==='m3'?r.unitario*totalM3:r.cant*r.unitario),0)
+const subCarga=s.optTransp!=='A'?(s.cargaModo==='m3'?s.cargaValor*totalM3:s.cargaValor):0
+const subD=subDescon+subAlm+subCarga
+// subTransp: usa cotizaciones del sistema si hay, sino cálculo manual
+const subTransp=s.optTransp==='A'
+  // Opción A: cotización del sistema si hay, sino ida/dev/rt manual
+  ?(transpTerrElegida?subTranspTerr:(()=>{const ida=s.ftIda*nc,dev=s.ftDev*nc,rt=s.ftRt*nc;return rt>0&&rt<(ida+dev)?rt:ida+dev})())
+  // B1/B2: usa cotizaciones del sistema si hay, sino inputs manuales
+  :(transpTerrElegida?subTranspTerr:s.ftCamion*s.nCamiones)
+
+// Estadias
+const subEstadias=s.estadiaCargaVal*s.estadiaCargaDias+s.estadiaDescargaVal*s.estadiaDescargaDias
+// Seguro terrestre (solo si seguro FW es maritimo)
+// Bloque 4: Gastos Argentina
+const calcGastoArg=(g:GastoArg,cifUsd:number,tcTrib:number):number=>{
+  let usd=0
+  if(g.tipoCalc==='pct_cif'){
+    usd=cifUsd*g.valor/100
+    if(g.pisoUsd>0&&usd<g.pisoUsd) usd=g.pisoUsd
+    if(g.techoUsd>0&&usd>g.techoUsd) usd=g.techoUsd
+  } else if(g.tipoCalc==='fijo_usd'){usd=g.valor}
+  else {usd=g.valor/(tcTrib||1)}
+  return usd
+}
+const cif=totalFOB+subFW+totalSeg
+const cifARS=cif*s.tcTrib
+// Honorario + gastos adicionales despachante (sección A)
+const subHon=calcGastoArg({id:'hon',desc:'',tipoCalc:s.honTipo,moneda:'USD',valor:s.honValor,pisoUsd:s.honPiso,techoUsd:s.honTecho,usd:0,ars:0},cif,s.tcTrib)
+const subGastosDesp=s.gastosDesp.reduce((t,g)=>t+calcGastoArg(g,cif,s.tcTrib),0)
+const subGastosArg=subHon+subGastosDesp
+// Otros gastos Argentina sección B
+const subE=s.rowsE.reduce((t,r)=>t+calcGastoArg(r,cif,s.tcTrib),0)
+// Base logística para el fee (sin FOB, sin ARCA, sin el propio fee)
+const baseLogFee=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+segIndepCalc+subE+subGastosArg
+const fee=s.feeModo==='pct' ? baseLogFee*s.feePct/100 : s.feeCont*nc
+
+function calcTrib(cfg:TribCfg[],cifARS:number,derPct:number){
+  const VA=cifARS; let base=VA
+  return cfg.map(t=>{
+    let imp=0
+    if(t.codigo==='010'){imp=VA*derPct/100;base=VA+imp}
+    else if(t.codigo==='011'){const e=VA*t.valor/100;imp=e;base+=e}
+    else if(t.tipo==='fijo'){imp=t.valor}
+    else{imp=base*t.valor/100}
+    return {...t,imp}
+  })
+}
+const tributos=calcTrib(tribCfg,cifARS,s.derPct)
+const totalTribARS=tributos.reduce((t,r)=>t+r.imp,0)
+const totalTribUSD=s.incluirArca?totalTribARS/s.tcTrib:0
+const totalLog=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+segIndepCalc+subE+subGastosArg+fee
+const totalLanded=totalFOB+totalLog+totalTribUSD
+const cap=calcCapacidad(s.contenedores,s.productos)
+
+// ── Helpers para manejar CotProvSel genéricamente ──────────────
+const isVigente = (fv:string) => !fv || new Date(fv) >= new Date()
+
+// Verificar si un bloque está activo (por índice 0-based en array de bloques cargados)
+const bloqueActivo = (idx: number): boolean => {
+  if (s.bloquesActivos.length === 0) return true
+  const bloque = bloques[idx]
+  if (!bloque) return true
+  return s.bloquesActivos.includes((bloque as any).id)
+}
+const fmtFecha = (f:string) => f ? f.split('-').reverse().join('/') : '—'
+
+function cotProvDesdeSistema(cot:any, contenedoresH1:{tipo:string;cantidad:number}[], usadas:string[]): CotProvSel {
+  const items: ItemSelProv[] = (cot.items||[]).map((it:any)=>{
+    const esBigbag = it.tipo_calculo === 'por_bigbag'
+    const cantSug = esBigbag
+      ? (contenedoresH1 as any).__bigbags__ || 1
+      : contenedoresH1.find(c=>c.tipo===it.tipo_contenedor)?.cantidad || 1
+    const valorUnit = parseNum(String(it.valor||0))
+    return {
+      itemId: it.id||uid2(),
+      descripcion: it.descripcion||'',
+      tipo_calculo: it.tipo_calculo||'fijo_usd',
+      valorUnit,
+      cantCotizada: cantSug,
+      cantUsar: cantSug,
+      tipoContenedor: it.tipo_contenedor||'',
+      subtotal: valorUnit * cantSug,
+      seleccionado: false,
+    }
+  })
+  return {
+    uid: uid2(),
+    cotProvId: cot.id,
+    proveedorNombre: cot.proveedor_nombre||'',
+    referencia: cot.referencia||'',
+    fechaEmision: cot.fecha||'',
+    fechaVencimiento: cot.fecha_vencimiento||'',
+    tipo: cot.tipo==='especifica'?'especifica':'generica',
+    clienteId: cot.cliente_id||null,
+    estado: isVigente(cot.fecha_vencimiento||'')?'vigente':'vencida',
+    usadaEnCots: usadas,
+    items,
+    elegida: false,
+    seguroIncluido: cot.seguro_incluido||false,
+    seguroModo: (cot.seguro_modo||'pct') as 'pct'|'fijo',
+    seguroMonto: parseNum(String(cot.seguro_monto||0)),
+    segAlcance: (cot.seguro_incluido?'maritimo':'no') as any,
+  }
+}
+
+// FW desde sistema
+function agregarFWDesdeSistema(cotId:string){
+  const cot = cotsFWDisponibles.find(c=>c.id===cotId)
+  if(!cot) return
+  const usadas = cotsSistemaUsadas[cotId]||[]
+  const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
+  nueva.elegida = s.cotsProvFW.length===0
+  setS(p=>({...p, cotsProvFW:[...p.cotsProvFW, nueva]}))
+  setProvUsado(pv=>({...pv,1:cotId}))
+}
+
+function agregarFWManual(){
+  const nueva: CotProvSel = {
+    uid:uid2(), cotProvId:'', proveedorNombre:'', referencia:'',
+    fechaEmision:new Date().toISOString().slice(0,10), fechaVencimiento:'',
+    tipo:'generica', clienteId:null, estado:'vigente', usadaEnCots:[],
+    items:[{itemId:uid2(),descripcion:'Flete marítimo',tipo_calculo:'fijo_usd',valorUnit:0,cantCotizada:nc,cantUsar:nc,tipoContenedor:'',subtotal:0,seleccionado:true}],
+    elegida:s.cotsProvFW.length===0,
+    seguroIncluido:false, seguroModo:'pct', seguroMonto:0, segAlcance:'no',
+    esManual:false,
+  }
+  setS(p=>({...p, cotsProvFW:[...p.cotsProvFW, nueva]}))
+}
+
+function elegirCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', uid:string){
+  setS(p=>({...p, [campo]:p[campo].map((c:CotProvSel)=>({...c,elegida:c.uid===uid}))}))
+}
+
+function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', uid:string){
+  setS(p=>{
+    const nuevas = (p[campo] as CotProvSel[]).filter(c=>c.uid!==uid)
+    if(nuevas.length>0&&!nuevas.some(c=>c.elegida)) nuevas[0].elegida=true
+    return {...p,[campo]:nuevas}
+  })
+}
+
+function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', cotUid:string, itemId:string){
+  setS(p=>({...p,[campo]:(p[campo] as CotProvSel[]).map(c=>{
+    if(c.uid!==cotUid) return c
+    return {...c,items:c.items.map(i=>{
+      if(i.itemId!==itemId) return i
+      const sel = !i.seleccionado
+      return {...i,seleccionado:sel,subtotal:sel?i.valorUnit*i.cantUsar:0}
+    })}
+  })}))
+}
+
+function setCantUsarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', cotUid:string, itemId:string, cant:number){
+  setS(p=>({...p,[campo]:(p[campo] as CotProvSel[]).map(c=>{
+    if(c.uid!==cotUid) return c
+    return {...c,items:c.items.map(i=>{
+      if(i.itemId!==itemId) return i
+      return {...i,cantUsar:cant,subtotal:i.seleccionado?i.valorUnit*cant:0}
+    })}
+  })}))
+}
+
+function updateSegAlcanceFW(cotUid:string, segAlcance:'no'|'maritimo'|'punta_a_punta'){
+  setS(p=>({...p,cotsProvFW:p.cotsProvFW.map(c=>c.uid===cotUid?{...c,segAlcance}:c)}))
+}
+
+// Transporte Chile desde sistema
+function agregarTranspChileDesdeSistema(cotId:string){
+  const cot = cotsChileDisponibles.find(c=>c.id===cotId)
+  if(!cot) return
+  const usadas = cotsSistemaUsadas[cotId]||[]
+  const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
+  nueva.elegida = s.cotsProvChile.length===0
+  setS(p=>({...p, cotsProvChile:[...p.cotsProvChile, nueva]}))
+  setProvUsado(pv=>({...pv,2:cotId}))
+}
+
+// Transporte terrestre desde sistema
+function agregarTranspTerrDesdeSistema(cotId:string){
+  const cot = cotsTranspDisponibles.find(c=>c.id===cotId)
+  if(!cot) return
+  const usadas = cotsSistemaUsadas[cotId]||[]
+  const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
+  nueva.elegida = s.cotsProvTransp.length===0
+  setS(p=>({...p, cotsProvTransp:[...p.cotsProvTransp, nueva]}))
+  setProvUsado(pv=>({...pv,3:cotId}))
+}
+
+// Buscar terceros proveedores por rubros del bloque
+function tercerosPorBloque(bloque:number){
+  const rubros=rubrosBloque[bloque]||[]
+  if(rubros.length===0) return tercerosProv
+  return tercerosProv.filter(t=>rubros.includes(t.rubro))
+}
+
+// Crear tercero mínimo desde el cotizador
+async function crearTerceroMinimo(razonSocial:string, rubro:string):Promise<string|null>{
+  const {data,error}=await (supabase.from('terceros') as any).insert({
+    razon_social:razonSocial,
+    tipo:['proveedor'],
+    activo:true,
+    pais:'',
+  }).select('id').single()
+  if(error||!data) return null
+  const terceroId=(data as any).id
+  // Buscar id del rubro
+  const {data:rubroData}=await supabase.from('proveedor_rubros').select('id').eq('nombre',rubro).limit(1)
+  if(rubroData&&rubroData.length>0){
+    await (supabase.from('tercero_rubros') as any).insert({tercero_id:terceroId,rubro_id:(rubroData[0] as any).id})
+  }
+  // Refrescar tercerosProv
+  const {data:newT}=await supabase.from('terceros').select('id,razon_social').eq('id',terceroId).single()
+  if(newT) setTercerosProv(p=>[...p,{...(newT as any),rubro}])
+  return terceroId
+}
+
+
+
+
+
+  // Gastos Chile manual (cuando no hay cotización del sistema)
+function agregarGastoChileDesdeSistema(cotId:string){
+  const cot=cotsChileDisponibles.find(c=>c.id===cotId)
+  if(!cot) return
+  const nuevos:GastoChile[]=(cot.items||[]).map((it:any)=>({
+    id:uid2(),desc:it.descripcion,proveedor:cot.proveedor_nombre,
+    tipoCalc:(it.tipo_calculo==='por_m3'?'m3':'fijo') as 'fijo'|'m3',
+    valor:it.valor||0,ivaChile:'exento' as const,
+  }))
+  setS(p=>({...p,gastosChile:[...p.gastosChile,...nuevos]}))
+}
+
+async function seleccionarDespachante(d:any){
+  setDespachanteSelId(d.id)
+  u('despachante',d.razon_social)
+  setBuscarDespachante('')
+  setShowDespachanteDropdown(false)
+  setLoadingDesp(true)
+  const {data:cots}=await supabase.from('cotizaciones_proveedor_v2')
+    .select('*,items:cotizaciones_proveedor_v2_items(*)')
+    .eq('tercero_id',d.id)
+    .eq('estado','vigente')
+    .order('fecha',{ascending:false})
+    .limit(1)
+  if(cots&&cots.length>0){
+    const cot=cots[0] as any
+    const items=cot.items||[]
+    const it=items[0] as any
+    if(it){
+      setS(p=>({...p,
+        honTipo:(it.tipo_calculo==='pct_cif'?'pct_cif':it.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,
+        honValor:it.valor||0,honPiso:it.piso_usd||0,honTecho:it.techo_usd||0,
+        gastosDesp:items.slice(1).map((x:any)=>({id:uid2(),desc:x.descripcion,tipoCalc:(x.tipo_calculo==='pct_cif'?'pct_cif':x.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,moneda:'USD' as const,valor:x.valor||0,pisoUsd:x.piso_usd||0,techoUsd:x.techo_usd||0,usd:0,ars:0})),
+      }))
+    }
+    setProvUsado(pv=>({...pv,4:cot.id}))
+    setCotDesp({id:cot.id,referencia:cot.referencia||'',fecha:cot.fecha||'',tipo:(cot.tipo==='especifica'?'especifica':'generica')})
+  } else {
+    setS(p=>({...p,honTipo:'fijo_usd',honValor:0,honPiso:0,honTecho:0,gastosDesp:[]}))
+    setCotDesp(null)
+  }
+  setLoadingDesp(false)
+}
+
+async function selectCliente(t:any){
+  const contactoPpal=t.contactos?.find((c:any)=>c.principal)||t.contactos?.[0]
+  u('cliente',t.razon_social);u('cuit',t.nro_doc||'');u('email',contactoPpal?.email||'');u('telefono',contactoPpal?.telefono||'')
+  u('ivaCondicion',t.condicion_iva||'Responsable Inscripto')
+  setClienteSelId(t.id);setBuscarCliente(t.razon_social);setShowClienteDropdown(false)
+  const {data}=await supabase.from('cotizaciones').select('id,num,estado,total_landed,created_at').eq('tercero_id',t.id).order('created_at',{ascending:false}).limit(5)
+  if(data) setHistCliente(data)
+  setShowHist(true)
+}
+
+async function duplicarCotizacion(cotId:string){
+  const {data:orig}=await supabase.from('cotizaciones').select('*').eq('id',cotId).single()
+  if(!orig) return
+  const {data:tcData}=await supabase.from('tipos_cambio_eventos').select('ars,clp').order('created_at',{ascending:false}).limit(1).single()
+  setS(p=>({...p,
+    cliente:(orig as any).cliente,cuit:(orig as any).cuit||'',
+    productos:(orig as any).productos||p.productos,
+    contenedores:(orig as any).tipo_contenedores||p.contenedores,
+    origen:(orig as any).origen||p.origen,ptoChile:(orig as any).puerto_chile||p.ptoChile,
+    destinoNoa:(orig as any).destino_noa||p.destinoNoa,incoterm:(orig as any).incoterm||p.incoterm,
+    transito:(orig as any).transito||p.transito,
+    tcTrib:(tcData as any)?.ars||p.tcTrib,tcClp:(tcData as any)?.clp||p.tcClp,notas:'',
+  }))
+  cambiarTab('embarque')
+  alert('Cotizacion duplicada. Revisa los valores y guarda cuando este lista.')
+}
+
+// Filtra cotizaciones por bloque: especificas del cliente primero, luego genericas
+function filtrarCotsBloque(cots: any[], clienteId: string|null) {
+  const especificas = cots.filter(c => c.tipo === 'especifica' && clienteId && c.cliente_id === clienteId)
+  const genericas = cots.filter(c => c.tipo === 'generica')
+  return { especificas, genericas }
+}
+
+async function guardar(){
+  if(!s.cliente){alert('Ingresa el nombre del cliente.');return}
+  setSaving(true)
+  try {
+    const {data:cots}=await supabase.from('cotizaciones').select('num')
+    const num=nextCotNum(cots||[])
+    const {data:user}=await supabase.auth.getUser()
+    if(!user.user){alert('Sesion expirada.');setSaving(false);return}
+    const {data:uDB}=await supabase.from('usuarios').select('id').eq('auth_id',user.user.id).single()
+    const uid=(uDB as any)?.id||''
+    const presupuesto=[
+      ...(subFW>0?[{etapa:'forwarder',tipo:'flete',concepto:`ForWarder: ${fwElegida?.proveedorNombre||'Manual'}`,usd:subFW}]:[]),
+      ...(totalSeg>0?[{etapa:'forwarder',tipo:'seguro',concepto:'Seguro mercaderia',usd:totalSeg}]:[]),
+      ...(subGastosChile>0?[{etapa:'chile',tipo:'servicios',concepto:'Gastos post-entrega Chile',usd:subGastosChile}]:[]),
+      ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidacion (Opcion ${s.optTransp})`,usd:subD}]:[]),
+      ...(subTransp>0?[{etapa:'terrestre',tipo:'flete',concepto:'Transporte terrestre',usd:subTransp}]:[]),
+      ...(subEstadias>0?[{etapa:'terrestre',tipo:'estadia',concepto:'Estadias por demora',usd:subEstadias}]:[]),
+      ...(segIndepCalc>0?[{etapa:'terrestre',tipo:'seguro',concepto:'Seguro terrestre',usd:segIndepCalc}]:[]),
+      ...(subE>0?[{etapa:'argentina',tipo:'servicios',concepto:'Gastos Argentina',usd:subE}]:[]),
+      ...(subGastosArg>0?[{etapa:'argentina',tipo:'gastos_arg',concepto:'Gastos Argentina (despachante)',usd:subGastosArg}]:[]),
+      ...(totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Regimen ${s.regimen}`,usd:totalTribUSD}]:[]),
+      ...(fee>0?[{etapa:'fee',tipo:'fee',concepto:'Fee Puerto NOA',usd:fee}]:[]),
+    ]
+    const {error}=await (supabase.from('cotizaciones') as any).insert({
+      num,version:1,
+      cliente:s.cliente,cuit:s.cuit,email_cliente:s.email,telefono_cliente:s.telefono,
+      tercero_id:clienteSelId||null,
+      origen:s.origen,puerto_chile:s.ptoChile,destino_noa:s.destinoNoa,incoterm:s.incoterm,
+      transito:s.transito,notas:s.notas,
+      puerto_china_id:s.puertoChiId||null,
+      puerto_chile_id:s.puertoChileId||null,
+      paso_id:s.pasoId||null,
+      ciudad_destino_id:s.ciudadDestinoId||null,
+      tipo_contenedores:s.contenedores,productos:s.productos,proformas:s.proformas,
+      total_fob:totalFOB,total_logistico:totalLog,
+      total_tributos_usd:totalTribUSD,total_tributos_ars:totalTribARS,
+      total_landed:totalLanded,precio_arg_equiv:s.precioArgEquiv||null,
+      regimen:s.regimen,tc_ars:s.tcTrib,derechos_pct:s.derPct,
+      opcion_transporte:s.optTransp,validez:s.validez,estado:'borrador',
+      ejecutivo_id:uid,creado_por:uid,modificado_por:uid,presupuesto,
+    })
+    if(error){alert('Error al guardar: '+error.message);setSaving(false);return}
+    // Obtener el id de la cotizacion recien creada
+    const {data:cotGuardada}=await supabase.from('cotizaciones').select('id').eq('num',num).single()
+    if(cotGuardada) {
+      const provUsados=Object.entries(provUsado)
+        .filter(([_,cotProvId])=>cotProvId)
+        .map(([bloque,cotProvId])=>({
+          cotizacion_id:(cotGuardada as any).id,
+          cotizacion_proveedor_id:cotProvId,
+          bloque:parseInt(bloque)
+        }))
+      if(provUsados.length>0){
+        await (supabase.from('cotizacion_proveedores_usados') as any).insert(provUsados)
+      }
+    }
+    router.push('/registro')
+  } catch(e:any){alert('Error inesperado: '+e.message);setSaving(false)}
+}
+
+const clientesFiltrados=terceros.filter(t=>
+  t.razon_social.toLowerCase().includes((buscarCliente||s.cliente).toLowerCase())||
+  (t.nro_doc||'').includes(buscarCliente||s.cliente)||
+  (t.nombre_fantasia||'').toLowerCase().includes((buscarCliente||s.cliente).toLowerCase())
+).slice(0,8)
+
   function generarImpresion() {
     const nc2 = s.contenedores?.length ? s.contenedores.reduce((t:number,c:any)=>t+(c.cantidad||1),0) : nc
     const filas = [
@@ -180,8 +769,8 @@ function DesconRows({rows,onChange,totalM3}:{rows:ItemLog[];onChange:(r:ItemLog[
     const totalPct = (v:number) => totalLanded>0?`${((v/totalLanded)*100).toFixed(1)}%`:''
 
     const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
+  <html lang="es">
+  <head>
   <meta charset="UTF-8"/>
   <title>Cotización ${s.num||''} — Puerto NOA SpA</title>
   <style>
@@ -235,8 +824,8 @@ function DesconRows({rows,onChange,totalM3}:{rows:ItemLog[];onChange:(r:ItemLog[
     .tc-val { font-family:monospace; font-weight:600; color:#333; }
     @media print { body { padding:10mm 12mm; } @page { margin:0; size:A4; } }
   </style>
-</head>
-<body>
+  </head>
+  <body>
   <!-- HEADER -->
   <div class="header">
     <div>
@@ -324,597 +913,12 @@ function DesconRows({rows,onChange,totalM3}:{rows:ItemLog[];onChange:(r:ItemLog[
   </div>
 
   <script>window.onload=()=>{window.print();}</script>
-</body>
-</html>`
+  </body>
+  </html>`
 
     const win = window.open('','_blank','width=900,height=700')
     if(win){ win.document.write(html); win.document.close() }
   }
-
-    return (
-    <div>
-      {rows.map((r,i)=>(
-        <div key={r.id} style={{display:'grid',gridTemplateColumns:'2.5fr 100px 1fr 1fr auto',gap:'7px',alignItems:'end'}} className="mb-2">
-          <input value={r.desc} onChange={e=>{const n=[...rows];n[i]={...n[i],desc:e.target.value};onChange(n)}} className={inp} placeholder="Concepto"/>
-          <select value={r.tipoCalc||'fijo'} onChange={e=>{const n=[...rows];n[i]={...n[i],tipoCalc:e.target.value as any};onChange(n)}} className={sel}>
-            <option value="fijo">Fijo (USD)</option><option value="m3">Por m3</option>
-          </select>
-          {r.tipoCalc==='fijo'
-            ?<input type="text" inputMode="decimal" value={r.cant} onFocus={e=>e.target.select()} onChange={e=>{const n=[...rows];n[i]={...n[i],cant:parseNum(e.target.value)||1};onChange(n)}} className={inp+' text-right'} placeholder="Cant."/>
-            :<div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right font-mono">{fmt(totalM3,2)} m3</div>
-          }
-          <input type="text" inputMode="decimal" value={r.unitario} onFocus={e=>e.target.select()} onChange={e=>{const n=[...rows];n[i]={...n[i],unitario:parseNum(e.target.value)};onChange(n)}} className={inp+' text-right'} placeholder={r.tipoCalc==='m3'?'USD/m3':'USD'}/>
-          <button onClick={()=>onChange(rows.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs pb-1">X</button>
-        </div>
-      ))}
-      <button onClick={()=>onChange([...rows,{id:uid2(),desc:'',cant:1,unitario:0,tipoCalc:'fijo'}])} className="text-xs text-[#1168F8] hover:underline mt-1">+ Agregar item</button>
-    </div>
-  )
-}
-
-export default function CotizadorPage(){
-  const topRef=useRef<HTMLDivElement>(null)
-  const [s,setS]=useState<CotState>(INIT)
-  const [tab,setTab]=useState<Tab>('embarque')
-  // Catálogos geográficos
-  const [puertosChi,setPuertosChi]=useState<any[]>([])
-  const [puertosChile,setPuertosChile]=useState<any[]>([])
-  const [pasosFront,setPasosFront]=useState<any[]>([])
-  const [ciudadesArg,setCiudadesArg]=useState<any[]>([])
-  const [tiposCont,setTiposCont]=useState<any[]>([])
-  const [tiposCamion,setTiposCamion]=useState<any[]>([])
-  const [cotsFWDisponibles,setCotsFWDisponibles]=useState<any[]>([])
-  const [cotsTranspDisponibles,setCotsTranspDisponibles]=useState<any[]>([])
-  const [cotsArgDisponibles,setCotsArgDisponibles]=useState<any[]>([])
-  const [cotsChileDisponibles,setCotsChileDisponibles]=useState<any[]>([])
-  // Cotizaciones de operaciones usadas (para detectar "ya usada en X")
-  const [cotsSistemaUsadas,setCotsSistemaUsadas]=useState<Record<string,string[]>>({})
-  // Rubros por bloque (desde cotizador_bloque_rubros)
-  const [rubrosBloque,setRubrosBloque]=useState<Record<number,string[]>>({1:[],2:[],3:[],4:[]})
-  const [bloques,setBloques]=useState<any[]>([])
-  // Terceros proveedores por rubro (para búsqueda en carga manual)
-  const [tercerosProv,setTercerosProv]=useState<any[]>([])
-
-
-
-  // Cotizaciones de proveedores seleccionadas por bloque
-  const [provUsado,setProvUsado]=useState<Record<number,string|null>>({1:null,2:null,3:null,4:null})
-  const [terceros,setTerceros]=useState<any[]>([])
-  const [despachantes,setDespachantes]=useState<any[]>([])
-  const [despachanteSelId,setDespachanteSelId]=useState<string|null>(null)
-  const [cotDesp,setCotDesp]=useState<{id:string;referencia:string;fecha:string;tipo:'generica'|'especifica'}|null>(null)
-  const [buscarDespachante,setBuscarDespachante]=useState('')
-  const [showDespachanteDropdown,setShowDespachanteDropdown]=useState(false)
-  const [loadingDesp,setLoadingDesp]=useState(false)
-  const [buscarCliente,setBuscarCliente]=useState('')
-  const [showClienteDropdown,setShowClienteDropdown]=useState(false)
-  const [clienteSelId,setClienteSelId]=useState<string|null>(null)
-  const [histCliente,setHistCliente]=useState<any[]>([])
-  const [showHist,setShowHist]=useState(false)
-
-  const [tribCfg,setTribCfg]=useState<TribCfg[]>([])
-  const [saving,setSaving]=useState(false)
-  const supabase=createClient()
-  const router=useRouter()
-
-  useEffect(()=>{
-    supabase.from('tipos_cambio_eventos').select('ars,clp').order('created_at',{ascending:false}).limit(1)
-      .then(({data})=>{
-        if(data&&data.length>0){
-          const row=data[0] as any
-          if(row.ars) setS(p=>({...p,tcTrib:row.ars}))
-          if(row.clp) setS(p=>({...p,tcClp:row.clp}))
-        }
-      })
-    supabase.from('terceros').select('id,razon_social,nombre_fantasia,nro_doc,tipo_doc,condicion_iva,dir_fiscal_ciudad,pais,contactos:tercero_contactos(email,telefono,principal)')
-      .eq('activo','true')
-      .filter('tipo', 'cs', '{"cliente"}')
-      .then(({data})=>{if(data) setTerceros(data)})
-    // Cargar despachantes (proveedores con rubro despachante de aduana)
-    supabase.from('tercero_rubros')
-      .select('tercero_id, rubro:proveedor_rubros!inner(nombre), tercero:terceros!inner(id,razon_social,activo)')
-      .eq('rubro.nombre','Despachante de aduana')
-      .then(({data})=>{
-        if(data){
-          const desps=(data as any[]).filter(r=>r.tercero?.activo!==false).map(r=>r.tercero)
-          setDespachantes(desps)
-        }
-      })
-    // Cargar cotizaciones por bloque_id + usadas + terceros
-    Promise.all([
-      supabase.from('cotizador_bloques').select('id,numero,nombre').eq('activo',true).order('numero'),
-      supabase.from('cotizaciones_proveedor_v2')
-        .select('*, items:cotizaciones_proveedor_v2_items(*)')
-        .eq('estado','vigente')
-        .order('fecha',{ascending:false}),
-      supabase.from('cotizacion_proveedores_usados')
-        .select('cotizacion_proveedor_id, cotizacion:cotizaciones!inner(num)')
-        .limit(500),
-      supabase.from('tercero_rubros')
-        .select('tercero_id, rubro:proveedor_rubros!inner(nombre), tercero:terceros!inner(id,razon_social,activo)')
-        .filter('tercero.activo','eq','true'),
-    ]).then(([bloqRes,cotRes,usadasRes,trRes])=>{
-      // Guardar nombres de bloques para UI
-      const rb:Record<number,string[]>={1:[],2:[],3:[],4:[]}
-      if(bloqRes.data){
-        for(const b of bloqRes.data as any[]) rb[b.numero]=[b.nombre]
-      }
-      if(bloqRes.data) setBloques(bloqRes.data as any[])
-      setRubrosBloque(rb)
-      // Terceros proveedores
-      if(trRes.data){
-        const provs=(trRes.data as any[])
-          .filter(r=>r.tercero?.activo!==false)
-          .map(r=>({...r.tercero, rubro:(r.rubro as any)?.nombre||''}))
-        setTercerosProv(provs)
-      }
-      // Mapa de cotizaciones usadas
-      const usadasMap:Record<string,string[]>={}
-      if(usadasRes.data){
-        for(const u of usadasRes.data as any[]){
-          const pid=u.cotizacion_proveedor_id
-          const num=(u.cotizacion as any)?.num||''
-          if(!usadasMap[pid]) usadasMap[pid]=[]
-          if(num) usadasMap[pid].push(num)
-        }
-      }
-      setCotsSistemaUsadas(usadasMap)
-      // Filtrar por bloque_id — directo y limpio
-      if(cotRes.data && bloqRes.data){
-        const cots=cotRes.data as any[]
-        const idPorNum:Record<number,string>={}
-        for(const b of bloqRes.data as any[]) idPorNum[b.numero]=b.id
-        setCotsFWDisponibles(cots.filter(c=>c.bloque_id===idPorNum[1]))
-        setCotsChileDisponibles(cots.filter(c=>c.bloque_id===idPorNum[2]))
-        setCotsTranspDisponibles(cots.filter(c=>c.bloque_id===idPorNum[3]))
-        setCotsArgDisponibles(cots.filter(c=>c.bloque_id===idPorNum[4]))
-      }
-    })
-    // Catálogos geográficos y tipos de camión
-    Promise.all([
-      supabase.from('puertos_china').select('id,locode,nombre,ciudad').eq('activo','true').order('orden'),
-      supabase.from('puertos_chile').select('id,locode,nombre,ciudad').eq('activo','true').order('orden'),
-      supabase.from('pasos_fronterizos').select('id,nombre,provincia_argentina,restriccion_invierno').eq('activo','true').order('orden'),
-      supabase.from('ciudades_destino_arg').select('id,ciudad,provincia').eq('activo','true').order('orden'),
-      supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo','true').order('orden'),
-      supabase.from('tipos_camion').select('id,nombre,icono').eq('activo','true').order('orden'),
-    ]).then(([ch,cl,ps,ci,tc,tca])=>{
-      if(ch.data) setPuertosChi(ch.data)
-      if(cl.data) setPuertosChile(cl.data)
-      if(ps.data) setPasosFront(ps.data)
-      if(ci.data) setCiudadesArg(ci.data)
-      if(tc.data) setTiposCont(tc.data)
-      if(tca.data) setTiposCamion(tca.data)
-    })
-  },[])
-  useEffect(()=>{loadTrib()},[s.regimen])
-  useEffect(()=>{
-    // Pre-cargar nCamiones según contenedores seleccionados
-    setS(p=>{
-      const ncTotal=p.contenedores.reduce((s,c)=>s+c.cantidad,0)||1
-      return {...p,nCamiones:p.nCamiones===1?ncTotal:p.nCamiones}
-    })
-  },[s.contenedores])
-
-  async function loadTrib(){
-    const {data}=await supabase.from('tributos_config').select('*').eq('regimen',s.regimen).eq('aplica',true).order('orden')
-    if(data){
-      setTribCfg(data as TribCfg[])
-      const der=(data as TribCfg[]).find(t=>t.codigo==='010')
-      if(der) setS(p=>({...p,derPct:der.valor}))
-    }
-  }
-
-  const u=<K extends keyof CotState>(k:K,v:CotState[K])=>setS(p=>({...p,[k]:v}))
-  const cambiarTab=(t:Tab)=>{setTab(t);setTimeout(()=>{topRef.current?.scrollIntoView({behavior:'smooth',block:'start'})},50)}
-  const nc=s.contenedores.reduce((t,c)=>t+c.cantidad,0)||1
-  const totalFOB=s.productos.reduce((t,p)=>t+p.subtotal,0)+(s.incoterm==='EXW'?s.exwTransp+s.exwAgente+s.exwOtros:0)
-  const totalM3=s.productos.reduce((t,p)=>t+p.vol_unit*p.cantidad,0)
-
-  // Bloque 1: ForWarder elegido y sus ítems seleccionados
-  const fwElegida = s.cotsProvFW.find(c=>c.elegida)
-  const subFW = fwElegida
-    ? fwElegida.esManual
-      ? (fwElegida.manualMonto||0)
-      : fwElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
-    : 0
-  const segFW = fwElegida?.segAlcance!=='no'
-    ? (fwElegida?.seguroModo==='pct'
-        ? totalFOB*(fwElegida?.seguroMonto||0)/100
-        : (fwElegida?.seguroMonto||0))
-    : 0
-  const segIndepCalc = fwElegida?.segAlcance==='maritimo'
-    ? (s.segModoIndep==='pct'?(totalFOB+subFW)*s.segValIndep/100:s.segValIndep)
-    : 0
-  const totalSeg = segFW
-  // Bloque 2: Transporte Chile-NOA (cotizaciones del sistema)
-  // Bloque 2: Transporte Chile-NOA (cotizaciones del sistema)
-  const transpChileElegida = s.cotsProvChile.find(c=>c.elegida)
-  const subTranspChile = transpChileElegida
-    ? transpChileElegida.esManual
-      ? (transpChileElegida.manualMonto||0)
-      : transpChileElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
-    : 0
-  // Bloque 3: Flete terrestre (cotizaciones del sistema para B1/B2)
-  const transpTerrElegida = s.cotsProvTransp.find(c=>c.elegida)
-  const subTranspTerr = transpTerrElegida
-    ? transpTerrElegida.esManual
-      ? (transpTerrElegida.manualMonto||0)
-      : transpTerrElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
-    : 0
-
-  // Bloque 2: Gastos Chile post-entrega
-  const subGastosChile=s.gastosChile.reduce((t,g)=>{
-    const b=(g.tipoCalc==='m3'?g.valor*totalM3:g.valor)
-    return t+(g.ivaChile==='gravado'?b*1.19:b)
-  },0)
-
-  // Bloque 3: Transporte + desconsolidacion
-  const volAlm=s.almModoVol==='auto'?totalM3:s.almVolM3
-  const subAlm=s.optTransp==='B2'?volAlm*s.almCostoDia*s.almDias:0
-  const subDescon=s.rowsDescon.reduce((t,r)=>t+(r.tipoCalc==='m3'?r.unitario*totalM3:r.cant*r.unitario),0)
-  const subCarga=s.optTransp!=='A'?(s.cargaModo==='m3'?s.cargaValor*totalM3:s.cargaValor):0
-  const subD=subDescon+subAlm+subCarga
-  // subTransp: usa cotizaciones del sistema si hay, sino cálculo manual
-  const subTransp=s.optTransp==='A'
-    // Opción A: cotización del sistema si hay, sino ida/dev/rt manual
-    ?(transpTerrElegida?subTranspTerr:(()=>{const ida=s.ftIda*nc,dev=s.ftDev*nc,rt=s.ftRt*nc;return rt>0&&rt<(ida+dev)?rt:ida+dev})())
-    // B1/B2: usa cotizaciones del sistema si hay, sino inputs manuales
-    :(transpTerrElegida?subTranspTerr:s.ftCamion*s.nCamiones)
-
-  // Estadias
-  const subEstadias=s.estadiaCargaVal*s.estadiaCargaDias+s.estadiaDescargaVal*s.estadiaDescargaDias
-  // Seguro terrestre (solo si seguro FW es maritimo)
-  // Bloque 4: Gastos Argentina
-  const calcGastoArg=(g:GastoArg,cifUsd:number,tcTrib:number):number=>{
-    let usd=0
-    if(g.tipoCalc==='pct_cif'){
-      usd=cifUsd*g.valor/100
-      if(g.pisoUsd>0&&usd<g.pisoUsd) usd=g.pisoUsd
-      if(g.techoUsd>0&&usd>g.techoUsd) usd=g.techoUsd
-    } else if(g.tipoCalc==='fijo_usd'){usd=g.valor}
-    else {usd=g.valor/(tcTrib||1)}
-    return usd
-  }
-  const cif=totalFOB+subFW+totalSeg
-  const cifARS=cif*s.tcTrib
-  // Honorario + gastos adicionales despachante (sección A)
-  const subHon=calcGastoArg({id:'hon',desc:'',tipoCalc:s.honTipo,moneda:'USD',valor:s.honValor,pisoUsd:s.honPiso,techoUsd:s.honTecho,usd:0,ars:0},cif,s.tcTrib)
-  const subGastosDesp=s.gastosDesp.reduce((t,g)=>t+calcGastoArg(g,cif,s.tcTrib),0)
-  const subGastosArg=subHon+subGastosDesp
-  // Otros gastos Argentina sección B
-  const subE=s.rowsE.reduce((t,r)=>t+calcGastoArg(r,cif,s.tcTrib),0)
-  // Base logística para el fee (sin FOB, sin ARCA, sin el propio fee)
-  const baseLogFee=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+segIndepCalc+subE+subGastosArg
-  const fee=s.feeModo==='pct' ? baseLogFee*s.feePct/100 : s.feeCont*nc
-
-  function calcTrib(cfg:TribCfg[],cifARS:number,derPct:number){
-    const VA=cifARS; let base=VA
-    return cfg.map(t=>{
-      let imp=0
-      if(t.codigo==='010'){imp=VA*derPct/100;base=VA+imp}
-      else if(t.codigo==='011'){const e=VA*t.valor/100;imp=e;base+=e}
-      else if(t.tipo==='fijo'){imp=t.valor}
-      else{imp=base*t.valor/100}
-      return {...t,imp}
-    })
-  }
-  const tributos=calcTrib(tribCfg,cifARS,s.derPct)
-  const totalTribARS=tributos.reduce((t,r)=>t+r.imp,0)
-  const totalTribUSD=s.incluirArca?totalTribARS/s.tcTrib:0
-  const totalLog=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+segIndepCalc+subE+subGastosArg+fee
-  const totalLanded=totalFOB+totalLog+totalTribUSD
-  const cap=calcCapacidad(s.contenedores,s.productos)
-
-  // ── Helpers para manejar CotProvSel genéricamente ──────────────
-  const isVigente = (fv:string) => !fv || new Date(fv) >= new Date()
-
-  // Verificar si un bloque está activo (por índice 0-based en array de bloques cargados)
-  const bloqueActivo = (idx: number): boolean => {
-    if (s.bloquesActivos.length === 0) return true
-    const bloque = bloques[idx]
-    if (!bloque) return true
-    return s.bloquesActivos.includes((bloque as any).id)
-  }
-  const fmtFecha = (f:string) => f ? f.split('-').reverse().join('/') : '—'
-
-  function cotProvDesdeSistema(cot:any, contenedoresH1:{tipo:string;cantidad:number}[], usadas:string[]): CotProvSel {
-    const items: ItemSelProv[] = (cot.items||[]).map((it:any)=>{
-      const esBigbag = it.tipo_calculo === 'por_bigbag'
-      const cantSug = esBigbag
-        ? (contenedoresH1 as any).__bigbags__ || 1
-        : contenedoresH1.find(c=>c.tipo===it.tipo_contenedor)?.cantidad || 1
-      const valorUnit = parseNum(String(it.valor||0))
-      return {
-        itemId: it.id||uid2(),
-        descripcion: it.descripcion||'',
-        tipo_calculo: it.tipo_calculo||'fijo_usd',
-        valorUnit,
-        cantCotizada: cantSug,
-        cantUsar: cantSug,
-        tipoContenedor: it.tipo_contenedor||'',
-        subtotal: valorUnit * cantSug,
-        seleccionado: false,
-      }
-    })
-    return {
-      uid: uid2(),
-      cotProvId: cot.id,
-      proveedorNombre: cot.proveedor_nombre||'',
-      referencia: cot.referencia||'',
-      fechaEmision: cot.fecha||'',
-      fechaVencimiento: cot.fecha_vencimiento||'',
-      tipo: cot.tipo==='especifica'?'especifica':'generica',
-      clienteId: cot.cliente_id||null,
-      estado: isVigente(cot.fecha_vencimiento||'')?'vigente':'vencida',
-      usadaEnCots: usadas,
-      items,
-      elegida: false,
-      seguroIncluido: cot.seguro_incluido||false,
-      seguroModo: (cot.seguro_modo||'pct') as 'pct'|'fijo',
-      seguroMonto: parseNum(String(cot.seguro_monto||0)),
-      segAlcance: (cot.seguro_incluido?'maritimo':'no') as any,
-    }
-  }
-
-  // FW desde sistema
-  function agregarFWDesdeSistema(cotId:string){
-    const cot = cotsFWDisponibles.find(c=>c.id===cotId)
-    if(!cot) return
-    const usadas = cotsSistemaUsadas[cotId]||[]
-    const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
-    nueva.elegida = s.cotsProvFW.length===0
-    setS(p=>({...p, cotsProvFW:[...p.cotsProvFW, nueva]}))
-    setProvUsado(pv=>({...pv,1:cotId}))
-  }
-
-  function agregarFWManual(){
-    const nueva: CotProvSel = {
-      uid:uid2(), cotProvId:'', proveedorNombre:'', referencia:'',
-      fechaEmision:new Date().toISOString().slice(0,10), fechaVencimiento:'',
-      tipo:'generica', clienteId:null, estado:'vigente', usadaEnCots:[],
-      items:[{itemId:uid2(),descripcion:'Flete marítimo',tipo_calculo:'fijo_usd',valorUnit:0,cantCotizada:nc,cantUsar:nc,tipoContenedor:'',subtotal:0,seleccionado:true}],
-      elegida:s.cotsProvFW.length===0,
-      seguroIncluido:false, seguroModo:'pct', seguroMonto:0, segAlcance:'no',
-      esManual:false,
-    }
-    setS(p=>({...p, cotsProvFW:[...p.cotsProvFW, nueva]}))
-  }
-
-  function elegirCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', uid:string){
-    setS(p=>({...p, [campo]:p[campo].map((c:CotProvSel)=>({...c,elegida:c.uid===uid}))}))
-  }
-
-  function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', uid:string){
-    setS(p=>{
-      const nuevas = (p[campo] as CotProvSel[]).filter(c=>c.uid!==uid)
-      if(nuevas.length>0&&!nuevas.some(c=>c.elegida)) nuevas[0].elegida=true
-      return {...p,[campo]:nuevas}
-    })
-  }
-
-  function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', cotUid:string, itemId:string){
-    setS(p=>({...p,[campo]:(p[campo] as CotProvSel[]).map(c=>{
-      if(c.uid!==cotUid) return c
-      return {...c,items:c.items.map(i=>{
-        if(i.itemId!==itemId) return i
-        const sel = !i.seleccionado
-        return {...i,seleccionado:sel,subtotal:sel?i.valorUnit*i.cantUsar:0}
-      })}
-    })}))
-  }
-
-  function setCantUsarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', cotUid:string, itemId:string, cant:number){
-    setS(p=>({...p,[campo]:(p[campo] as CotProvSel[]).map(c=>{
-      if(c.uid!==cotUid) return c
-      return {...c,items:c.items.map(i=>{
-        if(i.itemId!==itemId) return i
-        return {...i,cantUsar:cant,subtotal:i.seleccionado?i.valorUnit*cant:0}
-      })}
-    })}))
-  }
-
-  function updateSegAlcanceFW(cotUid:string, segAlcance:'no'|'maritimo'|'punta_a_punta'){
-    setS(p=>({...p,cotsProvFW:p.cotsProvFW.map(c=>c.uid===cotUid?{...c,segAlcance}:c)}))
-  }
-
-  // Transporte Chile desde sistema
-  function agregarTranspChileDesdeSistema(cotId:string){
-    const cot = cotsChileDisponibles.find(c=>c.id===cotId)
-    if(!cot) return
-    const usadas = cotsSistemaUsadas[cotId]||[]
-    const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
-    nueva.elegida = s.cotsProvChile.length===0
-    setS(p=>({...p, cotsProvChile:[...p.cotsProvChile, nueva]}))
-    setProvUsado(pv=>({...pv,2:cotId}))
-  }
-
-  // Transporte terrestre desde sistema
-  function agregarTranspTerrDesdeSistema(cotId:string){
-    const cot = cotsTranspDisponibles.find(c=>c.id===cotId)
-    if(!cot) return
-    const usadas = cotsSistemaUsadas[cotId]||[]
-    const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
-    nueva.elegida = s.cotsProvTransp.length===0
-    setS(p=>({...p, cotsProvTransp:[...p.cotsProvTransp, nueva]}))
-    setProvUsado(pv=>({...pv,3:cotId}))
-  }
-
-  // Buscar terceros proveedores por rubros del bloque
-  function tercerosPorBloque(bloque:number){
-    const rubros=rubrosBloque[bloque]||[]
-    if(rubros.length===0) return tercerosProv
-    return tercerosProv.filter(t=>rubros.includes(t.rubro))
-  }
-
-  // Crear tercero mínimo desde el cotizador
-  async function crearTerceroMinimo(razonSocial:string, rubro:string):Promise<string|null>{
-    const {data,error}=await (supabase.from('terceros') as any).insert({
-      razon_social:razonSocial,
-      tipo:['proveedor'],
-      activo:true,
-      pais:'',
-    }).select('id').single()
-    if(error||!data) return null
-    const terceroId=(data as any).id
-    // Buscar id del rubro
-    const {data:rubroData}=await supabase.from('proveedor_rubros').select('id').eq('nombre',rubro).limit(1)
-    if(rubroData&&rubroData.length>0){
-      await (supabase.from('tercero_rubros') as any).insert({tercero_id:terceroId,rubro_id:(rubroData[0] as any).id})
-    }
-    // Refrescar tercerosProv
-    const {data:newT}=await supabase.from('terceros').select('id,razon_social').eq('id',terceroId).single()
-    if(newT) setTercerosProv(p=>[...p,{...(newT as any),rubro}])
-    return terceroId
-  }
-
-
-
-
-
-    // Gastos Chile manual (cuando no hay cotización del sistema)
-  function agregarGastoChileDesdeSistema(cotId:string){
-    const cot=cotsChileDisponibles.find(c=>c.id===cotId)
-    if(!cot) return
-    const nuevos:GastoChile[]=(cot.items||[]).map((it:any)=>({
-      id:uid2(),desc:it.descripcion,proveedor:cot.proveedor_nombre,
-      tipoCalc:(it.tipo_calculo==='por_m3'?'m3':'fijo') as 'fijo'|'m3',
-      valor:it.valor||0,ivaChile:'exento' as const,
-    }))
-    setS(p=>({...p,gastosChile:[...p.gastosChile,...nuevos]}))
-  }
-
-  async function seleccionarDespachante(d:any){
-    setDespachanteSelId(d.id)
-    u('despachante',d.razon_social)
-    setBuscarDespachante('')
-    setShowDespachanteDropdown(false)
-    setLoadingDesp(true)
-    const {data:cots}=await supabase.from('cotizaciones_proveedor_v2')
-      .select('*,items:cotizaciones_proveedor_v2_items(*)')
-      .eq('tercero_id',d.id)
-      .eq('estado','vigente')
-      .order('fecha',{ascending:false})
-      .limit(1)
-    if(cots&&cots.length>0){
-      const cot=cots[0] as any
-      const items=cot.items||[]
-      const it=items[0] as any
-      if(it){
-        setS(p=>({...p,
-          honTipo:(it.tipo_calculo==='pct_cif'?'pct_cif':it.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,
-          honValor:it.valor||0,honPiso:it.piso_usd||0,honTecho:it.techo_usd||0,
-          gastosDesp:items.slice(1).map((x:any)=>({id:uid2(),desc:x.descripcion,tipoCalc:(x.tipo_calculo==='pct_cif'?'pct_cif':x.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,moneda:'USD' as const,valor:x.valor||0,pisoUsd:x.piso_usd||0,techoUsd:x.techo_usd||0,usd:0,ars:0})),
-        }))
-      }
-      setProvUsado(pv=>({...pv,4:cot.id}))
-      setCotDesp({id:cot.id,referencia:cot.referencia||'',fecha:cot.fecha||'',tipo:(cot.tipo==='especifica'?'especifica':'generica')})
-    } else {
-      setS(p=>({...p,honTipo:'fijo_usd',honValor:0,honPiso:0,honTecho:0,gastosDesp:[]}))
-      setCotDesp(null)
-    }
-    setLoadingDesp(false)
-  }
-
-  async function selectCliente(t:any){
-    const contactoPpal=t.contactos?.find((c:any)=>c.principal)||t.contactos?.[0]
-    u('cliente',t.razon_social);u('cuit',t.nro_doc||'');u('email',contactoPpal?.email||'');u('telefono',contactoPpal?.telefono||'')
-    u('ivaCondicion',t.condicion_iva||'Responsable Inscripto')
-    setClienteSelId(t.id);setBuscarCliente(t.razon_social);setShowClienteDropdown(false)
-    const {data}=await supabase.from('cotizaciones').select('id,num,estado,total_landed,created_at').eq('tercero_id',t.id).order('created_at',{ascending:false}).limit(5)
-    if(data) setHistCliente(data)
-    setShowHist(true)
-  }
-
-  async function duplicarCotizacion(cotId:string){
-    const {data:orig}=await supabase.from('cotizaciones').select('*').eq('id',cotId).single()
-    if(!orig) return
-    const {data:tcData}=await supabase.from('tipos_cambio_eventos').select('ars,clp').order('created_at',{ascending:false}).limit(1).single()
-    setS(p=>({...p,
-      cliente:(orig as any).cliente,cuit:(orig as any).cuit||'',
-      productos:(orig as any).productos||p.productos,
-      contenedores:(orig as any).tipo_contenedores||p.contenedores,
-      origen:(orig as any).origen||p.origen,ptoChile:(orig as any).puerto_chile||p.ptoChile,
-      destinoNoa:(orig as any).destino_noa||p.destinoNoa,incoterm:(orig as any).incoterm||p.incoterm,
-      transito:(orig as any).transito||p.transito,
-      tcTrib:(tcData as any)?.ars||p.tcTrib,tcClp:(tcData as any)?.clp||p.tcClp,notas:'',
-    }))
-    cambiarTab('embarque')
-    alert('Cotizacion duplicada. Revisa los valores y guarda cuando este lista.')
-  }
-
-  // Filtra cotizaciones por bloque: especificas del cliente primero, luego genericas
-  function filtrarCotsBloque(cots: any[], clienteId: string|null) {
-    const especificas = cots.filter(c => c.tipo === 'especifica' && clienteId && c.cliente_id === clienteId)
-    const genericas = cots.filter(c => c.tipo === 'generica')
-    return { especificas, genericas }
-  }
-
-  async function guardar(){
-    if(!s.cliente){alert('Ingresa el nombre del cliente.');return}
-    setSaving(true)
-    try {
-      const {data:cots}=await supabase.from('cotizaciones').select('num')
-      const num=nextCotNum(cots||[])
-      const {data:user}=await supabase.auth.getUser()
-      if(!user.user){alert('Sesion expirada.');setSaving(false);return}
-      const {data:uDB}=await supabase.from('usuarios').select('id').eq('auth_id',user.user.id).single()
-      const uid=(uDB as any)?.id||''
-      const presupuesto=[
-        ...(subFW>0?[{etapa:'forwarder',tipo:'flete',concepto:`ForWarder: ${fwElegida?.proveedorNombre||'Manual'}`,usd:subFW}]:[]),
-        ...(totalSeg>0?[{etapa:'forwarder',tipo:'seguro',concepto:'Seguro mercaderia',usd:totalSeg}]:[]),
-        ...(subGastosChile>0?[{etapa:'chile',tipo:'servicios',concepto:'Gastos post-entrega Chile',usd:subGastosChile}]:[]),
-        ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidacion (Opcion ${s.optTransp})`,usd:subD}]:[]),
-        ...(subTransp>0?[{etapa:'terrestre',tipo:'flete',concepto:'Transporte terrestre',usd:subTransp}]:[]),
-        ...(subEstadias>0?[{etapa:'terrestre',tipo:'estadia',concepto:'Estadias por demora',usd:subEstadias}]:[]),
-        ...(segIndepCalc>0?[{etapa:'terrestre',tipo:'seguro',concepto:'Seguro terrestre',usd:segIndepCalc}]:[]),
-        ...(subE>0?[{etapa:'argentina',tipo:'servicios',concepto:'Gastos Argentina',usd:subE}]:[]),
-        ...(subGastosArg>0?[{etapa:'argentina',tipo:'gastos_arg',concepto:'Gastos Argentina (despachante)',usd:subGastosArg}]:[]),
-        ...(totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Regimen ${s.regimen}`,usd:totalTribUSD}]:[]),
-        ...(fee>0?[{etapa:'fee',tipo:'fee',concepto:'Fee Puerto NOA',usd:fee}]:[]),
-      ]
-      const {error}=await (supabase.from('cotizaciones') as any).insert({
-        num,version:1,
-        cliente:s.cliente,cuit:s.cuit,email_cliente:s.email,telefono_cliente:s.telefono,
-        tercero_id:clienteSelId||null,
-        origen:s.origen,puerto_chile:s.ptoChile,destino_noa:s.destinoNoa,incoterm:s.incoterm,
-        transito:s.transito,notas:s.notas,
-        puerto_china_id:s.puertoChiId||null,
-        puerto_chile_id:s.puertoChileId||null,
-        paso_id:s.pasoId||null,
-        ciudad_destino_id:s.ciudadDestinoId||null,
-        tipo_contenedores:s.contenedores,productos:s.productos,proformas:s.proformas,
-        total_fob:totalFOB,total_logistico:totalLog,
-        total_tributos_usd:totalTribUSD,total_tributos_ars:totalTribARS,
-        total_landed:totalLanded,precio_arg_equiv:s.precioArgEquiv||null,
-        regimen:s.regimen,tc_ars:s.tcTrib,derechos_pct:s.derPct,
-        opcion_transporte:s.optTransp,validez:s.validez,estado:'borrador',
-        ejecutivo_id:uid,creado_por:uid,modificado_por:uid,presupuesto,
-      })
-      if(error){alert('Error al guardar: '+error.message);setSaving(false);return}
-      // Obtener el id de la cotizacion recien creada
-      const {data:cotGuardada}=await supabase.from('cotizaciones').select('id').eq('num',num).single()
-      if(cotGuardada) {
-        const provUsados=Object.entries(provUsado)
-          .filter(([_,cotProvId])=>cotProvId)
-          .map(([bloque,cotProvId])=>({
-            cotizacion_id:(cotGuardada as any).id,
-            cotizacion_proveedor_id:cotProvId,
-            bloque:parseInt(bloque)
-          }))
-        if(provUsados.length>0){
-          await (supabase.from('cotizacion_proveedores_usados') as any).insert(provUsados)
-        }
-      }
-      router.push('/registro')
-    } catch(e:any){alert('Error inesperado: '+e.message);setSaving(false)}
-  }
-
-  const clientesFiltrados=terceros.filter(t=>
-    t.razon_social.toLowerCase().includes((buscarCliente||s.cliente).toLowerCase())||
-    (t.nro_doc||'').includes(buscarCliente||s.cliente)||
-    (t.nombre_fantasia||'').toLowerCase().includes((buscarCliente||s.cliente).toLowerCase())
-  ).slice(0,8)
 
   return (
     <div ref={topRef} className="p-6 bg-gray-50 min-h-screen" onClick={()=>setShowClienteDropdown(false)}>
