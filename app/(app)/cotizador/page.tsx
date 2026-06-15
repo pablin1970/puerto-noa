@@ -580,10 +580,7 @@ export default function CotizadorPage(){
     return terceroId
   }
 
-  // Agregar cotización manual al array para guardar al finalizar
-  function registrarCotManual(bloque:number, proveedorNombre:string, terceroId:string|null, rubro:string, ref:string, fechaEm:string, fechaVenc:string, items:{desc:string,monto:number}[]){
-    setCotsManualesToGuardar(prev=>[...prev,{bloque,proveedorNombre,terceroId,rubro,ref,fechaEm,fechaVenc,items}])
-  }
+
 
 
 
@@ -1686,21 +1683,6 @@ export default function CotizadorPage(){
                     )
                   })}
 
-                  {/* Fila manual Terrestre — expandida */}
-                  <FilaManualExpandida
-                    estado={manualTransp}
-                    setEstado={setManualTransp as any}
-                    terceros={tercerosPorBloque(3)}
-                    color="#b45309"
-                    placeholder="Transportista"
-                    rubroLabel={(rubrosBloque[3]||[]).join(' / ')||'Transporte terrestre'}
-                    onAgregar={(prov,provId,ref,fechaEm,fechaVenc,monto)=>{
-                      const nueva:CotProvSel={uid:uid2(),cotProvId:'',proveedorNombre:prov,referencia:ref,fechaEmision:fechaEm,fechaVencimiento:fechaVenc,tipo:'generica',clienteId:provId||null,estado:'vigente',usadaEnCots:[],items:[],elegida:s.cotsProvTransp.length===0,seguroIncluido:false,seguroModo:'pct',seguroMonto:0,segAlcance:'no',esManual:true,manualMonto:monto}
-                      setS(p=>({...p,cotsProvTransp:[...p.cotsProvTransp,nueva]}))
-                      registrarCotManual(3,prov,provId||null,(rubrosBloque[3]||[])[0]||'Transporte terrestre',ref,fechaEm,fechaVenc,[{desc:'Flete total',monto}])
-                    }}
-                    onCrearTercero={async(nombre)=>crearTerceroMinimo(nombre,(rubrosBloque[3]||[])[0]||'Transporte terrestre')}
-                  />
 
                   {/* Inputs manual de flete (fallback si no hay cotizaciones del sistema) */}
                   {s.cotsProvTransp.length===0&&(
