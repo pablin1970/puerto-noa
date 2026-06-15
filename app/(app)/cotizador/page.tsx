@@ -166,6 +166,129 @@ function DesconRows({rows,onChange,totalM3}:{rows:ItemLog[];onChange:(r:ItemLog[
   )
 }
 
+// ── Formulario manual expandido para cotización de proveedor ─────────────────
+// Se declara FUERA del componente para evitar re-mount en cada keystroke
+interface ManualState {
+  prov:string; provId:string; ref:string
+  fechaEm:string; fechaVenc:string; monto:string
+  buscar:string; showDrop:boolean; showForm:boolean
+}
+interface FilaManualProps {
+  estado: ManualState
+  setEstado: (fn:(p:ManualState)=>ManualState)=>void
+  terceros: any[]
+  color: string
+  placeholder: string
+  rubroLabel: string
+  onAgregar: (prov:string,provId:string,ref:string,fechaEm:string,fechaVenc:string,monto:number)=>void
+  onCrearTercero: (nombre:string)=>Promise<string|null>
+}
+
+function FilaManualExpandida({estado,setEstado,terceros,color,placeholder,rubroLabel,onAgregar,onCrearTercero}:FilaManualProps){
+  const inpCls=`w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none bg-white`
+  const filt=terceros.filter(t=>
+    !estado.buscar||t.razon_social.toLowerCase().includes(estado.buscar.toLowerCase())
+  ).slice(0,6)
+  const st=(k:keyof ManualState,v:any)=>setEstado(p=>({...p,[k]:v}))
+
+  if(!estado.showForm) return null
+
+  return (
+    <div className="border border-dashed rounded-xl p-4 mt-2 bg-gray-50/50" style={{borderColor:color+'60'}}>
+      <div className="text-[10px] font-semibold mb-3 uppercase tracking-wide" style={{color}}>
+        Nueva cotización manual — {rubroLabel}
+      </div>
+      {/* Buscador de proveedor */}
+      <div className="relative mb-3">
+        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Proveedor *</label>
+        <input
+          value={estado.provId ? (terceros.find(t=>t.id===estado.provId)?.razon_social||estado.prov) : estado.buscar}
+          onChange={e=>{st('buscar',e.target.value);st('prov',e.target.value);st('provId','');st('showDrop',true)}}
+          onFocus={()=>st('showDrop',true)}
+          onBlur={()=>setTimeout(()=>st('showDrop',false),200)}
+          className={inpCls} placeholder={`Buscar o escribir nombre de ${placeholder}...`}
+          style={{focusBorderColor:color}}
+        />
+        {estado.showDrop&&(
+          <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-44 overflow-y-auto">
+            {filt.length>0 ? filt.map(t=>(
+              <button key={t.id} onMouseDown={()=>{st('prov',t.razon_social);st('provId',t.id);st('buscar',t.razon_social);st('showDrop',false)}}
+                className="w-full text-left px-3 py-2 hover:bg-blue-50 text-xs border-b border-gray-50 last:border-0">
+                <span className="font-semibold text-gray-800">{t.razon_social}</span>
+              </button>
+            )) : (
+              <div className="px-3 py-3">
+                <div className="text-xs text-gray-400 mb-2">"{estado.buscar}" no está en el sistema</div>
+                <button onMouseDown={async()=>{
+                  if(!estado.buscar.trim()) return
+                  const newId=await onCrearTercero(estado.buscar.trim())
+                  if(newId){st('provId',newId);st('prov',estado.buscar.trim());st('showDrop',false)}
+                }} className="w-full text-left px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold hover:bg-blue-100">
+                  + Crear "{estado.buscar}" como nuevo proveedor
+                </button>
+                <button onMouseDown={()=>window.open('/clientes','_blank')}
+                  className="w-full text-left px-3 py-1.5 text-gray-400 rounded-lg text-xs mt-1 hover:bg-gray-50">
+                  → Ir a Clientes y Proveedores para buscarlo
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        {estado.provId&&(
+          <div className="mt-1 flex items-center gap-2">
+            <span className="text-[10px] text-green-600 font-semibold">✓ Vinculado al sistema</span>
+            <button onClick={()=>{st('provId','');st('buscar','');st('prov','')}} className="text-[10px] text-gray-400 hover:text-red-500">Cambiar</button>
+          </div>
+        )}
+      </div>
+      {/* Datos de la cotización */}
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Referencia</label>
+          <input value={estado.ref} onChange={e=>st('ref',e.target.value)} className={inpCls} placeholder="N° cotización"/>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Fecha emisión</label>
+          <input type="date" value={estado.fechaEm} onChange={e=>st('fechaEm',e.target.value)} className={inpCls}/>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Fecha vencimiento</label>
+          <input type="date" value={estado.fechaVenc} onChange={e=>st('fechaVenc',e.target.value)} className={inpCls}/>
+        </div>
+      </div>
+      {/* Monto total */}
+      <div className="flex items-center gap-3 mb-3">
+        <div className="flex-1">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Monto total USD *</label>
+          <input type="text" inputMode="decimal" value={estado.monto} onFocus={e=>e.target.select()}
+            onChange={e=>st('monto',e.target.value)}
+            className={inpCls+' font-mono text-right'} placeholder="0.00"/>
+        </div>
+        <div className="flex gap-2 mt-4">
+          <button onClick={()=>setEstado(()=>({prov:'',provId:'',ref:'',fechaEm:'',fechaVenc:'',monto:'',buscar:'',showDrop:false,showForm:false}))}
+            className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-50">
+            Cancelar
+          </button>
+          <button
+            disabled={(!estado.prov&&!estado.provId)||!estado.monto}
+            onClick={()=>{
+              const nombre=estado.prov||terceros.find(t=>t.id===estado.provId)?.razon_social||''
+              onAgregar(nombre,estado.provId,estado.ref,estado.fechaEm,estado.fechaVenc,parseFloat(estado.monto.replace(',','.'))||0)
+              setEstado(()=>({prov:'',provId:'',ref:'',fechaEm:'',fechaVenc:'',monto:'',buscar:'',showDrop:false,showForm:false}))
+            }}
+            className="px-4 py-1.5 text-white rounded-lg text-xs font-semibold disabled:opacity-40 transition-all"
+            style={{background:color}}>
+            + Agregar cotización
+          </button>
+        </div>
+      </div>
+      <div className="text-[10px] text-gray-400 italic">
+        Esta cotización se guardará en la base de cotizaciones de proveedores al guardar el presupuesto.
+      </div>
+    </div>
+  )
+}
+
 export default function CotizadorPage(){
   const topRef=useRef<HTMLDivElement>(null)
   const [s,setS]=useState<CotState>(INIT)
@@ -183,6 +306,16 @@ export default function CotizadorPage(){
   const [cotsChileDisponibles,setCotsChileDisponibles]=useState<any[]>([])
   // Cotizaciones de operaciones usadas (para detectar "ya usada en X")
   const [cotsSistemaUsadas,setCotsSistemaUsadas]=useState<Record<string,string[]>>({})
+  // Rubros por bloque (desde cotizador_bloque_rubros)
+  const [rubrosBloque,setRubrosBloque]=useState<Record<number,string[]>>({1:[],2:[],3:[],4:[]})
+  // Terceros proveedores por rubro (para búsqueda en carga manual)
+  const [tercerosProv,setTercerosProv]=useState<any[]>([])
+  // Estado del formulario manual expandido por bloque
+  const [manualFW,setManualFW]=useState({prov:'',provId:'',ref:'',fechaEm:'',fechaVenc:'',monto:'',buscar:'',showDrop:false,showForm:false})
+  const [manualChile,setManualChile]=useState({prov:'',provId:'',ref:'',fechaEm:'',fechaVenc:'',monto:'',buscar:'',showDrop:false,showForm:false})
+  const [manualTransp,setManualTransp]=useState({prov:'',provId:'',ref:'',fechaEm:'',fechaVenc:'',monto:'',buscar:'',showDrop:false,showForm:false})
+  // Cotizaciones manuales a guardar al finalizar
+  const [cotsManualesToGuardar,setCotsManualesToGuardar]=useState<any[]>([])
   // Cotizaciones de proveedores seleccionadas por bloque
   const [provUsado,setProvUsado]=useState<Record<number,string|null>>({1:null,2:null,3:null,4:null})
   const [terceros,setTerceros]=useState<any[]>([])
@@ -230,19 +363,60 @@ export default function CotizadorPage(){
           setDespachantes(desps)
         }
       })
-    // Cargar cotizaciones de proveedores v2 vigentes por rubro
-    supabase.from('cotizaciones_proveedor_v2')
-      .select('*, items:cotizaciones_proveedor_v2_items(*)')
-      .eq('estado','vigente')
-      .order('fecha',{ascending:false})
-      .then(({data})=>{
-        if(data){
-          setCotsFWDisponibles((data as any[]).filter(c=>c.rubro==='forwarder'))
-          setCotsTranspDisponibles((data as any[]).filter(c=>c.rubro==='transporte_terrestre'))
-          setCotsArgDisponibles((data as any[]).filter(c=>c.rubro==='gastos_argentina'))
-          setCotsChileDisponibles((data as any[]).filter(c=>c.rubro==='transporte_chile'||c.rubro==='deposito'))
+    // Cargar rubros por bloque desde configuración
+    Promise.all([
+      supabase.from('cotizador_bloque_rubros')
+        .select('bloque, rubro:proveedor_rubros!inner(id,nombre)')
+        .eq('activo',true),
+      supabase.from('cotizaciones_proveedor_v2')
+        .select('*, items:cotizaciones_proveedor_v2_items(*)')
+        .eq('estado','vigente')
+        .order('fecha',{ascending:false}),
+      supabase.from('cotizacion_proveedores_usados')
+        .select('cotizacion_proveedor_id, cotizacion:cotizaciones!inner(num)')
+        .limit(500),
+      supabase.from('tercero_rubros')
+        .select('tercero_id, rubro:proveedor_rubros!inner(nombre), tercero:terceros!inner(id,razon_social,activo)')
+        .filter('tercero.activo','eq','true'),
+    ]).then(([brRes,cotRes,usadasRes,trRes])=>{
+      // Rubros por bloque
+      const rb:Record<number,string[]>={1:[],2:[],3:[],4:[]}
+      if(brRes.data){
+        for(const row of brRes.data as any[]){
+          const b=row.bloque as number
+          const nombre=(row.rubro as any)?.nombre||''
+          if(rb[b]) rb[b].push(nombre)
         }
-      })
+      }
+      setRubrosBloque(rb)
+      // Terceros proveedores
+      if(trRes.data){
+        const provs=(trRes.data as any[])
+          .filter(r=>r.tercero?.activo!==false)
+          .map(r=>({...r.tercero, rubro:(r.rubro as any)?.nombre||''}))
+        setTercerosProv(provs)
+      }
+      // Mapa de cotizaciones usadas: id -> [nums de cotizaciones]
+      const usadasMap:Record<string,string[]>={}
+      if(usadasRes.data){
+        for(const u of usadasRes.data as any[]){
+          const pid=u.cotizacion_proveedor_id
+          const num=(u.cotizacion as any)?.num||''
+          if(!usadasMap[pid]) usadasMap[pid]=[]
+          if(num) usadasMap[pid].push(num)
+        }
+      }
+      setCotsSistemaUsadas(usadasMap)
+      // Cotizaciones disponibles filtradas por rubros del bloque
+      if(cotRes.data){
+        const cots=cotRes.data as any[]
+        const rubroNombresEnBloque=(bloque:number)=>rb[bloque]||[]
+        setCotsFWDisponibles(cots.filter(c=>rubroNombresEnBloque(1).some(r=>c.rubro_nombre===r||c.rubro===r.toLowerCase().replace(/ /g,'_')||c.rubro===r)))
+        setCotsChileDisponibles(cots.filter(c=>rubroNombresEnBloque(2).some(r=>c.rubro_nombre===r||c.rubro===r.toLowerCase().replace(/ /g,'_')||c.rubro===r)))
+        setCotsTranspDisponibles(cots.filter(c=>rubroNombresEnBloque(3).some(r=>c.rubro_nombre===r||c.rubro===r.toLowerCase().replace(/ /g,'_')||c.rubro===r)))
+        setCotsArgDisponibles(cots.filter(c=>rubroNombresEnBloque(4).some(r=>c.rubro_nombre===r||c.rubro===r.toLowerCase().replace(/ /g,'_')||c.rubro===r)))
+      }
+    })
     // Catálogos geográficos y tipos de camión
     Promise.all([
       supabase.from('puertos_china').select('id,locode,nombre,ciudad').eq('activo','true').order('orden'),
@@ -501,7 +675,71 @@ export default function CotizadorPage(){
     setProvUsado(pv=>({...pv,3:cotId}))
   }
 
-  // Gastos Chile manual (cuando no hay cotización del sistema)
+  // Buscar terceros proveedores por rubros del bloque
+  function tercerosPorBloque(bloque:number){
+    const rubros=rubrosBloque[bloque]||[]
+    if(rubros.length===0) return tercerosProv
+    return tercerosProv.filter(t=>rubros.includes(t.rubro))
+  }
+
+  // Crear tercero mínimo desde el cotizador
+  async function crearTerceroMinimo(razonSocial:string, rubro:string):Promise<string|null>{
+    const {data,error}=await (supabase.from('terceros') as any).insert({
+      razon_social:razonSocial,
+      tipo:['proveedor'],
+      activo:true,
+      pais:'',
+    }).select('id').single()
+    if(error||!data) return null
+    const terceroId=(data as any).id
+    // Buscar id del rubro
+    const {data:rubroData}=await supabase.from('proveedor_rubros').select('id').eq('nombre',rubro).limit(1)
+    if(rubroData&&rubroData.length>0){
+      await (supabase.from('tercero_rubros') as any).insert({tercero_id:terceroId,rubro_id:(rubroData[0] as any).id})
+    }
+    // Refrescar tercerosProv
+    const {data:newT}=await supabase.from('terceros').select('id,razon_social').eq('id',terceroId).single()
+    if(newT) setTercerosProv(p=>[...p,{...(newT as any),rubro}])
+    return terceroId
+  }
+
+  // Agregar cotización manual al array para guardar al finalizar
+  function registrarCotManual(bloque:number, proveedorNombre:string, terceroId:string|null, rubro:string, ref:string, fechaEm:string, fechaVenc:string, items:{desc:string,monto:number}[]){
+    setCotsManualesToGuardar(prev=>[...prev,{bloque,proveedorNombre,terceroId,rubro,ref,fechaEm,fechaVenc,items}])
+  }
+
+  // Guardar cotizaciones manuales en cotizaciones_proveedor_v2
+  async function guardarCotsManuals(cotizacionId:string){
+    for(const cm of cotsManualesToGuardar){
+      const rubroKey=cm.rubro.toLowerCase().replace(/ /g,'_')
+      const {data:cot,error}=await (supabase.from('cotizaciones_proveedor_v2') as any).insert({
+        proveedor_nombre:cm.proveedorNombre,
+        tercero_id:cm.terceroId||null,
+        rubro:rubroKey,
+        rubro_nombre:cm.rubro,
+        tipo:'generica',
+        referencia:cm.ref||null,
+        fecha:cm.fechaEm||new Date().toISOString().slice(0,10),
+        fecha_vencimiento:cm.fechaVenc||null,
+        moneda:'USD',
+        estado:'vigente',
+        cotizacion_id:cotizacionId,
+      }).select('id').single()
+      if(error||!cot) continue
+      const cotId=(cot as any).id
+      if(cm.items.length>0){
+        const itemsRows=cm.items.filter((it:any)=>it.desc).map((it:any,i:number)=>({
+          cotizacion_id:cotId, descripcion:it.desc, tipo_calculo:'fijo_usd', valor:it.monto, orden:i,
+        }))
+        if(itemsRows.length>0) await (supabase.from('cotizaciones_proveedor_v2_items') as any).insert(itemsRows)
+      }
+      await (supabase.from('cotizacion_proveedores_usados') as any).insert({
+        cotizacion_id:cotizacionId, cotizacion_proveedor_id:cotId, bloque:cm.bloque,
+      })
+    }
+  }
+
+    // Gastos Chile manual (cuando no hay cotización del sistema)
   function agregarGastoChileDesdeSistema(cotId:string){
     const cot=cotsChileDisponibles.find(c=>c.id===cotId)
     if(!cot) return
@@ -635,6 +873,8 @@ export default function CotizadorPage(){
           await (supabase.from('cotizacion_proveedores_usados') as any).insert(provUsados)
         }
       }
+      // Guardar cotizaciones manuales generadas durante el presupuesto
+      if(cotGuardada) await guardarCotsManuals((cotGuardada as any).id)
       router.push('/registro')
     } catch(e:any){alert('Error inesperado: '+e.message);setSaving(false)}
   }
@@ -1040,7 +1280,7 @@ export default function CotizadorPage(){
                     })()}
                   </select>
                 )}
-                <button onClick={agregarFWManual} className="px-3 py-1 bg-[#1168F8] text-white rounded-lg text-[10px] font-bold hover:bg-[#0a4fc4]">+ Manual</button>
+                <button onClick={()=>setManualFW(p=>({...p,showForm:true}))} className="px-3 py-1 bg-[#1168F8] text-white rounded-lg text-[10px] font-bold hover:bg-[#0a4fc4]">+ Manual</button>
               </div>
             </div>
             <div className="px-5 py-4">
@@ -1217,23 +1457,24 @@ export default function CotizadorPage(){
                   })}
                 </div>
               )}
-              {/* Fila manual FW */}
-              <div className="flex items-center gap-2 px-3 py-2.5 border border-dashed border-gray-200 rounded-xl bg-gray-50/50 mt-2">
-                <span className="text-xs text-gray-400 flex-shrink-0">Sin cotización del sistema:</span>
-                <input value={fwManualProv} onChange={e=>setFwManualProv(e.target.value)}
-                  className="flex-1 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Nombre ForWarder"/>
-                <span className="text-[10px] text-gray-400">USD</span>
-                <input type="text" inputMode="decimal" value={fwManualMonto} onFocus={e=>e.target.select()}
-                  onChange={e=>setFwManualMonto(e.target.value)}
-                  className="w-28 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:border-[#1168F8] bg-white" placeholder="0.00"/>
-                <button disabled={!fwManualProv||!fwManualMonto} onClick={()=>{
-                  const nueva:CotProvSel={uid:uid2(),cotProvId:'',proveedorNombre:fwManualProv,referencia:'',fechaEmision:'',fechaVencimiento:'',tipo:'generica',clienteId:null,estado:'vigente',usadaEnCots:[],items:[],elegida:s.cotsProvFW.length===0,seguroIncluido:false,seguroModo:'pct',seguroMonto:0,segAlcance:'no',esManual:true,manualMonto:parseNum(fwManualMonto)}
+              {/* Fila manual FW — expandida */}
+              <FilaManualExpandida
+                estado={manualFW}
+                setEstado={setManualFW as any}
+                terceros={tercerosPorBloque(1)}
+                color="#1168F8"
+                placeholder="ForWarder"
+                rubroLabel={(rubrosBloque[1]||[]).join(' / ')||'ForWarder'}
+                onAgregar={(prov,provId,ref,fechaEm,fechaVenc,monto)=>{
+                  const nueva:CotProvSel={uid:uid2(),cotProvId:'',proveedorNombre:prov,referencia:ref,fechaEmision:fechaEm,fechaVencimiento:fechaVenc,tipo:'generica',clienteId:provId||null,estado:'vigente',usadaEnCots:[],items:[],elegida:s.cotsProvFW.length===0,seguroIncluido:false,seguroModo:'pct',seguroMonto:0,segAlcance:'no',esManual:true,manualMonto:monto}
                   setS(p=>({...p,cotsProvFW:[...p.cotsProvFW,nueva]}))
-                  setFwManualProv('');setFwManualMonto('')
-                }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-white hover:border-[#1168F8] hover:text-[#1168F8] disabled:opacity-40 whitespace-nowrap transition-all">
-                  + Agregar
-                </button>
-              </div>
+                  registrarCotManual(1,prov,provId||null,(rubrosBloque[1]||[])[0]||'Freight Forwarder',ref,fechaEm,fechaVenc,[{desc:'Flete total',monto}])
+                }}
+                onCrearTercero={async(nombre)=>{
+                  const id=await crearTerceroMinimo(nombre,(rubrosBloque[1]||[])[0]||'Freight Forwarder')
+                  return id
+                }}
+              />
             </div>
             <div className="flex justify-between items-center px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
               <span>{fwElegida?`ForWarder elegido: ${fwElegida.proveedorNombre||'Manual'}`:s.cotsProvFW.length>0?'Ninguno elegido':'Sin cotizaciones'}</span>
@@ -1261,6 +1502,7 @@ export default function CotizadorPage(){
               <div className="border-t border-gray-100 pt-3 mb-3">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Cotización transporte Chile → NOA</div>
+                  <div className="flex items-center gap-2">
                   {cotsChileDisponibles.length>0&&(
                     <select onChange={e=>{if(e.target.value){agregarTranspChileDesdeSistema(e.target.value);e.target.value=''}}}
                       className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#0a9e6e]" defaultValue="">
@@ -1275,7 +1517,24 @@ export default function CotizadorPage(){
                       })()}
                     </select>
                   )}
+                  <button onClick={()=>setManualChile(p=>({...p,showForm:true}))}
+                    className="px-3 py-1 bg-[#0a9e6e] text-white rounded-lg text-[10px] font-bold hover:bg-[#087a55] whitespace-nowrap">+ Manual</button>
+                  </div>
                 </div>
+                <FilaManualExpandida
+                  estado={manualChile}
+                  setEstado={setManualChile as any}
+                  terceros={tercerosPorBloque(2)}
+                  color="#0a9e6e"
+                  placeholder="Transportista Chile-NOA"
+                  rubroLabel={(rubrosBloque[2]||[]).join(' / ')||'Transporte Chile-NOA'}
+                  onAgregar={(prov,provId,ref,fechaEm,fechaVenc,monto)=>{
+                    const nueva:CotProvSel={uid:uid2(),cotProvId:'',proveedorNombre:prov,referencia:ref,fechaEmision:fechaEm,fechaVencimiento:fechaVenc,tipo:'generica',clienteId:provId||null,estado:'vigente',usadaEnCots:[],items:[],elegida:s.cotsProvChile.length===0,seguroIncluido:false,seguroModo:'pct',seguroMonto:0,segAlcance:'no',esManual:true,manualMonto:monto}
+                    setS(p=>({...p,cotsProvChile:[...p.cotsProvChile,nueva]}))
+                    registrarCotManual(2,prov,provId||null,(rubrosBloque[2]||[])[0]||'Transporte terrestre',ref,fechaEm,fechaVenc,[{desc:'Flete total',monto}])
+                  }}
+                  onCrearTercero={async(nombre)=>crearTerceroMinimo(nombre,(rubrosBloque[2]||[])[0]||'Transporte terrestre')}
+                />
                 {s.cotsProvChile.length>0&&(
                   <div>
                   {s.cotsProvChile.map(ct=>{
@@ -1508,12 +1767,12 @@ export default function CotizadorPage(){
               {s.optTransp!=='A'&&(
                 <div>
                   {/* Selector del sistema */}
+                  <div className="flex items-center gap-2 mb-3 flex-wrap">
+                    <span className="text-[10px] text-gray-500">Cotizaciones:</span>
                   {cotsTranspDisponibles.length>0&&(
-                    <div className="flex items-center gap-2 mb-3 flex-wrap">
-                      <span className="text-[10px] text-gray-500">Cotizaciones del sistema:</span>
-                      <select onChange={e=>{if(e.target.value){agregarTranspTerrDesdeSistema(e.target.value);e.target.value=''}}}
-                        className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#b45309]" defaultValue="">
-                        <option value="">+ Cargar cotización</option>
+                    <select onChange={e=>{if(e.target.value){agregarTranspTerrDesdeSistema(e.target.value);e.target.value=''}}}
+                      className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#b45309]" defaultValue="">
+                      <option value="">+ Cargar del sistema</option>
                         {(()=>{
                           const esp=cotsTranspDisponibles.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
                           const gen=cotsTranspDisponibles.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
@@ -1522,9 +1781,25 @@ export default function CotizadorPage(){
                             <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
                           </>)
                         })()}
-                      </select>
-                    </div>
+                    </select>
                   )}
+                    <button onClick={()=>setManualTransp(p=>({...p,showForm:true}))}
+                      className="px-3 py-1 bg-[#b45309] text-white rounded-lg text-[10px] font-bold hover:bg-[#92400e] whitespace-nowrap">+ Manual</button>
+                  </div>
+                  <FilaManualExpandida
+                    estado={manualTransp}
+                    setEstado={setManualTransp as any}
+                    terceros={tercerosPorBloque(3)}
+                    color="#b45309"
+                    placeholder="Transportista terrestre"
+                    rubroLabel={(rubrosBloque[3]||[]).join(' / ')||'Transporte terrestre'}
+                    onAgregar={(prov,provId,ref,fechaEm,fechaVenc,monto)=>{
+                      const nueva:CotProvSel={uid:uid2(),cotProvId:'',proveedorNombre:prov,referencia:ref,fechaEmision:fechaEm,fechaVencimiento:fechaVenc,tipo:'generica',clienteId:provId||null,estado:'vigente',usadaEnCots:[],items:[],elegida:s.cotsProvTransp.length===0,seguroIncluido:false,seguroModo:'pct',seguroMonto:0,segAlcance:'no',esManual:true,manualMonto:monto}
+                      setS(p=>({...p,cotsProvTransp:[...p.cotsProvTransp,nueva]}))
+                      registrarCotManual(3,prov,provId||null,(rubrosBloque[3]||[])[0]||'Transporte terrestre',ref,fechaEm,fechaVenc,[{desc:'Flete total',monto}])
+                    }}
+                    onCrearTercero={async(nombre)=>crearTerceroMinimo(nombre,(rubrosBloque[3]||[])[0]||'Transporte terrestre')}
+                  />
 
                   {/* Paneles de cotizaciones cargadas */}
                   {s.cotsProvTransp.map(ct=>{
@@ -1601,23 +1876,21 @@ export default function CotizadorPage(){
                     )
                   })}
 
-                  {/* Fila manual */}
-                  <div className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-200 rounded-xl bg-gray-50/50 mb-3">
-                    <span className="text-xs text-gray-400 flex-shrink-0">Sin cotización del sistema:</span>
-                    <input value={transpManualProv} onChange={e=>setTranspManualProv(e.target.value)}
-                      className="flex-1 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#b45309] bg-white" placeholder="Transportista"/>
-                    <span className="text-[10px] text-gray-400">USD</span>
-                    <input type="text" inputMode="decimal" value={transpManualMonto} onFocus={e=>e.target.select()}
-                      onChange={e=>setTranspManualMonto(e.target.value)}
-                      className="w-28 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:border-[#b45309] bg-white" placeholder="0.00"/>
-                    <button disabled={!transpManualProv||!transpManualMonto} onClick={()=>{
-                      const nueva:CotProvSel={uid:uid2(),cotProvId:'',proveedorNombre:transpManualProv,referencia:'',fechaEmision:'',fechaVencimiento:'',tipo:'generica',clienteId:null,estado:'vigente',usadaEnCots:[],items:[],elegida:s.cotsProvTransp.length===0,seguroIncluido:false,seguroModo:'pct',seguroMonto:0,segAlcance:'no',esManual:true,manualMonto:parseNum(transpManualMonto)}
+                  {/* Fila manual Terrestre — expandida */}
+                  <FilaManualExpandida
+                    estado={manualTransp}
+                    setEstado={setManualTransp as any}
+                    terceros={tercerosPorBloque(3)}
+                    color="#b45309"
+                    placeholder="Transportista"
+                    rubroLabel={(rubrosBloque[3]||[]).join(' / ')||'Transporte terrestre'}
+                    onAgregar={(prov,provId,ref,fechaEm,fechaVenc,monto)=>{
+                      const nueva:CotProvSel={uid:uid2(),cotProvId:'',proveedorNombre:prov,referencia:ref,fechaEmision:fechaEm,fechaVencimiento:fechaVenc,tipo:'generica',clienteId:provId||null,estado:'vigente',usadaEnCots:[],items:[],elegida:s.cotsProvTransp.length===0,seguroIncluido:false,seguroModo:'pct',seguroMonto:0,segAlcance:'no',esManual:true,manualMonto:monto}
                       setS(p=>({...p,cotsProvTransp:[...p.cotsProvTransp,nueva]}))
-                      setTranspManualProv('');setTranspManualMonto('')
-                    }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-white hover:border-[#b45309] hover:text-[#b45309] disabled:opacity-40 whitespace-nowrap transition-all">
-                      + Agregar
-                    </button>
-                  </div>
+                      registrarCotManual(3,prov,provId||null,(rubrosBloque[3]||[])[0]||'Transporte terrestre',ref,fechaEm,fechaVenc,[{desc:'Flete total',monto}])
+                    }}
+                    onCrearTercero={async(nombre)=>crearTerceroMinimo(nombre,(rubrosBloque[3]||[])[0]||'Transporte terrestre')}
+                  />
 
                   {/* Inputs manual de flete (fallback si no hay cotizaciones del sistema) */}
                   {s.cotsProvTransp.length===0&&(
