@@ -525,7 +525,14 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const listaProv = tercerosConRubro.length > 0 ? tercerosConRubro : terceros
   const provsFiltrados = listaProv.filter((t: any) => {
     const matchBuscar = !buscarProv || t.razon_social.toLowerCase().includes(buscarProv.toLowerCase())
-    const matchRubro = !form.rubro || !t.rubros || t.rubros.length === 0 || t.rubros.includes(form.rubro)
+    // Si ya cargamos rubros: mostrar solo los que tienen el rubro asignado
+    // Si el tercero no tiene ningún rubro registrado, lo excluimos cuando hay rubro seleccionado
+    const tieneRubros = t.rubros && t.rubros.length > 0
+    const matchRubro = !form.rubro || !tercerosConRubro.length
+      ? true  // sin datos de rubros cargados → mostrar todos
+      : tieneRubros
+        ? t.rubros.includes(form.rubro)
+        : false  // sin rubros asignados → no mostrar cuando hay filtro de rubro
     return matchBuscar && matchRubro
   }).slice(0, 8)
   const hayProvEnRubro = listaProv.some((t:any) => t.rubros?.includes(form.rubro))
