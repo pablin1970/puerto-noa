@@ -1,345 +1,242 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
-import { fmt } from '@/lib/utils'
 import Link from 'next/link'
 
-export default function DashboardPage() {
+const fmtN = (n: number) => (n||0).toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmtUSD = (n: number) => `USD ${fmtN(n)}`
+const fmtDate = (d: string) => d ? d.split('T')[0].split('-').reverse().join('/') : '—'
+
+export default function DashboardLogisticoPage() {
   const supabase = useMemo(() => createClient(), [])
-  const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [userName, setUserName] = useState('')
-  const [tc, setTc] = useState<any>({ ars: null, clp: null, cny: null, fecha: null })
+  const [usuario, setUsuario] = useState('')
+  const [d, setD] = useState<any>({
+    opsActivas: [], opsPorEtapa: {}, cotsRecientes: [],
+    cotsPendientes: 0, cotsEnviadas: 0, cotsBorrador: 0,
+    fondosTotal: 0, factPendCobro: 0,
+    alertas: [], provVencimientos: [],
+    tcARS: null, tcCLP: null, tcFecha: '', tcOk: true,
+  })
 
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => { load() }, [])
 
-  async function loadAll() {
-    const { data: authData } = await supabase.auth.getUser()
-    if (authData.user) {
-      const { data: u } = await supabase.from('usuarios').select('nombre').eq('auth_id', authData.user.id).single()
-      if (u) setUserName((u as any).nombre?.split(' ')[0] || '')
+  async function load() {
+    setLoading(true)
+    const { data: auth } = await supabase.auth.getUser()
+    if (auth?.user) {
+      const { data: u } = await supabase.from('usuarios').select('nombre').eq('auth_id', auth.user.id).single()
+      setUsuario((u as any)?.nombre?.split(' ')[0] || '')
     }
 
-    const [cotsRes, opsRes, tcRes, facEmitRes, facRecRes] = await Promise.all([
-      supabase.from('cotizaciones').select('id,estado,total_landed,total_fob,created_at,cliente').order('created_at', { ascending: false }).limit(100),
-      supabase.from('operaciones').select('id,estado,created_at,cotizacion:cotizaciones(num,cliente,total_landed,destino_noa)').order('created_at', { ascending: false }),
+    const hoy = new Date()
+    const hace30 = new Date(hoy); hace30.setDate(hoy.getDate() - 30)
+    const en30  = new Date(hoy); en30.setDate(hoy.getDate() + 30)
+
+    const [opsRes, cotsRes, tcRes, facRes, fondosRes, cotProvRes] = await Promise.all([
+      supabase.from('operaciones').select('id,estado,created_at,cotizacion:cotizaciones(num,cliente,destino_noa,total_landed)').order('created_at', { ascending: false }),
+      supabase.from('cotizaciones').select('id,num,cliente,estado,total_landed,created_at').order('created_at', { ascending: false }).limit(8),
       supabase.from('tipos_cambio_eventos').select('ars,clp,cny,fecha,created_at').order('created_at', { ascending: false }).limit(1),
-      supabase.from('facturas_emitidas').select('id,total,estado,created_at').order('created_at', { ascending: false }).limit(100),
-      supabase.from('facturas_recibidas').select('id,total,estado,created_at').order('created_at', { ascending: false }).limit(100),
+      supabase.from('facturas_emitidas').select('id,total,estado').order('created_at', { ascending: false }).limit(200),
+      (supabase.from('fondos_cuentas') as any).select('id').limit(1),
+      supabase.from('cotizaciones_proveedor_v2').select('id,proveedor_nombre,fecha_vencimiento,estado').eq('estado','vigente'),
     ])
 
-    const cots = cotsRes.data || []
-    const ops = opsRes.data || []
-    const facEmit = facEmitRes.data || []
-    const facRec = facRecRes.data || []
+    const ops = (opsRes.data || []) as any[]
+    const cots = (cotsRes.data || []) as any[]
+    const tc = tcRes.data?.[0] as any
+    const facs = (facRes.data || []) as any[]
+    const cotsProv = (cotProvRes.data || []) as any[]
 
-    if (tcRes.data && tcRes.data.length > 0) setTc(tcRes.data[0])
+    const opsActivas = ops.filter(o => o.estado !== 'cerrada' && o.estado !== 'cancelada')
 
-    // KPIs cotizaciones
-    const ahora = Date.now()
-    const hace30 = ahora - 30 * 86400000
-    const hace7  = ahora - 7  * 86400000
-
-    const cotsAceptadas  = cots.filter((c: any) => c.estado === 'aceptada')
-    const cotsEnviadas   = cots.filter((c: any) => c.estado === 'enviada')
-    const cotsBorrador   = cots.filter((c: any) => c.estado === 'borrador')
-    const cotsUltimas30  = cots.filter((c: any) => new Date(c.created_at).getTime() > hace30)
-    const cotsUltimas7   = cots.filter((c: any) => new Date(c.created_at).getTime() > hace7)
-
-    // Tasa de conversión
-    const totalCerradas = cotsAceptadas.length + cots.filter((c: any) => c.estado === 'rechazada').length
-    const tasaConv = totalCerradas > 0 ? Math.round(cotsAceptadas.length / totalCerradas * 100) : 0
-
-    // Valor pipeline (enviadas)
-    const pipeline = cotsEnviadas.reduce((s: number, c: any) => s + (c.total_landed || 0), 0)
-    const valorAceptadas = cotsAceptadas.reduce((s: number, c: any) => s + (c.total_landed || 0), 0)
-
-    // Gráfico últimas 8 semanas
-    const semanas: { label: string; cots: number; valor: number }[] = []
-    for (let i = 7; i >= 0; i--) {
-      const desde = ahora - (i + 1) * 7 * 86400000
-      const hasta = ahora - i * 7 * 86400000
-      const semCots = cots.filter((c: any) => {
-        const t = new Date(c.created_at).getTime()
-        return t >= desde && t < hasta
-      })
-      const d = new Date(hasta)
-      semanas.push({
-        label: `${d.getDate()}/${d.getMonth() + 1}`,
-        cots: semCots.length,
-        valor: semCots.reduce((s: number, c: any) => s + (c.total_landed || 0), 0),
-      })
+    // Etapas simuladas desde estado
+    const ETAPA_LABEL: Record<string,string> = {
+      'en_proceso': 'En tránsito', 'pendiente': 'Pendiente inicio',
+      'abierta': 'Abierta', 'en_transito': 'En tránsito',
     }
-    const maxValor = Math.max(...semanas.map(s => s.valor), 1)
-    const maxCots  = Math.max(...semanas.map(s => s.cots), 1)
+    const opsPorEtapa: Record<string,any[]> = {
+      'Marítimo': opsActivas.filter(o => ['maritimo','en_transito_maritimo'].includes(o.estado)),
+      'Puerto Chile': opsActivas.filter(o => ['puerto_chile','aduana_chile'].includes(o.estado)),
+      'Terrestre': opsActivas.filter(o => ['terrestre','en_transito_terrestre'].includes(o.estado)),
+      'En proceso': opsActivas.filter(o => !['maritimo','en_transito_maritimo','puerto_chile','aduana_chile','terrestre','en_transito_terrestre'].includes(o.estado)),
+    }
 
-    // Facturas
-    const facEmitPend = facEmit.filter((f: any) => f.estado === 'pendiente' || f.estado === 'emitida')
-    const facRecPend  = facRec.filter((f: any) => f.estado === 'pendiente')
-    const cobrar = facEmitPend.reduce((s: number, f: any) => s + (f.total || 0), 0)
-    const pagar  = facRecPend.reduce((s: number, f: any) => s + (f.total || 0), 0)
+    // Fondos en custodia — total aproximado desde movimientos
+    const { data: movFondos } = await (supabase.from('fondos_movimientos') as any).select('tipo,monto,moneda')
+    const fondosTotal = (movFondos||[]).reduce((t: number, m: any) => {
+      const monto = m.monto || 0
+      return ['ingreso','deposito','credito'].includes(m.tipo) ? t + monto : t - monto
+    }, 0)
 
-    // Ops activas
-    const opsActivas = ops.filter((o: any) => o.estado !== 'cerrada' && o.estado !== 'cancelada')
+    // Facturas pendientes de cobro
+    const factPendCobro = facs.filter(f => ['pendiente','emitida'].includes(f.estado)).reduce((t, f) => t + (f.total||0), 0)
+
+    // Cotizaciones de proveedores próximas a vencer
+    const provVencimientos = cotsProv.filter(c => {
+      if (!c.fecha_vencimiento) return false
+      const venc = new Date(c.fecha_vencimiento)
+      return venc >= hoy && venc <= en30
+    }).sort((a, b) => new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime()).slice(0, 5)
+
+    // TC ok si fue hoy
+    const tcFechaHoy = tc?.created_at ? new Date(tc.created_at).toDateString() === hoy.toDateString() : false
 
     // Alertas
-    const alertas: { tipo: 'warning'|'danger'|'info'; msg: string; href: string }[] = []
-    const enviSinRespuesta = cotsEnviadas.filter((c: any) => new Date(c.created_at).getTime() < hace7)
-    if (enviSinRespuesta.length > 0)
-      alertas.push({ tipo: 'warning', msg: `${enviSinRespuesta.length} cotización(es) enviada(s) sin respuesta hace más de 7 días`, href: '/registro' })
-    if (cotsBorrador.length > 3)
-      alertas.push({ tipo: 'info', msg: `${cotsBorrador.length} cotizaciones en borrador sin enviar`, href: '/registro' })
-    if (opsActivas.length > 0)
-      alertas.push({ tipo: 'info', msg: `${opsActivas.length} operación(es) en curso`, href: '/operaciones' })
+    const alertas: any[] = []
+    if (!tcFechaHoy) alertas.push({ tipo: 'warn', msg: 'Tipo de cambio no actualizado hoy', href: '/tipos-cambio' })
+    const cotsBorrador = cots.filter(c => c.estado === 'borrador').length
+    const cotsEnviadas = cots.filter(c => c.estado === 'enviada').length
+    if (cotsBorrador > 0) alertas.push({ tipo: 'info', msg: `${cotsBorrador} cotización(es) en borrador sin enviar`, href: '/registro' })
+    if (cotsEnviadas > 0) alertas.push({ tipo: 'info', msg: `${cotsEnviadas} cotización(es) esperando respuesta del cliente`, href: '/registro' })
+    if (provVencimientos.length > 0) alertas.push({ tipo: 'warn', msg: `${provVencimientos.length} cotización(es) de proveedores vencen en 30 días`, href: '/cotizaciones-proveedores' })
+    if (factPendCobro > 0) alertas.push({ tipo: 'info', msg: `Facturas pendientes de cobro: ${fmtUSD(factPendCobro)}`, href: '/facturacion/emitidas' })
 
-    setData({ cots, ops, opsActivas, cotsAceptadas, cotsEnviadas, cotsBorrador, cotsUltimas30, cotsUltimas7, tasaConv, pipeline, valorAceptadas, semanas, maxValor, maxCots, cobrar, pagar, alertas })
+    setD({
+      opsActivas, opsPorEtapa,
+      cotsRecientes: cots,
+      cotsPendientes: cots.filter(c => c.estado === 'enviada').length,
+      cotsEnviadas: cots.filter(c => c.estado === 'aceptada').length,
+      cotsBorrador,
+      fondosTotal, factPendCobro,
+      alertas, provVencimientos,
+      tcARS: tc?.ars, tcCLP: tc?.clp, tcFecha: tc?.fecha || '',
+      tcOk: tcFechaHoy,
+    })
     setLoading(false)
   }
 
   const hora = new Date().getHours()
-  const saludo = hora < 12 ? 'Buenos días' : hora < 18 ? 'Buenas tardes' : 'Buenas noches'
+  const saludo = hora < 12 ? 'Buenos días' : hora < 20 ? 'Buenas tardes' : 'Buenas noches'
 
-  if (loading) return (
-    <div className="min-h-screen bg-[#f0f4ff] flex items-center justify-center">
-      <div className="text-center space-y-3">
-        <div className="w-10 h-10 border-2 border-[#1168F8] border-t-transparent rounded-full animate-spin mx-auto"/>
-        <div className="text-sm text-gray-400">Cargando dashboard...</div>
-      </div>
-    </div>
-  )
-
-  const d = data!
+  if (loading) return <div className="p-12 text-center text-gray-400">Cargando...</div>
 
   return (
-    <div className="min-h-screen bg-[#f0f4ff] p-6">
-
-      {/* ── HEADER ── */}
-      <div className="flex items-end justify-between mb-7">
+    <div className="p-6 bg-gray-50 min-h-screen">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
         <div>
-          <div className="text-[11px] font-semibold text-[#1168F8]/60 uppercase tracking-widest mb-1">Puerto NOA SpA · Sistema logístico</div>
-          <h1 className="text-2xl font-bold text-[#052698]">
-            {saludo}{userName ? `, ${userName}` : ''} 👋
-          </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
+          <h1 className="text-xl font-bold text-gray-900">{saludo}{usuario ? `, ${usuario}` : ''} 👋</h1>
+          <p className="text-xs text-gray-400 mt-0.5">Puerto NOA SpA — {new Date().toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' })}</p>
         </div>
-        <Link href="/cotizador"
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-semibold hover:bg-[#0a4fc4] transition-colors shadow-md shadow-blue-200">
-          ✦ Nueva cotización
-        </Link>
+        <div className="flex items-center gap-3">
+          {[{ label:'AR ARS', val:d.tcARS, dec:0 },{ label:'CL CLP', val:d.tcCLP, dec:0 }].map(t => (
+            <div key={t.label} className={`px-3 py-1.5 rounded-xl border text-xs font-mono ${d.tcOk?'bg-white border-gray-200':'bg-amber-50 border-amber-200'}`}>
+              <span className="text-gray-400 mr-1">{t.label}</span>
+              <span className="font-bold text-gray-900">{t.val ? t.val.toLocaleString('es-CL',{maximumFractionDigits:t.dec}) : '—'}</span>
+            </div>
+          ))}
+          {!d.tcOk && <span className="text-[10px] text-amber-600 font-semibold">⚠ TC desactualizado</span>}
+        </div>
       </div>
 
-      {/* ── ALERTAS ── */}
-      {d.alertas.length > 0 && (
-        <div className="flex flex-col gap-2 mb-6">
-          {d.alertas.map((a: any, i: number) => (
-            <Link key={i} href={a.href}
-              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-medium border transition-all hover:shadow-sm ${
-                a.tipo === 'danger'  ? 'bg-red-50 border-red-200 text-red-700' :
-                a.tipo === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
-                'bg-blue-50 border-blue-200 text-blue-700'
-              }`}>
-              <span>{a.tipo === 'danger' ? '🚨' : a.tipo === 'warning' ? '⚠️' : '💡'}</span>
-              <span className="flex-1">{a.msg}</span>
-              <span className="opacity-50">→</span>
+      {/* FILA 1 — KPIs principales */}
+      <div className="grid grid-cols-4 gap-4 mb-5">
+        {[
+          { label:'Operaciones activas', val: d.opsActivas.length, icon:'🚢', color:'text-[#1168F8]', href:'/operaciones' },
+          { label:'Cotizaciones enviadas', val: d.cotsPendientes, icon:'📋', color:'text-amber-600', href:'/registro' },
+          { label:'Fondos administrados', val: `USD ${fmtN(d.fondosTotal)}`, icon:'🏦', color:'text-teal-600', href:'/fondos' },
+          { label:'Facturas por cobrar', val: fmtUSD(d.factPendCobro), icon:'📄', color:'text-purple-600', href:'/facturacion/emitidas' },
+        ].map((k, i) => (
+          <Link key={i} href={k.href} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:border-[#1168F8] transition-colors group">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-lg">{k.icon}</span>
+              <span className="text-[9px] text-gray-400 group-hover:text-[#1168F8]">Ver →</span>
+            </div>
+            <div className={`text-2xl font-bold font-mono ${k.color}`}>{k.val}</div>
+            <div className="text-[10px] text-gray-400 mt-1">{k.label}</div>
+          </Link>
+        ))}
+      </div>
+
+      {/* FILA 2 — Pipeline logístico */}
+      <div className="mb-5">
+        <div className="text-[10px] font-semibold text-gray-400 uppercase mb-2">Pipeline logístico</div>
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { etapa:'Marítimo', icon:'🌊', color:'bg-blue-50 border-blue-100', text:'text-blue-700' },
+            { etapa:'Puerto Chile', icon:'⚓', color:'bg-teal-50 border-teal-100', text:'text-teal-700' },
+            { etapa:'Terrestre', icon:'🚛', color:'bg-amber-50 border-amber-100', text:'text-amber-700' },
+            { etapa:'En proceso', icon:'📦', color:'bg-gray-50 border-gray-200', text:'text-gray-600' },
+          ].map(e => {
+            const ops = d.opsPorEtapa[e.etapa] || []
+            return (
+              <div key={e.etapa} className={`border rounded-2xl p-3 ${e.color}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span>{e.icon}</span>
+                  <span className={`text-[10px] font-bold uppercase ${e.text}`}>{e.etapa}</span>
+                </div>
+                <div className={`text-3xl font-bold font-mono ${e.text}`}>{ops.length}</div>
+                <div className="text-[10px] text-gray-400 mt-1">operación{ops.length !== 1 ? 'es' : ''}</div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* FILA 3 — Alertas + Cotiz proveedores por vencer */}
+      <div className="grid grid-cols-2 gap-4 mb-5">
+        {/* Alertas */}
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+          <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3">Alertas y pendientes</div>
+          {d.alertas.length === 0 ? (
+            <div className="flex items-center gap-2 text-green-700 text-xs">
+              <span className="text-lg">✅</span> Todo al día — sin alertas pendientes
+            </div>
+          ) : d.alertas.map((a: any, i: number) => (
+            <Link key={i} href={a.href} className={`flex items-start gap-2 py-2 border-b border-gray-50 last:border-0 hover:opacity-70 transition-opacity`}>
+              <span className="flex-shrink-0 mt-0.5">{a.tipo === 'warn' ? '⚠️' : 'ℹ️'}</span>
+              <span className={`text-xs ${a.tipo === 'warn' ? 'text-amber-700' : 'text-gray-600'}`}>{a.msg}</span>
             </Link>
           ))}
         </div>
-      )}
 
-      {/* ── FILA 1: KPIs PRINCIPALES ── */}
-      <div className="grid grid-cols-4 gap-4 mb-5">
-
-        {/* Pipeline */}
-        <div className="bg-[#052698] rounded-2xl p-5 text-white col-span-1">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-blue-300 mb-3">Pipeline activo</div>
-          <div className="text-3xl font-black font-mono mb-1">USD {fmt(d.pipeline, 0)}</div>
-          <div className="text-[11px] text-blue-300">{d.cotsEnviadas.length} cotiz. enviada(s) esperando respuesta</div>
-          <div className="mt-4 pt-4 border-t border-white/10">
-            <div className="text-[10px] text-blue-300 mb-1">Tasa de conversión histórica</div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-green-400 rounded-full transition-all" style={{ width: `${d.tasaConv}%` }}/>
+        {/* Cotizaciones proveedores por vencer */}
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+          <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3">Cotizaciones proveedores por vencer</div>
+          {d.provVencimientos.length === 0 ? (
+            <div className="text-xs text-gray-400">Sin vencimientos en los próximos 30 días</div>
+          ) : d.provVencimientos.map((c: any) => {
+            const dias = Math.ceil((new Date(c.fecha_vencimiento).getTime() - new Date().getTime()) / 86400000)
+            return (
+              <div key={c.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                <span className="text-xs text-gray-700 font-medium">{c.proveedor_nombre}</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${dias <= 7 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+                  {dias}d
+                </span>
               </div>
-              <span className="text-sm font-bold text-green-400">{d.tasaConv}%</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Valor aceptadas */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Negocios cerrados</div>
-          <div className="text-2xl font-black font-mono text-[#052698] mb-1">USD {fmt(d.valorAceptadas, 0)}</div>
-          <div className="text-[11px] text-gray-400">{d.cotsAceptadas.length} cotización(es) aceptada(s)</div>
-          <div className="mt-4 flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-green-400"/>
-            <span className="text-[10px] text-gray-400">{d.cotsUltimas30.length} nuevas en los últimos 30 días</span>
-          </div>
-        </div>
-
-        {/* Operaciones */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Operaciones en curso</div>
-          <div className="text-4xl font-black text-[#1168F8] mb-1">{d.opsActivas.length}</div>
-          <div className="text-[11px] text-gray-400">embarques activos</div>
-          <div className="mt-4 grid grid-cols-3 gap-1">
-            {d.opsActivas.slice(0, 3).map((op: any, i: number) => (
-              <div key={i} className="bg-[#f0f4ff] rounded-lg px-2 py-1.5 text-center">
-                <div className="text-[9px] font-bold text-[#1168F8] truncate">{op.cotizacion?.num?.slice(-4)}</div>
-              </div>
-            ))}
-            {d.opsActivas.length === 0 && <div className="col-span-3 text-[10px] text-gray-300">Sin operaciones activas</div>}
-          </div>
-        </div>
-
-        {/* Finanzas rápido */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Posición financiera</div>
-          <div className="space-y-3">
-            <div>
-              <div className="text-[10px] text-gray-400 mb-0.5">Por cobrar</div>
-              <div className="text-lg font-bold font-mono text-green-600">USD {fmt(d.cobrar, 0)}</div>
-            </div>
-            <div className="h-px bg-gray-100"/>
-            <div>
-              <div className="text-[10px] text-gray-400 mb-0.5">Por pagar</div>
-              <div className="text-lg font-bold font-mono text-red-500">USD {fmt(d.pagar, 0)}</div>
-            </div>
-          </div>
+            )
+          })}
         </div>
       </div>
 
-      {/* ── FILA 2: GRÁFICO + TC + ESTADO COTIZACIONES ── */}
-      <div className="grid grid-cols-3 gap-4 mb-5">
-
-        {/* Gráfico actividad — últimas 8 semanas */}
-        <div className="col-span-2 bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Actividad comercial</div>
-              <div className="text-sm font-semibold text-gray-700 mt-0.5">Últimas 8 semanas</div>
-            </div>
-            <div className="flex items-center gap-4 text-[10px] text-gray-400">
-              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-[#1168F8]"/>Valor USD</div>
-              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-[#93B8FC]"/>N° cotiz.</div>
-            </div>
-          </div>
-          <div className="flex items-end gap-1.5 h-36">
-            {d.semanas.map((s: any, i: number) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                <div className="w-full flex items-end gap-0.5 h-28">
-                  {/* Barra valor */}
-                  <div className="flex-1 bg-[#1168F8] rounded-t-md transition-all"
-                    style={{ height: `${d.maxValor > 0 ? (s.valor / d.maxValor) * 100 : 0}%`, minHeight: s.valor > 0 ? '4px' : '0' }}
-                    title={`USD ${fmt(s.valor, 0)}`}/>
-                  {/* Barra cantidad */}
-                  <div className="flex-1 bg-[#93B8FC] rounded-t-md transition-all"
-                    style={{ height: `${d.maxCots > 0 ? (s.cots / d.maxCots) * 100 : 0}%`, minHeight: s.cots > 0 ? '4px' : '0' }}
-                    title={`${s.cots} cotiz.`}/>
-                </div>
-                <div className="text-[8px] text-gray-300 font-mono">{s.label}</div>
-              </div>
+      {/* FILA 4 — Actividad reciente */}
+      <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+          <span className="font-bold text-sm text-gray-900">Cotizaciones recientes</span>
+          <Link href="/registro" className="text-[10px] text-[#1168F8] hover:underline">Ver todas →</Link>
+        </div>
+        <table className="w-full text-xs">
+          <tbody>
+            {d.cotsRecientes.length === 0 ? (
+              <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-400">Sin cotizaciones</td></tr>
+            ) : d.cotsRecientes.map((c: any) => (
+              <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50">
+                <td className="px-5 py-3 font-mono font-bold text-[#052698]">{c.num}</td>
+                <td className="px-4 py-3 font-medium text-gray-800">{c.cliente}</td>
+                <td className="px-4 py-3 font-mono text-gray-500">{c.total_landed ? fmtUSD(c.total_landed) : '—'}</td>
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                    c.estado==='aceptada'?'bg-green-50 text-green-700':
+                    c.estado==='enviada'?'bg-blue-50 text-blue-700':
+                    c.estado==='rechazada'?'bg-red-50 text-red-700':
+                    'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
+                </td>
+              </tr>
             ))}
-          </div>
-        </div>
-
-        {/* Panel derecho: TC + estado cotizaciones */}
-        <div className="flex flex-col gap-4">
-
-          {/* Tipos de cambio */}
-          <div className="bg-[#052698] rounded-2xl p-5 text-white">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-blue-300 mb-3">Tipos de cambio</div>
-            <div className="space-y-2.5">
-              {[
-                { flag: '🇦🇷', label: 'USD / ARS', valor: tc.ars, dec: 0 },
-                { flag: '🇨🇱', label: 'USD / CLP', valor: tc.clp, dec: 0 },
-                { flag: '🇨🇳', label: 'USD / CNY', valor: tc.cny, dec: 4 },
-              ].map(t => (
-                <div key={t.label} className="flex items-center justify-between">
-                  <span className="text-[11px] text-blue-300">{t.flag} {t.label}</span>
-                  <span className="font-mono font-bold text-base">
-                    {t.valor != null ? (t.dec > 0 ? Number(t.valor).toFixed(t.dec) : Math.round(t.valor).toLocaleString('es-AR')) : '—'}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {tc.fecha && (
-              <div className="mt-3 pt-3 border-t border-white/10 text-[9px] text-blue-300/60">
-                Actualizado: {String(tc.fecha).split('-').reverse().join('/')}
-              </div>
-            )}
-          </div>
-
-          {/* Estado cotizaciones — mini donut visual */}
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex-1">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Estado cotizaciones</div>
-            <div className="space-y-2.5">
-              {[
-                { label: 'Aceptadas',  n: d.cotsAceptadas.length,  color: 'bg-green-400',  text: 'text-green-600' },
-                { label: 'Enviadas',   n: d.cotsEnviadas.length,   color: 'bg-[#1168F8]',  text: 'text-[#1168F8]' },
-                { label: 'Borradores', n: d.cotsBorrador.length,   color: 'bg-gray-300',   text: 'text-gray-500' },
-                { label: 'Rechazadas', n: (data.cots||[]).filter((c:any)=>c.estado==='rechazada').length, color: 'bg-red-300', text: 'text-red-500' },
-              ].map(row => {
-                const total = d.cots.length || 1
-                const pct = Math.round(row.n / total * 100)
-                return (
-                  <div key={row.label}>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-[11px] text-gray-600">{row.label}</span>
-                      <span className={`text-[11px] font-bold ${row.text}`}>{row.n}</span>
-                    </div>
-                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full ${row.color} rounded-full transition-all`} style={{ width: `${pct}%` }}/>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            <div className="mt-4 pt-3 border-t border-gray-100 text-[10px] text-gray-400">
-              {d.cots.length} cotizaciones en total · {d.cotsUltimas7.length} esta semana
-            </div>
-          </div>
-        </div>
+          </tbody>
+        </table>
       </div>
-
-      {/* ── FILA 3: OPERACIONES ACTIVAS ── */}
-      {d.opsActivas.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-5">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"/>
-              <span className="font-semibold text-sm text-gray-900">Operaciones en curso</span>
-            </div>
-            <Link href="/operaciones" className="text-xs text-[#1168F8] hover:underline">Ver todas →</Link>
-          </div>
-          <div className="grid grid-cols-4 divide-x divide-gray-100">
-            {d.opsActivas.slice(0, 4).map((op: any) => (
-              <Link key={op.id} href={`/operaciones?cot=${op.cotizacion_id}`}
-                className="px-5 py-4 hover:bg-[#f0f4ff] transition-colors group">
-                <div className="font-mono text-xs font-bold text-[#1168F8] group-hover:underline mb-1">{op.cotizacion?.num}</div>
-                <div className="text-sm font-semibold text-gray-800 truncate">{op.cotizacion?.cliente}</div>
-                <div className="text-[11px] text-gray-400 mt-0.5">→ {op.cotizacion?.destino_noa}</div>
-                <div className="font-mono text-xs font-bold text-gray-700 mt-2">USD {fmt(op.cotizacion?.total_landed || 0, 0)}</div>
-              </Link>
-            ))}
-            {d.opsActivas.length > 4 && (
-              <div className="px-5 py-4 flex items-center justify-center">
-                <Link href="/operaciones" className="text-xs text-[#1168F8] font-semibold hover:underline">
-                  +{d.opsActivas.length - 4} más →
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── PIE ── */}
-      <div className="flex items-center justify-between text-[10px] text-gray-300 mt-2">
-        <span>Puerto NOA SpA · Sistema logístico China → NOA</span>
-        <span>San Salvador de Jujuy, Argentina</span>
-      </div>
-
     </div>
   )
 }
