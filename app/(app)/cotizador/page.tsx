@@ -831,8 +831,8 @@ const clientesFiltrados=terceros.filter(t=>
   <!-- HEADER -->
   <div class="header">
     <div>
-      <div class="logo">Puerto<span>NOA</span></div>
-      <div style="font-size:10px;color:#666;margin-top:2px;">SpA · Servicios logísticos de importación</div>
+      <img src="${window.location.origin}/logo.png" alt="Puerto NOA" style="height:40px;object-fit:contain;"/>
+      <div style="font-size:10px;color:#666;margin-top:4px;">SpA · Servicios logísticos de importación</div>
     </div>
     <div class="header-right">
       <div class="num-cot">${cotNumActual||'BORRADOR'}</div>
