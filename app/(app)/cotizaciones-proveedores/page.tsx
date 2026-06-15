@@ -467,6 +467,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [buscarProv, setBuscarProv] = useState('')
   const [showProvDropdown, setShowProvDropdown] = useState(false)
   const [usuarioNombre, setUsuarioNombre] = useState('')
+  const [tercerosConRubro, setTercerosConRubro] = useState<any[]>([])
   const [buscarCot, setBuscarCot] = useState('')
   const [showCotDropdown, setShowCotDropdown] = useState(false)
   const [puertosCh, setPuertosCh] = useState<any[]>([])
@@ -489,6 +490,22 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       if (ci.data) setCiudades(ci.data)
       if (tc.data) setTiposCont(tc.data)
     })
+    // Cargar terceros con sus rubros para filtro por rubro
+    supabase.from('tercero_rubros')
+      .select('tercero_id, rubro:proveedor_rubros!inner(codigo,nombre)')
+      .then(({data})=>{
+        if(data){
+          const map:Record<string,string[]>={}
+          for(const r of data as any[]){
+            if(!map[r.tercero_id]) map[r.tercero_id]=[]
+            map[r.tercero_id].push((r.rubro as any)?.codigo||'')
+          }
+          setTercerosConRubro(prev=>{
+            // enriquecer la lista de terceros ya cargada
+            return terceros.map((t:any)=>({...t, rubros: map[t.id]||[]}))
+          })
+        }
+      })
     // Cargar nombre del usuario logueado para cotizaciones estimadas
     supabase.auth.getUser().then(({data})=>{
       if(data?.user){
@@ -505,9 +522,14 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     !buscarCot || c.num?.toLowerCase().includes(buscarCot.toLowerCase()) || c.cliente?.toLowerCase().includes(buscarCot.toLowerCase())
   ).slice(0, 8)
 
-  const provsFiltrados = terceros.filter((t: any) =>
-    !buscarProv || t.razon_social.toLowerCase().includes(buscarProv.toLowerCase())
-  ).slice(0, 6)
+  // Filtrar proveedores: por búsqueda Y por rubro seleccionado
+  const listaProv = tercerosConRubro.length > 0 ? tercerosConRubro : terceros
+  const provsFiltrados = listaProv.filter((t: any) => {
+    const matchBuscar = !buscarProv || t.razon_social.toLowerCase().includes(buscarProv.toLowerCase())
+    const matchRubro = !form.rubro || !t.rubros || t.rubros.length === 0 || t.rubros.includes(form.rubro)
+    return matchBuscar && matchRubro
+  }).slice(0, 8)
+  const hayProvEnRubro = listaProv.some((t:any) => t.rubros?.includes(form.rubro))
 
   function addItem() { setItems(prev => [...prev, { ...ITEM_VACIO, orden: prev.length }]) }
   function removeItem(i: number) { setItems(prev => prev.filter((_, idx) => idx !== i)) }
@@ -654,6 +676,48 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             </div>
           )}
         </div>
+
+        {/* Rubro — debajo de Genérica/Específica */}
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Rubro</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.entries(rubros) as [string,{label:string;color:string;bg:string}][]).map(([key, r]) => (
+              <button key={key} onClick={() => setF('rubro', key)}
+                className="px-3 py-2 rounded-xl border-2 text-left text-xs font-semibold transition-all"
+                style={form.rubro === key
+                  ? { background: r.color, color: 'white', borderColor: r.color }
+                  : { background: r.bg, color: r.color, borderColor: r.color + '40' }}>
+                {r.label}
+              </button>
+            ))}
+          </div>
+          {/* Seguro — solo para forwarder */}
+          {form.rubro === 'forwarder' && (
+            <div className="mt-3 p-3 bg-[#EBF2FF] rounded-xl border border-[#93B8FC]">
+              <label className="flex items-center gap-2 cursor-pointer mb-2">
+                <input type="checkbox" checked={form.seguro_incluido}
+                  onChange={e => setF('seguro_incluido', e.target.checked)} className="w-4 h-4 rounded" />
+                <span className="text-xs font-semibold text-[#052698]">Seguro incluido en esta cotizacion</span>
+              </label>
+              {form.seguro_incluido && (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    {[{k:'pct',l:'% sobre FOB'},{k:'fijo',l:'Monto fijo USD'}].map(o=>(
+                      <button key={o.k} onClick={()=>setF('seguro_modo',o.k)}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-colors ${form.seguro_modo===o.k?'bg-[#1168F8] text-white border-[#1168F8]':'border-[#93B8FC] text-[#052698] bg-white'}`}>
+                        {o.l}
+                      </button>
+                    ))}
+                  </div>
+                  <input type="text" inputMode="decimal" value={form.seguro_monto}
+                    onChange={e => setF('seguro_monto', e.target.value)}
+                    className="w-full px-2.5 py-1.5 border border-[#93B8FC] rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white font-mono text-right"
+                    placeholder={form.seguro_modo==='pct'?'ej. 0.5 (%)':'ej. 1200 (USD)'} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Proveedor */}
@@ -689,6 +753,11 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                   </div>
                 )}
                 {form.tercero_id && <div className="mt-1 text-[10px] text-[#1168F8]">Vinculado al tercero en el sistema</div>}
+                {!form.tercero_id && form.rubro && !hayProvEnRubro && tercerosConRubro.length > 0 && (
+                  <div className="mt-1 text-[10px] text-amber-600">
+                    Sin proveedores registrados para este rubro. Podés cargarlo igual o ir a Clientes y Proveedores para agregarlo.
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -743,54 +812,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         </div>
       </div>
 
-      {/* Clasificacion */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-        <h3 className="font-bold text-sm text-gray-900 mb-4">Clasificacion</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Rubro</label>
-            <div className="grid grid-cols-2 gap-2">
-              {(Object.entries(rubros) as [string,{label:string;color:string;bg:string}][]).map(([key, r]) => (
-                <button key={key} onClick={() => setF('rubro', key)}
-                  className="px-3 py-2 rounded-xl border-2 text-left text-xs font-semibold transition-all"
-                  style={form.rubro === key
-                    ? { background: r.color, color: 'white', borderColor: r.color }
-                    : { background: r.bg, color: r.color, borderColor: r.color + '40' }}>
-                  {r.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            {/* Seguro — solo para forwarder */}
-            {form.rubro === 'forwarder' && (
-              <div className="mt-4 p-3 bg-[#EBF2FF] rounded-xl border border-[#93B8FC]">
-                <label className="flex items-center gap-2 cursor-pointer mb-2">
-                  <input type="checkbox" checked={form.seguro_incluido}
-                    onChange={e => setF('seguro_incluido', e.target.checked)} className="w-4 h-4 rounded" />
-                  <span className="text-xs font-semibold text-[#052698]">Seguro incluido en esta cotizacion</span>
-                </label>
-                {form.seguro_incluido && (
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      {[{k:'pct',l:'% sobre FOB'},{k:'fijo',l:'Monto fijo USD'}].map(o=>(
-                        <button key={o.k} onClick={()=>setF('seguro_modo',o.k)}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-colors ${form.seguro_modo===o.k?'bg-[#1168F8] text-white border-[#1168F8]':'border-[#93B8FC] text-[#052698] bg-white'}`}>
-                          {o.l}
-                        </button>
-                      ))}
-                    </div>
-                    <input type="text" inputMode="decimal" value={form.seguro_monto}
-                      onChange={e => setF('seguro_monto', e.target.value)}
-                      className="w-full px-2.5 py-1.5 border border-[#93B8FC] rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white font-mono text-right"
-                      placeholder={form.seguro_modo==='pct'?'ej. 0.5 (%)':'ej. 1200 (USD)'} />
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+
 
       {/* Ruta y tramo */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
