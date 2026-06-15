@@ -645,6 +645,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                   value={form.proveedor_nombre}
                   onChange={e => { setF('proveedor_nombre', e.target.value); setBuscarProv(e.target.value); setShowProvDropdown(e.target.value.length > 0) }}
                   onFocus={() => setShowProvDropdown(form.proveedor_nombre.length > 0)}
+                  onBlur={() => setTimeout(() => setShowProvDropdown(false), 200)}
                   onClick={e => e.stopPropagation()}
                   className={inp} placeholder="Nombre o buscar en terceros..."
                 />
@@ -676,6 +677,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 : buscarCot}
               onChange={e => { setBuscarCot(e.target.value); setShowCotDropdown(true); if (!e.target.value) setF('cotizacion_id', '') }}
               onFocus={() => setShowCotDropdown(true)}
+              onBlur={() => setTimeout(() => setShowCotDropdown(false), 200)}
               className={inp} placeholder="Buscar por N o cliente..."
             />
             {form.cotizacion_id && (
@@ -719,7 +721,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Rubro</label>
             <div className="grid grid-cols-2 gap-2">
-              {Object.entries(rubros).map(([key, r]) => (
+              {(Object.entries(rubros) as [string,{label:string;color:string;bg:string}][]).map(([key, r]) => (
                 <button key={key} onClick={() => setF('rubro', key)}
                   className="px-3 py-2 rounded-xl border-2 text-left text-xs font-semibold transition-all"
                   style={form.rubro === key
