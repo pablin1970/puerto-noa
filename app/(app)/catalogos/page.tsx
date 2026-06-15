@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 
-type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias'
+type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm'
 
 const TABS = [
   { key: 'categorias',    label: 'Categorías de precio', icon: '🏷' },
@@ -16,6 +16,7 @@ const TABS = [
   { key: 'bloques_cotizacion', label: 'Bloques cotización',   icon: '📋' },
   { key: 'rubros_proveedor',   label: 'Rubros de proveedor',  icon: '🏷️' },
   { key: 'gastos_categorias',  label: 'Cat. gastos fijos',    icon: '💸' },
+  { key: 'cuentas_abm',        label: 'Cuentas bancarias',    icon: '🏦' },
 ] as const
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -580,6 +581,7 @@ export default function CatalogosPage() {
       {/* ── RUBROS POR BLOQUE ── */}
       {tab === 'bloques_cotizacion' && <BloquesCotizacionABM />}
       {tab === 'gastos_categorias' && <GastosCatABM />}
+      {tab === 'cuentas_abm' && <CuentasABM />}
 
       {/* ── RUBROS DE PROVEEDOR ── */}
       {tab === 'rubros_proveedor' && <RubrosProveedorABM />}
@@ -865,6 +867,228 @@ const BLOQUES_COTIZADOR = [
 
 
 // ── ABM Categorías de Gastos Fijos ────────────────────────────────
+
+// ── ABM Cuentas bancarias (propias PN + custodia terceros) ───────
+function CuentasABM() {
+  const supabase = useMemo(() => createClient(), [])
+  const [propias, setPropias] = useState<any[]>([])
+  const [custodia, setCustodia] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editId, setEditId] = useState<string|null>(null)
+  const [editTipo, setEditTipo] = useState<'propia'|'custodia'>('propia')
+  const [editData, setEditData] = useState<any>({})
+  const [showNew, setShowNew] = useState(false)
+  const [tipoCuenta, setTipoCuenta] = useState<'propia'|'custodia'>('propia')
+  const [newData, setNewData] = useState<any>({ nombre:'', tipo:'banco', pais:'CL', moneda:'CLP', banco:'', nro_cuenta:'', titular:'', notas:'' })
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    const [pRes, cRes] = await Promise.all([
+      (supabase.from('cuentas_pn') as any).select('*').order('pais').order('moneda'),
+      (supabase.from('fondos_cuentas') as any).select('*').order('pais').order('nombre'),
+    ])
+    if (pRes.data) setPropias(pRes.data)
+    if (cRes.data) setCustodia(cRes.data)
+    setLoading(false)
+  }
+
+  async function saveNew() {
+    if (!newData.nombre || !newData.moneda) { alert('Nombre y moneda son obligatorios'); return }
+    setSaving(true)
+    if (tipoCuenta === 'propia') {
+      await (supabase.from('cuentas_pn') as any).insert({
+        nombre: newData.nombre, tipo: newData.tipo||'banco',
+        pais: newData.pais, moneda: newData.moneda,
+        banco: newData.banco||null, nro_cuenta: newData.nro_cuenta||null,
+        notas: newData.notas||null, saldo_inicial: 0, saldo_actual: 0, activo: true,
+      })
+    } else {
+      await (supabase.from('fondos_cuentas') as any).insert({
+        nombre: newData.nombre, tipo: newData.tipo||'banco',
+        pais: newData.pais, moneda: newData.moneda,
+        banco: newData.banco||null, nro_cuenta: newData.nro_cuenta||null,
+        titular: newData.titular||null, notas: newData.notas||null, activo: true,
+      })
+    }
+    setShowNew(false)
+    setNewData({ nombre:'', tipo:'banco', pais:'CL', moneda:'CLP', banco:'', nro_cuenta:'', titular:'', notas:'' })
+    await load()
+    setSaving(false)
+  }
+
+  async function saveEdit() {
+    setSaving(true)
+    const tabla = editTipo === 'propia' ? 'cuentas_pn' : 'fondos_cuentas'
+    await (supabase.from(tabla) as any).update({
+      nombre: editData.nombre, tipo: editData.tipo,
+      pais: editData.pais, moneda: editData.moneda,
+      banco: editData.banco||null, nro_cuenta: editData.nro_cuenta||null,
+      titular: editData.titular||null, notas: editData.notas||null,
+    }).eq('id', editId)
+    setEditId(null)
+    await load()
+    setSaving(false)
+  }
+
+  async function toggleActivo(id: string, tipo: 'propia'|'custodia', activo: boolean) {
+    const tabla = tipo === 'propia' ? 'cuentas_pn' : 'fondos_cuentas'
+    await (supabase.from(tabla) as any).update({ activo: !activo }).eq('id', id)
+    await load()
+  }
+
+  async function eliminar(id: string, tipo: 'propia'|'custodia') {
+    if (!confirm('¿Eliminar esta cuenta? Solo si no tiene movimientos asociados.')) return
+    const tabla = tipo === 'propia' ? 'cuentas_pn' : 'fondos_cuentas'
+    await (supabase.from(tabla) as any).delete().eq('id', id)
+    await load()
+  }
+
+  const inp2 = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+
+  function FormCuenta({ data, setData, onSave, onCancel }: any) {
+    return (
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre *</label>
+          <input value={data.nombre||''} onChange={e => setData((p:any)=>({...p,nombre:e.target.value}))} className={inp2} placeholder="ej. Banco Itaú CLP Chile"/>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
+          <select value={data.tipo||'banco'} onChange={e => setData((p:any)=>({...p,tipo:e.target.value}))} className={inp2}>
+            <option value="banco">Banco</option>
+            <option value="caja">Caja / efectivo</option>
+            <option value="inversion">Inversión</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">País</label>
+          <select value={data.pais||'CL'} onChange={e => setData((p:any)=>({...p,pais:e.target.value}))} className={inp2}>
+            <option value="CL">🇨🇱 Chile</option>
+            <option value="AR">🇦🇷 Argentina</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
+          <select value={data.moneda||'CLP'} onChange={e => setData((p:any)=>({...p,moneda:e.target.value}))} className={inp2}>
+            <option value="CLP">CLP — Peso chileno</option>
+            <option value="ARS">ARS — Peso argentino</option>
+            <option value="USD">USD — Dólar</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco / Entidad</label>
+          <input value={data.banco||''} onChange={e => setData((p:any)=>({...p,banco:e.target.value}))} className={inp2} placeholder="ej. Banco Itaú"/>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N° Cuenta / CBU / IBAN</label>
+          <input value={data.nro_cuenta||''} onChange={e => setData((p:any)=>({...p,nro_cuenta:e.target.value}))} className={inp2} placeholder="Número de cuenta"/>
+        </div>
+        <div className="col-span-2">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Titular (para cuentas de custodia)</label>
+          <input value={data.titular||''} onChange={e => setData((p:any)=>({...p,titular:e.target.value}))} className={inp2} placeholder="Nombre del titular"/>
+        </div>
+        <div className="col-span-2">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas</label>
+          <input value={data.notas||''} onChange={e => setData((p:any)=>({...p,notas:e.target.value}))} className={inp2} placeholder="Observaciones"/>
+        </div>
+        <div className="col-span-2 flex justify-end gap-2 mt-1">
+          <button onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cancelar</button>
+          <button onClick={onSave} disabled={saving} className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  function RowCuenta({ row, tipo }: { row: any, tipo: 'propia'|'custodia' }) {
+    const paisFlag = row.pais === 'CL' ? '🇨🇱' : row.pais === 'AR' ? '🇦🇷' : '🌐'
+    return editId === row.id ? (
+      <div className="p-4 bg-white border border-[#1168F8] rounded-2xl mb-2">
+        <FormCuenta data={editData} setData={setEditData} onSave={saveEdit} onCancel={() => setEditId(null)} />
+      </div>
+    ) : (
+      <div className={`bg-white border border-gray-100 rounded-2xl px-4 py-3 mb-2 shadow-sm flex items-center gap-3 ${!row.activo?'opacity-50':''}`}>
+        <div className="text-xl flex-shrink-0">{paisFlag}</div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-gray-900">{row.nombre}</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${row.moneda==='CLP'?'bg-blue-50 text-blue-700':row.moneda==='ARS'?'bg-sky-50 text-sky-700':'bg-green-50 text-green-700'}`}>{row.moneda}</span>
+            <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px]">{row.tipo}</span>
+          </div>
+          <div className="text-[10px] text-gray-400 mt-0.5 flex gap-3">
+            {row.banco && <span>{row.banco}</span>}
+            {row.nro_cuenta && <span className="font-mono">{row.nro_cuenta}</span>}
+            {row.titular && <span>Titular: {row.titular}</span>}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => toggleActivo(row.id, tipo, row.activo)}
+            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${row.activo?'bg-green-50 text-green-700 border-green-200':'bg-gray-100 text-gray-400 border-gray-200'}`}>
+            {row.activo ? 'Activa' : 'Inactiva'}
+          </button>
+          <button onClick={() => { setEditId(row.id); setEditTipo(tipo); setEditData({...row}) }}
+            className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 hover:border-[#1168F8] hover:text-[#1168F8]">Editar</button>
+          <button onClick={() => eliminar(row.id, tipo)}
+            className="px-3 py-1.5 border border-red-100 rounded-xl text-xs text-red-500 hover:bg-red-50">Eliminar</button>
+        </div>
+      </div>
+    )
+  }
+
+  if (loading) return <div className="p-8 text-center text-gray-400 text-sm">Cargando...</div>
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="font-bold text-base text-gray-900">Cuentas bancarias</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Cuentas propias de Puerto NOA y cuentas de custodia de clientes</p>
+        </div>
+        <button onClick={() => setShowNew(true)} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Nueva cuenta</button>
+      </div>
+
+      {showNew && (
+        <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-4 mb-4">
+          <div className="flex gap-3 mb-4">
+            <h3 className="font-bold text-sm text-gray-900 mr-2">Nueva cuenta —</h3>
+            {[['propia','Propia Puerto NOA'],['custodia','Custodia de cliente']].map(([k,l]) => (
+              <button key={k} onClick={() => setTipoCuenta(k as any)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition-all ${tipoCuenta===k?'border-[#1168F8] bg-[#1168F8] text-white':'border-gray-200 text-gray-600'}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+          <FormCuenta data={newData} setData={setNewData} onSave={saveNew} onCancel={() => setShowNew(false)} />
+        </div>
+      )}
+
+      {/* Cuentas propias PN */}
+      <div className="mb-2">
+        <div className="text-[10px] font-semibold text-gray-400 uppercase mb-2 flex items-center gap-2">
+          <span>Cuentas propias Puerto NOA</span>
+          <span className="px-2 py-0.5 bg-[#EBF2FF] text-[#052698] rounded-full font-bold">{propias.length}</span>
+        </div>
+        {propias.length === 0 ? <div className="text-xs text-gray-400 py-3">Sin cuentas propias registradas</div> :
+          propias.map(r => <RowCuenta key={r.id} row={r} tipo="propia" />)}
+      </div>
+
+      {/* Cuentas custodia */}
+      <div>
+        <div className="text-[10px] font-semibold text-gray-400 uppercase mb-2 flex items-center gap-2">
+          <span>Cuentas de custodia (clientes)</span>
+          <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full font-bold">{custodia.length}</span>
+        </div>
+        {custodia.length === 0 ? <div className="text-xs text-gray-400 py-3">Sin cuentas de custodia registradas</div> :
+          custodia.map(r => <RowCuenta key={r.id} row={r} tipo="custodia" />)}
+      </div>
+    </div>
+  )
+}
+
 function GastosCatABM() {
   const supabase = useMemo(() => createClient(), [])
   const [rows, setRows] = useState<any[]>([])
