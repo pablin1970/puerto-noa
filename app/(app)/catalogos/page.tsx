@@ -16,7 +16,7 @@ const TABS = [
   { key: 'bloques_cotizacion', label: 'Bloques cotización',   icon: '📋' },
   { key: 'rubros_proveedor',   label: 'Rubros de proveedor',  icon: '🏷️' },
   { key: 'gastos_categorias',  label: 'Cat. gastos fijos',    icon: '💸' },
-  { key: 'cuentas_abm',        label: 'Cuentas bancarias',    icon: '🏦' },
+  { key: 'cuentas_abm',        label: 'Cuentas (caja y bancos)', icon: '🏦' },
 ] as const
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -1045,7 +1045,7 @@ function CuentasABM() {
     <div className="space-y-2">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="font-bold text-base text-gray-900">Cuentas bancarias</h2>
+          <h2 className="font-bold text-base text-gray-900">Cuentas (caja y bancos)</h2>
           <p className="text-xs text-gray-400 mt-0.5">Cuentas propias de Puerto NOA y cuentas de custodia de clientes</p>
         </div>
         <button onClick={() => setShowNew(true)} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Nueva cuenta</button>
