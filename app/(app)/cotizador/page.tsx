@@ -233,11 +233,9 @@ export default function CotizadorPage(){
           setDespachantes(desps)
         }
       })
-    // Cargar rubros por bloque desde configuración
+    // Cargar cotizaciones por bloque_id + usadas + terceros
     Promise.all([
-      supabase.from('cotizador_bloque_rubros')
-        .select('bloque, rubro:proveedor_rubros!inner(id,nombre,codigo)')
-        .eq('activo',true),
+      supabase.from('cotizador_bloques').select('id,numero,nombre').eq('activo',true).order('numero'),
       supabase.from('cotizaciones_proveedor_v2')
         .select('*, items:cotizaciones_proveedor_v2_items(*)')
         .eq('estado','vigente')
@@ -248,15 +246,11 @@ export default function CotizadorPage(){
       supabase.from('tercero_rubros')
         .select('tercero_id, rubro:proveedor_rubros!inner(nombre), tercero:terceros!inner(id,razon_social,activo)')
         .filter('tercero.activo','eq','true'),
-    ]).then(([brRes,cotRes,usadasRes,trRes])=>{
-      // Rubros por bloque
+    ]).then(([bloqRes,cotRes,usadasRes,trRes])=>{
+      // Guardar nombres de bloques para UI
       const rb:Record<number,string[]>={1:[],2:[],3:[],4:[]}
-      if(brRes.data){
-        for(const row of brRes.data as any[]){
-          const b=row.bloque as number
-          const nombre=(row.rubro as any)?.nombre||''
-          if(rb[b]) rb[b].push(nombre)
-        }
+      if(bloqRes.data){
+        for(const b of bloqRes.data as any[]) rb[b.numero]=[b.nombre]
       }
       setRubrosBloque(rb)
       // Terceros proveedores
@@ -266,7 +260,7 @@ export default function CotizadorPage(){
           .map(r=>({...r.tercero, rubro:(r.rubro as any)?.nombre||''}))
         setTercerosProv(provs)
       }
-      // Mapa de cotizaciones usadas: id -> [nums de cotizaciones]
+      // Mapa de cotizaciones usadas
       const usadasMap:Record<string,string[]>={}
       if(usadasRes.data){
         for(const u of usadasRes.data as any[]){
@@ -277,20 +271,15 @@ export default function CotizadorPage(){
         }
       }
       setCotsSistemaUsadas(usadasMap)
-      // Cotizaciones disponibles filtradas por rubros del bloque (usando codigo)
-      if(cotRes.data && brRes.data){
+      // Filtrar por bloque_id — directo y limpio
+      if(cotRes.data && bloqRes.data){
         const cots=cotRes.data as any[]
-        // Construir Set de codigos por bloque
-        const codigosPorBloque:Record<number,Set<string>>={1:new Set(),2:new Set(),3:new Set(),4:new Set()}
-        for(const row of brRes.data as any[]){
-          const b=row.bloque as number
-          const cod=(row.rubro as any)?.codigo||''
-          if(codigosPorBloque[b]&&cod) codigosPorBloque[b].add(cod)
-        }
-        setCotsFWDisponibles(cots.filter(c=>codigosPorBloque[1].has(c.rubro)||codigosPorBloque[1].size===0))
-        setCotsChileDisponibles(cots.filter(c=>codigosPorBloque[2].has(c.rubro)))
-        setCotsTranspDisponibles(cots.filter(c=>codigosPorBloque[3].has(c.rubro)))
-        setCotsArgDisponibles(cots.filter(c=>codigosPorBloque[4].has(c.rubro)))
+        const idPorNum:Record<number,string>={}
+        for(const b of bloqRes.data as any[]) idPorNum[b.numero]=b.id
+        setCotsFWDisponibles(cots.filter(c=>c.bloque_id===idPorNum[1]))
+        setCotsChileDisponibles(cots.filter(c=>c.bloque_id===idPorNum[2]))
+        setCotsTranspDisponibles(cots.filter(c=>c.bloque_id===idPorNum[3]))
+        setCotsArgDisponibles(cots.filter(c=>c.bloque_id===idPorNum[4]))
       }
     })
     // Catálogos geográficos y tipos de camión
@@ -1836,9 +1825,42 @@ export default function CotizadorPage(){
 
           {/* ── BLOQUE 4: GASTOS ARGENTINA ── */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#6b21a8] text-white text-[10px] font-bold">4</span>
               <span className="font-medium text-sm text-gray-900">Bloque 4 — Gastos en Argentina</span>
+              <div className="ml-auto flex items-center gap-2">
+                <select onChange={e=>{
+                  if(!e.target.value) return
+                  const cot=cotsArgDisponibles.find((c:any)=>c.id===e.target.value)
+                  if(!cot) return
+                  const items=cot.items||[]
+                  const it=items[0] as any
+                  if(it){
+                    setS(p=>({...p,
+                      honTipo:(it.tipo_calculo==='pct_cif'?'pct_cif':it.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,
+                      honValor:it.valor||0,honPiso:it.piso_usd||0,honTecho:it.techo_usd||0,
+                      gastosDesp:items.slice(1).map((x:any)=>({id:uid2(),desc:x.descripcion,tipoCalc:(x.tipo_calculo==='pct_cif'?'pct_cif':x.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,moneda:'USD' as const,valor:x.valor||0,pisoUsd:x.piso_usd||0,techoUsd:x.techo_usd||0,usd:0,ars:0})),
+                    }))
+                    setProvUsado(pv=>({...pv,4:cot.id}))
+                    setCotDesp({id:cot.id,referencia:cot.referencia||'',fecha:cot.fecha||'',tipo:(cot.tipo==='especifica'?'especifica':'generica')})
+                  }
+                  e.target.value=''
+                }} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#6b21a8]" defaultValue="">
+                  <option value="">+ Cargar del sistema</option>
+                  {(()=>{
+                    const esp=cotsArgDisponibles.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                    const gen=cotsArgDisponibles.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                    return(<>
+                      {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}</option>)})}</optgroup>)}
+                      <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
+                    </>)
+                  })()}
+                </select>
+                <button onClick={()=>{
+                  const rubroCod=(rubrosBloque[4]||[]).length>0?(rubrosBloque[4][0]).toLowerCase().replace(/ /g,'_'):'gastos_argentina'
+                  window.open(`/cotizaciones-proveedores?nuevo=1&bloque=4&rubro=${rubroCod}&cliente_id=${clienteSelId||''}&cliente_nombre=${encodeURIComponent(s.cliente||'')}`, '_blank')
+                }} className="px-3 py-1 bg-[#6b21a8] text-white rounded-lg text-[10px] font-bold hover:bg-[#581c87] whitespace-nowrap">+ Manual</button>
+              </div>
             </div>
             <div className="px-5 py-4">
               {/* Seccion A — Despachante de aduana */}
@@ -1871,35 +1893,7 @@ export default function CotizadorPage(){
                     )}
                     {despachantes.length===0&&<div className="mt-1 text-[9px] text-amber-600">Sin despachantes. Agregalos en Clientes y Proveedores con rubro Despachante de aduana.</div>}
                   </div>
-                  {cotsArgDisponibles.length>0&&(
-                    <select onChange={e=>{
-                      if(!e.target.value) return
-                      const cot=cotsArgDisponibles.find((c:any)=>c.id===e.target.value)
-                      if(!cot) return
-                      const items=cot.items||[]
-                      const it=items[0] as any
-                      if(it){
-                        setS(p=>({...p,
-                          honTipo:(it.tipo_calculo==='pct_cif'?'pct_cif':it.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,
-                          honValor:it.valor||0,honPiso:it.piso_usd||0,honTecho:it.techo_usd||0,
-                          gastosDesp:items.slice(1).map((x:any)=>({id:uid2(),desc:x.descripcion,tipoCalc:(x.tipo_calculo==='pct_cif'?'pct_cif':x.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,moneda:'USD' as const,valor:x.valor||0,pisoUsd:x.piso_usd||0,techoUsd:x.techo_usd||0,usd:0,ars:0})),
-                        }))
-                        setProvUsado(pv=>({...pv,4:cot.id}))
-                        setCotDesp({id:cot.id,referencia:cot.referencia||'',fecha:cot.fecha||'',tipo:(cot.tipo==='especifica'?'especifica':'generica')})
-                      }
-                      e.target.value=''
-                    }} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#6b21a8]" defaultValue="">
-                      <option value="">+ Cotizacion del sistema</option>
-                      {(()=>{const {especificas,genericas}=filtrarCotsBloque(cotsArgDisponibles,clienteSelId);return(<>
-                        {especificas.length>0&&(<optgroup label="Especificas para este cliente">
-                          {especificas.map((c:any)=>(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
-                        </optgroup>)}
-                        <optgroup label="Genericas vigentes">
-                          {genericas.map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
-                        </optgroup>
-                      </>)})()}
-                    </select>
-                  )}
+
                 </div>
                 {loadingDesp&&<div className="text-[10px] text-gray-400 mb-2">Cargando condiciones del despachante...</div>}
                 {despachanteSelId&&(
