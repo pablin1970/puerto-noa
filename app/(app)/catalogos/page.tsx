@@ -1066,24 +1066,50 @@ function CuentasABM() {
         </div>
       )}
 
-      {/* Cuentas propias PN */}
-      <div className="mb-2">
-        <div className="text-[10px] font-semibold text-gray-400 uppercase mb-2 flex items-center gap-2">
+      {/* Cuentas propias PN — agrupadas por subtipo */}
+      <div className="mb-4">
+        <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3 flex items-center gap-2">
           <span>Cuentas propias Puerto NOA</span>
           <span className="px-2 py-0.5 bg-[#EBF2FF] text-[#052698] rounded-full font-bold">{propias.length}</span>
         </div>
-        {propias.length === 0 ? <div className="text-xs text-gray-400 py-3">Sin cuentas propias registradas</div> :
-          propias.map(r => <RowCuenta key={r.id} row={r} tipo="propia" />)}
+        {propias.length === 0 ? <div className="text-xs text-gray-400 py-3">Sin cuentas propias registradas</div> : (
+          <>
+            {(['banco','caja','inversion'] as const).map(subtipo => {
+              const grupo = propias.filter(r => r.tipo === subtipo)
+              if (grupo.length === 0) return null
+              const labels: Record<string,string> = { banco:'🏛 Cuentas bancarias', caja:'💵 Cajas / efectivo', inversion:'📈 Inversiones' }
+              return (
+                <div key={subtipo} className="mb-3">
+                  <div className="text-[10px] font-semibold text-gray-500 mb-1.5 pl-1">{labels[subtipo]}</div>
+                  {grupo.map(r => <RowCuenta key={r.id} row={r} tipo="propia" />)}
+                </div>
+              )
+            })}
+          </>
+        )}
       </div>
 
-      {/* Cuentas custodia */}
+      {/* Cuentas custodia — agrupadas por subtipo */}
       <div>
-        <div className="text-[10px] font-semibold text-gray-400 uppercase mb-2 flex items-center gap-2">
+        <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3 flex items-center gap-2">
           <span>Cuentas de custodia (clientes)</span>
           <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full font-bold">{custodia.length}</span>
         </div>
-        {custodia.length === 0 ? <div className="text-xs text-gray-400 py-3">Sin cuentas de custodia registradas</div> :
-          custodia.map(r => <RowCuenta key={r.id} row={r} tipo="custodia" />)}
+        {custodia.length === 0 ? <div className="text-xs text-gray-400 py-3">Sin cuentas de custodia registradas</div> : (
+          <>
+            {(['banco','caja','inversion'] as const).map(subtipo => {
+              const grupo = custodia.filter(r => r.tipo === subtipo)
+              if (grupo.length === 0) return null
+              const labels: Record<string,string> = { banco:'🏛 Cuentas bancarias', caja:'💵 Cajas / efectivo', inversion:'📈 Inversiones' }
+              return (
+                <div key={subtipo} className="mb-3">
+                  <div className="text-[10px] font-semibold text-gray-500 mb-1.5 pl-1">{labels[subtipo]}</div>
+                  {grupo.map(r => <RowCuenta key={r.id} row={r} tipo="custodia" />)}
+                </div>
+              )
+            })}
+          </>
+        )}
       </div>
     </div>
   )
