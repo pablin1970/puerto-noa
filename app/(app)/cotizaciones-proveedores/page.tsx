@@ -88,23 +88,18 @@ const CATEGORIAS_ITEM: Record<string, string> = {
   otro:                   '· Otro',
 }
 
-// Tipos de cálculo por bloque
-const TIPOS_CALCULO_BLOQUE: Record<number, Record<string,string>> = {
-  1: { fijo_usd:'Fijo USD', por_contenedor:'Por contenedor' },          // ForWarder
-  2: { fijo_usd:'Fijo USD', por_contenedor:'Por contenedor', por_m3:'Por m3' }, // Chile NOA
-  3: { fijo_usd:'Fijo USD', por_contenedor:'Por contenedor' },          // Terrestre
-  4: { pct_cif:'% sobre CIF', fijo_usd:'Fijo USD', fijo_ars:'Fijo ARS' }, // Gastos Arg
-}
-
-// ── Fila de item contextual según bloque ──────────────────────────────────────
-function ItemRow({ it, i, tiposCont, bloqueNum, onChange, onRemove, editMode = true }: {
-  it: Item; i: number; tiposCont: any[]; bloqueNum: number
+// ── Fila de item con categorías dinámicas ────────────────────────────────────
+function ItemRow({ it, i, tiposCont, categorias, onChange, onRemove, editMode = true }: {
+  it: Item; i: number; tiposCont: any[]; categorias: any[]
   onChange: (i: number, f: string, v: any) => void; onRemove: (i: number) => void; editMode?: boolean
 }) {
   const esPct = it.tipo_calculo === 'pct_cif'
-  const tiposCalc = TIPOS_CALCULO_BLOQUE[bloqueNum] || TIPO_CALCULO
-  // Bloque 1 y 2: mostrar tipo contenedor. Bloque 3: opcional. Bloque 4: no
-  const mostrarCont = bloqueNum === 1 || bloqueNum === 2 || bloqueNum === 3
+  // Buscar la categoría seleccionada para saber qué campos mostrar
+  const catSel = categorias.find((c:any) => c.codigo === (it as any).categoria)
+  const tiposCalc: Record<string,string> = catSel?.tipos_calculo?.length
+    ? Object.fromEntries((catSel.tipos_calculo as string[]).map((t:string) => [t, TIPO_CALCULO[t]||t]))
+    : TIPO_CALCULO
+  const mostrarCont = catSel ? catSel.aplica_contenedor : true
 
   if (!editMode) return (
     <tr className="border-b border-gray-50 hover:bg-gray-50">
@@ -124,37 +119,41 @@ function ItemRow({ it, i, tiposCont, bloqueNum, onChange, onRemove, editMode = t
 
   return (
     <div className="mb-2.5 p-3 bg-gray-50 rounded-xl border border-gray-100">
-      <div className="flex gap-2 items-start mb-2">
-        {/* Descripción */}
-        <input value={it.descripcion} onChange={e => onChange(i, 'descripcion', e.target.value)}
-          className={inp + ' flex-1'} placeholder="Descripción del cargo"/>
-
-        {/* Tipo de cálculo */}
-        <select value={it.tipo_calculo} onChange={e => onChange(i, 'tipo_calculo', e.target.value)}
-          className={inp + ' w-40 flex-shrink-0'}>
-          {Object.entries(tiposCalc).map(([k,v]) => <option key={k} value={k}>{v as string}</option>)}
+      {/* Fila 1: categoría */}
+      <div className="mb-2">
+        <select value={(it as any).categoria||''} onChange={e=>{
+            onChange(i,'categoria',e.target.value)
+            const cat=categorias.find((c:any)=>c.codigo===e.target.value)
+            if(cat?.tipos_calculo?.length) onChange(i,'tipo_calculo',cat.tipos_calculo[0])
+          }} className={inp}>
+          <option value="">— Seleccionar categoría —</option>
+          {categorias.map((c:any)=>(
+            <option key={c.codigo} value={c.codigo}>{c.icon||''} {c.label}</option>
+          ))}
         </select>
-
-        {/* Contenedor — bloques 1, 2, 3 */}
-        {mostrarCont && (
-          <select value={it.tipo_contenedor} onChange={e => onChange(i, 'tipo_contenedor', e.target.value)}
-            className={inp + ' w-28 flex-shrink-0'}>
+      </div>
+      {/* Fila 2: descripción + tipo cálculo + contenedor + valor */}
+      <div className="flex gap-2 items-center">
+        <input value={it.descripcion} onChange={e=>onChange(i,'descripcion',e.target.value)}
+          className={inp+' flex-1 min-w-0'} placeholder="Descripción del cargo (opcional si ya elegiste categoría)"/>
+        <select value={it.tipo_calculo} onChange={e=>onChange(i,'tipo_calculo',e.target.value)}
+          className={inp+' w-36 flex-shrink-0'}>
+          {Object.entries(tiposCalc).map(([k,v])=><option key={k} value={k}>{v as string}</option>)}
+        </select>
+        {mostrarCont&&(
+          <select value={it.tipo_contenedor} onChange={e=>onChange(i,'tipo_contenedor',e.target.value)}
+            className={inp+' w-24 flex-shrink-0'}>
             <option value="">Todos</option>
-            {tiposCont.map((t:any) => <option key={t.codigo} value={t.codigo}>{t.codigo}</option>)}
+            {tiposCont.map((t:any)=><option key={t.codigo} value={t.codigo}>{t.codigo}</option>)}
           </select>
         )}
-
-        {/* Moneda + Valor */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          <span className="text-[10px] text-gray-400 w-8 text-right">
-            {esPct ? '%' : it.tipo_calculo === 'fijo_ars' ? 'ARS' : 'USD'}
-          </span>
+          <span className="text-[10px] text-gray-400">{esPct?'%':it.tipo_calculo==='fijo_ars'?'ARS':'USD'}</span>
           <input type="text" inputMode="decimal" value={it.valor||''} onFocus={e=>e.target.select()}
             onChange={e=>onChange(i,'valor',e.target.value)}
-            className={inp + ' w-28 text-right font-mono'} placeholder="0.00"/>
+            className={inp+' w-28 text-right font-mono'} placeholder="0.00"/>
         </div>
-
-        <button onClick={()=>onRemove(i)} className="text-gray-400 hover:text-red-500 text-xs p-1 mt-1 flex-shrink-0">✕</button>
+        <button onClick={()=>onRemove(i)} className="text-gray-400 hover:text-red-500 text-xs p-1 flex-shrink-0">✕</button>
       </div>
 
       {/* Piso / Techo — solo % CIF (bloque 4) */}
@@ -494,6 +493,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [buscarCot, setBuscarCot] = useState('')
   const [showCotDropdown, setShowCotDropdown] = useState(false)
   const [bloques, setBloques] = useState<any[]>([])
+  const [categorias, setCategorias] = useState<any[]>([])
   const [puertosCh, setPuertosCh] = useState<any[]>([])
   const [puertosChile, setPuertosChile] = useState<any[]>([])
   const [pasos, setPasos] = useState<any[]>([])
@@ -503,13 +503,15 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   useEffect(() => {
     Promise.all([
       supabase.from('cotizador_bloques').select('id,numero,nombre,descripcion').eq('activo',true).order('numero'),
+      supabase.from('categorias_precio').select('id,label,codigo,icon,color,bg,tipos_calculo,aplica_contenedor').eq('activo',true).order('orden'),
       supabase.from('puertos_china').select('id,locode,nombre,ciudad').eq('activo', 'true').order('orden'),
       supabase.from('puertos_chile').select('id,locode,nombre,ciudad').eq('activo', 'true').order('orden'),
       supabase.from('pasos_fronterizos').select('id,nombre,provincia_argentina').eq('activo', 'true').order('orden'),
       supabase.from('ciudades_destino_arg').select('id,ciudad,provincia').eq('activo', 'true').order('orden'),
       supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo', 'true').order('orden'),
-    ]).then(([bl, ch, cl, ps, ci, tc]) => {
+    ]).then(([bl, cat, ch, cl, ps, ci, tc]) => {
       if (bl.data) setBloques(bl.data)
+      if (cat.data) setCategorias(cat.data)
       if (ch.data) setPuertosCh(ch.data)
       if (cl.data) setPuertosChile(cl.data)
       if (ps.data) setPasos(ps.data)
@@ -936,19 +938,13 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-bold text-sm text-gray-900">Ítems de la cotización</h3>
-            <p className="text-[10px] text-gray-400 mt-0.5">
-              {bloqueNum===1&&'Por contenedor: ej. Flete 40HC, THC 40HC, Handling'}
-              {bloqueNum===2&&'Por contenedor o viaje: ej. Flete 40HC Chile→NOA'}
-              {bloqueNum===3&&'Por camión o contenedor: ej. Flete Jujuy'}
-              {bloqueNum===4&&'% sobre CIF o fijo: ej. Honorarios, IVA aduana'}
-              {bloqueNum===0&&'Completá los ítems de la cotización'}
-            </p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Elegí la categoría de cada ítem — los campos se adaptan automáticamente</p>
           </div>
           <button onClick={addItem} className="px-3 py-1.5 border border-[#1168F8] text-[#1168F8] rounded-xl text-xs font-bold hover:bg-[#EBF2FF]">+ Agregar item</button>
         </div>
 
         {items.map((it, i) => (
-          <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} bloqueNum={bloqueNum} onChange={updateItem} onRemove={removeItem} editMode={true} />
+          <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={categorias} onChange={updateItem} onRemove={removeItem} editMode={true} />
         ))}
 
         {items.filter(it => it.descripcion).length > 0 && (
@@ -1073,7 +1069,7 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
         {editando ? (
           <>
             {items.map((it, i) => (
-              <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} bloqueNum={0} onChange={updateItem} onRemove={removeItem} editMode={true} />
+              <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={[]} onChange={updateItem} onRemove={removeItem} editMode={true} />
             ))}
             <div className="flex justify-end mt-3">
               <button onClick={saveItems} disabled={saving}
@@ -1093,7 +1089,7 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
             </thead>
             <tbody>
               {items.map((it, i) => (
-                <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} bloqueNum={0} onChange={updateItem} onRemove={removeItem} editMode={false} />
+                <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={[]} onChange={updateItem} onRemove={removeItem} editMode={false} />
               ))}
               {totalUSD > 0 && (
                 <tr className="bg-[#EBF2FF] border-t-2 border-[#1168F8]">
