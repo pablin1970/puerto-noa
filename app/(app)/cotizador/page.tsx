@@ -1535,7 +1535,10 @@ export default function CotizadorPage(){
             <div className="px-5 py-4">
               {/* Opciones A / B1 / B2 */}
               <div className="grid grid-cols-3 gap-3 mb-4">
-                {[{key:'A',label:'Opcion A',sub:'Contenedor completo hasta Argentina'},{key:'B1',label:'Opcion B1',sub:'Desconsolidar + cargar directo al camion'},{key:'B2',label:'Opcion B2',sub:'Desconsolidar + almacenar + cargar al camion'}].map(o=>(
+                {(s.sentido==='exportacion'
+  ? [{key:'A',label:'Opcion A',sub:'Contenedor completo desde Argentina'},{key:'B1',label:'Opcion B1',sub:'Cargar directo al camion + consolidar en Chile'},{key:'B2',label:'Opcion B2',sub:'Descargar + almacenar + consolidar en Chile'}]
+  : [{key:'A',label:'Opcion A',sub:'Contenedor completo hasta Argentina'},{key:'B1',label:'Opcion B1',sub:'Desconsolidar + cargar directo al camion'},{key:'B2',label:'Opcion B2',sub:'Desconsolidar + almacenar + cargar al camion'}]
+).map(o=>(
                   <button key={o.key} onClick={()=>u('optTransp',o.key as OptTransp)} className={`px-3 py-2.5 rounded-lg border text-left transition-colors ${s.optTransp===o.key?'border-[#0a9e6e] bg-green-50 text-green-800':'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
                     <div className="text-xs font-semibold">{o.label}</div><div className="text-[10px] opacity-70 mt-0.5">{o.sub}</div>
                   </button>
