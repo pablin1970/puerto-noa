@@ -2253,107 +2253,177 @@ export default function CotizadorPage(){
       {/* ── RESUMEN ── */}
       {tab==='resumen'&&(
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-3 items-center">
-            <div className="bg-white border border-gray-100 border-t-4 border-t-[#1168F8] rounded-xl p-5 text-center">
-              <div className="text-[10px] text-gray-400 mb-1">Costo total China — {s.destinoNoa}</div>
-              <div className="text-2xl font-semibold text-gray-900">USD {fmt(totalLanded,0)}</div>
-              <div className="text-[10px] text-gray-400 mt-1">producto + logistica + tributos</div>
+          <style>{`
+            @media print {
+              /* Ocultar sidebar y navegación */
+              aside, nav, header, [data-sidebar], .sidebar { display: none !important; }
+              /* Ocultar botones de navegación */
+              .print\:hidden { display: none !important; }
+              /* Expandir contenido */
+              main, .main-content { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+              body { background: white !important; }
+              /* Tamaño de página */
+              @page { margin: 15mm; size: A4; }
+              /* Evitar cortes en tablas */
+              tr { page-break-inside: avoid; }
+            }
+          `}</style>
+
+          {/* Header adaptativo según sentido */}
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">{s.sentido==='exportacion'?'🚢':'📦'}</span>
+                  <h2 className="font-bold text-base text-gray-900">
+                    {s.sentido==='exportacion'?'Cotización de exportación':'Cotización de importación'}
+                  </h2>
+                </div>
+                <div className="text-xs text-gray-400">
+                  {s.sentido==='exportacion'
+                    ? `${s.destinoNoa||'Argentina'} → ${s.ptoChile||'Puerto Chile'} → Destino`
+                    : `Origen → ${s.ptoChile||'Puerto Chile'} → ${s.destinoNoa||'NOA'}`}
+                  {s.cliente&&<span className="ml-2 font-semibold text-gray-600">· {s.cliente}</span>}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={()=>window.print()}
+                  className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50 flex items-center gap-1.5">
+                  🖨 Imprimir / PDF
+                </button>
+                <button onClick={guardar} disabled={saving}
+                  className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-60">
+                  {saving?'Guardando...':'Guardar cotización'}
+                </button>
+              </div>
             </div>
-            <div className="text-center text-sm text-gray-400 font-semibold">VS</div>
-            <div className="bg-white border border-gray-100 border-t-4 border-t-blue-300 rounded-xl p-5 text-center">
-              <div className="text-[10px] text-gray-400 mb-1">Precio equivalente en Argentina</div>
-              <div className="text-2xl font-semibold text-gray-900">{s.precioArgEquiv>0?`USD ${fmt(s.precioArgEquiv,0)}`:'—'}</div>
+
+            {/* Bloques activos en esta cotización */}
+            <div className="flex flex-wrap gap-2">
+              {bloques.filter((_:any,i:number)=>bloqueActivo(i)).map((b:any,i:number)=>(
+                <span key={b.id} className="px-2.5 py-1 bg-[#EBF2FF] text-[#052698] rounded-full text-[10px] font-semibold">
+                  {b.nombre}
+                </span>
+              ))}
+              {s.incluirArca&&<span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-[10px] font-semibold">Tributos ARCA</span>}
             </div>
           </div>
-          {s.precioArgEquiv>0&&(
-            <div className={`text-xs px-4 py-3 rounded-xl text-center font-medium ${(s.precioArgEquiv-totalLanded)>0?'bg-[#EBF2FF] text-[#052698] border border-[#93B8FC]':'bg-red-50 text-red-700 border border-red-200'}`}>
-              {(s.precioArgEquiv-totalLanded)>0
-                ?`Importar desde China es USD ${fmt(Math.abs(s.precioArgEquiv-totalLanded),0)} mas economico (${Math.round(Math.abs(s.precioArgEquiv-totalLanded)/s.precioArgEquiv*100)}% de ahorro)`
-                :`Importar desde China resulta USD ${fmt(Math.abs(s.precioArgEquiv-totalLanded),0)} mas caro que el precio local`}
-            </div>
-          )}
 
+          {/* KPI principal */}
+          <div className="grid grid-cols-3 gap-3 items-center">
+            <div className="bg-white border border-gray-100 border-t-4 border-t-[#1168F8] rounded-xl p-5 text-center col-span-2">
+              <div className="text-[10px] text-gray-400 mb-1">
+                {s.sentido==='exportacion'
+                  ? `Costo total del servicio logístico`
+                  : `Costo total ${s.origen?s.origen.split(' (')[0]:'origen'} — ${s.destinoNoa||'destino'}`}
+              </div>
+              <div className="text-3xl font-bold text-gray-900 font-mono">USD {fmt(totalLanded,0)}</div>
+              <div className="text-[10px] text-gray-400 mt-1">
+                {s.sentido==='exportacion'
+                  ? `${nc} contenedor(es) · USD ${fmt(totalLanded/nc,0)} por cont.`
+                  : `producto + logística${s.incluirArca?' + tributos':''}`}
+              </div>
+            </div>
+            {s.precioArgEquiv>0&&s.sentido!=='exportacion'?(
+              <div className={`rounded-xl p-4 text-center border ${(s.precioArgEquiv-totalLanded)>0?'bg-green-50 border-green-100':'bg-red-50 border-red-100'}`}>
+                <div className="text-[10px] text-gray-400 mb-1">vs precio local Argentina</div>
+                <div className={`text-lg font-bold font-mono ${(s.precioArgEquiv-totalLanded)>0?'text-green-700':'text-red-700'}`}>
+                  {(s.precioArgEquiv-totalLanded)>0?'−':'+'} USD {fmt(Math.abs(s.precioArgEquiv-totalLanded),0)}
+                </div>
+                <div className={`text-[10px] mt-1 ${(s.precioArgEquiv-totalLanded)>0?'text-green-600':'text-red-600'}`}>
+                  {(s.precioArgEquiv-totalLanded)>0?'más económico importar':'más caro que precio local'}
+                </div>
+              </div>
+            ):(
+              <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-center">
+                <div className="text-[10px] text-gray-400 mb-1">Tipos de cambio</div>
+                <div className="text-xs font-mono text-gray-700">ARS {fmt(s.tcTrib,0)}</div>
+                <div className="text-xs font-mono text-gray-500">CLP {fmt(s.tcClp,0)}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Desglose por bloques activos */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Desglose completo de costos</div>
+            <div className="px-5 py-3.5 border-b border-gray-100 font-semibold text-sm text-gray-900">
+              Desglose de costos
+            </div>
             <table className="w-full text-xs">
-              <thead><tr className="bg-gray-50"><th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase">Bloque</th><th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase">Concepto</th><th className="text-right px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase">USD</th></tr></thead>
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-semibold uppercase">Bloque</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-semibold uppercase">Concepto</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] text-gray-400 font-semibold uppercase">USD</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] text-gray-400 font-semibold uppercase">%</th>
+                </tr>
+              </thead>
               <tbody>
                 {[
-                  {sec:'Producto',concepto:`Precio mercaderia China (${s.incoterm})`,v:totalFOB},
-                  ...(s.incoterm==='EXW'?[{sec:'Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros}]:[]),
-                  ...(subFW>0?[{sec:'1 — ForWarder',concepto:fwElegida?.proveedorNombre?`${fwElegida.proveedorNombre}${fwElegida.referencia?` — ${fwElegida.referencia}`:''}`:'Manual',v:subFW}]:[]),
-                  ...(totalSeg>0?[{sec:'1 — Seguro',concepto:segFW>0?'Incluido en cotizacion ForWarder':'Contratado independientemente',v:totalSeg}]:[]),
-                  ...(subGastosChile>0?[{sec:'2 — Gastos Chile',concepto:'Post-entrega naviera',v:subGastosChile}]:[]),
-                  ...(subDescon>0?[{sec:'3 — Desconsolidacion',concepto:'Opcion '+s.optTransp,v:subDescon}]:[]),
-                  ...(subAlm>0?[{sec:'3 — Almacenaje',concepto:`${fmt(volAlm,2)} m3 x ${s.almDias} dias`,v:subAlm}]:[]),
-                  ...(subCarga>0?[{sec:'3 — Carga al camion',concepto:'Importe carga',v:subCarga}]:[]),
-                  ...(subTransp>0?[{sec:'3 — Transporte terrestre',concepto:`${s.nCamiones} camion(es)`,v:subTransp}]:[]),
-                  ...(subGastosArg>0?[{sec:'4 — Gastos Argentina',concepto:'Despachante y honorarios',v:subGastosArg}]:[]),
-                  ...(subE>0?[{sec:'4 — Gastos Argentina',concepto:'Otros gastos',v:subE}]:[]),
-                  ...(fee>0?[{sec:'5 — Fee Puerto NOA',concepto:`${nc} cont. x USD ${s.feeCont}`,v:fee}]:[]),
-                  {sec:'Tributos ARCA',concepto:`Regimen ${s.regimen} — Base CIF Jama`,v:totalTribUSD},
-                ].filter(r=>r.v>0).map((r,i)=>(
+                  // Producto — siempre
+                  ...(totalFOB>0?[{sec:'Producto',concepto:`Mercadería (${s.incoterm})`,v:totalFOB,show:true}]:[]),
+                  ...(s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0?[{sec:'Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros,show:true}]:[]),
+                  // Bloque 1 — ForWarder
+                  ...(bloqueActivo(0)&&subFW>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:fwElegida?.proveedorNombre||'Manual',v:subFW,show:true}]:[]),
+                  ...(bloqueActivo(0)&&totalSeg>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:'Seguro',v:totalSeg,show:true}]:[]),
+                  // Bloque 2 — Chile
+                  ...(bloqueActivo(1)&&subGastosChile>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Gastos en Chile',v:subGastosChile,show:true}]:[]),
+                  ...(bloqueActivo(1)&&subDescon>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:`Desconsolidación (Op. ${s.optTransp})`,v:subDescon,show:true}]:[]),
+                  ...(bloqueActivo(1)&&subAlm>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:`Almacenaje ${fmt(volAlm,2)} m3 × ${s.almDias} días`,v:subAlm,show:true}]:[]),
+                  ...(bloqueActivo(1)&&subCarga>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Carga al camión',v:subCarga,show:true}]:[]),
+                  // Bloque 3 — Flete terrestre
+                  ...(bloqueActivo(2)&&subTransp>0?[{sec:bloques[2]?.nombre||'Bloque 3',concepto:'Flete terrestre',v:subTransp,show:true}]:[]),
+                  // Bloque 4 — Argentina
+                  ...(bloqueActivo(3)&&(subE+subGastosArg)>0?[{sec:bloques[3]?.nombre||'Bloque 4',concepto:'Gastos Argentina',v:subE+subGastosArg,show:true}]:[]),
+                  // Bloque 5 — Fee PN
+                  ...(bloqueActivo(4)&&fee>0?[{sec:bloques[4]?.nombre||'Bloque 5 — Fee PN',concepto:`${nc} cont. × USD ${s.feeCont}`,v:fee,show:true}]:[]),
+                  // Tributos ARCA
+                  ...(s.incluirArca&&totalTribUSD>0?[{sec:'Tributos ARCA',concepto:`Régimen ${s.regimen}`,v:totalTribUSD,ars:Math.round(totalTribARS).toLocaleString('es-AR'),show:true}]:[]),
+                ].filter(r=>r.show&&r.v>0).map((r,i)=>(
                   <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-4 py-2.5 text-[10px] text-gray-400">{r.sec}</td>
+                    <td className="px-4 py-2.5 text-[10px] text-gray-400 font-semibold">{r.sec}</td>
                     <td className="px-4 py-2.5 text-gray-700">{r.concepto}</td>
-                    <td className="px-4 py-2.5 font-mono text-right">{fmt(r.v)}</td>
+                    <td className="px-4 py-2.5 font-mono text-right font-semibold">{fmt(r.v)}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-400">{fmt(r.v/totalLanded*100,1)}%</td>
                   </tr>
                 ))}
                 <tr className="bg-[#EBF2FF] font-semibold border-t-2 border-[#1168F8]">
-                  <td className="px-4 py-3 text-sm text-[#052698]" colSpan={2}>TOTAL LANDED EN DESTINO</td>
-                  <td className="px-4 py-3 font-mono text-right text-base text-[#052698]">{fmt(totalLanded)}</td>
+                  <td className="px-4 py-3 text-sm text-[#052698] font-bold" colSpan={2}>TOTAL</td>
+                  <td className="px-4 py-3 font-mono text-right text-base text-[#052698] font-bold">{fmt(totalLanded)}</td>
+                  <td className="px-4 py-3 text-right text-[#052698] font-bold">100%</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Composicion del costo total</div>
-            <div className="p-4 space-y-2">
-              {[
-                {label:'Valor mercaderia China',sub:`${s.incoterm}`,v:totalFOB},
-                {label:'ForWarder + Seguro',sub:`${fwElegida?.proveedorNombre||'No asignado'}`,v:subFW+totalSeg},
-                {label:'Gastos post-entrega Chile',sub:'Bloque 2',v:subGastosChile},
-                {label:'Transporte terrestre',sub:'Bloque 3',v:subD+subTransp},
-                {label:'Gastos Argentina',sub:'Bloque 4',v:subE+subGastosArg},
-                {label:'Fee Puerto NOA',sub:'Bloque 5',v:fee},
-                {label:'Tributos ARCA',sub:`Regimen ${s.regimen}`,v:totalTribUSD,ars:Math.round(totalTribARS).toLocaleString('es-AR')},
-              ].filter(it=>it.v>0).map(it=>(
-                <div key={it.label} className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg">
-                  <div>
-                    <div className="text-xs font-medium text-gray-700">{it.label}</div>
-                    <div className="text-[10px] text-gray-400">{it.sub}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-mono font-semibold text-gray-800">USD {fmt(it.v,0)}</div>
-                    {(it as any).ars&&<div className="font-mono text-[10px] text-[#052698]">ARS {(it as any).ars}</div>}
-                    <div className="text-[10px] text-gray-400">{fmt(it.v/totalLanded*100,1)}%</div>
-                  </div>
-                </div>
-              ))}
-              <div className="flex items-center justify-between px-3 py-3 bg-[#052698] rounded-lg">
-                <div>
-                  <div className="text-xs font-semibold text-white">TOTAL LANDED EN DESTINO</div>
-                  <div className="text-[10px] text-blue-200">USD {fmt(totalLanded/nc,0)} por contenedor</div>
-                </div>
-                <div className="font-mono font-bold text-white text-xl">USD {fmt(totalLanded,0)}</div>
-              </div>
+          {/* Observaciones */}
+          {s.observaciones.length>0&&(
+            <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+              <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3">Observaciones</div>
+              <ol className="space-y-1.5">
+                {s.observaciones.filter((o:string)=>o.trim()).map((obs:string,i:number)=>(
+                  <li key={i} className="flex gap-2 text-xs text-gray-700">
+                    <span className="text-gray-400 font-mono flex-shrink-0">{i+1}.</span>
+                    <span>{obs}</span>
+                  </li>
+                ))}
+              </ol>
             </div>
-          </div>
+          )}
 
-          <div className="bg-white border border-gray-100 rounded-xl px-5 py-3.5">
-            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Tipos de cambio aplicados</div>
-            <div className="flex flex-wrap gap-4 text-xs">
-              <div className="flex items-center gap-2"><span className="text-gray-500">TC oficial BNA (ARS/USD)</span><span className="font-mono font-semibold text-gray-800 bg-[#EBF2FF] px-2 py-0.5 rounded">ARS {fmt(s.tcTrib,0)}</span></div>
-              <div className="flex items-center gap-2"><span className="text-gray-500">CLP/USD</span><span className="font-mono font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded">CLP {fmt(s.tcClp,0)}</span></div>
+          {/* Botones navegación */}
+          <div className="flex justify-between print:hidden">
+            <button onClick={()=>cambiarTab(s.incluirArca?'tributos':'logistica')}
+              className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
+            <div className="flex gap-2">
+              <button onClick={()=>window.print()}
+                className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50">
+                🖨 Imprimir / PDF
+              </button>
+              <button onClick={guardar} disabled={saving}
+                className="bg-[#1168F8] text-white px-6 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] disabled:opacity-60">
+                {saving?'Guardando...':'Guardar cotización'}
+              </button>
             </div>
-          </div>
-
-          <div className="flex justify-between">
-            <button onClick={()=>cambiarTab('tributos')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
-            <button onClick={guardar} disabled={saving} className="bg-[#1168F8] text-white px-6 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] disabled:opacity-60">
-              {saving?'Guardando...':'Guardar cotizacion'}
-            </button>
           </div>
         </div>
       )}
