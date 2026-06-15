@@ -933,105 +933,163 @@ export default function CotizadorPage(){
               <span className="font-semibold text-sm text-gray-900">Ruta del embarque</span>
             </div>
             <div className="px-5 py-4 space-y-3">
-              {/* Tramo marítimo — solo si B1 activo */}
-              {bloqueActivo(0) && (
-                <div>
-                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                    {s.sentido==='exportacion'?'Tramo marítimo (salida)':'Tramo marítimo'}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label={s.sentido==='exportacion'?'Puerto de destino':'Puerto de origen (China)'}>
-                      <select value={s.puertoChiId} onChange={e=>{
-                        u('puertoChiId',e.target.value)
-                        const p=puertosChi.find((x:any)=>x.id===e.target.value)
-                        if(p) u('origen',`${p.nombre} (${p.locode})`)
-                      }} className={sel}>
-                        <option value="">— Seleccionar puerto —</option>
-                        {puertosChi.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} — {p.ciudad}</option>)}
-                      </select>
-                    </Field>
-                    <Field label={s.sentido==='exportacion'?'Puerto Chile (embarque)':'Puerto Chile (descarga)'}>
-                      <select value={s.puertoChileId} onChange={e=>{
-                        u('puertoChileId',e.target.value)
-                        const p=puertosChile.find((x:any)=>x.id===e.target.value)
-                        if(p) u('ptoChile',p.locode)
-                      }} className={sel}>
-                        <option value="">— Seleccionar puerto —</option>
-                        {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
-                      </select>
-                    </Field>
-                  </div>
-                </div>
-              )}
+              {/* Indicador visual de dirección */}
+              <div className="flex items-center gap-2 text-[10px] text-gray-400 mb-1">
+                {s.sentido==='exportacion' ? (
+                  <>
+                    {bloqueActivo(3)&&<span className="px-2 py-0.5 bg-[#EBF2FF] text-[#052698] rounded-full font-semibold">Argentina</span>}
+                    {(bloqueActivo(2)||bloqueActivo(1))&&<><span>→</span><span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full font-semibold">Chile</span></>}
+                    {bloqueActivo(0)&&<><span>→</span><span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full font-semibold">Destino</span></>}
+                  </>
+                ) : (
+                  <>
+                    {bloqueActivo(0)&&<span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full font-semibold">Origen</span>}
+                    {(bloqueActivo(1)||bloqueActivo(2))&&<><span>→</span><span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full font-semibold">Chile</span></>}
+                    {bloqueActivo(3)&&<><span>→</span><span className="px-2 py-0.5 bg-[#EBF2FF] text-[#052698] rounded-full font-semibold">Argentina/NOA</span></>}
+                  </>
+                )}
+              </div>
 
-              {/* Puerto Chile solo — si B1 no activo pero B2 sí */}
-              {!bloqueActivo(0) && bloqueActivo(1) && (
-                <div>
-                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Puerto Chile</div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label={s.sentido==='exportacion'?'Puerto Chile (embarque)':'Puerto Chile (descarga)'}>
-                      <select value={s.puertoChileId} onChange={e=>{
-                        u('puertoChileId',e.target.value)
-                        const p=puertosChile.find((x:any)=>x.id===e.target.value)
-                        if(p) u('ptoChile',p.locode)
-                      }} className={sel}>
-                        <option value="">— Seleccionar puerto —</option>
-                        {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
-                      </select>
-                    </Field>
-                  </div>
-                </div>
-              )}
-
-              {/* Tramo terrestre — solo si B2 o B3 activo */}
-              {(bloqueActivo(1) || bloqueActivo(2)) && (
-                <div className={bloqueActivo(0)||(!bloqueActivo(0)&&bloqueActivo(1))?"pt-3 border-t border-gray-100":""}>
-                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                    {s.sentido==='exportacion'?'Tramo terrestre (NOA → Chile)':'Tramo terrestre'}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Paso fronterizo">
-                      <select value={s.pasoId} onChange={e=>{u('pasoId',e.target.value)}} className={sel}>
-                        <option value="">— Seleccionar paso —</option>
-                        {pasosFront.map((p:any)=>(
-                          <option key={p.id} value={p.id}>
-                            {p.nombre} {p.restriccion_invierno?'⚠️':''} ({p.provincia_argentina})
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    {/* Ciudad Argentina — solo si B3 o B4 activo */}
-                    {(bloqueActivo(2) || bloqueActivo(3)) && (
-                      <Field label={s.sentido==='exportacion'?'Ciudad origen Argentina':'Ciudad destino Argentina'}>
-                        <select value={s.ciudadDestinoId} onChange={e=>{
-                          u('ciudadDestinoId',e.target.value)
-                          const c=ciudadesArg.find((x:any)=>x.id===e.target.value)
-                          if(c) u('destinoNoa',c.ciudad)
+              {s.sentido==='exportacion' ? (
+                /* ── EXPORTACIÓN: Argentina → Chile → Destino ── */
+                <>
+                  {/* 1. Ciudad origen Argentina */}
+                  {(bloqueActivo(3) || bloqueActivo(2)) && (
+                    <div>
+                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Origen Argentina</div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Ciudad origen Argentina">
+                          <select value={s.ciudadDestinoId} onChange={e=>{
+                            u('ciudadDestinoId',e.target.value)
+                            const c=ciudadesArg.find((x:any)=>x.id===e.target.value)
+                            if(c) u('destinoNoa',c.ciudad)
+                          }} className={sel}>
+                            <option value="">— Seleccionar ciudad —</option>
+                            {ciudadesArg.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
+                          </select>
+                        </Field>
+                        {(bloqueActivo(2)||bloqueActivo(1)) && (
+                          <Field label="Paso fronterizo">
+                            <select value={s.pasoId} onChange={e=>{u('pasoId',e.target.value)}} className={sel}>
+                              <option value="">— Seleccionar paso —</option>
+                              {pasosFront.map((p:any)=>(
+                                <option key={p.id} value={p.id}>{p.nombre} {p.restriccion_invierno?'⚠️':''} ({p.provincia_argentina})</option>
+                              ))}
+                            </select>
+                          </Field>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {/* 2. Puerto Chile embarque */}
+                  {(bloqueActivo(1) || bloqueActivo(0)) && (
+                    <div className="pt-3 border-t border-gray-100">
+                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Tramo Chile → Puerto</div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Puerto Chile (embarque)">
+                          <select value={s.puertoChileId} onChange={e=>{
+                            u('puertoChileId',e.target.value)
+                            const p=puertosChile.find((x:any)=>x.id===e.target.value)
+                            if(p) u('ptoChile',p.locode)
+                          }} className={sel}>
+                            <option value="">— Seleccionar puerto —</option>
+                            {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
+                          </select>
+                        </Field>
+                        {bloqueActivo(0) && (
+                          <Field label="Puerto de destino">
+                            <select value={s.puertoChiId} onChange={e=>{
+                              u('puertoChiId',e.target.value)
+                              const p=puertosChi.find((x:any)=>x.id===e.target.value)
+                              if(p) u('origen',`${p.nombre} (${p.locode})`)
+                            }} className={sel}>
+                              <option value="">— Seleccionar puerto —</option>
+                              {puertosChi.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} — {p.ciudad}</option>)}
+                            </select>
+                          </Field>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* ── IMPORTACIÓN: Origen → Chile → Argentina ── */
+                <>
+                  {/* 1. Tramo marítimo */}
+                  {bloqueActivo(0) && (
+                    <div>
+                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Tramo marítimo</div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Puerto de origen (China)">
+                          <select value={s.puertoChiId} onChange={e=>{
+                            u('puertoChiId',e.target.value)
+                            const p=puertosChi.find((x:any)=>x.id===e.target.value)
+                            if(p) u('origen',`${p.nombre} (${p.locode})`)
+                          }} className={sel}>
+                            <option value="">— Seleccionar puerto —</option>
+                            {puertosChi.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} — {p.ciudad}</option>)}
+                          </select>
+                        </Field>
+                        <Field label="Puerto Chile (descarga)">
+                          <select value={s.puertoChileId} onChange={e=>{
+                            u('puertoChileId',e.target.value)
+                            const p=puertosChile.find((x:any)=>x.id===e.target.value)
+                            if(p) u('ptoChile',p.locode)
+                          }} className={sel}>
+                            <option value="">— Seleccionar puerto —</option>
+                            {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
+                          </select>
+                        </Field>
+                      </div>
+                    </div>
+                  )}
+                  {/* Puerto Chile solo si B1 no activo */}
+                  {!bloqueActivo(0) && bloqueActivo(1) && (
+                    <div>
+                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Puerto Chile</div>
+                      <Field label="Puerto Chile (descarga)">
+                        <select value={s.puertoChileId} onChange={e=>{
+                          u('puertoChileId',e.target.value)
+                          const p=puertosChile.find((x:any)=>x.id===e.target.value)
+                          if(p) u('ptoChile',p.locode)
                         }} className={sel}>
-                          <option value="">— Seleccionar ciudad —</option>
-                          {ciudadesArg.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
+                          <option value="">— Seleccionar puerto —</option>
+                          {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
                         </select>
                       </Field>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Solo Argentina — si solo B4 activo sin tramos anteriores */}
-              {!bloqueActivo(0) && !bloqueActivo(1) && !bloqueActivo(2) && bloqueActivo(3) && (
-                <div>
-                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Destino Argentina</div>
-                  <Field label={s.sentido==='exportacion'?'Ciudad origen Argentina':'Ciudad destino Argentina'}>
-                    <select value={s.ciudadDestinoId} onChange={e=>{
-                      u('ciudadDestinoId',e.target.value)
-                      const c=ciudadesArg.find((x:any)=>x.id===e.target.value)
-                      if(c) u('destinoNoa',c.ciudad)
-                    }} className={sel}>
-                      <option value="">— Seleccionar ciudad —</option>
-                      {ciudadesArg.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
-                    </select>
-                  </Field>
-                </div>
+                    </div>
+                  )}
+                  {/* 2. Tramo terrestre */}
+                  {(bloqueActivo(1) || bloqueActivo(2) || bloqueActivo(3)) && (
+                    <div className={(bloqueActivo(0)||bloqueActivo(1))?"pt-3 border-t border-gray-100":""}>
+                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Tramo terrestre</div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {(bloqueActivo(1)||bloqueActivo(2)) && (
+                          <Field label="Paso fronterizo">
+                            <select value={s.pasoId} onChange={e=>{u('pasoId',e.target.value)}} className={sel}>
+                              <option value="">— Seleccionar paso —</option>
+                              {pasosFront.map((p:any)=>(
+                                <option key={p.id} value={p.id}>{p.nombre} {p.restriccion_invierno?'⚠️':''} ({p.provincia_argentina})</option>
+                              ))}
+                            </select>
+                          </Field>
+                        )}
+                        {(bloqueActivo(2)||bloqueActivo(3)) && (
+                          <Field label="Ciudad destino Argentina">
+                            <select value={s.ciudadDestinoId} onChange={e=>{
+                              u('ciudadDestinoId',e.target.value)
+                              const c=ciudadesArg.find((x:any)=>x.id===e.target.value)
+                              if(c) u('destinoNoa',c.ciudad)
+                            }} className={sel}>
+                              <option value="">— Seleccionar ciudad —</option>
+                              {ciudadesArg.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
+                            </select>
+                          </Field>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
