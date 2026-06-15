@@ -734,7 +734,7 @@ function RubrosBloqueABM() {
     setLoading(true)
     const [rubRes, asnRes] = await Promise.all([
       supabase.from('proveedor_rubros').select('id,nombre').order('nombre'),
-      supabase.from('cotizador_bloque_rubros').select('*').eq('activo', true),
+      supabase.from('cotizador_bloque_rubros').select('*'),
     ])
     if (rubRes.data) setRubros(rubRes.data)
     if (asnRes.data) {
@@ -758,41 +758,49 @@ function RubrosBloqueABM() {
 
   async function guardarCambios() {
     setSaving(true)
-    // Calcular diferencias
-    const existentes = new Set<string>(asignaciones.map((a: any) => `${a.bloque}|${a.rubro_id}`))
-    const agregar = Array.from(activosLocal).filter(k => !existentes.has(k))
-    const quitar  = Array.from(existentes).filter(k => !activosLocal.has(k))
+    try {
+      // Calcular diferencias
+      const existentes = new Set<string>(asignaciones.map((a: any) => `${a.bloque}|${a.rubro_id}`))
+      const agregar = Array.from(activosLocal).filter(k => !existentes.has(k))
+      const quitar  = Array.from(existentes).filter(k => !activosLocal.has(k))
 
-    // Insertar nuevos
-    if (agregar.length > 0) {
-      const rows = agregar.map(k => {
+      // Insertar nuevos uno por uno para detectar errores
+      for (const k of agregar) {
         const sepIdx = k.indexOf('|')
         const bloqueNum = parseInt(k.substring(0, sepIdx))
         const rubroId = k.substring(sepIdx + 1)
         const bloqueNombre = BLOQUES_COTIZADOR.find(b => b.num === bloqueNum)?.label || ''
-        return { bloque: bloqueNum, bloque_nombre: bloqueNombre, rubro_id: rubroId, activo: true }
-      })
-      await (supabase.from('cotizador_bloque_rubros') as any).insert(rows)
-    }
+        const { error } = await (supabase.from('cotizador_bloque_rubros') as any)
+          .insert({ bloque: bloqueNum, bloque_nombre: bloqueNombre, rubro_id: rubroId, activo: true })
+        if (error) {
+          // Si ya existe (conflict), ignorar
+          if (!error.message?.includes('duplicate') && !error.code?.includes('23505')) {
+            alert('Error al guardar: ' + error.message)
+            setSaving(false)
+            return
+          }
+        }
+      }
 
-    // Eliminar los que se quitaron
-    if (quitar.length > 0) {
+      // Eliminar los que se quitaron
       for (const k of quitar) {
         const asnExistente = asignaciones.find((a: any) => `${a.bloque}|${a.rubro_id}` === k)
         if (asnExistente) {
           await supabase.from('cotizador_bloque_rubros').delete().eq('id', asnExistente.id)
         }
       }
-    }
 
-    await load()
+      await load()
+    } catch(e: any) {
+      alert('Error inesperado: ' + e.message)
+    }
     setSaving(false)
     setDirty(false)
   }
 
   function cancelarCambios() {
     // Restaurar desde asignaciones actuales
-    const keys = new Set<string>(asignaciones.map((a: any) => `${a.bloque}-${a.rubro_id}`))
+    const keys = new Set<string>(asignaciones.map((a: any) => `${a.bloque}|${a.rubro_id}`))
     setActivosLocal(keys)
     setDirty(false)
   }
