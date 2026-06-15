@@ -406,13 +406,11 @@ function CotizacionesProveedoresInner() {
 }
 
 function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cotizacionInicial, initParams }: any) {
-  // Prellenar con params del cotizador si vienen
-  const preInit = initParams || {}
   const [form, setForm] = useState({
     proveedor_nombre: '',
     tercero_id: '',
-    rubro: preInit.rubro || 'forwarder',
-    tipo: preInit.cliente_id ? 'especifica' : 'generica',
+    rubro: 'forwarder',
+    tipo: 'generica',
     referencia: '',
     fecha: new Date().toISOString().slice(0, 10),
     fecha_vencimiento: '',
@@ -424,7 +422,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
     seguro_monto: '',
     notas: '',
     cotizacion_id: '',
-    cliente_id: preInit.cliente_id || '',
+    cliente_id: '',
     tramo: '',
     puerto_china_id: '',
     puerto_chile_id: '',
@@ -439,6 +437,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
   const [saving, setSaving] = useState(false)
   const [buscarProv, setBuscarProv] = useState('')
   const [showProvDropdown, setShowProvDropdown] = useState(false)
+  const [usuarioNombre, setUsuarioNombre] = useState('')
   const [buscarCot, setBuscarCot] = useState('')
   const [showCotDropdown, setShowCotDropdown] = useState(false)
   const [puertosCh, setPuertosCh] = useState<any[]>([])
@@ -460,6 +459,16 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
       if (ps.data) setPasos(ps.data)
       if (ci.data) setCiudades(ci.data)
       if (tc.data) setTiposCont(tc.data)
+    })
+    // Cargar nombre del usuario logueado para cotizaciones estimadas
+    supabase.auth.getUser().then(({data})=>{
+      if(data?.user){
+        supabase.from('usuarios').select('nombre_completo,email').eq('auth_id',data.user.id).single()
+          .then(({data:u})=>{
+            const nombre=(u as any)?.nombre_completo||(u as any)?.email||data.user.email||'Puerto NOA'
+            setUsuarioNombre(nombre)
+          })
+      }
     })
   }, [])
 
@@ -537,45 +546,92 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
     return t + (parseN(String(it.valor)) || 0)
   }, 0)
 
-  const setF = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }))
+  const setF = (k: string, v: any) => setForm((f: any) => {
+    const updated = { ...f, [k]: v }
+    // Si cambia origen a estimada → proveedor = usuario logueado
+    if(k === 'origen' && v === 'estimada'){
+      updated.proveedor_nombre = usuarioNombre || 'Puerto NOA SpA'
+      updated.tercero_id = ''
+    }
+    // Si vuelve a recibida → limpiar proveedor
+    if(k === 'origen' && v === 'recibida'){
+      updated.proveedor_nombre = ''
+      updated.tercero_id = ''
+    }
+    return updated
+  })
 
   return (
     <div className="max-w-3xl space-y-4">
-      {/* Proveedor */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-        {initParams?.bloque && (
-        <div className="mb-4 px-4 py-3 bg-[#EBF2FF] border border-[#93B8FC] rounded-xl text-xs text-[#052698] flex items-center gap-3">
+      {/* Banner informativo si viene del cotizador */}
+      {initParams?.bloque && (
+        <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl px-5 py-3 flex items-center gap-3 text-xs text-[#052698]">
           <span className="text-lg">📋</span>
-          <div>
-            <div className="font-bold mb-0.5">Carga iniciada desde el Cotizador — Bloque {initParams.bloque}</div>
-            <div className="text-[10px] text-[#1168F8]">
-              El rubro y cliente fueron preseleccionados. Completá los datos y guardá — podrás usar esta cotización al volver al cotizador.
-            </div>
-          </div>
+          <span>Carga iniciada desde el Cotizador — Bloque {initParams.bloque}{initParams.opcion ? ` · Opción ${initParams.opcion}` : ''}. Al guardar podrás traerla desde el cotizador.</span>
         </div>
       )}
+
+      {/* Origen — siempre primero */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+        <h3 className="font-bold text-sm text-gray-900 mb-3">Origen de esta cotización</h3>
+        <div className="flex gap-3 mb-1">
+          {[
+            { key: 'recibida', label: 'Recibida', desc: 'Cotización real del proveedor', icon: '📨' },
+            { key: 'estimada', label: 'Estimada', desc: 'Generada internamente por Puerto NOA', icon: '✏️' },
+          ].map(o => (
+            <button key={o.key} onClick={() => setF('origen', o.key)}
+              className={`flex-1 px-4 py-3 rounded-xl border-2 text-left transition-all ${form.origen === o.key ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
+              <div className="flex items-center gap-2">
+                <span className="text-base">{o.icon}</span>
+                <div>
+                  <div className="text-xs font-bold text-gray-900">{o.label}</div>
+                  <div className="text-[10px] text-gray-400">{o.desc}</div>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+        {form.origen === 'estimada' && (
+          <div className="mt-2 px-3 py-2 bg-amber-50 border border-amber-100 rounded-lg text-[10px] text-amber-700">
+            ⚠ Se registrará con tu usuario como proveedor. Útil para análisis de evolución de precios y tarifas de referencia.
+          </div>
+        )}
+      </div>
+
+      {/* Proveedor */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
       <h3 className="font-bold text-sm text-gray-900 mb-4">Proveedor</h3>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2 relative">
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre del proveedor *</label>
-            <input
-              value={form.proveedor_nombre}
-              onChange={e => { setF('proveedor_nombre', e.target.value); setBuscarProv(e.target.value); setShowProvDropdown(e.target.value.length > 0) }}
-              onFocus={() => setShowProvDropdown(form.proveedor_nombre.length > 0)}
-              onClick={e => e.stopPropagation()}
-              className={inp} placeholder="Nombre o buscar en terceros..."
-            />
-            {showProvDropdown && provsFiltrados.length > 0 && (
-              <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-48 overflow-y-auto" onClick={e => e.stopPropagation()}>
-                {provsFiltrados.map((t: any) => (
-                  <button key={t.id} onMouseDown={() => { setF('proveedor_nombre', t.razon_social); setF('tercero_id', t.id); setShowProvDropdown(false) }}
-                    className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
-                    <span className="font-semibold text-gray-900">{t.razon_social}</span>
-                  </button>
-                ))}
+            {form.origen === 'estimada' ? (
+              <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 flex items-center gap-2">
+                <span>✏️</span>
+                <span className="font-semibold">{form.proveedor_nombre || usuarioNombre || 'Puerto NOA SpA'}</span>
+                <span className="text-[10px] text-gray-400 ml-1">— usuario logueado</span>
               </div>
+            ) : (
+              <>
+                <input
+                  value={form.proveedor_nombre}
+                  onChange={e => { setF('proveedor_nombre', e.target.value); setBuscarProv(e.target.value); setShowProvDropdown(e.target.value.length > 0) }}
+                  onFocus={() => setShowProvDropdown(form.proveedor_nombre.length > 0)}
+                  onClick={e => e.stopPropagation()}
+                  className={inp} placeholder="Nombre o buscar en terceros..."
+                />
+                {showProvDropdown && provsFiltrados.length > 0 && (
+                  <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-48 overflow-y-auto" onClick={e => e.stopPropagation()}>
+                    {provsFiltrados.map((t: any) => (
+                      <button key={t.id} onMouseDown={() => { setF('proveedor_nombre', t.razon_social); setF('tercero_id', t.id); setShowProvDropdown(false) }}
+                        className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
+                        <span className="font-semibold text-gray-900">{t.razon_social}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {form.tercero_id && <div className="mt-1 text-[10px] text-[#1168F8]">Vinculado al tercero en el sistema</div>}
+              </>
             )}
-            {form.tercero_id && <div className="mt-1 text-[10px] text-[#1168F8]">Vinculado al tercero en el sistema</div>}
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Referencia (N cotizacion proveedor)</label>
@@ -673,34 +729,6 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
                 {form.cliente_id && <div className="mt-1 text-[10px] text-[#1168F8]">Aparecera sugerida al cotizar para este cliente</div>}
               </div>
             )}
-
-            {/* Origen de la cotización */}
-            <div className="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
-              <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Origen de esta cotización</label>
-              <div className="space-y-2">
-                {[
-                  { key: 'recibida', label: 'Recibida', desc: 'Cotización real enviada por el proveedor', icon: '📨' },
-                  { key: 'estimada', label: 'Estimada', desc: 'Generada internamente por Puerto NOA — sin cotización formal del proveedor', icon: '✏️' },
-                ].map(o => (
-                  <button key={o.key} onClick={() => setF('origen', o.key)}
-                    className={`w-full px-4 py-2.5 rounded-xl border-2 text-left transition-all ${form.origen === o.key ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">{o.icon}</span>
-                      <div>
-                        <div className="text-xs font-bold text-gray-900">{o.label}</div>
-                        <div className="text-[10px] text-gray-400">{o.desc}</div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              {form.origen === 'estimada' && (
-                <div className="mt-2 px-3 py-2 bg-amber-50 border border-amber-100 rounded-lg text-[10px] text-amber-700">
-                  ⚠ Las cotizaciones estimadas se usarán para análisis de precios y evolución de tarifas. 
-                  El proveedor será el usuario logueado en el sistema.
-                </div>
-              )}
-            </div>
 
             {/* Seguro — solo para forwarder */}
             {form.rubro === 'forwarder' && (
