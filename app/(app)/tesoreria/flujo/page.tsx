@@ -43,15 +43,25 @@ export default function FlujoCuentasPage() {
 
   async function loadAll() {
     setLoading(true)
-    const [mRes, cpRes, ccRes, tcRes] = await Promise.all([
+    const [mRes, cpRes, ccRes, movFondosRes, tcRes] = await Promise.all([
       (supabase.from('flujo_cuentas_pn') as any).select('*').order('fecha', { ascending: false }).limit(100),
       (supabase.from('cuentas_pn') as any).select('*').eq('activo', true).order('nombre'),
-      (supabase.from('fondos_custodia') as any).select('id,nombre,tipo,pais,moneda,saldo').order('nombre'),
+      (supabase.from('fondos_cuentas') as any).select('*').eq('activo', true).order('nombre'),
+      (supabase.from('fondos_movimientos') as any).select('cuenta_id, tipo, monto'),
       (supabase.from('tipos_cambio_eventos') as any).select('clp,ars').order('created_at', { ascending: false }).limit(1),
     ])
     if (mRes.data) setMovimientos(mRes.data)
     if (cpRes.data) setCuentasPn(cpRes.data)
-    if (ccRes.data) setCuentasCustodia(ccRes.data)
+    if (ccRes.data) {
+      const movs = (movFondosRes.data || []) as any[]
+      const saldos: Record<string,number> = {}
+      for (const m of movs) {
+        if (!saldos[m.cuenta_id]) saldos[m.cuenta_id] = 0
+        if (['ingreso','deposito','credito'].includes(m.tipo)) saldos[m.cuenta_id] += (m.monto||0)
+        else saldos[m.cuenta_id] -= (m.monto||0)
+      }
+      setCuentasCustodia(ccRes.data.map((c:any) => ({ ...c, saldo: saldos[c.id] || 0 })))
+    }
     if (tcRes.data?.[0]) setTc({ usd: tcRes.data[0].clp||908, ars: tcRes.data[0].ars||1450 })
     setLoading(false)
   }
