@@ -452,6 +452,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     notas: '',
     cotizacion_id: '',
     cliente_id: '',
+    bloque_id: '',
     tramo: '',
     puerto_china_id: '',
     puerto_chile_id: '',
@@ -470,6 +471,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [tercerosConRubro, setTercerosConRubro] = useState<any[]>([])
   const [buscarCot, setBuscarCot] = useState('')
   const [showCotDropdown, setShowCotDropdown] = useState(false)
+  const [bloques, setBloques] = useState<any[]>([])
   const [puertosCh, setPuertosCh] = useState<any[]>([])
   const [puertosChile, setPuertosChile] = useState<any[]>([])
   const [pasos, setPasos] = useState<any[]>([])
@@ -478,12 +480,14 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
 
   useEffect(() => {
     Promise.all([
+      supabase.from('cotizador_bloques').select('id,numero,nombre,descripcion').eq('activo',true).order('numero'),
       supabase.from('puertos_china').select('id,locode,nombre,ciudad').eq('activo', 'true').order('orden'),
       supabase.from('puertos_chile').select('id,locode,nombre,ciudad').eq('activo', 'true').order('orden'),
       supabase.from('pasos_fronterizos').select('id,nombre,provincia_argentina').eq('activo', 'true').order('orden'),
       supabase.from('ciudades_destino_arg').select('id,ciudad,provincia').eq('activo', 'true').order('orden'),
       supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo', 'true').order('orden'),
-    ]).then(([ch, cl, ps, ci, tc]) => {
+    ]).then(([bl, ch, cl, ps, ci, tc]) => {
+      if (bl.data) setBloques(bl.data)
       if (ch.data) setPuertosCh(ch.data)
       if (cl.data) setPuertosChile(cl.data)
       if (ps.data) setPasos(ps.data)
@@ -565,6 +569,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       notas: form.notas || null,
       cotizacion_id: form.cotizacion_id || null,
       cliente_id: form.tipo === 'especifica' ? (form.cliente_id || null) : null,
+      bloque_id: form.bloque_id || null,
       tramo: form.tramo || null,
       puerto_china_id: form.puerto_china_id || null,
       puerto_chile_id: form.puerto_chile_id || null,
@@ -831,22 +836,25 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           </label>
         </div>
         <div className="mb-4">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Tramo que cubre esta cotizacion</label>
-          <div className="grid grid-cols-4 gap-2">
-            {[
-              { key: 'maritimo',           label: 'Bloque 1 — ForWarder',      icon: '🚢', desc: 'Flete marítimo · handling · naviero' },
-              { key: 'post_entrega_chile', label: 'Bloque 2 — Chile NOA',       icon: '🏭', desc: 'Transporte y gastos en Chile' },
-              { key: 'terrestre',          label: 'Bloque 3 — Flete terrestre', icon: '🚛', desc: 'Chile → Argentina' },
-              { key: 'aduanero',           label: 'Bloque 4 — Gastos Argentina',icon: '📋', desc: 'Despachante · aduana · otros' },
-            ].map(t => (
-              <button key={t.key} onClick={() => setF('tramo', form.tramo === t.key ? '' : t.key)}
-                className={`px-3 py-2.5 rounded-xl border-2 text-left transition-all ${form.tramo === t.key ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
-                <div className="text-base mb-1">{t.icon}</div>
-                <div className="text-[10px] font-bold text-gray-900">{t.label}</div>
-                <div className="text-[9px] text-gray-400 mt-0.5">{t.desc}</div>
-              </button>
-            ))}
-          </div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Bloque del cotizador que cubre esta cotización</label>
+          {bloques.length===0?(
+            <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-3 py-2">Cargando bloques...</div>
+          ):(
+            <div className="grid grid-cols-2 gap-2">
+              {bloques.map(b=>(
+                <button key={b.id} onClick={()=>setF('bloque_id', form.bloque_id===b.id?'':b.id)}
+                  className={`px-3 py-2.5 rounded-xl border-2 text-left transition-all ${form.bloque_id===b.id?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 hover:bg-gray-50'}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-[#1168F8] text-white text-[10px] font-black flex items-center justify-center flex-shrink-0">{b.numero}</span>
+                    <div>
+                      <div className="text-xs font-bold text-gray-900">{b.nombre}</div>
+                      {b.descripcion&&<div className="text-[9px] text-gray-400 mt-0.5">{b.descripcion}</div>}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           {(form.tramo === 'maritimo' || form.tramo === 'post_entrega_chile') && (
