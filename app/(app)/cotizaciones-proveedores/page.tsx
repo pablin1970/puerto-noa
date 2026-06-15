@@ -3,13 +3,27 @@ import { useEffect, useState, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
+// Colores por código — se combina con rubros dinámicos de DB
+const RUBRO_COLORS: Record<string, { color: string; bg: string }> = {
+  forwarder:            { color: '#1168F8', bg: '#EBF2FF' },
+  transporte_chile:     { color: '#0a9e6e', bg: '#E1F5EE' },
+  transporte_terrestre: { color: '#b45309', bg: '#FEF3C7' },
+  gastos_argentina:     { color: '#6b21a8', bg: '#F3E8FF' },
+  deposito:             { color: '#0891b2', bg: '#E0F2FE' },
+  naviera:              { color: '#0e7490', bg: '#E0F7FA' },
+  seguro:               { color: '#15803d', bg: '#DCFCE7' },
+  otro:                 { color: '#6b7280', bg: '#F3F4F6' },
+}
+// RUBROS se reconstruye dinámicamente — este es el fallback
 const RUBROS: Record<string, { label: string; color: string; bg: string }> = {
-  forwarder:           { label: 'ForWarder',            color: '#1168F8', bg: '#EBF2FF' },
-  transporte_chile:    { label: 'Transporte Chile',     color: '#0a9e6e', bg: '#E1F5EE' },
-  transporte_terrestre:{ label: 'Transporte terrestre', color: '#b45309', bg: '#FEF3C7' },
-  gastos_argentina:    { label: 'Gastos Argentina',     color: '#6b21a8', bg: '#F3E8FF' },
-  deposito:            { label: 'Deposito fiscal',      color: '#0891b2', bg: '#E0F2FE' },
-  otro:                { label: 'Otro',                 color: '#6b7280', bg: '#F3F4F6' },
+  forwarder:            { label: 'ForWarder',            color: '#1168F8', bg: '#EBF2FF' },
+  transporte_chile:     { label: 'Transporte Chile',     color: '#0a9e6e', bg: '#E1F5EE' },
+  transporte_terrestre: { label: 'Transporte terrestre', color: '#b45309', bg: '#FEF3C7' },
+  gastos_argentina:     { label: 'Gastos Argentina',     color: '#6b21a8', bg: '#F3E8FF' },
+  deposito:             { label: 'Deposito fiscal',      color: '#0891b2', bg: '#E0F2FE' },
+  naviera:              { label: 'Naviera',              color: '#0e7490', bg: '#E0F7FA' },
+  seguro:               { label: 'Seguro de carga',      color: '#15803d', bg: '#DCFCE7' },
+  otro:                 { label: 'Otro',                 color: '#6b7280', bg: '#F3F4F6' },
 }
 
 const TIPO_CALCULO: Record<string, string> = {
@@ -152,6 +166,7 @@ function CotizacionesProveedoresInner() {
   // Params prellenados desde el cotizador
   const [initParams, setInitParams] = useState<any>(null)
   const [selId, setSelId] = useState<string | null>(null)
+  const [rubrosDB, setRubrosDB] = useState<Record<string,{label:string;color:string;bg:string}>>(RUBROS)
   const [filtroRubro, setFiltroRubro] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
@@ -176,7 +191,7 @@ function CotizacionesProveedoresInner() {
   async function loadAll() {
     setLoading(true)
     // Queries separadas para evitar joins que pueden fallar por RLS
-    const [cotRes, itemsRes, tercRes, cotsRes] = await Promise.all([
+    const [cotRes, itemsRes, tercRes, cotsRes, rubrosRes] = await Promise.all([
       supabase.from('cotizaciones_proveedor_v2')
         .select('*')
         .order('created_at', { ascending: false }),
@@ -185,7 +200,18 @@ function CotizacionesProveedoresInner() {
         .order('orden', { ascending: true }),
       supabase.from('terceros').select('id,razon_social,tipo').eq('activo', 'true').order('razon_social'),
       supabase.from('cotizaciones').select('id,num,cliente,estado').order('created_at', { ascending: false }).limit(200),
+      supabase.from('proveedor_rubros').select('id,nombre,codigo,activo').eq('activo', true).order('nombre'),
     ])
+    // Construir mapa de rubros dinámico
+    if(rubrosRes.data){
+      const map:Record<string,{label:string;color:string;bg:string}>={}
+      for(const r of rubrosRes.data as any[]){
+        const cod=r.codigo||r.nombre.toLowerCase().replace(/ /g,'_')
+        const colors=RUBRO_COLORS[cod]||RUBRO_COLORS.otro
+        map[cod]={label:r.nombre, color:colors.color, bg:colors.bg}
+      }
+      setRubrosDB(map)
+    }
     if (cotRes.data && itemsRes.data) {
       // Combinar items con sus cotizaciones manualmente
       const itemsPorCot: Record<string, Item[]> = {}
@@ -223,7 +249,7 @@ function CotizacionesProveedoresInner() {
     if (selId === id) setView('lista')
   }
 
-  const stats = Object.keys(RUBROS).map(r => ({
+  const stats = Object.keys(rubrosDB).map(r => ({
     rubro: r,
     total: cotizaciones.filter(c => c.rubro === r && c.estado === 'vigente').length,
   })).filter(s => s.total > 0)
@@ -316,7 +342,7 @@ function CotizacionesProveedoresInner() {
                 </thead>
                 <tbody>
                   {filtradas.map(c => {
-                    const r = RUBROS[c.rubro] || RUBROS.otro
+                    const r = rubrosDB[c.rubro] || RUBROS.otro
                     const totalItems = (c.items || []).length
                     return (
                       <tr key={c.id} className="border-b border-gray-50 hover:bg-blue-50/20 transition-colors group cursor-pointer"
@@ -384,6 +410,7 @@ function CotizacionesProveedoresInner() {
           supabase={supabase}
           terceros={terceros}
           cotsSistema={cotsSistema}
+          rubrosDisp={rubrosDB}
           onSave={async () => { await loadAll(); setView('lista') }}
           onCancel={() => setView('lista')}
           initParams={initParams}
@@ -396,6 +423,7 @@ function CotizacionesProveedoresInner() {
           supabase={supabase}
           terceros={terceros}
           cotsSistema={cotsSistema}
+          rubrosDisp={rubrosDB}
           onReload={async () => { await loadAll() }}
           onBack={() => setView('lista')}
           onEliminar={() => eliminar(sel.id)}
@@ -405,7 +433,8 @@ function CotizacionesProveedoresInner() {
   )
 }
 
-function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cotizacionInicial, initParams }: any) {
+function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, onCancel, cotizacionInicial, initParams }: any) {
+  const rubros = rubrosDisp || RUBROS
   const [form, setForm] = useState({
     proveedor_nombre: '',
     tercero_id: '',
@@ -690,7 +719,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Rubro</label>
             <div className="grid grid-cols-2 gap-2">
-              {Object.entries(RUBROS).map(([key, r]) => (
+              {Object.entries(rubros).map(([key, r]) => (
                 <button key={key} onClick={() => setF('rubro', key)}
                   className="px-3 py-2 rounded-xl border-2 text-left text-xs font-semibold transition-all"
                   style={form.rubro === key
@@ -883,7 +912,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, onSave, onCancel, cot
   )
 }
 
-function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, onReload, onBack, onEliminar }: any) {
+function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubrosDisp, onReload, onBack, onEliminar }: any) {
+  const rubros = rubrosDisp || RUBROS
   const [editando, setEditando] = useState(false)
   const [items, setItems] = useState<Item[]>(cotizacion.items || [])
   const [saving, setSaving] = useState(false)
@@ -893,7 +923,7 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, onRelo
     supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo', 'true').order('orden').then(({ data }: any) => { if (data) setTiposCont(data) })
   }, [])
 
-  const r = RUBROS[cotizacion.rubro] || RUBROS.otro
+  const r = rubros[cotizacion.rubro] || rubros.otro || RUBROS.otro
   const totalUSD = items.reduce((t, it) => {
     if (it.tipo_calculo === 'pct_cif') return t
     return t + (parseN(String(it.valor)) || 0)
