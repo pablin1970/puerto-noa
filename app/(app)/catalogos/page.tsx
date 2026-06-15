@@ -739,7 +739,7 @@ function RubrosBloqueABM() {
     if (rubRes.data) setRubros(rubRes.data)
     if (asnRes.data) {
       setAsignaciones(asnRes.data)
-      const keys = new Set<string>(asnRes.data.map((a: any) => `${a.bloque}-${a.rubro_id}`))
+      const keys = new Set<string>(asnRes.data.map((a: any) => `${a.bloque}|${a.rubro_id}`))
       setActivosLocal(keys)
     }
     setDirty(false)
@@ -747,7 +747,7 @@ function RubrosBloqueABM() {
   }
 
   function toggleLocal(bloque: number, rubroId: string) {
-    const key = `${bloque}-${rubroId}`
+    const key = `${bloque}|${rubroId}`
     setActivosLocal(prev => {
       const next = new Set(prev)
       if (next.has(key)) { next.delete(key) } else { next.add(key) }
@@ -759,18 +759,16 @@ function RubrosBloqueABM() {
   async function guardarCambios() {
     setSaving(true)
     // Calcular diferencias
-    const existentes = new Set<string>(asignaciones.map((a: any) => `${a.bloque}-${a.rubro_id}`))
+    const existentes = new Set<string>(asignaciones.map((a: any) => `${a.bloque}|${a.rubro_id}`))
     const agregar = Array.from(activosLocal).filter(k => !existentes.has(k))
     const quitar  = Array.from(existentes).filter(k => !activosLocal.has(k))
 
     // Insertar nuevos
     if (agregar.length > 0) {
       const rows = agregar.map(k => {
-        const [bloqueStr, rubroId] = k.split('-').reduce((acc: string[], v, i, arr) => {
-          if (i === 0) return [v, arr.slice(1).join('-')]
-          return acc
-        }, [] as string[])
-        const bloqueNum = parseInt(bloqueStr)
+        const sepIdx = k.indexOf('|')
+        const bloqueNum = parseInt(k.substring(0, sepIdx))
+        const rubroId = k.substring(sepIdx + 1)
         const bloqueNombre = BLOQUES_COTIZADOR.find(b => b.num === bloqueNum)?.label || ''
         return { bloque: bloqueNum, bloque_nombre: bloqueNombre, rubro_id: rubroId, activo: true }
       })
@@ -780,7 +778,7 @@ function RubrosBloqueABM() {
     // Eliminar los que se quitaron
     if (quitar.length > 0) {
       for (const k of quitar) {
-        const asnExistente = asignaciones.find((a: any) => `${a.bloque}-${a.rubro_id}` === k)
+        const asnExistente = asignaciones.find((a: any) => `${a.bloque}|${a.rubro_id}` === k)
         if (asnExistente) {
           await supabase.from('cotizador_bloque_rubros').delete().eq('id', asnExistente.id)
         }
@@ -800,7 +798,7 @@ function RubrosBloqueABM() {
   }
 
   const countBloque = (num: number) =>
-    Array.from(activosLocal).filter(k => k.startsWith(`${num}-`)).length
+    Array.from(activosLocal).filter(k => k.startsWith(`${num}|`)).length
 
   return (
     <div className="space-y-4">
@@ -865,7 +863,7 @@ function RubrosBloqueABM() {
                 <div className="px-5 py-4">
                   <div className="grid grid-cols-3 gap-2">
                     {rubros.map(rubro => {
-                      const key = `${bloque.num}-${rubro.id}`
+                      const key = `${bloque.num}|${rubro.id}`
                       const activo = activosLocal.has(key)
 
                       return (
@@ -930,9 +928,9 @@ function RubrosBloqueABM() {
           <div className="space-y-2">
             {BLOQUES_COTIZADOR.map(bloque => {
               const rubrosDelBloque = Array.from(activosLocal)
-                .filter(k => k.startsWith(`${bloque.num}-`))
+                .filter(k => k.startsWith(`${bloque.num}|`))
                 .map(k => {
-                  const rubroId = k.substring(k.indexOf('-') + 1)
+                  const rubroId = k.substring(k.indexOf('|') + 1)
                   return rubros.find(r => r.id === rubroId)?.nombre
                 })
                 .filter(Boolean)
