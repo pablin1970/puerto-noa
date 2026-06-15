@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 
-type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm'
+type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm' | 'empresa'
 
 const TABS = [
   { key: 'categorias',    label: 'Categorías de precio', icon: '🏷' },
@@ -17,6 +17,7 @@ const TABS = [
   { key: 'rubros_proveedor',   label: 'Rubros de proveedor',  icon: '🏷️' },
   { key: 'gastos_categorias',  label: 'Cat. gastos fijos',    icon: '💸' },
   { key: 'cuentas_abm',        label: 'Cuentas (caja y bancos)', icon: '🏦' },
+  { key: 'empresa',             label: 'Datos de la empresa',    icon: '🏢' },
 ] as const
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -582,6 +583,7 @@ export default function CatalogosPage() {
       {tab === 'bloques_cotizacion' && <BloquesCotizacionABM />}
       {tab === 'gastos_categorias' && <GastosCatABM />}
       {tab === 'cuentas_abm' && <CuentasABM />}
+      {tab === 'empresa' && <EmpresaABM />}
 
       {/* ── RUBROS DE PROVEEDOR ── */}
       {tab === 'rubros_proveedor' && <RubrosProveedorABM />}
@@ -1696,6 +1698,275 @@ function RubrosProveedorABM() {
           </table>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── Ficha empresa Puerto NOA SpA ──────────────────────────────
+function EmpresaABM() {
+  const supabase = useMemo(() => createClient(), [])
+  const [data, setData] = useState<any>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [editando, setEditando] = useState(false)
+  const [form, setForm] = useState<any>({})
+
+  const inp2 = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    const { data: d } = await (supabase.from('empresa_config') as any).select('*').limit(1).single()
+    if (d) { setData(d); setForm(d) }
+    setLoading(false)
+  }
+
+  async function save() {
+    setSaving(true)
+    if (data.id) {
+      await (supabase.from('empresa_config') as any).update(form).eq('id', data.id)
+    } else {
+      await (supabase.from('empresa_config') as any).insert(form)
+    }
+    await load()
+    setEditando(false)
+    setSaving(false)
+  }
+
+  const setF = (k: string, v: string) => setForm((p: any) => ({...p, [k]: v}))
+
+  const REGIMENES = [
+    'Pro Pyme General',
+    'Pro Pyme Transparente',
+    'Régimen General Semi Integrado',
+    'Microempresa Familiar',
+  ]
+
+  if (loading) return <div className="p-8 text-center text-gray-400 text-sm">Cargando...</div>
+
+  return (
+    <div className="max-w-2xl">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="font-bold text-base text-gray-900">Datos de la empresa</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Se usan en facturas, Libro IVA y declaraciones SII</p>
+        </div>
+        {!editando && (
+          <button onClick={() => setEditando(true)}
+            className="px-4 py-2 border border-[#1168F8] text-[#1168F8] rounded-xl text-xs font-bold hover:bg-[#EBF2FF]">
+            Editar
+          </button>
+        )}
+      </div>
+
+      {!editando ? (
+        /* Vista */
+        <div className="space-y-4">
+          {/* Identificación */}
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-4">Identificación legal</div>
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { label:'Razón social', val: data.razon_social },
+                { label:'RUT Chile', val: data.rut },
+                { label:'Giro SII', val: data.giro },
+                { label:'Régimen tributario', val: data.regimen_tributario },
+                { label:'Año fiscal inicio', val: data.anio_fiscal_inicio ? `${data.anio_fiscal_inicio}° mes` : '—' },
+                { label:'Año fiscal fin', val: data.anio_fiscal_fin ? `${data.anio_fiscal_fin}° mes` : '—' },
+              ].map(r => (
+                <div key={r.label}>
+                  <div className="text-[10px] text-gray-400 mb-0.5">{r.label}</div>
+                  <div className="text-xs font-semibold text-gray-800">{r.val || '—'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Dirección */}
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-4">Domicilio Chile</div>
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { label:'Dirección', val: data.direccion },
+                { label:'Ciudad', val: data.ciudad },
+                { label:'Región', val: data.region },
+                { label:'País', val: data.pais || 'Chile' },
+              ].map(r => (
+                <div key={r.label}>
+                  <div className="text-[10px] text-gray-400 mb-0.5">{r.label}</div>
+                  <div className="text-xs font-semibold text-gray-800">{r.val || '—'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Representante y contacto */}
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-4">Representante y contacto</div>
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { label:'Representante legal', val: data.representante_legal },
+                { label:'RUT representante', val: data.rut_representante },
+                { label:'Email', val: data.email },
+                { label:'Teléfono', val: data.telefono },
+                { label:'Sitio web', val: data.web },
+              ].map(r => (
+                <div key={r.label}>
+                  <div className="text-[10px] text-gray-400 mb-0.5">{r.label}</div>
+                  <div className="text-xs font-semibold text-gray-800">{r.val || '—'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* SII */}
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-4">Datos SII y tributarios</div>
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { label:'Clave SII', val: data.clave_sii ? '••••••••' : '—' },
+                { label:'Resolución SII', val: data.resolucion_sii },
+                { label:'Fecha resolución', val: data.fecha_resolucion },
+                { label:'Moneda contable', val: data.moneda_contable || 'CLP' },
+              ].map(r => (
+                <div key={r.label}>
+                  <div className="text-[10px] text-gray-400 mb-0.5">{r.label}</div>
+                  <div className="text-xs font-semibold text-gray-800">{r.val || '—'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {!data.rut && (
+            <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-[11px] text-amber-700">
+              ⚠ Los datos de la empresa no están configurados. Hacé click en Editar para completarlos.
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Edición */
+        <div className="space-y-4">
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-4">Identificación legal</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Razón social *</label>
+                <input value={form.razon_social||''} onChange={e=>setF('razon_social',e.target.value)} className={inp2} placeholder="Puerto NOA SpA"/>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">RUT Chile *</label>
+                <input value={form.rut||''} onChange={e=>setF('rut',e.target.value)} className={inp2} placeholder="12.345.678-9"/>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Giro SII *</label>
+                <input value={form.giro||''} onChange={e=>setF('giro',e.target.value)} className={inp2} placeholder="Servicios logísticos de importación"/>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Régimen tributario</label>
+                <select value={form.regimen_tributario||''} onChange={e=>setF('regimen_tributario',e.target.value)} className={inp2}>
+                  <option value="">— Seleccionar —</option>
+                  {REGIMENES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda contable</label>
+                <select value={form.moneda_contable||'CLP'} onChange={e=>setF('moneda_contable',e.target.value)} className={inp2}>
+                  <option value="CLP">CLP — Peso chileno</option>
+                  <option value="USD">USD — Dólar</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Mes inicio año fiscal</label>
+                <select value={form.anio_fiscal_inicio||'1'} onChange={e=>setF('anio_fiscal_inicio',e.target.value)} className={inp2}>
+                  {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'].map((m,i) => (
+                    <option key={i+1} value={String(i+1)}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Mes fin año fiscal</label>
+                <select value={form.anio_fiscal_fin||'12'} onChange={e=>setF('anio_fiscal_fin',e.target.value)} className={inp2}>
+                  {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'].map((m,i) => (
+                    <option key={i+1} value={String(i+1)}>{m}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-4">Domicilio Chile</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Dirección</label>
+                <input value={form.direccion||''} onChange={e=>setF('direccion',e.target.value)} className={inp2} placeholder="Av. Ejemplo 1234, Of. 5"/>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Ciudad</label>
+                <input value={form.ciudad||''} onChange={e=>setF('ciudad',e.target.value)} className={inp2} placeholder="Santiago"/>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Región</label>
+                <input value={form.region||''} onChange={e=>setF('region',e.target.value)} className={inp2} placeholder="Región Metropolitana"/>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-4">Representante y contacto</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Representante legal</label>
+                <input value={form.representante_legal||''} onChange={e=>setF('representante_legal',e.target.value)} className={inp2} placeholder="Nombre completo"/>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">RUT representante</label>
+                <input value={form.rut_representante||''} onChange={e=>setF('rut_representante',e.target.value)} className={inp2} placeholder="12.345.678-9"/>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Email</label>
+                <input value={form.email||''} onChange={e=>setF('email',e.target.value)} className={inp2} placeholder="contacto@puertonoa.com"/>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Teléfono</label>
+                <input value={form.telefono||''} onChange={e=>setF('telefono',e.target.value)} className={inp2} placeholder="+56 9 1234 5678"/>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Sitio web</label>
+                <input value={form.web||''} onChange={e=>setF('web',e.target.value)} className={inp2} placeholder="www.puertonoa.com"/>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-4">Datos SII</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Resolución SII N°</label>
+                <input value={form.resolucion_sii||''} onChange={e=>setF('resolucion_sii',e.target.value)} className={inp2} placeholder="Ex. 45"/>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Fecha resolución</label>
+                <input type="date" value={form.fecha_resolucion||''} onChange={e=>setF('fecha_resolucion',e.target.value)} className={inp2}/>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas internas</label>
+                <input value={form.notas||''} onChange={e=>setF('notas',e.target.value)} className={inp2} placeholder="Observaciones internas"/>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-between">
+            <button onClick={() => { setEditando(false); setForm(data) }}
+              className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cancelar</button>
+            <button onClick={save} disabled={saving}
+              className="px-6 py-2.5 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
+              {saving ? 'Guardando...' : 'Guardar datos'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
