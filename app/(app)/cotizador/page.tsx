@@ -1986,8 +1986,7 @@ export default function CotizadorPage(){
                     <button onClick={()=>{
                       window.open(`/cotizaciones-proveedores?nuevo=1&bloque=4&cliente_id=${clienteSelId||''}&cliente_nombre=${encodeURIComponent(s.cliente||'')}`, '_blank')
                     }} className="px-3 py-1 bg-[#6b21a8] text-white rounded-lg text-[10px] font-bold hover:bg-[#581c87] whitespace-nowrap">+ Manual</button>
-                    <button onClick={()=>u('rowsE',[...s.rowsE,{id:uid2(),desc:'',tipoCalc:'fijo_usd',moneda:'USD',valor:0,pisoUsd:0,techoUsd:0,usd:0,ars:0}])}
-                      className="text-[10px] text-[#1168F8] hover:underline">+ Agregar fila</button>
+
                   </div>
                 </div>
                 {s.rowsE.length===0&&(
