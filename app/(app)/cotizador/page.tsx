@@ -1536,7 +1536,7 @@ export default function CotizadorPage(){
               {/* Opciones A / B1 / B2 */}
               <div className="grid grid-cols-3 gap-3 mb-4">
                 {(s.sentido==='exportacion'
-  ? [{key:'A',label:'Opcion A',sub:'Contenedor completo desde Argentina'},{key:'B1',label:'Opcion B1',sub:'Cargar directo al camion + consolidar en Chile'},{key:'B2',label:'Opcion B2',sub:'Descargar + almacenar + consolidar en Chile'}]
+  ? [{key:'A',label:'Opcion A',sub:'Contenedor completo desde Argentina'},{key:'B1',label:'Opcion B1',sub:'Descarga directa de camion + consolidar'},{key:'B2',label:'Opcion B2',sub:'Descargar camion + almacenar + consolidar'}]
   : [{key:'A',label:'Opcion A',sub:'Contenedor completo hasta Argentina'},{key:'B1',label:'Opcion B1',sub:'Desconsolidar + cargar directo al camion'},{key:'B2',label:'Opcion B2',sub:'Desconsolidar + almacenar + cargar al camion'}]
 ).map(o=>(
                   <button key={o.key} onClick={()=>u('optTransp',o.key as OptTransp)} className={`px-3 py-2.5 rounded-lg border text-left transition-colors ${s.optTransp===o.key?'border-[#0a9e6e] bg-green-50 text-green-800':'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
