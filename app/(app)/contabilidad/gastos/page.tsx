@@ -26,19 +26,19 @@ export default function GastosFijosPage() {
   useEffect(() => { load() }, [anio, mes])
 
   async function loadTC() {
-    const { data } = await supabase.from('tipos_cambio_eventos')
+    const { data } = await (supabase.from('tipos_cambio_eventos') as any)
       .select('clp, ars').order('created_at', { ascending: false }).limit(1)
     if (data?.[0]) setTc({ usd: data[0].clp || 908, ars: data[0].ars || 0 })
   }
 
   async function loadCats() {
-    const { data } = await supabase.from('gastos_fijos_categorias').select('*').eq('activo', true).order('orden')
+    const { data } = await (supabase.from('gastos_fijos_categorias') as any).select('*').eq('activo', true).order('orden')
     if (data) setCategorias(data)
   }
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase.from('gastos_fijos_pn')
+    const { data } = await (supabase.from('gastos_fijos_pn') as any)
       .select('*, categoria:gastos_fijos_categorias(nombre,codigo)')
       .eq('periodo_anio', anio).eq('periodo_mes', mes)
       .order('fecha', { ascending: false })
@@ -58,7 +58,7 @@ export default function GastosFijosPage() {
     setSaving(true)
     const monto = parseN(form.monto)
     const clpEquiv = calcClpEquiv(monto, form.moneda)
-    await supabase.from('gastos_fijos_pn').insert({
+    await (supabase.from('gastos_fijos_pn') as any).insert({
       categoria_id: form.categoria_id,
       descripcion: form.descripcion,
       moneda: form.moneda,
@@ -80,7 +80,7 @@ export default function GastosFijosPage() {
 
   async function eliminar(id: string) {
     if (!confirm('¿Eliminar este gasto?')) return
-    await supabase.from('gastos_fijos_pn').delete().eq('id', id)
+    await (supabase.from('gastos_fijos_pn') as any).delete().eq('id', id)
     setGastos(prev => prev.filter(g => g.id !== id))
   }
 
