@@ -834,10 +834,10 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Tramo que cubre esta cotizacion</label>
           <div className="grid grid-cols-4 gap-2">
             {[
-              { key: 'maritimo',          label: 'Maritimo',           icon: '🚢', desc: 'Puerto China → Puerto Chile' },
-              { key: 'post_entrega_chile', label: 'Post-entrega Chile', icon: '🏭', desc: 'Operaciones en puerto Chile' },
-              { key: 'terrestre',          label: 'Terrestre',          icon: '🚛', desc: 'Chile → Argentina' },
-              { key: 'aduanero',           label: 'Aduanero',           icon: '📋', desc: 'Gestión en Argentina' },
+              { key: 'maritimo',           label: 'Bloque 1 — ForWarder',      icon: '🚢', desc: 'Flete marítimo · handling · naviero' },
+              { key: 'post_entrega_chile', label: 'Bloque 2 — Chile NOA',       icon: '🏭', desc: 'Transporte y gastos en Chile' },
+              { key: 'terrestre',          label: 'Bloque 3 — Flete terrestre', icon: '🚛', desc: 'Chile → Argentina' },
+              { key: 'aduanero',           label: 'Bloque 4 — Gastos Argentina',icon: '📋', desc: 'Despachante · aduana · otros' },
             ].map(t => (
               <button key={t.key} onClick={() => setF('tramo', form.tramo === t.key ? '' : t.key)}
                 className={`px-3 py-2.5 rounded-xl border-2 text-left transition-all ${form.tramo === t.key ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
