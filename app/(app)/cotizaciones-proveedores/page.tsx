@@ -31,6 +31,7 @@ const TIPO_CALCULO: Record<string, string> = {
   fijo_ars:        'Fijo ARS',
   por_contenedor:  'Por contenedor',
   por_m3:          'Por m3',
+  por_bigbag:      'Por big bag',
   pct_cif:         '% sobre CIF',
 }
 
