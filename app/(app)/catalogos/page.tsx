@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 
-type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor'
+type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias'
 
 const TABS = [
   { key: 'categorias',    label: 'Categorías de precio', icon: '🏷' },
@@ -15,6 +15,7 @@ const TABS = [
   { key: 'fondos',        label: 'Fondos en custodia',   icon: '🏦' },
   { key: 'bloques_cotizacion', label: 'Bloques cotización',   icon: '📋' },
   { key: 'rubros_proveedor',   label: 'Rubros de proveedor',  icon: '🏷️' },
+  { key: 'gastos_categorias',  label: 'Cat. gastos fijos',    icon: '💸' },
 ] as const
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -578,6 +579,7 @@ export default function CatalogosPage() {
 
       {/* ── RUBROS POR BLOQUE ── */}
       {tab === 'bloques_cotizacion' && <BloquesCotizacionABM />}
+      {tab === 'gastos_categorias' && <GastosCatABM />}
 
       {/* ── RUBROS DE PROVEEDOR ── */}
       {tab === 'rubros_proveedor' && <RubrosProveedorABM />}
@@ -860,6 +862,161 @@ const BLOQUES_COTIZADOR = [
   { num: 3, label: 'Bloque 3 — Flete terrestre',      color: '#b45309', bg: '#FEF3C7', desc: 'Camiones, contenedores, estadías' },
   { num: 4, label: 'Bloque 4 — Gastos Argentina',     color: '#6b21a8', bg: '#F3E8FF', desc: 'Despachante, gastos aduaneros, otros ARG' },
 ]
+
+
+// ── ABM Categorías de Gastos Fijos ────────────────────────────────
+function GastosCatABM() {
+  const supabase = useMemo(() => createClient(), [])
+  const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editId, setEditId] = useState<string|null>(null)
+  const [editData, setEditData] = useState<any>({})
+  const [showNew, setShowNew] = useState(false)
+  const [newData, setNewData] = useState({ nombre:'', codigo:'', orden:0 })
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    const { data } = await (supabase.from('gastos_fijos_categorias') as any).select('*').order('orden', { ascending: true })
+    if (data) setRows(data)
+    setLoading(false)
+  }
+
+  async function saveEdit() {
+    setSaving(true)
+    await (supabase.from('gastos_fijos_categorias') as any).update({
+      nombre: editData.nombre,
+      codigo: editData.codigo,
+      orden: editData.orden || 0,
+    }).eq('id', editId)
+    setEditId(null)
+    await load()
+    setSaving(false)
+  }
+
+  async function saveNew() {
+    if (!newData.nombre || !newData.codigo) { alert('Nombre y código son obligatorios'); return }
+    setSaving(true)
+    await (supabase.from('gastos_fijos_categorias') as any).insert({
+      nombre: newData.nombre,
+      codigo: newData.codigo.toLowerCase().replace(/ /g,'_'),
+      orden: newData.orden || rows.length + 1,
+      activo: true,
+    })
+    setShowNew(false)
+    setNewData({ nombre:'', codigo:'', orden:0 })
+    await load()
+    setSaving(false)
+  }
+
+  async function toggleActivo(row: any) {
+    await (supabase.from('gastos_fijos_categorias') as any).update({ activo: !row.activo }).eq('id', row.id)
+    setRows(prev => prev.map(r => r.id === row.id ? { ...r, activo: !r.activo } : r))
+  }
+
+  async function eliminar(id: string) {
+    if (!confirm('¿Eliminar esta categoría? Solo si no tiene gastos asociados.')) return
+    await (supabase.from('gastos_fijos_categorias') as any).delete().eq('id', id)
+    setRows(prev => prev.filter(r => r.id !== id))
+  }
+
+  if (loading) return <div className="p-8 text-center text-gray-400 text-sm">Cargando...</div>
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="font-bold text-base text-gray-900">Categorías de gastos fijos</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Se usan en el módulo Gastos y costos de Puerto NOA</p>
+        </div>
+        <button onClick={() => setShowNew(true)} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Nueva categoría</button>
+      </div>
+
+      {showNew && (
+        <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-4 mb-4">
+          <h3 className="font-bold text-sm text-gray-900 mb-3">Nueva categoría</h3>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-1">
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre *</label>
+              <input value={newData.nombre} onChange={e => setNewData(p => ({...p, nombre: e.target.value}))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="ej. Seguros"/>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Código *</label>
+              <input value={newData.codigo} onChange={e => setNewData(p => ({...p, codigo: e.target.value.toLowerCase().replace(/ /g,'_')}))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white font-mono" placeholder="ej. seguros"/>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Orden</label>
+              <input type="number" value={newData.orden} onChange={e => setNewData(p => ({...p, orden: Number(e.target.value)}))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white"/>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-3">
+            <button onClick={() => setShowNew(false)} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cancelar</button>
+            <button onClick={saveNew} disabled={saving} className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
+              {saving ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {rows.map(row => (
+        <div key={row.id} className={`bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm ${!row.activo?'opacity-50':''}`}>
+          {editId === row.id ? (
+            <div className="p-4">
+              <div className="grid grid-cols-3 gap-3 mb-3">
+                <div className="col-span-1">
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre</label>
+                  <input value={editData.nombre||''} onChange={e => setEditData((p:any) => ({...p, nombre: e.target.value}))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white"/>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Código</label>
+                  <input value={editData.codigo||''} onChange={e => setEditData((p:any) => ({...p, codigo: e.target.value}))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white font-mono"/>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Orden</label>
+                  <input type="number" value={editData.orden||0} onChange={e => setEditData((p:any) => ({...p, orden: Number(e.target.value)}))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white"/>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setEditId(null)} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cancelar</button>
+                <button onClick={saveEdit} disabled={saving} className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
+                  {saving ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-gray-900">{row.nombre}</span>
+                  <span className="text-[10px] text-gray-400 font-mono">{row.codigo}</span>
+                  <span className="text-[10px] text-gray-300">· orden {row.orden}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => toggleActivo(row)}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${row.activo?'bg-green-50 text-green-700 border-green-200':'bg-gray-100 text-gray-400 border-gray-200'}`}>
+                  {row.activo ? 'Activo' : 'Inactivo'}
+                </button>
+                <button onClick={() => { setEditId(row.id); setEditData({...row}) }}
+                  className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 hover:border-[#1168F8] hover:text-[#1168F8]">Editar</button>
+                <button onClick={() => eliminar(row.id)}
+                  className="px-3 py-1.5 border border-red-100 rounded-xl text-xs text-red-500 hover:bg-red-50">Eliminar</button>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function BloquesCotizacionABM() {
   const supabase = createClient()
