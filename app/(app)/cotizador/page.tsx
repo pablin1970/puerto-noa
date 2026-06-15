@@ -200,6 +200,7 @@ const [cotsSistemaUsadas,setCotsSistemaUsadas]=useState<Record<string,string[]>>
 // Rubros por bloque (desde cotizador_bloque_rubros)
 const [rubrosBloque,setRubrosBloque]=useState<Record<number,string[]>>({1:[],2:[],3:[],4:[]})
 const [bloques,setBloques]=useState<any[]>([])
+const [cotNumActual,setCotNumActual]=useState<string>('')
 // Terceros proveedores por rubro (para búsqueda en carga manual)
 const [tercerosProv,setTercerosProv]=useState<any[]>([])
 
@@ -684,6 +685,7 @@ async function guardar(){
   try {
     const {data:cots}=await supabase.from('cotizaciones').select('num')
     const num=nextCotNum(cots||[])
+    setCotNumActual(num)
     const {data:user}=await supabase.auth.getUser()
     if(!user.user){alert('Sesion expirada.');setSaving(false);return}
     const {data:uDB}=await supabase.from('usuarios').select('id').eq('auth_id',user.user.id).single()
@@ -772,7 +774,7 @@ const clientesFiltrados=terceros.filter(t=>
   <html lang="es">
   <head>
   <meta charset="UTF-8"/>
-  <title>Cotización ${s.num||''} — Puerto NOA SpA</title>
+  <title>Cotización ${cotNumActual||''} — Puerto NOA SpA</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body { font-family: 'Arial', sans-serif; font-size: 11px; color: #1a1a1a; background: white; padding: 20mm 18mm; }
@@ -833,7 +835,7 @@ const clientesFiltrados=terceros.filter(t=>
       <div style="font-size:10px;color:#666;margin-top:2px;">SpA · Servicios logísticos de importación</div>
     </div>
     <div class="header-right">
-      <div class="num-cot">${s.num||'BORRADOR'}</div>
+      <div class="num-cot">${cotNumActual||'BORRADOR'}</div>
       <div class="fecha">${fecha}</div>
       ${s.validez?`<div style="font-size:10px;color:#666;margin-top:4px;">Válida por ${s.validez}</div>`:''}
     </div>
