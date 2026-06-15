@@ -890,6 +890,68 @@ function BloquesCotizacionABM() {
 
 const RUBRO_VACIO = { nombre: '', codigo: '', descripcion: '', icono: '', color: '#6b7280' }
 
+const ICONOS_RUBRO = ['🚢','🚛','🏭','📋','🛡','⚓','🏦','🏷️','·','📦','🔧','💼']
+
+function FormRubro({ form, setForm, editId, saving, onGuardar, onCancelar }: any) {
+  const inp2 = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm mb-4">
+      <div className="text-sm font-bold text-gray-900 mb-4">{editId ? 'Editar rubro' : 'Nuevo rubro'}</div>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre *</label>
+          <input value={form.nombre} onChange={e => setForm((f: any) => ({ ...f, nombre: e.target.value }))}
+            className={inp2} placeholder="ej. Freight Forwarder" />
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Código</label>
+          <input value={form.codigo} onChange={e => setForm((f: any) => ({ ...f, codigo: e.target.value }))}
+            className={inp2} placeholder="ej. forwarder" />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Descripción</label>
+          <input value={form.descripcion} onChange={e => setForm((f: any) => ({ ...f, descripcion: e.target.value }))}
+            className={inp2} placeholder="Descripción breve" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Ícono</label>
+          <div className="flex gap-1.5 flex-wrap">
+            {ICONOS_RUBRO.map(ic => (
+              <button key={ic} onClick={() => setForm((f: any) => ({ ...f, icono: ic }))}
+                className={`w-8 h-8 rounded-lg border-2 text-base flex items-center justify-center transition-all ${form.icono === ic ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:border-gray-300'}`}>
+                {ic}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Color</label>
+          <div className="flex items-center gap-2">
+            <input type="color" value={form.color || '#6b7280'}
+              onChange={e => setForm((f: any) => ({ ...f, color: e.target.value }))}
+              className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5 bg-white" />
+            <input value={form.color} onChange={e => setForm((f: any) => ({ ...f, color: e.target.value }))}
+              className="flex-1 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-mono focus:outline-none focus:border-[#1168F8]"
+              placeholder="#6b7280" />
+            <div className="w-8 h-8 rounded-lg border border-gray-200 flex-shrink-0"
+              style={{ background: form.color || '#6b7280' }} />
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-2 justify-end">
+        <button onClick={onCancelar}
+          className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50">Cancelar</button>
+        <button onClick={onGuardar} disabled={saving || !form.nombre}
+          className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
+          {saving ? 'Guardando...' : editId ? 'Guardar cambios' : 'Crear rubro'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 const RUBROS_DEFAULT = [
   { nombre: 'Freight Forwarder',    codigo: 'forwarder',            icono: '🚢', color: '#1168F8', descripcion: 'Flete marítimo, handling, gastos naviero' },
   { nombre: 'Agente',               codigo: 'transporte_chile',     icono: '🏭', color: '#0a9e6e', descripcion: 'Transporte Chile-NOA' },
