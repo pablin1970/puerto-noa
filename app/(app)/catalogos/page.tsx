@@ -1724,10 +1724,16 @@ function EmpresaABM() {
 
   async function save() {
     setSaving(true)
+    // Excluir campos de sistema del update
+    const { id: _id, created_at: _ca, updated_at: _ua, ...payload } = form
     if (data.id) {
-      await (supabase.from('empresa_config') as any).update(form).eq('id', data.id)
+      const { error } = await (supabase.from('empresa_config') as any)
+        .update({ ...payload, updated_at: new Date().toISOString() })
+        .eq('id', data.id)
+      if (error) { alert('Error al guardar: ' + error.message); setSaving(false); return }
     } else {
-      await (supabase.from('empresa_config') as any).insert(form)
+      const { error } = await (supabase.from('empresa_config') as any).insert(payload)
+      if (error) { alert('Error al guardar: ' + error.message); setSaving(false); return }
     }
     await load()
     setEditando(false)
@@ -1811,6 +1817,7 @@ function EmpresaABM() {
                 { label:'Email', val: data.email },
                 { label:'Teléfono', val: data.telefono },
                 { label:'Sitio web', val: data.web },
+                { label:'Logotipo URL', val: data.logo_url },
               ].map(r => (
                 <div key={r.label}>
                   <div className="text-[10px] text-gray-400 mb-0.5">{r.label}</div>
@@ -1935,6 +1942,13 @@ function EmpresaABM() {
               <div>
                 <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Sitio web</label>
                 <input value={form.web||''} onChange={e=>setF('web',e.target.value)} className={inp2} placeholder="www.puertonoa.com"/>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">URL del logotipo</label>
+                <input value={form.logo_url||''} onChange={e=>setF('logo_url',e.target.value)} className={inp2} placeholder="https://... o /logo.png"/>
+                {form.logo_url && (
+                  <img src={form.logo_url} alt="Logo" className="mt-2 h-10 object-contain rounded border border-gray-100 p-1"/>
+                )}
               </div>
             </div>
           </div>
