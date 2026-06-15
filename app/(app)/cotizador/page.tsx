@@ -1825,42 +1825,9 @@ export default function CotizadorPage(){
 
           {/* ── BLOQUE 4: GASTOS ARGENTINA ── */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
+            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#6b21a8] text-white text-[10px] font-bold">4</span>
               <span className="font-medium text-sm text-gray-900">Bloque 4 — Gastos en Argentina</span>
-              <div className="ml-auto flex items-center gap-2">
-                <select onChange={e=>{
-                  if(!e.target.value) return
-                  const cot=cotsArgDisponibles.find((c:any)=>c.id===e.target.value)
-                  if(!cot) return
-                  const items=cot.items||[]
-                  const it=items[0] as any
-                  if(it){
-                    setS(p=>({...p,
-                      honTipo:(it.tipo_calculo==='pct_cif'?'pct_cif':it.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,
-                      honValor:it.valor||0,honPiso:it.piso_usd||0,honTecho:it.techo_usd||0,
-                      gastosDesp:items.slice(1).map((x:any)=>({id:uid2(),desc:x.descripcion,tipoCalc:(x.tipo_calculo==='pct_cif'?'pct_cif':x.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,moneda:'USD' as const,valor:x.valor||0,pisoUsd:x.piso_usd||0,techoUsd:x.techo_usd||0,usd:0,ars:0})),
-                    }))
-                    setProvUsado(pv=>({...pv,4:cot.id}))
-                    setCotDesp({id:cot.id,referencia:cot.referencia||'',fecha:cot.fecha||'',tipo:(cot.tipo==='especifica'?'especifica':'generica')})
-                  }
-                  e.target.value=''
-                }} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#6b21a8]" defaultValue="">
-                  <option value="">+ Cargar del sistema</option>
-                  {(()=>{
-                    const esp=cotsArgDisponibles.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
-                    const gen=cotsArgDisponibles.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
-                    return(<>
-                      {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}</option>)})}</optgroup>)}
-                      <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
-                    </>)
-                  })()}
-                </select>
-                <button onClick={()=>{
-                  const rubroCod=(rubrosBloque[4]||[]).length>0?(rubrosBloque[4][0]).toLowerCase().replace(/ /g,'_'):'gastos_argentina'
-                  window.open(`/cotizaciones-proveedores?nuevo=1&bloque=4&rubro=${rubroCod}&cliente_id=${clienteSelId||''}&cliente_nombre=${encodeURIComponent(s.cliente||'')}`, '_blank')
-                }} className="px-3 py-1 bg-[#6b21a8] text-white rounded-lg text-[10px] font-bold hover:bg-[#581c87] whitespace-nowrap">+ Manual</button>
-              </div>
             </div>
             <div className="px-5 py-4">
               {/* Seccion A — Despachante de aduana */}
@@ -1991,14 +1958,39 @@ export default function CotizadorPage(){
 
               {/* Seccion B — Otros gastos en Argentina */}
               <div className="pt-4 border-t border-gray-100">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold">B</span>
                     <span className="text-xs font-semibold text-gray-700">Otros gastos en Argentina</span>
                     <span className="text-[10px] text-gray-400">Transporte interno, almacenaje, etc.</span>
                   </div>
-                  <button onClick={()=>u('rowsE',[...s.rowsE,{id:uid2(),desc:'',tipoCalc:'fijo_usd',moneda:'USD',valor:0,pisoUsd:0,techoUsd:0,usd:0,ars:0}])}
-                    className="text-[10px] text-[#1168F8] hover:underline">+ Agregar</button>
+                  <div className="flex items-center gap-2">
+                    <select onChange={e=>{
+                      if(!e.target.value) return
+                      const cot=cotsArgDisponibles.find((c:any)=>c.id===e.target.value)
+                      if(!cot) return
+                      const items=(cot.items||[]) as any[]
+                      const nuevos=items.map((x:any)=>({id:uid2(),desc:x.descripcion||'',tipoCalc:(x.tipo_calculo==='pct_cif'?'pct_cif':x.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,moneda:'USD' as const,valor:x.valor||0,pisoUsd:x.piso_usd||0,techoUsd:x.techo_usd||0,usd:0,ars:0}))
+                      setS(p=>({...p,rowsE:[...p.rowsE,...nuevos]}))
+                      setProvUsado(pv=>({...pv,4:cot.id}))
+                      e.target.value=''
+                    }} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#6b21a8]" defaultValue="">
+                      <option value="">+ Cargar del sistema</option>
+                      {(()=>{
+                        const esp=cotsArgDisponibles.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                        const gen=cotsArgDisponibles.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                        return(<>
+                          {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}</option>)})}</optgroup>)}
+                          <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
+                        </>)
+                      })()}
+                    </select>
+                    <button onClick={()=>{
+                      window.open(`/cotizaciones-proveedores?nuevo=1&bloque=4&cliente_id=${clienteSelId||''}&cliente_nombre=${encodeURIComponent(s.cliente||'')}`, '_blank')
+                    }} className="px-3 py-1 bg-[#6b21a8] text-white rounded-lg text-[10px] font-bold hover:bg-[#581c87] whitespace-nowrap">+ Manual</button>
+                    <button onClick={()=>u('rowsE',[...s.rowsE,{id:uid2(),desc:'',tipoCalc:'fijo_usd',moneda:'USD',valor:0,pisoUsd:0,techoUsd:0,usd:0,ars:0}])}
+                      className="text-[10px] text-[#1168F8] hover:underline">+ Agregar fila</button>
+                  </div>
                 </div>
                 {s.rowsE.length===0&&(
                   <div className="text-[10px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">Sin gastos adicionales.</div>
