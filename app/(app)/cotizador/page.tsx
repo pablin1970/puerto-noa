@@ -193,6 +193,7 @@ export default function CotizadorPage(){
   const [cotsSistemaUsadas,setCotsSistemaUsadas]=useState<Record<string,string[]>>({})
   // Rubros por bloque (desde cotizador_bloque_rubros)
   const [rubrosBloque,setRubrosBloque]=useState<Record<number,string[]>>({1:[],2:[],3:[],4:[]})
+  const [bloques,setBloques]=useState<any[]>([])
   // Terceros proveedores por rubro (para búsqueda en carga manual)
   const [tercerosProv,setTercerosProv]=useState<any[]>([])
 
@@ -260,6 +261,7 @@ export default function CotizadorPage(){
       if(bloqRes.data){
         for(const b of bloqRes.data as any[]) rb[b.numero]=[b.nombre]
       }
+      if(bloqRes.data) setBloques(bloqRes.data as any[])
       setRubrosBloque(rb)
       // Terceros proveedores
       if(trRes.data){
