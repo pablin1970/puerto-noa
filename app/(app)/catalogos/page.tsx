@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 
-type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'rubros_bloques' | 'rubros_proveedor'
+type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor'
 
 const TABS = [
   { key: 'categorias',    label: 'Categorías de precio', icon: '🏷' },
@@ -13,8 +13,8 @@ const TABS = [
   { key: 'contenedores',  label: 'Tipos de contenedor',  icon: '📦' },
   { key: 'camiones',      label: 'Tipos de camión',      icon: '🚛' },
   { key: 'fondos',        label: 'Fondos en custodia',   icon: '🏦' },
-  { key: 'rubros_bloques',   label: 'Rubros por bloque',    icon: '⚙️' },
-  { key: 'rubros_proveedor', label: 'Rubros de proveedor',  icon: '🏷️' },
+  { key: 'bloques_cotizacion', label: 'Bloques cotización',   icon: '📋' },
+  { key: 'rubros_proveedor',   label: 'Rubros de proveedor',  icon: '🏷️' },
 ] as const
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -433,7 +433,7 @@ export default function CatalogosPage() {
       {tab === 'fondos' && <FondosCuentasABM />}
 
       {/* ── RUBROS POR BLOQUE ── */}
-      {tab === 'rubros_bloques' && <RubrosBloqueABM />}
+      {tab === 'bloques_cotizacion' && <BloquesCotizacionABM />}
 
       {/* ── RUBROS DE PROVEEDOR ── */}
       {tab === 'rubros_proveedor' && <RubrosProveedorABM />}
@@ -717,394 +717,176 @@ const BLOQUES_COTIZADOR = [
   { num: 4, label: 'Bloque 4 — Gastos Argentina',     color: '#6b21a8', bg: '#F3E8FF', desc: 'Despachante, gastos aduaneros, otros ARG' },
 ]
 
-function RubrosBloqueABM() {
-  const supabase = useMemo(() => createClient(), [])
-  const [rubros, setRubros] = useState<any[]>([])
-  const [asignaciones, setAsignaciones] = useState<any[]>([])
+function BloquesCotizacionABM() {
+  const supabase = createClient()
+  const [bloques, setBloques] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [guardando, setGuardando] = useState(false)
-  // Set de keys "bloque-rubroId" que están activos localmente
-  const [activosLocal, setActivosLocal] = useState<Set<string>>(new Set())
-  const [dirty, setDirty] = useState(false)
+  const [editId, setEditId] = useState<string|null>(null)
+  const [form, setForm] = useState({numero:'',nombre:'',descripcion:''})
   const [saving, setSaving] = useState(false)
+  const [showNew, setShowNew] = useState(false)
+  const [newForm, setNewForm] = useState({numero:'',nombre:'',descripcion:''})
 
-  useEffect(() => { load() }, [])
+  useEffect(()=>{ load() },[])
 
-  async function load() {
+  async function load(){
     setLoading(true)
-    const [rubRes, asnRes] = await Promise.all([
-      supabase.from('proveedor_rubros').select('id,nombre').order('nombre'),
-      supabase.from('cotizador_bloque_rubros').select('*'),
-    ])
-    if (rubRes.data) setRubros(rubRes.data)
-    if (asnRes.data) {
-      setAsignaciones(asnRes.data)
-      const keys = new Set<string>(asnRes.data.map((a: any) => `${a.bloque}|${a.rubro_id}`))
-      setActivosLocal(keys)
-    }
-    setDirty(false)
+    const {data}=await supabase.from('cotizador_bloques').select('*').order('numero')
+    if(data) setBloques(data)
     setLoading(false)
   }
 
-  function toggleLocal(bloque: number, rubroId: string) {
-    const key = `${bloque}|${rubroId}`
-    setActivosLocal(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) { next.delete(key) } else { next.add(key) }
-      return next
-    })
-    setDirty(true)
-  }
-
-  async function guardarCambios() {
+  async function guardar(id:string){
     setSaving(true)
-    try {
-      // Calcular diferencias
-      const existentes = new Set<string>(asignaciones.map((a: any) => `${a.bloque}|${a.rubro_id}`))
-      const agregar = Array.from(activosLocal).filter(k => !existentes.has(k))
-      const quitar  = Array.from(existentes).filter(k => !activosLocal.has(k))
-
-      // Insertar nuevos uno por uno para detectar errores
-      for (const k of agregar) {
-        const sepIdx = k.indexOf('|')
-        const bloqueNum = parseInt(k.substring(0, sepIdx))
-        const rubroId = k.substring(sepIdx + 1)
-        const bloqueNombre = BLOQUES_COTIZADOR.find(b => b.num === bloqueNum)?.label || ''
-        const { error } = await (supabase.from('cotizador_bloque_rubros') as any)
-          .insert({ bloque: bloqueNum, bloque_nombre: bloqueNombre, rubro_id: rubroId, activo: true })
-        if (error) {
-          // Si ya existe (conflict), ignorar
-          if (!error.message?.includes('duplicate') && !error.code?.includes('23505')) {
-            alert('Error al guardar: ' + error.message)
-            setSaving(false)
-            return
-          }
-        }
-      }
-
-      // Eliminar los que se quitaron
-      for (const k of quitar) {
-        const asnExistente = asignaciones.find((a: any) => `${a.bloque}|${a.rubro_id}` === k)
-        if (asnExistente) {
-          await supabase.from('cotizador_bloque_rubros').delete().eq('id', asnExistente.id)
-        }
-      }
-
-      await load()
-    } catch(e: any) {
-      alert('Error inesperado: ' + e.message)
-    }
+    await (supabase.from('cotizador_bloques') as any).update({
+      numero: parseInt(form.numero)||0,
+      nombre: form.nombre,
+      descripcion: form.descripcion||null,
+    }).eq('id',id)
+    await load()
+    setEditId(null)
     setSaving(false)
-    setDirty(false)
   }
 
-  function cancelarCambios() {
-    // Restaurar desde asignaciones actuales
-    const keys = new Set<string>(asignaciones.map((a: any) => `${a.bloque}|${a.rubro_id}`))
-    setActivosLocal(keys)
-    setDirty(false)
+  async function agregar(){
+    if(!newForm.nombre.trim()||!newForm.numero) return
+    setSaving(true)
+    await (supabase.from('cotizador_bloques') as any).insert({
+      numero: parseInt(newForm.numero)||0,
+      nombre: newForm.nombre,
+      descripcion: newForm.descripcion||null,
+      activo: true,
+    })
+    await load()
+    setNewForm({numero:'',nombre:'',descripcion:''})
+    setShowNew(false)
+    setSaving(false)
   }
 
-  const countBloque = (num: number) =>
-    Array.from(activosLocal).filter(k => k.startsWith(`${num}|`)).length
+  async function toggleActivo(id:string, activo:boolean){
+    await (supabase.from('cotizador_bloques') as any).update({activo:!activo}).eq('id',id)
+    setBloques(prev=>prev.map(b=>b.id===id?{...b,activo:!activo}:b))
+  }
+
+  async function eliminar(id:string){
+    if(!confirm('¿Eliminar este bloque? Las cotizaciones vinculadas perderán su bloque asignado.')) return
+    await supabase.from('cotizador_bloques').delete().eq('id',id)
+    setBloques(prev=>prev.filter(b=>b.id!==id))
+  }
+
+  if(loading) return <div className="p-8 text-center text-gray-400 text-sm">Cargando...</div>
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="max-w-2xl space-y-3">
+      <div className="flex items-center justify-between mb-2">
         <div>
-          <h2 className="font-bold text-base text-gray-900">Rubros por bloque del cotizador</h2>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Tildá los rubros que aplican a cada bloque. Los cambios se guardan con el botón "Guardar cambios".
-          </p>
+          <div className="text-sm font-semibold text-gray-700">Bloques de cotización</div>
+          <div className="text-[11px] text-gray-400 mt-0.5">Corresponden a los bloques de la hoja de logística. Se usan para clasificar cotizaciones de proveedores.</div>
         </div>
-        {dirty && (
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-amber-600 font-medium">Cambios sin guardar</span>
-            <button onClick={cancelarCambios}
-              className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50">
-              Cancelar
-            </button>
-            <button onClick={guardarCambios} disabled={saving}
-              className="px-4 py-1.5 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
-              {saving ? 'Guardando...' : 'Guardar cambios'}
+        <button onClick={()=>setShowNew(true)}
+          className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">
+          + Agregar bloque
+        </button>
+      </div>
+
+      {/* Formulario nuevo */}
+      {showNew&&(
+        <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-4">
+          <div className="text-xs font-bold text-[#052698] mb-3">Nuevo bloque</div>
+          <div className="grid grid-cols-4 gap-2 mb-2">
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N° bloque</label>
+              <input type="number" value={newForm.numero} onChange={e=>setNewForm(p=>({...p,numero:e.target.value}))}
+                className={inp} placeholder="5"/>
+            </div>
+            <div className="col-span-3">
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre *</label>
+              <input value={newForm.nombre} onChange={e=>setNewForm(p=>({...p,nombre:e.target.value}))}
+                className={inp} placeholder="ej. Bloque 5 — Depósito fiscal"/>
+            </div>
+          </div>
+          <div className="mb-3">
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Descripción</label>
+            <input value={newForm.descripcion} onChange={e=>setNewForm(p=>({...p,descripcion:e.target.value}))}
+              className={inp} placeholder="Descripción breve del bloque"/>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={()=>{setShowNew(false);setNewForm({numero:'',nombre:'',descripcion:''})}}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-50">Cancelar</button>
+            <button onClick={agregar} disabled={saving||!newForm.nombre.trim()||!newForm.numero}
+              className="px-4 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs font-bold disabled:opacity-40">
+              {saving?'Guardando...':'Guardar'}
             </button>
           </div>
-        )}
-      </div>
-
-      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700">
-        💡 Tildá los rubros que aplican a cada bloque y presioná <strong>Guardar cambios</strong>.
-        Podés modificar la configuración cuando quieras volviendo a este tab.
-      </div>
-
-      {loading ? (
-        <div className="p-8 text-center text-gray-400">Cargando...</div>
-      ) : rubros.length === 0 ? (
-        <div className="p-8 text-center text-gray-400">
-          No hay rubros de proveedores cargados. Agregá rubros en el módulo de Clientes y Proveedores primero.
         </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4">
-          {BLOQUES_COTIZADOR.map(bloque => {
-            const cant = countBloque(bloque.num)
-            return (
-              <div key={bloque.num}
-                className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                {/* Header del bloque */}
-                <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3"
-                  style={{ background: bloque.bg }}>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                    style={{ background: bloque.color }}>
-                    {bloque.num}
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-semibold text-sm" style={{ color: bloque.color }}>{bloque.label}</div>
-                    <div className="text-[10px] text-gray-500">{bloque.desc}</div>
-                  </div>
-                  <div className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                    style={{ background: bloque.color + '20', color: bloque.color }}>
-                    {cant} rubro(s)
-                  </div>
+      )}
+
+      {/* Lista de bloques */}
+      {bloques.map(b=>(
+        <div key={b.id} className={`bg-white border rounded-2xl p-4 shadow-sm transition-all ${!b.activo?'opacity-50':''}`}>
+          {editId===b.id ? (
+            <div>
+              <div className="grid grid-cols-4 gap-2 mb-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N° bloque</label>
+                  <input type="number" value={form.numero} onChange={e=>setForm(p=>({...p,numero:e.target.value}))}
+                    className={inp}/>
                 </div>
-
-                {/* Grid de rubros */}
-                <div className="px-5 py-4">
-                  <div className="grid grid-cols-3 gap-2">
-                    {rubros.map(rubro => {
-                      const key = `${bloque.num}|${rubro.id}`
-                      const activo = activosLocal.has(key)
-
-                      return (
-                        <button
-                          key={rubro.id}
-                          onClick={() => toggleLocal(bloque.num, rubro.id)}
-                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all text-xs font-medium cursor-pointer ${
-                            activo
-                              ? 'text-white'
-                              : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                          }`}
-                          style={activo
-                            ? { background: bloque.color, borderColor: bloque.color }
-                            : {}}
-                        >
-                          {/* Checkbox visual */}
-                          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                            activo ? 'bg-white' : 'border-gray-300 bg-white'
-                          }`}
-                            style={activo ? { borderColor: 'white' } : {}}>
-                            {activo && (
-                              <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                                <path d="M1 4L3.5 6.5L9 1" stroke={bloque.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                              </svg>
-                            )}
-                          </div>
-                          <span className="truncate">{rubro.nombre}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                  {cant === 0 && (
-                    <div className="mt-3 text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                      ⚠ Sin rubros asignados — este bloque no mostrará proveedores del sistema al cotizar
-                    </div>
-                  )}
+                <div className="col-span-3">
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre</label>
+                  <input value={form.nombre} onChange={e=>setForm(p=>({...p,nombre:e.target.value}))}
+                    className={inp}/>
                 </div>
               </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Botón guardar también al pie si hay cambios */}
-      {dirty && (
-        <div className="flex justify-end gap-2 pt-2">
-          <button onClick={cancelarCambios}
-            className="px-4 py-2 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50">
-            Cancelar
-          </button>
-          <button onClick={guardarCambios} disabled={saving}
-            className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
-            {saving ? 'Guardando...' : 'Guardar cambios'}
-          </button>
-        </div>
-      )}
-
-      {/* Resumen */}
-      {!loading && rubros.length > 0 && !dirty && (
-        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-          <div className="text-xs font-bold text-gray-700 mb-3">Configuración actual</div>
-          <div className="space-y-2">
-            {BLOQUES_COTIZADOR.map(bloque => {
-              const rubrosDelBloque = Array.from(activosLocal)
-                .filter(k => k.startsWith(`${bloque.num}|`))
-                .map(k => {
-                  const rubroId = k.substring(k.indexOf('|') + 1)
-                  return rubros.find(r => r.id === rubroId)?.nombre
-                })
-                .filter(Boolean)
-              return (
-                <div key={bloque.num} className="flex items-start gap-3 text-xs">
-                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5"
-                    style={{ background: bloque.color }}>
-                    {bloque.num}
-                  </div>
-                  <div className="flex-1">
-                    <span className="font-medium text-gray-700">{bloque.label.split('—')[1]?.trim()}: </span>
-                    {rubrosDelBloque.length > 0 ? (
-                      <span className="text-gray-500">{rubrosDelBloque.join(', ')}</span>
-                    ) : (
-                      <span className="text-amber-500 italic">sin rubros asignados</span>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Formulario de rubro (FUERA del componente para evitar re-mount en cada keystroke) ──
-const ICONOS_RUBRO = [
-  { icono: '🚢', label: 'Barco' },
-  { icono: '🚛', label: 'Camión' },
-  { icono: '🏭', label: 'Depósito' },
-  { icono: '📋', label: 'Trámite' },
-  { icono: '⚓', label: 'Ancla' },
-  { icono: '🛡',  label: 'Escudo' },
-  { icono: '📦', label: 'Caja' },
-  { icono: '✈️', label: 'Avión' },
-  { icono: '🏗',  label: 'Grúa' },
-  { icono: '🔧', label: 'Herramienta' },
-  { icono: '📄', label: 'Documento' },
-  { icono: '🏦', label: 'Banco' },
-  { icono: '💼', label: 'Maletín' },
-  { icono: '🌐', label: 'Global' },
-  { icono: '⚖️', label: 'Balanza' },
-  { icono: '🔍', label: 'Lupa' },
-]
-
-interface FormRubroProps {
-  form: any
-  setForm: (fn: (f: any) => any) => void
-  editId: string | null
-  saving: boolean
-  onGuardar: () => void
-  onCancelar: () => void
-}
-
-function FormRubro({ form, setForm, editId, saving, onGuardar, onCancelar }: FormRubroProps) {
-  const inpCls = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
-  return (
-    <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-5 mb-4">
-      <div className="text-xs font-bold text-[#052698] mb-4">{editId ? 'Editar rubro' : 'Nuevo rubro'}</div>
-
-      {/* Selector de ícono */}
-      <div className="mb-3">
-        <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Ícono del rubro</label>
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {ICONOS_RUBRO.map(op => (
-            <button key={op.icono} type="button"
-              onClick={() => setForm(f => ({ ...f, icono: op.icono }))}
-              title={op.label}
-              className={`w-9 h-9 rounded-xl text-lg flex items-center justify-center transition-all border-2 ${
-                form.icono === op.icono
-                  ? 'border-[#1168F8] bg-[#1168F8]/10 shadow-sm'
-                  : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
-              }`}>
-              {op.icono}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-gray-400">O escribí uno personalizado:</span>
-          <input
-            value={form.icono}
-            onChange={e => setForm(f => ({ ...f, icono: e.target.value }))}
-            className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:border-[#1168F8] bg-white"
-            placeholder="🚢"
-            maxLength={4}
-          />
-          {form.icono && (
-            <span className="text-2xl">{form.icono}</span>
+              <div className="mb-3">
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Descripción</label>
+                <input value={form.descripcion} onChange={e=>setForm(p=>({...p,descripcion:e.target.value}))}
+                  className={inp}/>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={()=>setEditId(null)}
+                  className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-50">Cancelar</button>
+                <button onClick={()=>guardar(b.id)} disabled={saving}
+                  className="px-4 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs font-bold disabled:opacity-40">
+                  {saving?'Guardando...':'Guardar'}
+                </button>
+              </div>
+            </div>
+          ):(
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-[#EBF2FF] flex items-center justify-center text-[#052698] text-sm font-black flex-shrink-0">
+                {b.numero}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm text-gray-900">{b.nombre}</div>
+                {b.descripcion&&<div className="text-[11px] text-gray-400 mt-0.5">{b.descripcion}</div>}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button onClick={()=>toggleActivo(b.id,b.activo)}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border transition-all ${b.activo?'bg-green-50 text-green-700 border-green-200':'bg-gray-100 text-gray-400 border-gray-200'}`}>
+                  {b.activo?'Activo':'Inactivo'}
+                </button>
+                <button onClick={()=>{setEditId(b.id);setForm({numero:String(b.numero),nombre:b.nombre,descripcion:b.descripcion||''})}}
+                  className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:border-[#1168F8] hover:text-[#1168F8] transition-all">
+                  Editar
+                </button>
+                <button onClick={()=>eliminar(b.id)}
+                  className="px-3 py-1.5 border border-red-100 rounded-lg text-xs text-red-400 hover:bg-red-50 transition-all">
+                  Eliminar
+                </button>
+              </div>
+            </div>
           )}
         </div>
-      </div>
+      ))}
 
-      {/* Nombre y color */}
-      <div className="grid grid-cols-4 gap-3 mb-3">
-        <div className="col-span-3">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre del rubro *</label>
-          <input
-            value={form.nombre}
-            onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
-            className={inpCls}
-            placeholder="ej. Freight Forwarder"
-          />
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Color</label>
-          <div className="flex gap-1.5 items-center">
-            <input type="color" value={form.color || '#6b7280'}
-              onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
-              className="w-9 h-9 rounded-lg border border-gray-200 cursor-pointer flex-shrink-0"/>
-            <input
-              value={form.color || ''}
-              onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
-              className={inpCls}
-              placeholder="#6b7280"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Descripción */}
-      <div className="mb-4">
-        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Descripción — se muestra en la ficha del proveedor</label>
-        <input
-          value={form.descripcion}
-          onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))}
-          className={inpCls}
-          placeholder="ej. Agentes de carga marítima internacional"
-        />
-      </div>
-
-      <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={form.activo}
-            onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))}
-            className="w-4 h-4 rounded"/>
-          <span className="text-xs text-gray-600 font-medium">Rubro activo</span>
-        </label>
-        <div className="flex gap-2">
-          <button type="button" onClick={onCancelar}
-            className="px-4 py-2 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50 bg-white">
-            Cancelar
-          </button>
-          <button type="button" onClick={onGuardar} disabled={saving}
-            className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
-            {saving ? 'Guardando...' : 'Guardar'}
-          </button>
-        </div>
-      </div>
+      {bloques.length===0&&!showNew&&(
+        <div className="text-center py-8 text-gray-400 text-sm">Sin bloques configurados.</div>
+      )}
     </div>
   )
 }
 
-// ── ABM de rubros de proveedores ──────────────────────────────────────────────
-const RUBROS_DEFAULT = [
-  { icono: '🚢', nombre: 'Freight Forwarder',       descripcion: 'Agentes de carga marítima internacional', color: '#1168F8' },
-  { icono: '🚛', nombre: 'Transporte terrestre',     descripcion: 'Empresas de transporte Chile - NOA',       color: '#b45309' },
-  { icono: '🏭', nombre: 'Deposito fiscal',          descripcion: 'Depósitos fiscales y almacenes en Chile',  color: '#0891b2' },
-  { icono: '📋', nombre: 'Despachante de aduana',    descripcion: 'Despachantes aduaneros en Argentina',      color: '#6b21a8' },
-  { icono: '⚓', nombre: 'Naviera',                  descripcion: 'Líneas navieras y agencias marítimas',     color: '#0a9e6e' },
-  { icono: '🛡',  nombre: 'Seguro de carga',          descripcion: 'Aseguradoras de mercadería en tránsito',  color: '#be185d' },
-  { icono: '📦', nombre: 'Otro',                     descripcion: 'Otros servicios relacionados',             color: '#6b7280' },
-]
-
-const RUBRO_VACIO = { icono: '', nombre: '', descripcion: '', color: '#6b7280', activo: true }
 
 function RubrosProveedorABM() {
   const supabase = useMemo(() => createClient(), [])
