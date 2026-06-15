@@ -29,6 +29,169 @@ interface ColDef {
   width?: string
 }
 
+const TIPOS_CALCULO_LABELS: Record<string,string> = {
+  fijo_usd:        'Fijo USD',
+  por_contenedor:  'Por contenedor',
+  por_m3:          'Por m³',
+  pct_cif:         '% CIF',
+  fijo_ars:        'Fijo ARS',
+}
+
+function CategoriasPrecioABM() {
+  const supabase = useMemo(() => createClient(), [])
+  const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editId, setEditId] = useState<string|null>(null)
+  const [editData, setEditData] = useState<any>({})
+  const [saving, setSaving] = useState(false)
+
+  useEffect(()=>{ load() },[])
+
+  async function load(){
+    setLoading(true)
+    const {data}=await supabase.from('categorias_precio').select('*').order('orden',{ascending:true})
+    if(data) setRows(data)
+    setLoading(false)
+  }
+
+  function startEdit(row:any){ setEditId(row.id); setEditData({...row}) }
+  function cancelEdit(){ setEditId(null); setEditData({}) }
+
+  function toggleTipoCalculo(tipo:string){
+    const current:string[]=editData.tipos_calculo||[]
+    const next=current.includes(tipo)?current.filter((t:string)=>t!==tipo):[...current,tipo]
+    setEditData((p:any)=>({...p,tipos_calculo:next}))
+  }
+
+  async function saveEdit(){
+    setSaving(true)
+    await (supabase.from('categorias_precio') as any).update({
+      label: editData.label,
+      codigo: editData.codigo,
+      icon: editData.icon,
+      color: editData.color,
+      bg: editData.bg,
+      tipos_calculo: editData.tipos_calculo||[],
+      aplica_contenedor: editData.aplica_contenedor||false,
+    }).eq('id',editId)
+    await load()
+    setEditId(null)
+    setSaving(false)
+  }
+
+  async function toggleActivo(row:any){
+    await (supabase.from('categorias_precio') as any).update({activo:!row.activo}).eq('id',row.id)
+    setRows(prev=>prev.map(r=>r.id===row.id?{...r,activo:!r.activo}:r))
+  }
+
+  if(loading) return <div className="p-8 text-center text-gray-400 text-sm">Cargando...</div>
+
+  return (
+    <div className="space-y-3">
+      <div className="mb-4">
+        <h2 className="font-bold text-base text-gray-900">Categorías de precio</h2>
+        <p className="text-xs text-gray-400 mt-0.5">Configurá cómo se cotiza cada categoría — formas de precio y si aplica tipo de contenedor</p>
+      </div>
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 text-[11px] text-blue-700 mb-3">
+        💡 El <strong>código</strong> es el identificador interno. Las <strong>formas de precio</strong> definen qué opciones aparecen al cargar ítems en cotizaciones de proveedores.
+      </div>
+
+      {rows.map(row=>(
+        <div key={row.id} className={`bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm ${!row.activo?'opacity-50':''}`}>
+          {editId===row.id ? (
+            <div className="p-4">
+              {/* Fila 1: ícono, nombre, código, color */}
+              <div className="grid grid-cols-4 gap-2 mb-3">
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Ícono</label>
+                  <input value={editData.icon||''} onChange={e=>setEditData((p:any)=>({...p,icon:e.target.value}))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white text-center text-base" placeholder="🚢"/>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre *</label>
+                  <input value={editData.label||''} onChange={e=>setEditData((p:any)=>({...p,label:e.target.value}))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Flete marítimo"/>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Código</label>
+                  <input value={editData.codigo||''} onChange={e=>setEditData((p:any)=>({...p,codigo:e.target.value}))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white font-mono" placeholder="flete_maritimo"/>
+                </div>
+              </div>
+              {/* Fila 2: formas de precio */}
+              <div className="mb-3">
+                <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Formas de precio habilitadas</label>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(TIPOS_CALCULO_LABELS).map(([k,v])=>(
+                    <button key={k} onClick={()=>toggleTipoCalculo(k)}
+                      className={`px-3 py-1.5 rounded-xl border-2 text-xs font-semibold transition-all ${(editData.tipos_calculo||[]).includes(k)?'bg-[#1168F8] text-white border-[#1168F8]':'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                      {v as string}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Fila 3: aplica contenedor */}
+              <div className="mb-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={editData.aplica_contenedor||false}
+                    onChange={e=>setEditData((p:any)=>({...p,aplica_contenedor:e.target.checked}))}
+                    className="w-4 h-4 rounded"/>
+                  <span className="text-xs font-semibold text-gray-700">Aplica tipo de contenedor</span>
+                  <span className="text-[10px] text-gray-400">(ej. precio por 40HC, 20DV)</span>
+                </label>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button onClick={cancelEdit} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cancelar</button>
+                <button onClick={saveEdit} disabled={saving}
+                  className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
+                  {saving?'Guardando...':'Guardar'}
+                </button>
+              </div>
+            </div>
+          ):(
+            <div className="flex items-center gap-3 px-4 py-3">
+              {/* Ícono + nombre */}
+              <span className="text-xl flex-shrink-0 w-8 text-center">{row.icon||'·'}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                    style={{background:row.bg||'#f3f4f6',color:row.color||'#6b7280'}}>
+                    {row.label}
+                  </span>
+                  <span className="text-[10px] text-gray-400 font-mono">{row.codigo}</span>
+                </div>
+                {/* Formas de precio */}
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {(row.tipos_calculo||[]).map((t:string)=>(
+                    <span key={t} className="px-2 py-0.5 bg-[#EBF2FF] text-[#1168F8] rounded-full text-[10px] font-semibold">
+                      {TIPOS_CALCULO_LABELS[t]||t}
+                    </span>
+                  ))}
+                  {row.aplica_contenedor&&(
+                    <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[10px] font-semibold">📦 Por contenedor</span>
+                  )}
+                </div>
+              </div>
+              {/* Acciones */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button onClick={()=>toggleActivo(row)}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${row.activo?'bg-green-50 text-green-700 border-green-200':'bg-gray-100 text-gray-400 border-gray-200'}`}>
+                  {row.activo?'Activo':'Inactivo'}
+                </button>
+                <button onClick={()=>startEdit(row)}
+                  className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 hover:border-[#1168F8] hover:text-[#1168F8]">
+                  Editar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+
 function CatalogoABM({
   tabla, titulo, cols, orden, extra
 }: {
@@ -316,26 +479,7 @@ export default function CatalogosPage() {
       </div>
 
       {/* ── CATEGORÍAS DE PRECIO ── */}
-      {tab === 'categorias' && (
-        <CatalogoABM
-          tabla="categorias_precio"
-          titulo="Categorías de precio"
-          orden="orden"
-          cols={[
-            { key: 'orden',  label: 'Orden',   type: 'number', placeholder: '1' },
-            { key: 'codigo', label: 'Código',   placeholder: 'flete_maritimo' },
-            { key: 'icon',   label: 'Ícono',    type: 'emoji', placeholder: '🚢' },
-            { key: 'label',  label: 'Nombre',   placeholder: 'Flete marítimo' },
-            { key: 'color',  label: 'Color',    type: 'color' },
-            { key: 'bg',     label: 'Fondo',    type: 'color' },
-          ]}
-          extra={
-            <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700">
-              💡 El <strong>código</strong> es el identificador interno (sin espacios, sin tildes). Se usa para vincular con las cotizaciones de proveedores. No lo cambiés después de crear cotizaciones con esa categoría.
-            </div>
-          }
-        />
-      )}
+      {tab === 'categorias' && <CategoriasPrecioABM />}
 
       {/* ── PUERTOS CHINA ── */}
       {tab === 'puertos_china' && (
