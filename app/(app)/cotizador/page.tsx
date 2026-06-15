@@ -1423,54 +1423,6 @@ export default function CotizadorPage(){
 
 
 
-              {/* Gastos post-entrega Chile — solo B1 y B2 */}
-              {s.optTransp!=='A'&&(
-                <>
-                  <div className="border-t border-gray-100 pt-3">
-                    {/* Desconsolidacion */}
-                    <div className="mb-3">
-                      <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Gastos de desconsolidacion</div>
-                      <DesconRows rows={s.rowsDescon} onChange={r=>u('rowsDescon',r)} totalM3={totalM3}/>
-                    </div>
-                    {/* Almacenaje — solo B2 */}
-                    {s.optTransp==='B2'&&(
-                      <div className="border border-gray-200 rounded-xl p-3 mb-3">
-                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Almacenaje en Chile</div>
-                        <div className="grid grid-cols-4 gap-3">
-                          <Field label="Volumen m3">
-                            {s.almModoVol==='manual'
-                              ? <div className="flex gap-1">
-                                  <input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almVolM3} onChange={e=>u('almVolM3',parseNum(e.target.value))} className={inp} placeholder="m3"/>
-                                  <button onClick={()=>u('almModoVol','auto')} className="text-[9px] text-gray-400 hover:text-gray-600 whitespace-nowrap">Auto</button>
-                                </div>
-                              : <div className="flex items-center gap-1">
-                                  <div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono flex-1 text-right">{fmt(totalM3,2)} m3</div>
-                                  <button onClick={()=>u('almModoVol','manual')} className="text-[9px] text-gray-400 hover:text-gray-600 whitespace-nowrap">Manual</button>
-                                </div>
-                            }
-                          </Field>
-                          <Field label="Costo m3/dia (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almCostoDia} onChange={e=>u('almCostoDia',parseNum(e.target.value))} className={inp}/></Field>
-                          <Field label="Dias"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.almDias} onChange={e=>u('almDias',parseInt2(e.target.value)||0)} className={inp}/></Field>
-                          <Field label="Subtotal"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(subAlm)}</div></Field>
-                        </div>
-                      </div>
-                    )}
-                    {/* Carga al camion */}
-                    <div className="mb-2">
-                      <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Carga al camion</div>
-                      <div className="grid grid-cols-4 gap-3">
-                        <Field label="Modalidad"><select value={s.cargaModo} onChange={e=>u('cargaModo',e.target.value as any)} className={sel}><option value="fijo">Importe fijo</option><option value="m3">Por m3</option></select></Field>
-                        <Field label={s.cargaModo==='fijo'?'Importe fijo (USD)':'USD por m3'}><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.cargaValor} onChange={e=>u('cargaValor',parseNum(e.target.value))} className={inp}/></Field>
-                        {s.cargaModo==='m3'&&<Field label="m3 totales"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">{fmt(totalM3,2)}</div></Field>}
-                        <Field label="Subtotal carga"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-right">USD {fmt(subCarga)}</div></Field>
-                      </div>
-                    </div>
-
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="flex justify-end items-center gap-2 px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
               Subtotal bloque 2: <strong className="font-mono text-gray-800">USD {fmt(subD+subGastosChile)}</strong>
             </div>
           </div>
