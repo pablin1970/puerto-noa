@@ -625,6 +625,35 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             ⚠ Se registrará con tu usuario como proveedor. Útil para análisis de evolución de precios y tarifas de referencia.
           </div>
         )}
+
+        {/* Tipo de cotizacion — justo debajo de Recibida/Estimada */}
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Tipo de cotizacion</label>
+          <div className="flex gap-3">
+            {[
+              { key: 'generica', label: 'Genérica', desc: 'Válida para cualquier operación' },
+              { key: 'especifica', label: '⭐ Específica', desc: 'Para un cliente o operación particular' },
+            ].map(o => (
+              <button key={o.key} onClick={() => setF('tipo', o.key)}
+                className={`flex-1 px-4 py-2.5 rounded-xl border-2 text-left transition-all ${form.tipo === o.key ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
+                <div className="text-xs font-bold text-gray-900">{o.label}</div>
+                <div className="text-[10px] text-gray-400">{o.desc}</div>
+              </button>
+            ))}
+          </div>
+          {form.tipo === 'especifica' && (
+            <div className="mt-3">
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cliente al que corresponde *</label>
+              <select value={form.cliente_id} onChange={e => setF('cliente_id', e.target.value)} className={inp}>
+                <option value="">— Sin vincular a cliente —</option>
+                {terceros.map((t: any) => (
+                  <option key={t.id} value={t.id}>{t.razon_social}</option>
+                ))}
+              </select>
+              {form.cliente_id && <div className="mt-1 text-[10px] text-[#1168F8]">Aparecerá sugerida al cotizar para este cliente</div>}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Proveedor */}
@@ -733,34 +762,6 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             </div>
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Tipo de cotizacion</label>
-            <div className="space-y-2">
-              {[
-                { key: 'generica', label: 'Generica', desc: 'Valida para cualquier operacion' },
-                { key: 'especifica', label: 'Especifica', desc: 'Para un cliente o operacion particular' },
-              ].map(o => (
-                <button key={o.key} onClick={() => setF('tipo', o.key)}
-                  className={`w-full px-4 py-2.5 rounded-xl border-2 text-left transition-all ${form.tipo === o.key ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
-                  <div className="text-xs font-bold text-gray-900">{o.key === 'especifica' ? '⭐ ' : ''}{o.label}</div>
-                  <div className="text-[10px] text-gray-400">{o.desc}</div>
-                </button>
-              ))}
-            </div>
-
-            {/* Cliente — solo para especifica */}
-            {form.tipo === 'especifica' && (
-              <div className="mt-3 pt-3 border-t border-gray-100">
-                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cliente al que corresponde *</label>
-                <select value={form.cliente_id} onChange={e => setF('cliente_id', e.target.value)} className={inp}>
-                  <option value="">— Sin vincular a cliente —</option>
-                  {terceros.map((t: any) => (
-                    <option key={t.id} value={t.id}>{t.razon_social}</option>
-                  ))}
-                </select>
-                {form.cliente_id && <div className="mt-1 text-[10px] text-[#1168F8]">Aparecera sugerida al cotizar para este cliente</div>}
-              </div>
-            )}
-
             {/* Seguro — solo para forwarder */}
             {form.rubro === 'forwarder' && (
               <div className="mt-4 p-3 bg-[#EBF2FF] rounded-xl border border-[#93B8FC]">
