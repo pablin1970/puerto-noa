@@ -984,7 +984,7 @@ export default function CotizadorPage(){
                   {/* 2. Puerto Chile embarque */}
                   {(bloqueActivo(1) || bloqueActivo(0)) && (
                     <div className="pt-3 border-t border-gray-100">
-                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Tramo Chile → Puerto</div>
+                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Puerto Chile (carga)</div>
                       <div className="grid grid-cols-2 gap-3">
                         <Field label="Puerto Chile (embarque)">
                           <select value={s.puertoChileId} onChange={e=>{
