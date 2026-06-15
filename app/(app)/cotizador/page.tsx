@@ -1548,7 +1548,7 @@ export default function CotizadorPage(){
               {/* Cotizaciones transporte Chile-NOA — A, B1 y B2 */}
               <div className="border-t border-gray-100 pt-3 mb-3">
                 <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Cotización transporte Chile → NOA</div>
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Gastos en Chile</div>
                   <div className="flex items-center gap-2">
                     <select onChange={e=>{if(e.target.value){agregarTranspChileDesdeSistema(e.target.value);e.target.value=''}}}
                       className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#0a9e6e]" defaultValue="">
@@ -1570,7 +1570,7 @@ export default function CotizadorPage(){
                 </div>
                 {s.cotsProvChile.length===0&&(
                   <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 text-center mb-2">
-                    Sin cotizaciones de transporte Chile→NOA. Cargalas del sistema o ingresalas con + Manual.
+                    Sin cotizaciones de gastos en Chile. Cargalas del sistema o ingresalas con + Manual.
                   </div>
                 )}
                 {s.cotsProvChile.length>0&&(
