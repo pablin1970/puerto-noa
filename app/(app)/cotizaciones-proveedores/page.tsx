@@ -88,66 +88,88 @@ const CATEGORIAS_ITEM: Record<string, string> = {
   otro:                   '· Otro',
 }
 
-// ── Fila de item con piso/techo si es pct_cif ──
-function ItemRow({ it, i, tiposCont, onChange, onRemove, editMode = true }: {
-  it: Item; i: number; tiposCont: any[]; onChange: (i: number, f: string, v: any) => void; onRemove: (i: number) => void; editMode?: boolean
+// Tipos de cálculo por bloque
+const TIPOS_CALCULO_BLOQUE: Record<number, Record<string,string>> = {
+  1: { fijo_usd:'Fijo USD', por_contenedor:'Por contenedor' },          // ForWarder
+  2: { fijo_usd:'Fijo USD', por_contenedor:'Por contenedor', por_m3:'Por m3' }, // Chile NOA
+  3: { fijo_usd:'Fijo USD', por_contenedor:'Por contenedor' },          // Terrestre
+  4: { pct_cif:'% sobre CIF', fijo_usd:'Fijo USD', fijo_ars:'Fijo ARS' }, // Gastos Arg
+}
+
+// ── Fila de item contextual según bloque ──────────────────────────────────────
+function ItemRow({ it, i, tiposCont, bloqueNum, onChange, onRemove, editMode = true }: {
+  it: Item; i: number; tiposCont: any[]; bloqueNum: number
+  onChange: (i: number, f: string, v: any) => void; onRemove: (i: number) => void; editMode?: boolean
 }) {
   const esPct = it.tipo_calculo === 'pct_cif'
+  const tiposCalc = TIPOS_CALCULO_BLOQUE[bloqueNum] || TIPO_CALCULO
+  // Bloque 1 y 2: mostrar tipo contenedor. Bloque 3: opcional. Bloque 4: no
+  const mostrarCont = bloqueNum === 1 || bloqueNum === 2 || bloqueNum === 3
+
   if (!editMode) return (
     <tr className="border-b border-gray-50 hover:bg-gray-50">
       <td className="px-3 py-2.5 font-medium text-gray-800">{it.descripcion}</td>
-      <td className="px-3 py-2.5 text-gray-500">{TIPO_CALCULO[it.tipo_calculo] || it.tipo_calculo}</td>
-      <td className="px-3 py-2.5 text-gray-400 text-[10px]">{CATEGORIAS_ITEM[(it as any).categoria] || '—'}</td>
-      <td className="px-3 py-2.5 text-gray-500 font-mono text-[11px]">{it.tipo_contenedor || 'Todos'}</td>
+      <td className="px-3 py-2.5 text-gray-500 text-[11px]">{TIPO_CALCULO[it.tipo_calculo] || it.tipo_calculo}</td>
+      {mostrarCont && <td className="px-3 py-2.5 text-gray-500 font-mono text-[11px]">{it.tipo_contenedor || 'Todos'}</td>}
       <td className="px-3 py-2.5 font-mono text-[#052698] text-right">
         {esPct ? `${it.valor}%` : `USD ${fmtN(parseN(String(it.valor)))}`}
         {esPct && (it.piso_usd || it.techo_usd) ? (
           <div className="text-[9px] text-gray-400">
-            {it.piso_usd ? `Piso USD ${fmtN(it.piso_usd)}` : ''}{it.piso_usd && it.techo_usd ? ' · ' : ''}{it.techo_usd ? `Techo USD ${fmtN(it.techo_usd)}` : ''}
+            {it.piso_usd ? `Piso ${fmtN(it.piso_usd)}` : ''}{it.piso_usd && it.techo_usd ? ' · ' : ''}{it.techo_usd ? `Techo ${fmtN(it.techo_usd)}` : ''}
           </div>
         ) : null}
       </td>
     </tr>
   )
+
   return (
-    <div className="mb-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
-      <div className="grid gap-2 items-center mb-2" style={{ gridTemplateColumns: '2fr 140px 140px 100px 110px 24px' }}>
+    <div className="mb-2.5 p-3 bg-gray-50 rounded-xl border border-gray-100">
+      <div className="flex gap-2 items-start mb-2">
+        {/* Descripción */}
         <input value={it.descripcion} onChange={e => onChange(i, 'descripcion', e.target.value)}
-          className={inp} placeholder="Descripcion del cargo" />
-        <select value={it.tipo_calculo} onChange={e => onChange(i, 'tipo_calculo', e.target.value)} className={inp}>
-          {Object.entries(TIPO_CALCULO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          className={inp + ' flex-1'} placeholder="Descripción del cargo"/>
+
+        {/* Tipo de cálculo */}
+        <select value={it.tipo_calculo} onChange={e => onChange(i, 'tipo_calculo', e.target.value)}
+          className={inp + ' w-40 flex-shrink-0'}>
+          {Object.entries(tiposCalc).map(([k,v]) => <option key={k} value={k}>{v as string}</option>)}
         </select>
-        <select value={(it as any).categoria || ''} onChange={e => onChange(i, 'categoria', e.target.value)} className={inp}>
-          <option value="">— Categoría —</option>
-          {Object.entries(CATEGORIAS_ITEM).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <div className="flex items-center gap-1">
-          <span className="text-[10px] text-gray-400 flex-shrink-0">{esPct ? '%' : it.tipo_calculo === 'fijo_ars' ? 'ARS' : 'USD'}</span>
-          <input type="text" inputMode="decimal" value={it.valor || ''}
-            onFocus={e => e.target.select()}
-            onChange={e => onChange(i, 'valor', e.target.value)}
-            className={inp + ' text-right font-mono'} placeholder="0.00" />
+
+        {/* Contenedor — bloques 1, 2, 3 */}
+        {mostrarCont && (
+          <select value={it.tipo_contenedor} onChange={e => onChange(i, 'tipo_contenedor', e.target.value)}
+            className={inp + ' w-28 flex-shrink-0'}>
+            <option value="">Todos</option>
+            {tiposCont.map((t:any) => <option key={t.codigo} value={t.codigo}>{t.codigo}</option>)}
+          </select>
+        )}
+
+        {/* Moneda + Valor */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <span className="text-[10px] text-gray-400 w-8 text-right">
+            {esPct ? '%' : it.tipo_calculo === 'fijo_ars' ? 'ARS' : 'USD'}
+          </span>
+          <input type="text" inputMode="decimal" value={it.valor||''} onFocus={e=>e.target.select()}
+            onChange={e=>onChange(i,'valor',e.target.value)}
+            className={inp + ' w-28 text-right font-mono'} placeholder="0.00"/>
         </div>
-        <select value={it.tipo_contenedor} onChange={e => onChange(i, 'tipo_contenedor', e.target.value)} className={inp}>
-          <option value="">Todos</option>
-          {tiposCont.map((t: any) => <option key={t.codigo} value={t.codigo}>{t.codigo}</option>)}
-        </select>
-        <button onClick={() => onRemove(i)} className="text-gray-400 hover:text-red-500 text-xs p-1 flex-shrink-0">X</button>
+
+        <button onClick={()=>onRemove(i)} className="text-gray-400 hover:text-red-500 text-xs p-1 mt-1 flex-shrink-0">✕</button>
       </div>
+
+      {/* Piso / Techo — solo % CIF (bloque 4) */}
       {esPct && (
-        <div className="flex gap-3 items-center pl-1">
-          <span className="text-[10px] text-gray-400 flex-shrink-0">Piso USD</span>
-          <input type="text" inputMode="decimal" value={it.piso_usd || ''}
-            onFocus={e => e.target.select()}
-            onChange={e => onChange(i, 'piso_usd', parseN(e.target.value))}
+        <div className="flex gap-3 items-center pl-1 mt-1">
+          <span className="text-[10px] text-gray-400">Piso USD</span>
+          <input type="text" inputMode="decimal" value={it.piso_usd||''} onFocus={e=>e.target.select()}
+            onChange={e=>onChange(i,'piso_usd',parseN(e.target.value))}
             className="w-28 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]"
-            placeholder="0 = sin piso" />
-          <span className="text-[10px] text-gray-400 flex-shrink-0">Techo USD</span>
-          <input type="text" inputMode="decimal" value={it.techo_usd || ''}
-            onFocus={e => e.target.select()}
-            onChange={e => onChange(i, 'techo_usd', parseN(e.target.value))}
+            placeholder="0 = sin piso"/>
+          <span className="text-[10px] text-gray-400">Techo USD</span>
+          <input type="text" inputMode="decimal" value={it.techo_usd||''} onFocus={e=>e.target.select()}
+            onChange={e=>onChange(i,'techo_usd',parseN(e.target.value))}
             className="w-28 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]"
-            placeholder="0 = sin techo" />
+            placeholder="0 = sin techo"/>
           <span className="text-[10px] text-gray-400 italic">0 = sin límite</span>
         </div>
       )}
@@ -608,6 +630,10 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     return t + (parseN(String(it.valor)) || 0)
   }, 0)
 
+  // Número de bloque para contextualizar los ítems
+  const bloqueSeleccionado = bloques.find((b:any) => b.id === form.bloque_id)
+  const bloqueNum = bloqueSeleccionado?.numero || 0
+
   const setF = (k: string, v: any) => setForm((f: any) => {
     const updated = { ...f, [k]: v }
     // Si cambia origen a estimada → proveedor = usuario logueado
@@ -893,13 +919,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               </select>
             </div>
           )}
-          <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo de contenedor</label>
-            <select value={form.tipo_contenedor} onChange={e => setF('tipo_contenedor', e.target.value)} className={inp}>
-              <option value="">— Todos los tipos —</option>
-              {tiposCont.map((t: any) => <option key={t.codigo} value={t.codigo}>{t.codigo} — {t.nombre}</option>)}
-            </select>
-          </div>
+
           {form.moneda !== 'USD' && (
             <div>
               <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">TC referencia (al momento de cotizar)</label>
@@ -915,14 +935,20 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-bold text-sm text-gray-900">Items de la cotizacion</h3>
-            <p className="text-[10px] text-gray-400 mt-0.5">Si el tipo es "% sobre CIF" aparecen los campos Piso y Techo USD</p>
+            <h3 className="font-bold text-sm text-gray-900">Ítems de la cotización</h3>
+            <p className="text-[10px] text-gray-400 mt-0.5">
+              {bloqueNum===1&&'Por contenedor: ej. Flete 40HC, THC 40HC, Handling'}
+              {bloqueNum===2&&'Por contenedor o viaje: ej. Flete 40HC Chile→NOA'}
+              {bloqueNum===3&&'Por camión o contenedor: ej. Flete Jujuy'}
+              {bloqueNum===4&&'% sobre CIF o fijo: ej. Honorarios, IVA aduana'}
+              {bloqueNum===0&&'Completá los ítems de la cotización'}
+            </p>
           </div>
           <button onClick={addItem} className="px-3 py-1.5 border border-[#1168F8] text-[#1168F8] rounded-xl text-xs font-bold hover:bg-[#EBF2FF]">+ Agregar item</button>
         </div>
 
         {items.map((it, i) => (
-          <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} onChange={updateItem} onRemove={removeItem} editMode={true} />
+          <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} bloqueNum={bloqueNum} onChange={updateItem} onRemove={removeItem} editMode={true} />
         ))}
 
         {items.filter(it => it.descripcion).length > 0 && (
@@ -1047,7 +1073,7 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
         {editando ? (
           <>
             {items.map((it, i) => (
-              <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} onChange={updateItem} onRemove={removeItem} editMode={true} />
+              <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} bloqueNum={0} onChange={updateItem} onRemove={removeItem} editMode={true} />
             ))}
             <div className="flex justify-end mt-3">
               <button onClick={saveItems} disabled={saving}
@@ -1067,7 +1093,7 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
             </thead>
             <tbody>
               {items.map((it, i) => (
-                <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} onChange={updateItem} onRemove={removeItem} editMode={false} />
+                <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} bloqueNum={0} onChange={updateItem} onRemove={removeItem} editMode={false} />
               ))}
               {totalUSD > 0 && (
                 <tr className="bg-[#EBF2FF] border-t-2 border-[#1168F8]">
