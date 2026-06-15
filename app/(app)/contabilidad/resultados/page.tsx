@@ -49,9 +49,10 @@ export default function UtilidadesPage() {
   const [anio, setAnio] = useState(new Date().getFullYear())
   const [mes, setMes] = useState(new Date().getMonth() + 1)
   const [ops, setOps] = useState<OpData[]>([])
+  const [opsEnCurso, setOpsEnCurso] = useState<OpData[]>([])
   const [gastosFijosMes, setGastosFijosMes] = useState(0)
   const [criterioElegido, setCriterioElegido] = useState<string>('costos')
-  const [tab, setTab] = useState<'operaciones'|'comparativo'|'mensual'>('operaciones')
+  const [tab, setTab] = useState<'operaciones'|'comparativo'|'mensual'|'anual'>('operaciones')
   const [tc, setTc] = useState(908)
 
   useEffect(() => { load() }, [anio, mes])
@@ -62,7 +63,7 @@ export default function UtilidadesPage() {
     const fechaFin = `${anio}-${String(mes).padStart(2,'0')}-31`
 
     const [opRes, feRes, frRes, gfRes, tcRes] = await Promise.all([
-      supabase.from('operaciones').select('id, estado, cotizacion:cotizaciones(num, cliente, tipo_contenedores, presupuesto)').order('created_at', { ascending: false }),
+      supabase.from('operaciones').select('id, estado, fecha_cierre, cotizacion:cotizaciones(num, cliente, tipo_contenedores, presupuesto)').order('created_at', { ascending: false }),
       supabase.from('facturas_emitidas').select('operacion_id, total_usd, neto_usd, iva_monto, moneda, tc_referencia, a_recuperar').not('operacion_id', 'is', null).gte('fecha_emision', fechaInicio).lte('fecha_emision', fechaFin),
       supabase.from('facturas_recibidas').select('operacion_id, total_usd, neto_usd, iva_monto, moneda, tc_referencia, a_recuperar, credito_fiscal').not('operacion_id', 'is', null).gte('fecha_emision', fechaInicio).lte('fecha_emision', fechaFin),
       (supabase.from('gastos_fijos_pn') as any).select('monto_clp_equiv').eq('periodo_anio', anio).eq('periodo_mes', mes),
@@ -127,6 +128,7 @@ export default function UtilidadesPage() {
         num: cot?.num || '—',
         cliente: cot?.cliente || '—',
         estado: op.estado || 'activa',
+        fecha_cierre: op.fecha_cierre || '',
         fecha_cierre: op.updated_at?.slice(0,10) || '',
         ingresos_usd, costos_usd, fee_usd, markup_usd,
         iva_debito, iva_credito, iva_neto,
@@ -155,7 +157,15 @@ export default function UtilidadesPage() {
       o.mn_igualitario      = o.margen_bruto - o.gf_igualitario
     }
 
-    setOps(opsData)
+    // Separar: cerradas en el período vs en curso
+    const opsCerradas = opsData.filter(o => {
+      if (o.estado !== 'cerrada' || !o.fecha_cierre) return false
+      return o.fecha_cierre >= fechaInicio && o.fecha_cierre <= fechaFin
+    })
+    const opsEnCurso = opsData.filter(o => o.estado !== 'cerrada')
+
+    setOps(opsCerradas)
+    setOpsEnCurso(opsEnCurso)
     setLoading(false)
   }
 
@@ -234,7 +244,7 @@ export default function UtilidadesPage() {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-4">
-        {([['operaciones','Por operación'],['comparativo','Comparativo criterios'],['mensual','Resumen mensual']] as [string,string][]).map(([k,l]) => (
+        {([['operaciones','Por operación'],['comparativo','Comparativo criterios'],['mensual','Resumen mensual'],['anual','Resultado anual']] as [string,string][]).map(([k,l]) => (
           <button key={k} onClick={() => setTab(k as any)}
             className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${tab===k?'bg-[#1168F8] text-white':'bg-white border border-gray-200 text-gray-600 hover:border-[#1168F8]'}`}>
             {l}
@@ -404,6 +414,49 @@ export default function UtilidadesPage() {
               ⚠ Hay operaciones <strong>en curso</strong> incluidas. Los números son parciales y cambiarán al registrar más movimientos.
             </div>
           )}
+        </div>
+      )}
+      {/* Tab: Resultado anual */}
+      {tab === 'anual' && (
+        <div className="space-y-4">
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <h3 className="font-bold text-sm text-gray-900 mb-1">Resultado ejercicio fiscal {anio}</h3>
+            <p className="text-xs text-gray-400 mb-4">Operaciones cerradas · Enero — Diciembre {anio} · Normativa SII Chile</p>
+            <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-[11px] text-amber-700 mb-4">
+              ⚠ Este resumen incluye solo el período seleccionado ({MESES[mes]} {anio}). Para ver el ejercicio anual completo cambiá el selector de mes y sumá los períodos, o usá el resumen mensual de cada mes.
+              Próximamente: vista consolidada anual automática.
+            </div>
+            <div className="space-y-2">
+              {[
+                { label: 'Ingresos totales del ejercicio', val: ops.reduce((t,o)=>t+o.ingresos_usd,0), indent: false, bold: false },
+                { label: 'Fee Puerto NOA', val: totFee, indent: true, bold: false },
+                { label: 'Markup sobre costos', val: totMarkup, indent: true, bold: false },
+                { label: 'IVA neto pagado SII', val: -totIVA, indent: true, bold: false },
+                { label: 'RESULTADO BRUTO DE EXPLOTACIÓN', val: totMB, indent: false, bold: true },
+                { label: 'Gastos de administración y operación', val: -gastosFijosMes, indent: true, bold: false },
+                { label: `RESULTADO NETO DEL EJERCICIO`, val: totMN, indent: false, bold: true },
+              ].map((r,i) => (
+                <div key={i} className={`flex justify-between py-2 border-b border-gray-50 ${r.bold?'border-t border-gray-200 mt-2 pt-3':''} ${r.indent?'pl-4':''}`}>
+                  <span className={`text-xs ${r.bold?'font-bold text-gray-900':'text-gray-600'}`}>{r.label}</span>
+                  <span className={`font-mono text-sm font-bold ${r.bold?colorMN(r.val):'text-gray-700'}`}>
+                    {r.val < 0 ? `−USD ${fmtN(Math.abs(r.val))}` : fmtUSD(r.val)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3">Datos para declaración — Puerto NOA SpA</div>
+            <div className="text-xs text-gray-500 space-y-1">
+              <div>RUT: <span className="font-mono text-gray-800">— configurar en Catálogos</span></div>
+              <div>Razón social: <span className="font-mono text-gray-800">Puerto NOA SpA</span></div>
+              <div>Régimen tributario: <span className="font-mono text-gray-800">— configurar en Catálogos</span></div>
+              <div>Año tributario: <span className="font-mono text-gray-800">{anio + 1} (ejercicio {anio})</span></div>
+            </div>
+            <div className="mt-3 text-[10px] text-[#1168F8] hover:underline cursor-pointer">
+              Completar datos de la empresa en Catálogos →
+            </div>
+          </div>
         </div>
       )}
     </div>
