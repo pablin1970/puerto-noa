@@ -20,15 +20,15 @@ export default function LibroIVAPage() {
   useEffect(() => { loadPeriodos(); load() }, [anio, mes])
 
   async function loadPeriodos() {
-    const { data } = await supabase.from('periodos_contables').select('*').order('anio', { ascending: false }).order('mes', { ascending: false })
+    const { data } = await (supabase.from('periodos_contables') as any).select('*').order('anio', { ascending: false }).order('mes', { ascending: false })
     if (data) setPeriodos(data)
   }
 
   async function load() {
     setLoading(true)
     const [vRes, cRes] = await Promise.all([
-      supabase.from('libro_iva_ventas').select('*').eq('anio', anio).eq('mes', mes).order('fecha_emision'),
-      supabase.from('libro_iva_compras').select('*').eq('anio', anio).eq('mes', mes).order('fecha_emision'),
+      (supabase.from('libro_iva_ventas') as any).select('*').eq('anio', anio).eq('mes', mes).order('fecha_emision'),
+      (supabase.from('libro_iva_compras') as any).select('*').eq('anio', anio).eq('mes', mes).order('fecha_emision'),
     ])
     if (vRes.data) setVentas(vRes.data)
     if (cRes.data) setCompras(cRes.data)
@@ -37,7 +37,7 @@ export default function LibroIVAPage() {
 
   async function cerrarPeriodo() {
     if (!confirm(`¿Cerrar el período ${MESES[mes-1]} ${anio}? No se podrán agregar más movimientos.`)) return
-    await supabase.from('periodos_contables').upsert({ anio, mes, estado: 'cerrado', fecha_cierre: new Date().toISOString().slice(0,10) }, { onConflict: 'anio,mes' })
+    await ((supabase.from('periodos_contables') as any) as any).upsert({ anio, mes, estado: 'cerrado', fecha_cierre: new Date().toISOString().slice(0,10) }, { onConflict: 'anio,mes' })
     loadPeriodos()
   }
 
