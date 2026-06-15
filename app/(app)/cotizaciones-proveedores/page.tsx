@@ -119,42 +119,43 @@ function ItemRow({ it, i, tiposCont, categorias, onChange, onRemove, editMode = 
 
   return (
     <div className="mb-2.5 p-3 bg-gray-50 rounded-xl border border-gray-100">
-      {/* Fila 1: categoría */}
-      <div className="mb-2">
+      {/* Fila 1: categoría + tipo cálculo + contenedor + valor + eliminar */}
+      <div className="grid gap-2 mb-2" style={{gridTemplateColumns:'1fr auto auto auto auto'}}>
         <select value={(it as any).categoria||''} onChange={e=>{
             onChange(i,'categoria',e.target.value)
             const cat=categorias.find((c:any)=>c.codigo===e.target.value)
             if(cat?.tipos_calculo?.length) onChange(i,'tipo_calculo',cat.tipos_calculo[0])
           }} className={inp}>
-          <option value="">— Seleccionar categoría —</option>
+          <option value="">— Categoría —</option>
           {categorias.map((c:any)=>(
             <option key={c.codigo} value={c.codigo}>{c.icon||''} {c.label}</option>
           ))}
         </select>
-      </div>
-      {/* Fila 2: descripción + tipo cálculo + contenedor + valor */}
-      <div className="flex gap-2 items-center">
-        <input value={it.descripcion} onChange={e=>onChange(i,'descripcion',e.target.value)}
-          className={inp+' flex-1 min-w-0'} placeholder="Descripción del cargo (opcional si ya elegiste categoría)"/>
         <select value={it.tipo_calculo} onChange={e=>onChange(i,'tipo_calculo',e.target.value)}
-          className={inp+' w-36 flex-shrink-0'}>
+          className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white">
           {Object.entries(tiposCalc).map(([k,v])=><option key={k} value={k}>{v as string}</option>)}
         </select>
-        {mostrarCont&&(
+        {mostrarCont?(
           <select value={it.tipo_contenedor} onChange={e=>onChange(i,'tipo_contenedor',e.target.value)}
-            className={inp+' w-24 flex-shrink-0'}>
+            className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white w-20">
             <option value="">Todos</option>
             {tiposCont.map((t:any)=><option key={t.codigo} value={t.codigo}>{t.codigo}</option>)}
           </select>
-        )}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <span className="text-[10px] text-gray-400">{esPct?'%':it.tipo_calculo==='fijo_ars'?'ARS':'USD'}</span>
+        ):<div/>}
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-gray-400 w-6 text-right flex-shrink-0">
+            {esPct?'%':it.tipo_calculo==='fijo_ars'?'$':'U$'}
+          </span>
           <input type="text" inputMode="decimal" value={it.valor||''} onFocus={e=>e.target.select()}
             onChange={e=>onChange(i,'valor',e.target.value)}
-            className={inp+' w-28 text-right font-mono'} placeholder="0.00"/>
+            className="w-24 px-2 py-1.5 border border-gray-200 rounded-xl text-xs text-right font-mono focus:outline-none focus:border-[#1168F8] bg-white"
+            placeholder="0.00"/>
         </div>
-        <button onClick={()=>onRemove(i)} className="text-gray-400 hover:text-red-500 text-xs p-1 flex-shrink-0">✕</button>
+        <button onClick={()=>onRemove(i)} className="text-gray-400 hover:text-red-500 text-xs px-1">✕</button>
       </div>
+      {/* Fila 2: descripción libre */}
+      <input value={it.descripcion} onChange={e=>onChange(i,'descripcion',e.target.value)}
+        className={inp+' text-xs'} placeholder="Descripción adicional (opcional)"/>
 
       {/* Piso / Techo — solo % CIF (bloque 4) */}
       {esPct && (
