@@ -85,12 +85,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       const { data: u } = await supabase.from('usuarios').select('*').eq('auth_id', data.user.id).single()
       if (!u) { router.push('/'); return }
       setUser(u as Usuario)
-      // Cargar permisos del rol
-      if ((u as any).rol_id) {
+      // Cargar permisos del rol — el rol está en roles_ids[0]
+      const rolId = Array.isArray((u as any).roles_ids) && (u as any).roles_ids.length > 0
+        ? (u as any).roles_ids[0]
+        : null
+      if (rolId) {
         const { data: perms } = await supabase
           .from('rol_permisos')
           .select('modulo, accion')
-          .eq('rol_id', (u as any).rol_id)
+          .eq('rol_id', rolId)
           .eq('permitido', true)
         if (perms) {
           const map: Record<string, string[]> = {}
