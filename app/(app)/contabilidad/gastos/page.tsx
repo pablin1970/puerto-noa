@@ -58,7 +58,7 @@ export default function GastosFijosPage() {
     setSaving(true)
     const monto = parseN(form.monto)
     const clpEquiv = calcClpEquiv(monto, form.moneda)
-    await (supabase.from('gastos_fijos_pn') as any).insert({
+    const { data: gastoData } = await (supabase.from('gastos_fijos_pn') as any).insert({
       categoria_id: form.categoria_id,
       descripcion: form.descripcion,
       moneda: form.moneda,
@@ -71,8 +71,18 @@ export default function GastosFijosPage() {
       es_recurrente: form.es_recurrente,
       notas: form.notas || null,
       comprobante_ref: form.comprobante_ref || null,
-    })
+    }).select('id').single()
+    if (gastoData && compFile) {
+      const ext = compFile.name.split('.').pop()
+      const path = `gastos/${gastoData.id}.${ext}`
+      await supabase.storage.from('comprobantes').upload(path, compFile, { upsert: true })
+      const { data: urlData } = supabase.storage.from('comprobantes').getPublicUrl(path)
+      if (urlData?.publicUrl) {
+        await (supabase.from('gastos_fijos_pn') as any).update({ archivo_url: urlData.publicUrl, archivo_nombre: compFile.name }).eq('id', gastoData.id)
+      }
+    }
     setForm({ categoria_id:'', descripcion:'', moneda:'CLP', monto:'', es_recurrente:false, notas:'', comprobante_ref:'' })
+    setCompFile(null)
     setShowForm(false)
     await load()
     setSaving(false)
@@ -174,9 +184,19 @@ export default function GastosFijosPage() {
               <input type="checkbox" checked={form.es_recurrente} onChange={e => setForm(f => ({...f, es_recurrente: e.target.checked}))} className="w-4 h-4"/>
               <label className="text-xs text-gray-600">Gasto recurrente mensual</label>
             </div>
-            <div className="col-span-2">
+            <div>
               <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas</label>
               <input value={form.notas} onChange={e => setForm(f => ({...f, notas: e.target.value}))} className={inp} placeholder="Observaciones"/>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Comprobante (PDF / imagen)</label>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 px-3 py-2 border border-dashed border-gray-300 rounded-xl text-xs text-gray-500 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer flex-1">
+                  📎 {compFile ? compFile.name : 'Adjuntar archivo'}
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e=>setCompFile(e.target.files?.[0]||null)}/>
+                </label>
+                {compFile && <button onClick={()=>setCompFile(null)} className="text-gray-400 hover:text-red-500 text-xs">✕</button>}
+              </div>
             </div>
           </div>
           <div className="flex justify-between mt-4">
@@ -215,7 +235,14 @@ export default function GastosFijosPage() {
                     {g.moneda==='CLP'?'$':g.moneda==='USD'?'U$':'AR$'} {fmtN(g.monto_clp||g.monto_usd||g.monto_ars||0)}
                   </td>
                   <td className="px-4 py-3.5 font-mono text-right font-bold text-gray-900">$ {fmtN(g.monto_clp_equiv)}</td>
-                  <td className="px-4 py-3.5 text-gray-400 font-mono text-[10px]">{g.comprobante_ref||'—'}</td>
+                  <td className="px-4 py-3.5">
+                    {g.archivo_url ? (
+                      <button onClick={()=>setPreviewModal({url:g.archivo_url,nombre:g.archivo_nombre||'comprobante',tipo:g.archivo_nombre?.endsWith('.pdf')?'pdf':'img'})}
+                        className="px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-[10px] font-medium hover:bg-[#93B8FC]">📄 Ver</button>
+                    ) : g.comprobante_ref ? (
+                      <span className="text-gray-400 text-[10px] font-mono">{g.comprobante_ref}</span>
+                    ) : <span className="text-gray-300 text-[10px]">—</span>}
+                  </td>
                   <td className="px-4 py-3.5">
                     <button onClick={() => eliminar(g.id)} className="text-gray-400 hover:text-red-500 text-xs">✕</button>
                   </td>
@@ -225,6 +252,22 @@ export default function GastosFijosPage() {
           </table>
         )}
       </div>
+      {previewModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={()=>setPreviewModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <span className="font-medium text-sm truncate">{previewModal.nombre}</span>
+              <div className="flex items-center gap-2">
+                <a href={previewModal.url} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs">🔗 Abrir / Descargar</a>
+                <button onClick={()=>setPreviewModal(null)} className="text-gray-400 text-xl px-1">×</button>
+              </div>
+            </div>
+            {previewModal.tipo==='pdf'
+              ? <iframe src={previewModal.url} className="w-full h-[70vh] border-0" title={previewModal.nombre}/>
+              : <img src={previewModal.url} alt={previewModal.nombre} className="max-w-full mx-auto rounded p-4"/>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
