@@ -875,79 +875,64 @@ const clientesFiltrados=terceros.filter(t=>
       {tab==='embarque'&&(
         <div className="space-y-4">
 
-          {/* ── PANEL: SENTIDO Y BLOQUES ACTIVOS ── */}
-          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
-              <span className="font-semibold text-sm text-gray-900">Configuración de la operación</span>
+          {/* ── PANEL: SENTIDO Y BLOQUES ACTIVOS ── rediseño compacto ── */}
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+            {/* Fila superior: sentido */}
+            <div className="px-5 pt-4 pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sentido</span>
+              </div>
+              <div className="flex gap-2">
+                {[
+                  { key:'importacion', label:'Importación', icon:'📦', desc:'Origen → Argentina/NOA' },
+                  { key:'exportacion', label:'Exportación', icon:'🚢', desc:'Argentina/NOA → Destino' },
+                ].map(o => (
+                  <button key={o.key} onClick={()=>u('sentido',o.key as any)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all text-left ${s.sentido===o.key?'border-[#1168F8] bg-[#EBF2FF] text-[#052698]':'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>
+                    <span className="text-base leading-none">{o.icon}</span>
+                    <div>
+                      <div className={`text-xs font-bold leading-tight ${s.sentido===o.key?'text-[#052698]':'text-gray-700'}`}>{o.label}</div>
+                      <div className="text-[9px] text-gray-400 leading-tight mt-0.5">{o.desc}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="px-5 py-4 space-y-4">
-              {/* Sentido */}
-              <div>
-                <div className="text-[10px] font-semibold text-gray-500 uppercase mb-2">Sentido de la operación</div>
-                <div className="flex gap-3">
-                  {[
-                    { key:'importacion', label:'📦 Importación', desc:'Origen → Argentina/NOA' },
-                    { key:'exportacion', label:'🚢 Exportación', desc:'Argentina/NOA → Destino' },
-                  ].map(o => (
-                    <button key={o.key} onClick={()=>u('sentido',o.key as any)}
-                      className={`flex-1 px-4 py-3 rounded-xl border-2 text-left transition-all ${s.sentido===o.key?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 hover:bg-gray-50'}`}>
-                      <div className="text-xs font-bold text-gray-900">{o.label}</div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">{o.desc}</div>
-                    </button>
-                  ))}
+            {/* Fila inferior: bloques + ARCA en una línea */}
+            <div className="px-5 py-3 flex items-center gap-3 flex-wrap">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex-shrink-0">Bloques</span>
+              {bloques.length === 0 ? (
+                <span className="text-[10px] text-gray-300">Cargando...</span>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {bloques.map((b:any) => {
+                    const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(b.id)
+                    return (
+                      <button key={b.id} onClick={()=>{
+                        if (s.bloquesActivos.length === 0) {
+                          u('bloquesActivos', bloques.filter((x:any)=>x.id!==b.id).map((x:any)=>x.id))
+                        } else if (activo) {
+                          u('bloquesActivos', s.bloquesActivos.filter((id:string)=>id!==b.id))
+                        } else {
+                          u('bloquesActivos', [...s.bloquesActivos, b.id])
+                        }
+                      }}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all ${activo?'bg-[#052698] border-[#052698] text-white':'bg-gray-100 border-gray-200 text-gray-400 line-through'}`}>
+                        {activo && <span className="w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0"/>}
+                        {b.nombre}
+                      </button>
+                    )
+                  })}
                 </div>
-              </div>
-              {/* Bloques activos */}
-              <div>
-                <div className="text-[10px] font-semibold text-gray-500 uppercase mb-2">
-                  Bloques que incluye esta cotización
-                  <span className="ml-2 text-gray-400 normal-case font-normal">(destildá los que no aplican)</span>
-                </div>
-                {bloques.length === 0 ? (
-                  <div className="text-xs text-gray-400">Cargando bloques...</div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {bloques.map((b:any) => {
-                      const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(b.id)
-                      return (
-                        <button key={b.id} onClick={()=>{
-                          if (s.bloquesActivos.length === 0) {
-                            // Primera vez que se destilda: inicializar con todos menos este
-                            u('bloquesActivos', bloques.filter((x:any)=>x.id!==b.id).map((x:any)=>x.id))
-                          } else if (activo) {
-                            u('bloquesActivos', s.bloquesActivos.filter((id:string)=>id!==b.id))
-                          } else {
-                            u('bloquesActivos', [...s.bloquesActivos, b.id])
-                          }
-                        }}
-                          className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-left transition-all ${activo?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 bg-gray-50 opacity-50'}`}>
-                          <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${activo?'bg-[#1168F8] border-[#1168F8]':'border-gray-300 bg-white'}`}>
-                            {activo&&<div className="w-2 h-1.5 border-l-2 border-b-2 border-white" style={{transform:'rotate(-45deg) translate(1px,-1px)'}}/>}
-                          </div>
-                          <div>
-                            <div className="text-xs font-semibold text-gray-800">{b.nombre}</div>
-                            {b.descripcion&&<div className="text-[9px] text-gray-400">{b.descripcion}</div>}
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-              {/* ARCA */}
-              <div className="pt-3 border-t border-gray-100">
-                <div className="text-[10px] font-semibold text-gray-500 uppercase mb-2">Tributos</div>
-                <button onClick={()=>u('incluirArca',!s.incluirArca)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-left transition-all w-full ${s.incluirArca?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 bg-gray-50 opacity-50'}`}>
-                  <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${s.incluirArca?'bg-[#1168F8] border-[#1168F8]':'border-gray-300 bg-white'}`}>
-                    {s.incluirArca&&<div className="w-2 h-1.5 border-l-2 border-b-2 border-white" style={{transform:'rotate(-45deg) translate(1px,-1px)'}}/>}
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold text-gray-800">Tributos ARCA</div>
-                    <div className="text-[9px] text-gray-400">Derechos de importación, IVA, tasa estadística (aduana Argentina)</div>
-                  </div>
-                </button>
-              </div>
+              )}
+              {/* Separador */}
+              <div className="h-5 w-px bg-gray-200 mx-1 flex-shrink-0"/>
+              {/* ARCA como pill */}
+              <button onClick={()=>u('incluirArca',!s.incluirArca)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all flex-shrink-0 ${s.incluirArca?'bg-amber-500 border-amber-500 text-white':'bg-gray-100 border-gray-200 text-gray-400 line-through'}`}>
+                {s.incluirArca && <span className="w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0"/>}
+                Tributos ARCA
+              </button>
             </div>
           </div>
 
