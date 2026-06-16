@@ -361,9 +361,9 @@ function MovimientosTab({ supabase, cuentas, movimientos, operaciones, tcActual,
       const ext = compFile.name.split('.').pop()
       const path = `fondos/${movData.id}.${ext}`
       await supabase.storage.from('comprobantes').upload(path, compFile, { upsert: true })
-      const { data: urlData } = supabase.storage.from('comprobantes').getPublicUrl(path)
-      if (urlData?.publicUrl) {
-        await (supabase.from('fondos_movimientos') as any).update({ comprobante_url: urlData.publicUrl, comprobante_nombre: compFile.name }).eq('id', movData.id)
+      const { data: urlData } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
+      if (urlData?.signedUrl) {
+        await (supabase.from('fondos_movimientos') as any).update({ comprobante_url: urlData.signedUrl, comprobante_nombre: compFile.name }).eq('id', movData.id)
       }
     }
     setForm(f => ({ ...f, monto: '', concepto: '', nro_referencia: '', notas: '', banco_origen: '', cuenta_origen: '', banco_destino: '', cuenta_destino_texto: '' }))
