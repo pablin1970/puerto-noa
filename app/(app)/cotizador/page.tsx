@@ -1434,8 +1434,8 @@ const clientesFiltrados=terceros.filter(t=>
                             const ext = file.name.split('.').pop()
                             const path = `proformas/${pf.id}.${ext}`
                             await sb.storage.from('comprobantes').upload(path, file, {upsert:true})
-                            const {data:ud} = sb.storage.from('comprobantes').getPublicUrl(path)
-                            const n=[...s.proformas];n[pi]={...n[pi],archivo_url:ud?.publicUrl||'',archivo_nombre:file.name};u('proformas',n)
+                            const {data:ud} = await sb.storage.from('comprobantes').createSignedUrl(path, 3600)
+                            const n=[...s.proformas];n[pi]={...n[pi],archivo_url:ud?.signedUrl||'',archivo_nombre:file.name};u('proformas',n)
                           }}/>
                         </label>
                         {pf.archivo_url && (
