@@ -181,6 +181,7 @@ function ItemRow({ it, i, tiposCont, categorias, onChange, onRemove, editMode = 
 function CotizacionesProveedoresInner() {
   const supabase = useMemo(() => createClient(), [])
   const searchParams = useSearchParams()
+  const [previewModal, setPreviewModal] = useState<{url:string;nombre:string;tipo:string}|null>(null)
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
   const [terceros, setTerceros] = useState<any[]>([])
   const [cotsSistema, setCotsSistema] = useState<any[]>([])
