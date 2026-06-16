@@ -225,9 +225,9 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, onSave, onC
       const ext = compFile.name.split('.').pop()
       const path = `facturas-emitidas/${factData.id}.${ext}`
       await supabase.storage.from('comprobantes').upload(path, compFile, { upsert: true })
-      const { data: urlData } = supabase.storage.from('comprobantes').getPublicUrl(path)
-      if (urlData?.publicUrl) {
-        await (supabase.from('facturas_emitidas') as any).update({ archivo_url: urlData.publicUrl, archivo_nombre: compFile.name }).eq('id', factData.id)
+      const { data: urlData } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
+      if (urlData?.signedUrl) {
+        await (supabase.from('facturas_emitidas') as any).update({ archivo_url: urlData.signedUrl, archivo_nombre: compFile.name }).eq('id', factData.id)
       }
     }
     setCompFile(null)
