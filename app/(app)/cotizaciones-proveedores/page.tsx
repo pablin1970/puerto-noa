@@ -578,7 +578,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     if (items.filter(it => it.descripcion).length === 0) { alert('Agrega al menos un item'); return }
     setSaving(true)
 
-    const { data: cot, error } = await (supabase.from('cotizaciones_proveedor_v2') as any).insert({
+    const payload = {
       proveedor_nombre: form.proveedor_nombre,
       tercero_id: form.tercero_id || null,
       rubro: form.rubro,
@@ -595,7 +595,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       notas: form.notas || null,
       cotizacion_id: form.cotizacion_id || null,
       cliente_id: form.tipo === 'especifica' ? (form.cliente_id || null) : null,
-      bloque_id: form.bloque_id || null, // primer bloque — se duplica abajo si hay más
+      bloque_id: form.bloque_id || null,
       tramo: form.tramo || null,
       puerto_china_id: form.puerto_china_id || null,
       puerto_chile_id: form.puerto_chile_id || null,
@@ -604,7 +604,9 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       tipo_contenedor: form.tipo_contenedor || null,
       tc_referencia: parseN(form.tc_referencia as any) || null,
       es_tarifa_base: form.es_tarifa_base || false,
-    }).select().single()
+    }
+    const { data: cot, error } = await (supabase.from('cotizaciones_proveedor_v2') as any)
+      .insert(payload).select().single()
 
     if (error) { alert('Error: ' + error.message); setSaving(false); return }
 
