@@ -21,6 +21,8 @@ export default function FlujoCuentasPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [compFile, setCompFile] = useState<File|null>(null)
+  const [previewModal, setPreviewModal] = useState<{url:string;nombre:string;tipo:string}|null>(null)
   const [tc, setTc] = useState<{usd:number,ars:number}>({usd:908,ars:1450})
   const [form, setForm] = useState({
     tipo: 'transferencia_arg_chile',
@@ -112,7 +114,19 @@ export default function FlujoCuentasPage() {
       monto_usd_equiv: montoUsd,
       referencia: form.referencia || null,
       notas: form.notas || null,
-    })
+    }).select('id').single()
+    if (movData && compFile) {
+      const ext = compFile.name.split('.').pop()
+      const path = `flujo/${movData.id}.${ext}`
+      await supabase.storage.from('comprobantes').upload(path, compFile, { upsert: true })
+      const { data: urlData } = supabase.storage.from('comprobantes').getPublicUrl(path)
+      if (urlData?.publicUrl) {
+        await (supabase.from('flujo_cuentas_pn') as any)
+          .update({ archivo_url: urlData.publicUrl, archivo_nombre: compFile.name })
+          .eq('id', movData.id)
+      }
+    }
+    setCompFile(null)
     setForm({ tipo:'transferencia_arg_chile', descripcion:'', cuenta_origen_id:'', cuenta_origen_tipo:'propia_argentina', cuenta_origen_nombre:'', cuenta_destino_id:'', cuenta_destino_tipo:'propia_chile', cuenta_destino_nombre:'', monto_origen:'', moneda_origen:'ARS', monto_destino:'', moneda_destino:'CLP', referencia:'', notas:'' })
     setShowForm(false)
     await loadAll()
@@ -265,6 +279,16 @@ export default function FlujoCuentasPage() {
               <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas</label>
               <input value={form.notas} onChange={e => setForm(f => ({...f, notas: e.target.value}))} className={inp} placeholder="Observaciones"/>
             </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Comprobante (PDF / imagen)</label>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 px-3 py-2 border border-dashed border-gray-300 rounded-xl text-xs text-gray-500 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer flex-1">
+                  📎 {compFile ? compFile.name : 'Adjuntar comprobante de transferencia'}
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e=>setCompFile(e.target.files?.[0]||null)}/>
+                </label>
+                {compFile && <button onClick={()=>setCompFile(null)} className="text-gray-400 hover:text-red-500 text-xs">✕</button>}
+              </div>
+            </div>
           </div>
           <div className="flex justify-between mt-4">
             <button onClick={() => setShowForm(false)} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cancelar</button>
@@ -283,7 +307,7 @@ export default function FlujoCuentasPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {['Fecha','Tipo','Descripción','Origen','Destino','Monto origen','Monto destino','Equiv. USD'].map(h => (
+                {['Fecha','Tipo','Descripción','Origen','Destino','Monto origen','Monto destino','Equiv. USD','Comp.'].map(h => (
                   <th key={h} className="text-left px-3 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -303,12 +327,35 @@ export default function FlujoCuentasPage() {
                   <td className="px-3 py-3 text-right font-mono">{m.moneda_origen} {fmtN(m.monto_origen)}</td>
                   <td className="px-3 py-3 text-right font-mono">{m.moneda_destino} {fmtN(m.monto_destino)}</td>
                   <td className="px-3 py-3 text-right font-mono font-bold text-[#052698]">USD {fmtN(m.monto_usd_equiv)}</td>
+                  <td className="px-3 py-3">
+                    {m.archivo_url ? (
+                      <button onClick={()=>setPreviewModal({url:m.archivo_url,nombre:m.archivo_nombre||'comprobante',tipo:m.archivo_nombre?.endsWith('.pdf')?'pdf':'img'})}
+                        className="px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-[10px] font-medium hover:bg-[#93B8FC]">📄 Ver</button>
+                    ) : <span className="text-gray-300 text-[10px]">—</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {previewModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={()=>setPreviewModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <span className="font-medium text-sm truncate">{previewModal.nombre}</span>
+              <div className="flex items-center gap-2">
+                <a href={previewModal.url} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs">🔗 Abrir / Descargar</a>
+                <button onClick={()=>setPreviewModal(null)} className="text-gray-400 text-xl px-1">×</button>
+              </div>
+            </div>
+            {previewModal.tipo==='pdf'
+              ? <iframe src={previewModal.url} className="w-full h-[70vh] border-0" title={previewModal.nombre}/>
+              : <img src={previewModal.url} alt={previewModal.nombre} className="max-w-full mx-auto rounded p-4"/>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
