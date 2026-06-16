@@ -329,7 +329,7 @@ function FormTercero({ supabase, currentUser, onSave, onCancel }: any) {
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Actividad comercial</label>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Actividad principal según ARCA</label>
             <input value={form.actividad} onChange={e => setForm(f => ({ ...f, actividad: e.target.value }))} className={inp} placeholder="ej. Importacion de maquinaria" />
           </div>
         </div>
@@ -739,7 +739,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                     <input value={form.nro_importador || ''} onChange={e => setForm((f: any) => ({ ...f, nro_importador: e.target.value }))} className={inp} />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Actividad</label>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Actividad principal según ARCA</label>
                     <input value={form.actividad || ''} onChange={e => setForm((f: any) => ({ ...f, actividad: e.target.value }))} className={inp} />
                   </div>
                 </div>
@@ -939,8 +939,11 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                 <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre *</label>
                   <input value={docForm.nombre_custom} onChange={e => setDocForm(f => ({ ...f, nombre_custom: e.target.value }))} className={inp} /></div>
               )}
-              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Referencia</label>
-                <input value={docForm.referencia} onChange={e => setDocForm(f => ({ ...f, referencia: e.target.value }))} className={inp} /></div>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">
+                {docForm.tipo === 'afip' ? 'Código verificador' : 'Referencia'}
+              </label>
+                <input value={docForm.referencia} onChange={e => setDocForm(f => ({ ...f, referencia: e.target.value }))} className={inp}
+                  placeholder={docForm.tipo === 'afip' ? 'Código verificador AFIP' : 'N° referencia, folio, etc.'}/></div>
               <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Fecha</label>
                 <input type="date" value={docForm.fecha} onChange={e => setDocForm(f => ({ ...f, fecha: e.target.value }))} className={inp} /></div>
             </div>
