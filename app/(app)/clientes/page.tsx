@@ -441,6 +441,9 @@ function FormTercero({ supabase, currentUser, onSave, onCancel }: any) {
           className={inp + ' resize-none'} rows={3} placeholder="Observaciones generales..." />
       </div>
 
+      <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-4 py-3 text-[11px] text-[#052698]">
+        📎 Podés adjuntar documentación (estatuto, poderes, AFIP, etc.) una vez guardado el tercero, desde el tab <strong>Documentos</strong> en su ficha.
+      </div>
       <div className="flex justify-between">
         <button onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50">Cancelar</button>
         <button onClick={handleSave} disabled={saving}
