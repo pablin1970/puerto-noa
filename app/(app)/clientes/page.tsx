@@ -329,7 +329,7 @@ function FormTercero({ supabase, currentUser, onSave, onCancel }: any) {
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Actividad principal según ARCA</label>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">{form.pais === 'Chile' ? 'Actividad principal según SII' : 'Actividad principal según ARCA'}</label>
             <input value={form.actividad} onChange={e => setForm(f => ({ ...f, actividad: e.target.value }))} className={inp} placeholder="ej. Importacion de maquinaria" />
           </div>
         </div>
@@ -739,7 +739,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                     <input value={form.nro_importador || ''} onChange={e => setForm((f: any) => ({ ...f, nro_importador: e.target.value }))} className={inp} />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Actividad principal según ARCA</label>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{form.pais === 'Chile' ? 'Actividad principal según SII' : 'Actividad principal según ARCA'}</label>
                     <input value={form.actividad || ''} onChange={e => setForm((f: any) => ({ ...f, actividad: e.target.value }))} className={inp} />
                   </div>
                 </div>
@@ -791,7 +791,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
               <div className="grid grid-cols-3 gap-x-8 gap-y-4">
                 {[
                   { l: 'Pais', v: tercero.pais },
-                  { l: 'Actividad principal según ARCA', v: tercero.actividad },
+                  { l: tercero.pais === 'Chile' ? 'Actividad principal según SII' : 'Actividad principal según ARCA', v: tercero.actividad },
                   { l: 'Condicion IVA', v: tercero.condicion_iva },
                   { l: tercero.tipo_doc || 'Documento', v: tercero.nro_doc },
                   { l: 'N importador', v: tercero.nro_importador },
@@ -944,7 +944,9 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
               </label>
                 <input value={docForm.referencia} onChange={e => setDocForm(f => ({ ...f, referencia: e.target.value }))} className={inp}
                   placeholder={docForm.tipo === 'afip' ? 'Código verificador AFIP' : 'N° referencia, folio, etc.'}/></div>
-              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Fecha</label>
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">
+                {docForm.tipo === 'afip' ? 'Fecha de emisión' : 'Fecha'}
+              </label>
                 <input type="date" value={docForm.fecha} onChange={e => setDocForm(f => ({ ...f, fecha: e.target.value }))} className={inp} /></div>
             </div>
             <div className="mb-3">
