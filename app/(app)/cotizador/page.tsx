@@ -747,105 +747,130 @@ const clientesFiltrados=terceros.filter(t=>
 ).slice(0,8)
 
   function generarImpresion() {
-    const ruta = s.sentido==='exportacion'
+    const esExpo = s.sentido==='exportacion'
+    const destinoLabel = esExpo ? (s.origen?s.origen.split(' (')[0]:'Origen') : (s.destinoNoa||'Destino')
+    const ruta = esExpo
       ? [s.destinoNoa||'Argentina', s.pasoId?pasosFront.find((p:any)=>p.id===s.pasoId)?.nombre||'Paso':'', s.ptoChile||'Puerto Chile'].filter(Boolean).join(' → ')
       : [s.origen?s.origen.split(' (')[0]:'Origen', s.ptoChile||'Puerto Chile', s.pasoId?pasosFront.find((p:any)=>p.id===s.pasoId)?.nombre||'Paso':'', s.destinoNoa||'Destino'].filter(Boolean).join(' → ')
     const fecha = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'long',year:'numeric'})
+
     const filas = [
-      ...(totalFOB>0?[{sec:'Producto',concepto:'Precio mercadería ('+s.incoterm+')',v:totalFOB,ars:''}]:[]),
-      ...(s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0?[{sec:'Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros,ars:''}]:[]),
-      ...(bloqueActivo(0)&&subFW>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:fwElegida?.proveedorNombre||'Manual',v:subFW,ars:''}]:[]),
-      ...(bloqueActivo(0)&&totalSeg>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:'Seguro',v:totalSeg,ars:''}]:[]),
-      ...(bloqueActivo(1)&&subGastosChile>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Gastos en Chile',v:subGastosChile,ars:''}]:[]),
-      ...(bloqueActivo(1)&&subDescon>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Desconsolidación (Op. '+s.optTransp+')',v:subDescon,ars:''}]:[]),
-      ...(bloqueActivo(1)&&subAlm>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Almacenaje '+fmt(volAlm,2)+' m3 x '+s.almDias+' días',v:subAlm,ars:''}]:[]),
-      ...(bloqueActivo(1)&&subCarga>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Carga al camión',v:subCarga,ars:''}]:[]),
-      ...(bloqueActivo(2)&&subTransp>0?[{sec:bloques[2]?.nombre||'Bloque 3',concepto:'Flete terrestre',v:subTransp,ars:''}]:[]),
-      ...(bloqueActivo(3)&&subGastosArg>0?[{sec:bloques[3]?.nombre||'Bloque 4',concepto:'Despachante y honorarios',v:subGastosArg,ars:''}]:[]),
-      ...(bloqueActivo(3)&&subE>0?[{sec:bloques[3]?.nombre||'Bloque 4',concepto:'Otros gastos Argentina',v:subE,ars:''}]:[]),
-      ...(bloqueActivo(4)&&fee>0?[{sec:bloques[4]?.nombre||'Bloque 5',concepto:'Fee Puerto NOA',v:fee,ars:''}]:[]),
-      ...(s.incluirArca&&totalTribUSD>0?[{sec:'Tributos ARCA',concepto:'Régimen '+s.regimen+' — Base CIF Jama',v:totalTribUSD,ars:'ARS '+Math.round(totalTribARS).toLocaleString('es-AR')}]:[]),
+      ...(totalFOB>0?[{sec:'Mercadería',concepto:'Valor '+s.incoterm+' · precio en origen',v:totalFOB,sub:false,mercaderia:true}]:[]),
+      ...(s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0?[{sec:'· Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros,sub:true}]:[]),
+      ...(bloqueActivo(0)&&subFW>0?[{sec:'· '+( bloques[0]?.nombre||'Marítimo'),concepto:fwElegida?.proveedorNombre||'ForWarder',v:subFW,sub:true}]:[]),
+      ...(bloqueActivo(0)&&totalSeg>0?[{sec:'· Seguro',concepto:segFW>0?'Incluido en ForWarder':'Independiente',v:totalSeg,sub:true}]:[]),
+      ...(bloqueActivo(1)&&(subGastosChile+subDescon+subAlm+subCarga)>0?[{sec:'· '+(bloques[1]?.nombre||'Chile'),concepto:'Gastos en Chile · Op. '+s.optTransp,v:subGastosChile+subDescon+subAlm+subCarga,sub:true}]:[]),
+      ...(bloqueActivo(2)&&subTransp>0?[{sec:'· '+(bloques[2]?.nombre||'Terrestre'),concepto:'Flete terrestre',v:subTransp,sub:true}]:[]),
+      ...(bloqueActivo(3)&&(subE+subGastosArg)>0?[{sec:'· '+(bloques[3]?.nombre||'Argentina'),concepto:'Despachante + honorarios + otros',v:subE+subGastosArg,sub:true}]:[]),
+      ...(bloqueActivo(4)&&fee>0?[{sec:'· '+(bloques[4]?.nombre||'Fee PN'),concepto:'Fee de servicio logístico',v:fee,sub:true}]:[]),
     ].filter(r=>r.v>0)
-    const comp = [
-      ...(totalFOB>0?[{label:'Valor mercadería',sub:s.incoterm,v:totalFOB,ars:''}]:[]),
-      ...(bloqueActivo(0)&&(subFW+totalSeg)>0?[{label:bloques[0]?.nombre||'Bloque 1',sub:fwElegida?.proveedorNombre||'No asignado',v:subFW+totalSeg,ars:''}]:[]),
-      ...(bloqueActivo(1)&&(subGastosChile+subDescon+subAlm+subCarga)>0?[{label:bloques[1]?.nombre||'Bloque 2',sub:'Op. '+s.optTransp,v:subGastosChile+subDescon+subAlm+subCarga,ars:''}]:[]),
-      ...(bloqueActivo(2)&&subTransp>0?[{label:bloques[2]?.nombre||'Bloque 3',sub:'Bloque 3',v:subTransp,ars:''}]:[]),
-      ...(bloqueActivo(3)&&(subE+subGastosArg)>0?[{label:bloques[3]?.nombre||'Bloque 4',sub:'Bloque 4',v:subE+subGastosArg,ars:''}]:[]),
-      ...(bloqueActivo(4)&&fee>0?[{label:'Fee Puerto NOA',sub:'Bloque 5',v:fee,ars:''}]:[]),
-      ...(s.incluirArca&&totalTribUSD>0?[{label:'Tributos ARCA',sub:'Régimen '+s.regimen,v:totalTribUSD,ars:'ARS '+Math.round(totalTribARS).toLocaleString('es-AR')}]:[]),
-    ].filter(it=>it.v>0)
-    const totalLabel = s.sentido==='exportacion'?'SERVICIO LOGÍSTICO':'LANDED EN DESTINO'
-    const esExpo = s.sentido==='exportacion'
-    const difComp = s.precioArgEquiv>0&&!esExpo ? s.precioArgEquiv-totalLanded : 0
+
+    const pagosARS = [
+      ...(s.incluirArca&&totalTribUSD>0?[{concepto:'Tributos ARCA',quien:'AFIP / aduana argentina',monto:Math.round(totalTribARS).toLocaleString('es-AR'),moneda:'ARS'}]:[]),
+      ...(bloqueActivo(3)&&subGastosArg>0?[{concepto:'Despachante de aduana',quien:'Honorarios + gastos despacho',monto:Math.round(subGastosArg*s.tcTrib).toLocaleString('es-AR'),moneda:'ARS'}]:[]),
+      ...(bloqueActivo(2)&&subTransp>0?[{concepto:'Flete terrestre',quien:esExpo?'NOA → Puerto Chile':'Puerto Chile → destino NOA',monto:Math.round(subTransp*s.tcTrib).toLocaleString('es-AR'),moneda:'ARS'}]:[]),
+    ]
+    const totalPagosARS = Math.round((s.incluirArca?totalTribARS:0)+(bloqueActivo(3)&&subGastosArg>0?subGastosArg*s.tcTrib:0)+(bloqueActivo(2)&&subTransp>0?subTransp*s.tcTrib:0))
+
+    const bloquesActivos2 = bloques.filter((_:any,i:number)=>bloqueActivo(i)).map((b:any)=>b.nombre).join(' · ')
+
     const css = `
       *{margin:0;padding:0;box-sizing:border-box}
-      body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;background:white;padding:18mm 16mm}
-      .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #1168F8}
-      .hdr-r{text-align:right}.num{font-size:16px;font-weight:700;color:#052698;font-family:monospace}
+      body{font-family:Arial,sans-serif;font-size:11px;color:#111;background:white}
+      .page{padding:14mm 14mm 12mm;min-height:267mm;position:relative;}
+      .page-break{page-break-before:always}
+      .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #1168F8}
+      .hdr-right{text-align:right}
+      .num{font-size:15px;font-weight:700;color:#052698;font-family:monospace}
       .fecha{font-size:10px;color:#666;margin-top:2px}
-      .sec{margin-bottom:14px}.sec-t{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#666;margin-bottom:5px;padding-bottom:3px;border-bottom:1px solid #eee}
-      .ruta{background:#EBF2FF;border-radius:6px;padding:8px 12px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
-      .badge{background:#052698;color:white;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px}
-      .ruta-v{font-size:12px;font-weight:700;color:#052698}
-      .kpig{display:grid;grid-template-columns:1fr 40px 1fr;gap:8px;margin-bottom:14px;align-items:center}
-      .kpi{background:#f8faff;border:1px solid #e0e8ff;border-top:3px solid #1168F8;border-radius:6px;padding:10px;text-align:center}
-      .kpi-l{font-size:9px;color:#666;margin-bottom:4px}.kpi-v{font-size:18px;font-weight:700;color:#1a1a1a;font-family:monospace}
-      .kpi-s{font-size:9px;color:#888;margin-top:2px}.kpi-vs{text-align:center;font-size:11px;color:#aaa;font-weight:600}
-      .cmp-box{padding:8px 12px;border-radius:6px;font-size:10px;text-align:center;font-weight:600;margin-bottom:14px}
-      .cmp-ok{background:#EBF2FF;color:#052698;border:1px solid #93B8FC}
-      .cmp-bad{background:#fef2f2;color:#b91c1c;border:1px solid #fca5a5}
-      table{width:100%;border-collapse:collapse;margin-bottom:14px}
-      thead tr{background:#052698}thead th{color:white;font-size:9px;font-weight:700;text-transform:uppercase;padding:6px 8px;text-align:left}
-      th.r{text-align:right}tbody tr{border-bottom:1px solid #f0f0f0}tbody td{padding:5px 8px;font-size:11px}
-      .ts{font-size:9px;color:#666;font-weight:600}.tr{text-align:right;font-family:monospace;font-weight:600}
-      .tars{font-size:9px;color:#1168F8;font-family:monospace}
-      .ttot td{background:#052698;color:white;font-weight:700;font-size:12px;padding:8px}
-      .ttot .tr{text-align:right;font-family:monospace;font-size:13px}
-      .crow{display:flex;align-items:center;gap:10px;background:#f8f9fa;border-radius:5px;padding:7px 10px;margin-bottom:5px}
-      .cinfo{flex:1}.clabel{font-size:11px;font-weight:600;color:#1a1a1a}.csub{font-size:9px;color:#888;margin-top:1px}
-      .cbar{width:100%;height:4px;background:#e5e7eb;border-radius:2px;margin-top:4px}
-      .cbar-f{height:4px;background:#1168F8;border-radius:2px}
-      .cvals{text-align:right;flex-shrink:0}.cusd{font-family:monospace;font-weight:700;font-size:12px;color:#1a1a1a}
-      .cars{font-family:monospace;font-size:9px;color:#1168F8}.cpct{font-size:9px;color:#888}
-      .ctot{display:flex;justify-content:space-between;align-items:center;background:#052698;border-radius:6px;padding:10px 12px;color:white;margin-top:4px}
-      .ctot-l{font-size:11px;font-weight:700}.ctot-s{font-size:9px;color:#93c5fd;margin-top:1px}
-      .ctot-v{font-family:monospace;font-size:18px;font-weight:700}
-      .obs-l{counter-reset:item;list-style:none}
-      .obs-l li{counter-increment:item;padding:4px 0;border-bottom:1px solid #f5f5f5;font-size:11px}
-      .obs-l li::before{content:counter(item) '. ';color:#888;font-weight:600}
-      .footer{margin-top:20px;padding-top:10px;border-top:1px solid #eee;display:flex;justify-content:space-between;align-items:flex-end}
-      .footer-r{font-size:9px;color:#aaa;font-style:italic;font-family:Georgia,serif}
-      .tc-r{display:flex;gap:16px;font-size:10px;color:#666;margin-top:4px}
-      .tc-v{font-family:monospace;font-weight:600;background:#EBF2FF;color:#052698;padding:1px 6px;border-radius:4px}
-      @media print{body{padding:10mm 12mm}@page{margin:0;size:A4}}
+      .sec-t{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#666;margin-bottom:5px;padding-bottom:3px;border-bottom:1px solid #eee}
+      .kpi-box{border:1px solid #e0e8ff;border-top:3px solid #1168F8;border-radius:6px;padding:12px 16px;margin-bottom:14px}
+      .kpi-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#666;margin-bottom:3px}
+      .kpi-val{font-size:28px;font-weight:700;color:#111;font-family:monospace}
+      .kpi-sub{font-size:10px;color:#888;margin-top:3px}
+      .kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+      table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:11px}
+      thead tr{background:#052698}
+      thead th{color:white;font-size:9px;font-weight:700;text-transform:uppercase;padding:6px 10px;text-align:left}
+      th.r{text-align:right}
+      tbody tr{border-bottom:1px solid #f0f0f0}
+      tbody td{padding:6px 10px;vertical-align:middle}
+      .td-r{text-align:right;font-family:monospace;font-weight:600}
+      .td-pct{text-align:right;color:#888;font-size:10px}
+      .td-merc{font-weight:700;font-size:12px;color:#052698}
+      .td-sub{color:#888;font-size:10px;padding-left:18px}
+      .td-sep{background:#f5f5f5;font-weight:700;font-size:10px;color:#444;text-transform:uppercase;letter-spacing:.06em;padding:4px 10px}
+      .row-subtot{border-top:2px solid #ccc;background:#fafafa}
+      .row-subtot td{font-weight:700;font-size:12px;color:#111}
+      .row-arca{border-top:2px solid #ef9f27;background:#faeeda}
+      .row-arca td{font-weight:700;font-size:12px;color:#412402}
+      .row-total{border-top:2px solid #1168F8;background:#EBF2FF}
+      .row-total td{font-weight:700;font-size:13px;color:#052698}
+      .ars-box{border:1px solid #ef9f27;border-left:3px solid #ef9f27;border-radius:6px;overflow:hidden;margin-bottom:14px}
+      .ars-hdr{background:#faeeda;padding:8px 12px;font-weight:700;font-size:11px;color:#633806;border-bottom:1px solid #ef9f27}
+      .row-ars-tot{background:#faeeda;border-top:2px solid #ef9f27}
+      .row-ars-tot td{font-weight:700;color:#412402;font-size:12px}
+      .pill-ars{display:inline-block;padding:1px 6px;border-radius:10px;background:#EBF2FF;color:#052698;font-size:9px;font-weight:700}
+      .pill-amber{background:#faeeda;color:#412402}
+      .tc-box{background:#f5f5f5;border-radius:4px;padding:8px 12px;display:flex;gap:20px;font-size:10px;color:#666}
+      .tc-val{font-family:monospace;font-weight:700;color:#111}
+      .footer{position:fixed;bottom:0;left:0;right:0;padding:8mm 14mm 6mm;border-top:1px solid #eee;display:flex;justify-content:space-between;align-items:flex-end;font-size:9px;color:#999;background:white}
+      .footer-r{font-style:italic;font-family:Georgia,serif}
+      .badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+      .badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:700;background:#EBF2FF;color:#052698}
+      .badge-amber{background:#faeeda;color:#633806}
+      .obs-list{counter-reset:item;list-style:none}
+      .obs-list li{counter-increment:item;padding:4px 0;border-bottom:1px solid #f5f5f5;font-size:11px}
+      .obs-list li::before{content:counter(item) '. ';color:#888}
+      @media print{body{font-size:10.5px}@page{margin:0;size:A4}.page{padding:12mm 12mm 10mm}.footer{position:fixed}}
     `
-    const kpiDer = !esExpo&&s.precioArgEquiv>0
-      ? '<div class="kpi-l">Precio equiv. en Argentina</div><div class="kpi-v">USD '+fmt(s.precioArgEquiv,0)+'</div>'
-      : '<div class="kpi-l">Por contenedor</div><div class="kpi-v">USD '+fmt(totalLanded/nc,0)+'</div><div class="kpi-s">'+nc+' contenedor(es)</div>'
-    const kpiSub = esExpo ? nc+' contenedor(es)' : 'producto + logística'+(s.incluirArca?' + tributos':'')
-    const cmpHtml = difComp!==0
-      ? '<div class="cmp-box '+(difComp>0?'cmp-ok':'cmp-bad')+'">'+(difComp>0
-          ? 'Importar desde China es USD '+fmt(Math.abs(difComp),0)+' más económico ('+Math.round(Math.abs(difComp)/s.precioArgEquiv*100)+'% de ahorro vs precio local Argentina USD '+fmt(s.precioArgEquiv,0)+')'
-          : 'Importar desde China resulta USD '+fmt(Math.abs(difComp),0)+' más caro que el precio local Argentina (USD '+fmt(s.precioArgEquiv,0)+')')+'</div>'
-      : ''
-    const filasHTML = filas.map(r=>'<tr><td class="ts">'+r.sec+'</td><td>'+r.concepto+'</td><td class="tr">USD '+fmt(r.v)+'</td></tr>'+(r.ars?'<tr><td></td><td class="tars">Equiv. '+r.ars+'</td><td></td></tr>':'')).join('')
-    const compHTML = comp.map(it=>'<div class="crow"><div class="cinfo"><div class="clabel">'+it.label+'</div><div class="csub">'+it.sub+'</div><div class="cbar"><div class="cbar-f" style="width:'+Math.min(100,(it.v/totalLanded)*100).toFixed(1)+'%"></div></div></div><div class="cvals"><div class="cusd">USD '+fmt(it.v,0)+'</div>'+(it.ars?'<div class="cars">'+it.ars+'</div>':'')+'<div class="cpct">'+((it.v/totalLanded)*100).toFixed(1)+'%</div></div></div>').join('')
+
+    const filasHTML = filas.map(r=>{
+      if(r.mercaderia) return '<tr><td class="td-merc">'+r.sec+'</td><td style="color:#666;font-size:11px">'+r.concepto+'</td><td class="td-r" style="font-size:13px;color:#052698">'+fmt(r.v)+'</td><td class="td-pct">'+fmt(r.v/totalLanded*100,1)+'%</td></tr>'
+      if(!r.sub) return ''
+      return '<tr><td class="td-sub">'+r.sec+'</td><td style="color:#999;font-size:10px">'+r.concepto+'</td><td class="td-r" style="color:#888">'+fmt(r.v)+'</td><td class="td-pct">'+fmt(r.v/totalLanded*100,1)+'%</td></tr>'
+    }).join('')+'<tr><td class="td-sep" colspan="4">Logística</td></tr>'
+
+    const pagosHTML = pagosARS.map(p=>'<tr><td style="font-weight:600">'+p.concepto+'</td><td style="color:#888;font-size:10px">'+p.quien+'</td><td class="td-r">'+p.monto+'</td><td style="text-align:right"><span class="pill-ars">'+p.moneda+'</span></td></tr>').join('')
+
     const obsHTML = s.observaciones.filter((o:string)=>o.trim()).length>0
-      ? '<div class="sec"><div class="sec-t">Observaciones</div><ol class="obs-l">'+s.observaciones.filter((o:string)=>o.trim()).map((o:string)=>'<li>'+o+'</li>').join('')+'</ol></div>'
+      ? '<div class="sec-t" style="margin-top:10px">Observaciones</div><ol class="obs-list">'+s.observaciones.filter((o:string)=>o.trim()).map((o:string)=>'<li>'+o+'</li>').join('')+'</ol>'
       : ''
-    const html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><title>Cotizacion '+( cotNumActual||'BORRADOR')+' - Puerto NOA SpA</title><style>'+css+'</style></head><body>'
-      +'<div class="hdr"><div><img src="'+window.location.origin+'/logo.png" alt="Puerto NOA" style="height:38px;object-fit:contain;"/><div style="font-size:10px;color:#666;margin-top:3px;">SpA - Servicios logísticos de importación/exportación</div></div><div class="hdr-r"><div class="num">'+(cotNumActual||'BORRADOR')+'</div><div class="fecha">'+fecha+'</div>'+(s.validez?'<div style="font-size:10px;color:#666;margin-top:3px;">Válida por '+s.validez+'</div>':'')+'</div></div>'
-      +'<div class="sec"><div class="sec-t">Cliente</div><div style="display:flex;gap:24px;"><div><span style="font-size:9px;color:#888;">Razón social </span><strong>'+(s.cliente||'—')+'</strong></div>'+(s.cuit?'<div><span style="font-size:9px;color:#888;">CUIT </span><strong>'+s.cuit+'</strong></div>':'')+'</div></div>'
-      +'<div class="ruta"><span class="badge">'+(esExpo?'EXPORTACIÓN':'IMPORTACIÓN')+'</span><span class="ruta-v">'+ruta+'</span></div>'
-      +'<div class="kpig"><div class="kpi"><div class="kpi-l">'+(esExpo?'Costo total servicio logístico':'Costo total — '+(s.destinoNoa||'destino'))+'</div><div class="kpi-v">USD '+fmt(totalLanded,0)+'</div><div class="kpi-s">'+kpiSub+'</div></div><div class="kpi-vs">VS</div><div class="kpi">'+kpiDer+'</div></div>'
-      +cmpHtml
-      +'<div class="sec"><div class="sec-t">Desglose completo de costos</div><table><thead><tr><th>Bloque</th><th>Concepto</th><th class="r">USD</th></tr></thead><tbody>'+filasHTML+'<tr class="ttot"><td colspan="2">TOTAL '+totalLabel+'</td><td class="tr">USD '+fmt(totalLanded)+'</td></tr></tbody></table></div>'
-      +'<div class="sec"><div class="sec-t">Composición del costo total</div>'+compHTML+'<div class="ctot"><div><div class="ctot-l">TOTAL '+totalLabel+'</div><div class="ctot-s">USD '+fmt(totalLanded/nc,0)+' por contenedor</div></div><div class="ctot-v">USD '+fmt(totalLanded,0)+'</div></div></div>'
-      +obsHTML
-      +'<div class="sec"><div class="sec-t">Tipos de cambio aplicados</div><div class="tc-r">'+(s.tcTrib>0?'<span>TC BNA (ARS/USD) <span class="tc-v">ARS '+fmt(s.tcTrib,0)+'</span></span>':'')+(s.tcClp>0?'<span>TC (CLP/USD) <span class="tc-v">CLP '+fmt(s.tcClp,0)+'</span></span>':'')+'</div></div>'
-      +'<div class="footer"><div>'+(s.validez?'<div style="font-size:10px;color:#444;">Oferta <strong>válida por '+s.validez+'</strong> desde la fecha de emisión</div>':'')+'</div><div class="footer-r">Developed by Pablin</div></div>'
+
+    const html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><title>Cotización '+(cotNumActual||'')+'</title><style>'+css+'</style></head><body>'
+      // PÁGINA 1
+      +'<div class="page">'
+      +'<div class="hdr"><div><img src="'+window.location.origin+'/logo.png" alt="Puerto NOA" style="height:36px;object-fit:contain;"/><div style="font-size:10px;color:#666;margin-top:3px">SpA · Servicios logísticos de importación/exportación</div></div><div class="hdr-right"><div class="num">'+(cotNumActual||'BORRADOR')+'</div><div class="fecha">'+fecha+'</div>'+(s.validez?'<div style="font-size:10px;color:#666;margin-top:2px">Válida por '+s.validez+'</div>':'')+'</div></div>'
+      // Cliente + ruta
+      +'<div class="kpi-grid" style="margin-bottom:10px"><div><div class="sec-t">Cliente</div><div style="font-size:13px;font-weight:700;color:#111">'+(s.cliente||'—')+'</div>'+(s.cuit?'<div style="font-size:10px;color:#666">CUIT '+s.cuit+'</div>':'')+'</div><div><div class="sec-t">Ruta</div><div style="font-size:11px;color:#333"><span style="background:#EBF2FF;color:#052698;border-radius:10px;padding:1px 7px;font-size:9px;font-weight:700;margin-right:6px">'+(esExpo?'EXPORTACIÓN':'IMPORTACIÓN')+'</span>'+ruta+'</div><div class="badges">'+(bloquesActivos2 ? bloquesActivos2.split(' · ').map((b:string)=>'<span class="badge">'+b+'</span>').join(''):'')+(s.incluirArca?'<span class="badge badge-amber">ARCA</span>':'')+'</div></div></div>'
+      // KPI
+      +'<div class="kpi-box"><div class="kpi-label">Mercadería puesta en destino · '+destinoLabel+'</div><div class="kpi-val">USD '+fmt(totalLanded,0)+'</div><div class="kpi-sub">'+nc+' contenedor(es) · USD '+fmt(totalLanded/nc,0)+' c/u · producto + logística'+(s.incluirArca?' + tributos ARCA':'')+'</div></div>'
+      // Tabla desglose
+      +'<div class="sec-t">Desglose por bloque</div>'
+      +'<table><thead><tr><th style="width:22%">Bloque</th><th>Concepto</th><th class="r" style="width:16%">USD</th><th class="r" style="width:10%">%</th></tr></thead><tbody>'
+      +filasHTML
+      +(totalLog>0?'<tr class="row-subtot"><td colspan="2">Subtotal logístico</td><td class="td-r" style="font-size:13px">'+fmt(totalLog)+'</td><td class="td-pct">'+fmt(totalLog/totalLanded*100,1)+'%</td></tr>':'')
+      +(s.incluirArca&&totalTribUSD>0?'<tr class="row-arca"><td>Tributos ARCA</td><td style="font-size:10px;color:#633806">Régimen '+s.regimen+' — base CIF Jama</td><td class="td-r" style="font-size:13px">'+fmt(totalTribUSD)+'</td><td class="td-pct" style="color:#854f0b">'+fmt(totalTribUSD/totalLanded*100,1)+'%</td></tr>':'')
+      +'<tr class="row-total"><td colspan="2">Total — mercadería puesta en destino</td><td class="td-r" style="font-size:14px">'+fmt(totalLanded)+'</td><td class="td-pct" style="color:#052698">100%</td></tr>'
+      +'</tbody></table>'
+      +'</div>'
+      // PÁGINA 2
+      +(pagosARS.length>0||obsHTML?'<div class="page page-break">'
+        +'<div class="hdr"><div><img src="'+window.location.origin+'/logo.png" alt="Puerto NOA" style="height:36px;object-fit:contain;"/></div><div class="hdr-right"><div class="num">'+(cotNumActual||'BORRADOR')+'</div><div class="fecha">'+fecha+' · Página 2</div></div></div>'
+        +(pagosARS.length>0?
+          '<div class="ars-box"><div class="ars-hdr">Pagos estimados en pesos argentinos</div>'
+          +'<table style="margin-bottom:0"><thead><tr><th>Concepto</th><th>A quién se paga</th><th class="r">Importe</th><th class="r">Moneda</th></tr></thead><tbody>'
+          +pagosHTML
+          +'<tr class="row-ars-tot"><td colspan="2" style="font-size:12px">Total a desembolsar en ARS</td><td class="td-r" style="font-size:13px">'+totalPagosARS.toLocaleString('es-AR')+'</td><td style="text-align:right"><span class="pill-ars pill-amber">ARS</span></td></tr>'
+          +'</tbody></table>'
+          +'<div style="padding:6px 12px;background:#f5f5f5;font-size:9px;color:#888">TC aplicado: ARS '+fmt(s.tcTrib,0)+' · Los importes son estimativos según TC al momento del despacho.</div>'
+          +'</div>'
+        :'')
+        +obsHTML
+        +'</div>':'')
+      +'<div class="footer"><div>'+(s.validez?'Oferta válida por <strong>'+s.validez+'</strong> desde la fecha de emisión<br/>':'')+'<div class="tc-box" style="margin-top:4px">'+(s.tcTrib?'<span>ARS/USD <span class="tc-val">'+fmt(s.tcTrib,0)+'</span></span>':'')+(s.tcClp?'<span>CLP/USD <span class="tc-val">'+fmt(s.tcClp,0)+'</span></span>':'')+'</div></div><div class="footer-r">Developed by Pablin</div></div>'
       +'<script>window.onload=function(){window.print();}</script></body></html>'
+
     const win = window.open('','_blank','width=900,height=700')
     if(win){ win.document.write(html); win.document.close() }
   }
@@ -2402,10 +2427,13 @@ const clientesFiltrados=terceros.filter(t=>
             @media print {
               aside, nav, header, [data-sidebar] { display: none !important; }
               .print\:hidden { display: none !important; }
+              .print-only { display: block !important; }
               body { background: white !important; }
-              @page { margin: 15mm; size: A4; }
+              @page { margin: 15mm 12mm; size: A4; }
               tr { page-break-inside: avoid; }
+              .page-break { page-break-before: always; }
             }
+            .print-only { display: none; }
           `}</style>
 
           {/* Header con botón imprimir */}
@@ -2427,125 +2455,262 @@ const clientesFiltrados=terceros.filter(t=>
             </button>
           </div>
 
-          {/* KPI principal — adaptado según sentido */}
-          <div className="grid grid-cols-3 gap-3 items-center">
-            <div className="bg-white border border-gray-100 border-t-4 border-t-[#1168F8] rounded-xl p-5 text-center">
-              <div className="text-[10px] text-gray-400 mb-1">
-                {s.sentido==='exportacion'
-                  ? `Costo total servicio logístico`
-                  : `Costo total ${s.origen?s.origen.split(' (')[0]:'origen'} — ${s.destinoNoa||'destino'}`}
-              </div>
-              <div className="text-2xl font-semibold text-gray-900">USD {fmt(totalLanded,0)}</div>
-              <div className="text-[10px] text-gray-400 mt-1">
-                {s.sentido==='exportacion'?'logística + fee':'producto + logística + tributos'}
-              </div>
-            </div>
-            <div className="text-center text-sm text-gray-400 font-semibold">VS</div>
-            <div className="bg-white border border-gray-100 border-t-4 border-t-blue-300 rounded-xl p-5 text-center">
-              {s.sentido!=='exportacion'&&s.precioArgEquiv>0?(
-                <>
-                  <div className="text-[10px] text-gray-400 mb-1">Precio equivalente en Argentina</div>
-                  <div className="text-2xl font-semibold text-gray-900">USD {fmt(s.precioArgEquiv,0)}</div>
-                </>
-              ):(
-                <>
-                  <div className="text-[10px] text-gray-400 mb-1">Por contenedor</div>
-                  <div className="text-2xl font-semibold text-gray-900">USD {fmt(totalLanded/nc,0)}</div>
-                  <div className="text-[10px] text-gray-400 mt-1">{nc} contenedor(es)</div>
-                </>
-              )}
+          {/* KPI principal */}
+          <div className="bg-white border border-gray-100 border-t-4 border-t-[#1168F8] rounded-xl p-5">
+            <div className="text-[10px] text-gray-400 mb-1 uppercase tracking-wider font-semibold">Mercadería puesta en destino</div>
+            <div className="text-3xl font-bold text-gray-900 font-mono">USD {fmt(totalLanded,0)}</div>
+            <div className="text-xs text-gray-400 mt-1.5 flex items-center gap-2 flex-wrap">
+              <span>{s.sentido==='exportacion'
+                ? (s.origen?s.origen.split(' (')[0]:'Origen')
+                : (s.destinoNoa||'destino final')}</span>
+              <span className="text-gray-200">·</span>
+              <span>{nc} contenedor(es) {nc>0&&`— USD ${fmt(totalLanded/nc,0)} c/u`}</span>
+              <span className="text-gray-200">·</span>
+              <span>{s.sentido==='exportacion'?'logística + fee':'producto + logística'}{s.incluirArca?' + tributos ARCA':''}</span>
             </div>
           </div>
 
-          {/* Comparativo precio local — solo importación */}
-          {s.precioArgEquiv>0&&s.sentido!=='exportacion'&&(
-            <div className={`text-xs px-4 py-3 rounded-xl text-center font-medium ${(s.precioArgEquiv-totalLanded)>0?'bg-[#EBF2FF] text-[#052698] border border-[#93B8FC]':'bg-red-50 text-red-700 border border-red-200'}`}>
-              {(s.precioArgEquiv-totalLanded)>0
-                ?`Importar desde China es USD ${fmt(Math.abs(s.precioArgEquiv-totalLanded),0)} más económico (${Math.round(Math.abs(s.precioArgEquiv-totalLanded)/s.precioArgEquiv*100)}% de ahorro)`
-                :`Importar desde China resulta USD ${fmt(Math.abs(s.precioArgEquiv-totalLanded),0)} más caro que el precio local`}
-            </div>
-          )}
-
-          {/* Desglose completo */}
+          {/* Cuadro 1: Desglose por bloque */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Desglose completo de costos</div>
+            <div className="px-5 py-3.5 border-b border-gray-100 font-semibold text-sm text-gray-900">Desglose por bloque</div>
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase">Bloque</th>
-                  <th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase">Concepto</th>
-                  <th className="text-right px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase">USD</th>
+                  <th className="text-left px-5 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wider w-[22%]">Bloque</th>
+                  <th className="text-left px-3 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Concepto</th>
+                  <th className="text-right px-5 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wider w-[16%]">USD</th>
+                  <th className="text-right px-5 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wider w-[10%]">%</th>
                 </tr>
               </thead>
               <tbody>
-                {[
-                  ...(totalFOB>0?[{sec:'Producto',concepto:`Precio mercadería (${s.incoterm})`,v:totalFOB}]:[]),
-                  ...(s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0?[{sec:'Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros}]:[]),
-                  ...(bloqueActivo(0)&&subFW>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:fwElegida?.proveedorNombre?`${fwElegida.proveedorNombre}${fwElegida.referencia?` — ${fwElegida.referencia}`:''}`:'Manual',v:subFW}]:[]),
-                  ...(bloqueActivo(0)&&totalSeg>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:segFW>0?'Seguro incluido en ForWarder':'Seguro independiente',v:totalSeg}]:[]),
-                  ...(bloqueActivo(1)&&subGastosChile>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Gastos en Chile',v:subGastosChile}]:[]),
-                  ...(bloqueActivo(1)&&subDescon>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:`Desconsolidación (Op. ${s.optTransp})`,v:subDescon}]:[]),
-                  ...(bloqueActivo(1)&&subAlm>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:`Almacenaje ${fmt(volAlm,2)} m3 × ${s.almDias} días`,v:subAlm}]:[]),
-                  ...(bloqueActivo(1)&&subCarga>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Carga al camión',v:subCarga}]:[]),
-                  ...(bloqueActivo(2)&&subTransp>0?[{sec:bloques[2]?.nombre||'Bloque 3',concepto:'Flete terrestre',v:subTransp}]:[]),
-                  ...(bloqueActivo(3)&&subGastosArg>0?[{sec:bloques[3]?.nombre||'Bloque 4',concepto:'Despachante y honorarios',v:subGastosArg}]:[]),
-                  ...(bloqueActivo(3)&&subE>0?[{sec:bloques[3]?.nombre||'Bloque 4',concepto:'Otros gastos Argentina',v:subE}]:[]),
-                  ...(bloqueActivo(4)&&fee>0?[{sec:bloques[4]?.nombre||'Bloque 5 — Fee PN',concepto:`${nc} cont. × USD ${s.feeCont}`,v:fee}]:[]),
-                  ...(s.incluirArca&&totalTribUSD>0?[{sec:'Tributos ARCA',concepto:`Régimen ${s.regimen} — Base CIF Jama`,v:totalTribUSD}]:[]),
-                ].filter(r=>r.v>0).map((r,i)=>(
-                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-4 py-2.5 text-[10px] text-gray-400">{r.sec}</td>
-                    <td className="px-4 py-2.5 text-gray-700">{r.concepto}</td>
-                    <td className="px-4 py-2.5 font-mono text-right">{fmt(r.v)}</td>
+                {/* Mercadería — fila principal destacada */}
+                {totalFOB>0&&(
+                  <tr className="border-t-2 border-gray-300">
+                    <td className="px-5 py-3 font-semibold text-sm text-gray-900">Mercadería</td>
+                    <td className="px-3 py-3 text-gray-500 text-[11px]">Valor {s.incoterm} · precio en origen</td>
+                    <td className="px-5 py-3 text-right font-semibold text-sm font-mono text-gray-900">{fmt(totalFOB)}</td>
+                    <td className="px-5 py-3 text-right font-semibold text-gray-500">{fmt(totalFOB/totalLanded*100,1)}%</td>
                   </tr>
-                ))}
-                <tr className="bg-[#EBF2FF] font-semibold border-t-2 border-[#1168F8]">
-                  <td className="px-4 py-3 text-sm text-[#052698]" colSpan={2}>
-                    TOTAL {s.sentido==='exportacion'?'SERVICIO LOGÍSTICO':'LANDED EN DESTINO'}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-right text-base text-[#052698]">{fmt(totalLanded)}</td>
+                )}
+                {s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0&&(
+                  <tr className="border-t border-gray-50 bg-gray-50">
+                    <td className="px-5 py-2 pl-8 text-gray-400 text-[11px]">· Puesta a FOB</td>
+                    <td className="px-3 py-2 text-gray-400 text-[11px]">Transporte + agente + otros</td>
+                    <td className="px-5 py-2 text-right font-mono text-gray-500">{fmt(s.exwTransp+s.exwAgente+s.exwOtros)}</td>
+                    <td className="px-5 py-2 text-right text-gray-400">{fmt((s.exwTransp+s.exwAgente+s.exwOtros)/totalLanded*100,1)}%</td>
+                  </tr>
+                )}
+
+                {/* Separador logística */}
+                {totalLog>0&&(
+                  <tr className="border-t-2 border-gray-300">
+                    <td colSpan={4} className="px-5 py-1.5 bg-gray-50">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Logística</span>
+                    </td>
+                  </tr>
+                )}
+
+                {/* Subrubros logísticos */}
+                {bloqueActivo(0)&&subFW>0&&(
+                  <tr className="border-t border-gray-50">
+                    <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[0]?.nombre||'Marítimo'}</td>
+                    <td className="px-3 py-2.5 text-gray-400 text-[11px]">{fwElegida?.proveedorNombre||'ForWarder'}{fwElegida?.referencia?` — ${fwElegida.referencia}`:''}</td>
+                    <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subFW)}</td>
+                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(subFW/totalLanded*100,1)}%</td>
+                  </tr>
+                )}
+                {bloqueActivo(0)&&totalSeg>0&&(
+                  <tr className="border-t border-gray-50">
+                    <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· Seguro</td>
+                    <td className="px-3 py-2.5 text-gray-400 text-[11px]">{segFW>0?'Incluido en ForWarder':'Contratado independiente'}</td>
+                    <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(totalSeg)}</td>
+                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(totalSeg/totalLanded*100,1)}%</td>
+                  </tr>
+                )}
+                {bloqueActivo(1)&&(subGastosChile+subDescon+subAlm+subCarga)>0&&(
+                  <tr className="border-t border-gray-50">
+                    <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[1]?.nombre||'Chile'}</td>
+                    <td className="px-3 py-2.5 text-gray-400 text-[11px]">Gastos en Chile · Op. {s.optTransp}</td>
+                    <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subGastosChile+subDescon+subAlm+subCarga)}</td>
+                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt((subGastosChile+subDescon+subAlm+subCarga)/totalLanded*100,1)}%</td>
+                  </tr>
+                )}
+                {bloqueActivo(2)&&subTransp>0&&(
+                  <tr className="border-t border-gray-50">
+                    <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[2]?.nombre||'Terrestre'}</td>
+                    <td className="px-3 py-2.5 text-gray-400 text-[11px]">Flete terrestre</td>
+                    <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subTransp)}</td>
+                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(subTransp/totalLanded*100,1)}%</td>
+                  </tr>
+                )}
+                {bloqueActivo(3)&&(subE+subGastosArg)>0&&(
+                  <tr className="border-t border-gray-50">
+                    <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[3]?.nombre||'Argentina'}</td>
+                    <td className="px-3 py-2.5 text-gray-400 text-[11px]">Despachante + honorarios + otros</td>
+                    <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subE+subGastosArg)}</td>
+                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt((subE+subGastosArg)/totalLanded*100,1)}%</td>
+                  </tr>
+                )}
+                {bloqueActivo(4)&&fee>0&&(
+                  <tr className="border-t border-gray-50">
+                    <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[4]?.nombre||'Fee PN'}</td>
+                    <td className="px-3 py-2.5 text-gray-400 text-[11px]">Fee de servicio logístico</td>
+                    <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(fee)}</td>
+                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(fee/totalLanded*100,1)}%</td>
+                  </tr>
+                )}
+
+                {/* Subtotal logístico */}
+                {totalLog>0&&(
+                  <tr className="border-t-2 border-gray-300">
+                    <td colSpan={2} className="px-5 py-3 font-semibold text-sm text-gray-900">Subtotal logístico</td>
+                    <td className="px-5 py-3 text-right font-semibold text-sm font-mono text-gray-900">{fmt(totalLog)}</td>
+                    <td className="px-5 py-3 text-right font-semibold text-gray-500">{fmt(totalLog/totalLanded*100,1)}%</td>
+                  </tr>
+                )}
+
+                {/* ARCA */}
+                {s.incluirArca&&totalTribUSD>0&&(
+                  <tr className="border-t-2" style={{borderColor:'#ef9f27',background:'#faeeda'}}>
+                    <td className="px-5 py-3 font-semibold text-sm" style={{color:'#412402'}}>Tributos ARCA</td>
+                    <td className="px-3 py-3 text-[11px]" style={{color:'#633806'}}>Régimen {s.regimen} — base CIF Jama</td>
+                    <td className="px-5 py-3 text-right font-semibold text-sm font-mono" style={{color:'#412402'}}>{fmt(totalTribUSD)}</td>
+                    <td className="px-5 py-3 text-right font-semibold" style={{color:'#854f0b'}}>{fmt(totalTribUSD/totalLanded*100,1)}%</td>
+                  </tr>
+                )}
+
+                {/* Total */}
+                <tr className="border-t-2 border-[#1168F8] bg-[#EBF2FF]">
+                  <td colSpan={2} className="px-5 py-3.5 font-bold text-sm text-[#052698]">Total — mercadería puesta en destino</td>
+                  <td className="px-5 py-3.5 text-right font-bold text-base font-mono text-[#052698]">{fmt(totalLanded)}</td>
+                  <td className="px-5 py-3.5 text-right font-bold text-[#052698]">100%</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          {/* Composición del costo total */}
-          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Composición del costo total</div>
-            <div className="p-4 space-y-2">
-              {[
-                ...(totalFOB>0?[{label:'Valor mercadería',sub:s.incoterm,v:totalFOB}]:[]),
-                ...(bloqueActivo(0)&&(subFW+totalSeg)>0?[{label:bloques[0]?.nombre||'ForWarder + Seguro',sub:fwElegida?.proveedorNombre||'No asignado',v:subFW+totalSeg}]:[]),
-                ...(bloqueActivo(1)&&(subGastosChile+subDescon+subAlm+subCarga)>0?[{label:bloques[1]?.nombre||'Bloque 2 — Chile',sub:`Op. ${s.optTransp}`,v:subGastosChile+subDescon+subAlm+subCarga}]:[]),
-                ...(bloqueActivo(2)&&subTransp>0?[{label:bloques[2]?.nombre||'Flete terrestre',sub:'Bloque 3',v:subTransp}]:[]),
-                ...(bloqueActivo(3)&&(subE+subGastosArg)>0?[{label:bloques[3]?.nombre||'Gastos Argentina',sub:'Bloque 4',v:subE+subGastosArg}]:[]),
-                ...(bloqueActivo(4)&&fee>0?[{label:'Fee Puerto NOA',sub:'Bloque 5',v:fee}]:[]),
-                ...(s.incluirArca&&totalTribUSD>0?[{label:'Tributos ARCA',sub:`Régimen ${s.regimen}`,v:totalTribUSD,ars:Math.round(totalTribARS).toLocaleString('es-AR')}]:[]),
-              ].filter(it=>it.v>0).map(it=>(
-                <div key={it.label} className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg">
-                  <div className="flex-1 mr-4">
-                    <div className="text-xs font-medium text-gray-700">{it.label}</div>
-                    <div className="text-[10px] text-gray-400">{it.sub}</div>
-                    {/* Barra proporcional */}
-                    <div className="mt-1.5 h-1 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-[#1168F8] rounded-full" style={{width:`${Math.min(100,(it.v/totalLanded)*100)}%`}}/>
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="font-mono font-semibold text-gray-800">USD {fmt(it.v,0)}</div>
-                    {(it as any).ars&&<div className="font-mono text-[10px] text-[#052698]">ARS {(it as any).ars}</div>}
-                    <div className="text-[10px] text-gray-400">{fmt(it.v/totalLanded*100,1)}%</div>
-                  </div>
+          {/* Cuadro 2: Pagos en ARS — solo si hay algo que pagar en pesos */}
+          {(s.incluirArca||bloqueActivo(3)||bloqueActivo(2))&&(subGastosArg>0||subE>0||subTransp>0||totalTribUSD>0)&&(
+            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm" style={{borderLeft:'3px solid #ef9f27'}}>
+              <div className="px-5 py-3.5 border-b flex items-center gap-2" style={{borderColor:'#ef9f27',background:'#faeeda'}}>
+                <span className="text-base">💵</span>
+                <span className="font-semibold text-sm" style={{color:'#633806'}}>Pagos estimados en pesos argentinos</span>
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="text-left px-5 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Concepto</th>
+                    <th className="text-left px-3 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wider">A quién se paga</th>
+                    <th className="text-right px-5 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Importe</th>
+                    <th className="text-right px-5 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Moneda</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {s.incluirArca&&totalTribUSD>0&&(
+                    <tr className="border-t border-gray-50">
+                      <td className="px-5 py-3 text-gray-800 font-semibold">Tributos ARCA</td>
+                      <td className="px-3 py-3 text-gray-400">AFIP / aduana argentina</td>
+                      <td className="px-5 py-3 text-right font-mono font-semibold text-gray-900">{Math.round(totalTribARS).toLocaleString('es-AR')}</td>
+                      <td className="px-5 py-3 text-right"><span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-bold">ARS</span></td>
+                    </tr>
+                  )}
+                  {bloqueActivo(3)&&subGastosArg>0&&(
+                    <tr className="border-t border-gray-50">
+                      <td className="px-5 py-3 text-gray-800 font-semibold">Despachante de aduana</td>
+                      <td className="px-3 py-3 text-gray-400">Honorarios + gastos despacho</td>
+                      <td className="px-5 py-3 text-right font-mono font-semibold text-gray-900">{Math.round(subGastosArg*s.tcTrib).toLocaleString('es-AR')}</td>
+                      <td className="px-5 py-3 text-right"><span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-bold">ARS</span></td>
+                    </tr>
+                  )}
+                  {bloqueActivo(2)&&subTransp>0&&(
+                    <tr className="border-t border-gray-50">
+                      <td className="px-5 py-3 text-gray-800 font-semibold">Flete terrestre</td>
+                      <td className="px-3 py-3 text-gray-400">{s.sentido==='exportacion'?'NOA → Puerto Chile':'Puerto Chile → destino NOA'}</td>
+                      <td className="px-5 py-3 text-right font-mono font-semibold text-gray-900">{Math.round(subTransp*s.tcTrib).toLocaleString('es-AR')}</td>
+                      <td className="px-5 py-3 text-right"><span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-bold">ARS</span></td>
+                    </tr>
+                  )}
+                  <tr className="border-t-2" style={{borderColor:'#ef9f27',background:'#faeeda'}}>
+                    <td colSpan={2} className="px-5 py-3.5 font-bold text-sm" style={{color:'#412402'}}>Total a desembolsar en ARS</td>
+                    <td className="px-5 py-3.5 text-right font-bold text-sm font-mono" style={{color:'#412402'}}>
+                      {Math.round((s.incluirArca?totalTribARS:0)+(bloqueActivo(3)&&subGastosArg>0?subGastosArg*s.tcTrib:0)+(bloqueActivo(2)&&subTransp>0?subTransp*s.tcTrib:0)).toLocaleString('es-AR')}
+                    </td>
+                    <td className="px-5 py-3.5 text-right"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{background:'#ef9f27',color:'#412402'}}>ARS</span></td>
+                  </tr>
+                </tbody>
+              </table>
+              <div className="px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-[10px] text-gray-400">
+                TC aplicado: ARS {fmt(s.tcTrib,0)} · Los importes son estimativos y pueden variar según TC vigente al momento del despacho.
+              </div>
+            </div>
+          )}
+
+          {/* Composición + TC */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Torta SVG */}
+            <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+              <div className="font-semibold text-sm text-gray-900 mb-4">Composición del costo total</div>
+              <div className="flex items-center gap-4">
+                {(()=>{
+                  const mercPct = totalLanded>0?totalFOB/totalLanded:0
+                  const logPct  = totalLanded>0?totalLog/totalLanded:0
+                  const arcPct  = totalLanded>0?totalTribUSD/totalLanded:0
+                  const r = 52, cx = 60, cy = 60
+                  function slice(start:number, end:number, color:string, key:string) {
+                    if(end-start<0.001) return null
+                    if(end-start>0.999) return <circle key={key} cx={cx} cy={cy} r={r} fill={color}/>
+                    const s1 = start*2*Math.PI - Math.PI/2
+                    const e1 = end*2*Math.PI - Math.PI/2
+                    const x1=cx+r*Math.cos(s1),y1=cy+r*Math.sin(s1)
+                    const x2=cx+r*Math.cos(e1),y2=cy+r*Math.sin(e1)
+                    const large=end-start>0.5?1:0
+                    return <path key={key} d={`M${cx},${cy} L${x1},${y1} A${r},${r},0,${large},1,${x2},${y2} Z`} fill={color}/>
+                  }
+                  const s0=0, s1=mercPct, s2=s1+logPct, s3=s2+arcPct
+                  return (
+                    <svg width="120" height="120" viewBox="0 0 120 120">
+                      {slice(s0,s1,'#1168F8','merc')}
+                      {slice(s1,s2,'#93B8FC','log')}
+                      {slice(s2,s3,'#ef9f27','arc')}
+                      <circle cx="60" cy="60" r="32" fill="white"/>
+                      <text x="60" y="57" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="#052698" fontWeight="bold">USD</text>
+                      <text x="60" y="70" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="#6b7280">{fmt(totalLanded,0)}</text>
+                    </svg>
+                  )
+                })()}
+                <div className="flex flex-col gap-3 flex-1">
+                  {totalFOB>0&&<div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{background:'#1168F8'}}/>
+                    <div><div className="text-xs font-semibold text-gray-800">Mercadería</div><div className="text-[10px] text-gray-400">USD {fmt(totalFOB,0)} · {fmt(totalFOB/totalLanded*100,1)}%</div></div>
+                  </div>}
+                  {totalLog>0&&<div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{background:'#93B8FC'}}/>
+                    <div><div className="text-xs font-semibold text-gray-800">Logística</div><div className="text-[10px] text-gray-400">USD {fmt(totalLog,0)} · {fmt(totalLog/totalLanded*100,1)}%</div></div>
+                  </div>}
+                  {s.incluirArca&&totalTribUSD>0&&<div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{background:'#ef9f27'}}/>
+                    <div><div className="text-xs font-semibold" style={{color:'#633806'}}>Tributos ARCA</div><div className="text-[10px]" style={{color:'#854f0b'}}>USD {fmt(totalTribUSD,0)} · {fmt(totalTribUSD/totalLanded*100,1)}%</div></div>
+                  </div>}
                 </div>
-              ))}
-              <div className="flex items-center justify-between px-3 py-3 bg-[#052698] rounded-lg mt-1">
-                <div>
-                  <div className="text-xs font-semibold text-white">
-                    TOTAL {s.sentido==='exportacion'?'SERVICIO LOGÍSTICO':'LANDED EN DESTINO'}
-                  </div>
-                  <div className="text-[10px] text-blue-200">USD {fmt(totalLanded/nc,0)} por contenedor</div>
-                </div>
-                <div className="font-mono font-bold text-white text-xl">USD {fmt(totalLanded,0)}</div>
+              </div>
+            </div>
+
+            {/* TC y validez */}
+            <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+              <div className="font-semibold text-sm text-gray-900 mb-4">Tipos de cambio · Validez</div>
+              <div className="space-y-3">
+                {s.tcTrib>0&&<div className="flex justify-between items-center py-2 border-b border-gray-50">
+                  <span className="text-xs text-gray-500">ARS / USD</span>
+                  <span className="font-mono font-semibold text-sm text-gray-900">ARS {fmt(s.tcTrib,0)}</span>
+                </div>}
+                {s.tcClp>0&&<div className="flex justify-between items-center py-2 border-b border-gray-50">
+                  <span className="text-xs text-gray-500">CLP / USD</span>
+                  <span className="font-mono font-semibold text-sm text-gray-900">CLP {fmt(s.tcClp,0)}</span>
+                </div>}
+                {s.validez&&<div className="flex justify-between items-center py-2">
+                  <span className="text-xs text-gray-500">Validez de la oferta</span>
+                  <span className="font-semibold text-sm text-gray-900">{s.validez}</span>
+                </div>}
               </div>
             </div>
           </div>
@@ -2553,7 +2718,7 @@ const clientesFiltrados=terceros.filter(t=>
           {/* Observaciones */}
           {s.observaciones.filter((o:string)=>o.trim()).length>0&&(
             <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-              <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3">Observaciones</div>
+              <div className="font-semibold text-sm text-gray-900 mb-3">Observaciones</div>
               <ol className="space-y-1.5 list-none">
                 {s.observaciones.filter((o:string)=>o.trim()).map((obs:string,i:number)=>(
                   <li key={i} className="flex gap-2 text-xs text-gray-700">
@@ -2564,15 +2729,6 @@ const clientesFiltrados=terceros.filter(t=>
               </ol>
             </div>
           )}
-
-          {/* Tipos de cambio */}
-          <div className="bg-white border border-gray-100 rounded-xl px-5 py-3.5">
-            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Tipos de cambio aplicados</div>
-            <div className="flex flex-wrap gap-4 text-xs">
-              {s.tcTrib>0&&<div className="flex items-center gap-2"><span className="text-gray-500">TC oficial BNA (ARS/USD)</span><span className="font-mono font-semibold text-gray-800 bg-[#EBF2FF] px-2 py-0.5 rounded">ARS {fmt(s.tcTrib,0)}</span></div>}
-              {s.tcClp>0&&<div className="flex items-center gap-2"><span className="text-gray-500">CLP/USD</span><span className="font-mono font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded">CLP {fmt(s.tcClp,0)}</span></div>}
-            </div>
-          </div>
 
           {/* Botones */}
           <div className="flex justify-between print:hidden">
