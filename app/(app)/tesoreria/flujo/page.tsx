@@ -96,7 +96,7 @@ export default function FlujoCuentasPage() {
       form.moneda_origen === 'CLP' ? montoOrigen / tc.usd :
       montoOrigen / tc.ars
 
-    await (supabase.from('flujo_cuentas_pn') as any).insert({
+    const { data: movData } = await (supabase.from('flujo_cuentas_pn') as any).insert({
       fecha: new Date().toISOString().slice(0,10),
       tipo: form.tipo,
       descripcion: form.descripcion,
