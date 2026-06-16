@@ -747,177 +747,105 @@ const clientesFiltrados=terceros.filter(t=>
 ).slice(0,8)
 
   function generarImpresion() {
-    const nc2 = s.contenedores?.length ? s.contenedores.reduce((t:number,c:any)=>t+(c.cantidad||1),0) : nc
-    const filas = [
-      ...(totalFOB>0?[{sec:'Producto',concepto:`Mercadería (${s.incoterm})`,v:totalFOB}]:[]),
-      ...(s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0?[{sec:'Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros}]:[]),
-      ...(bloqueActivo(0)&&subFW>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:fwElegida?.proveedorNombre||'ForWarder',v:subFW}]:[]),
-      ...(bloqueActivo(0)&&totalSeg>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:'Seguro',v:totalSeg}]:[]),
-      ...(bloqueActivo(1)&&subGastosChile>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Gastos en Chile',v:subGastosChile}]:[]),
-      ...(bloqueActivo(1)&&subDescon>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:`Desconsolidación (Op. ${s.optTransp})`,v:subDescon}]:[]),
-      ...(bloqueActivo(1)&&subAlm>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:`Almacenaje ${fmt(volAlm,2)} m3 × ${s.almDias} días`,v:subAlm}]:[]),
-      ...(bloqueActivo(1)&&subCarga>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Carga al camión',v:subCarga}]:[]),
-      ...(bloqueActivo(2)&&subTransp>0?[{sec:bloques[2]?.nombre||'Bloque 3',concepto:'Flete terrestre',v:subTransp}]:[]),
-      ...(bloqueActivo(3)&&(subE+subGastosArg)>0?[{sec:bloques[3]?.nombre||'Bloque 4',concepto:'Gastos Argentina',v:subE+subGastosArg}]:[]),
-      ...(bloqueActivo(4)&&fee>0?[{sec:bloques[4]?.nombre||'Bloque 5 — Fee PN',concepto:`Fee Puerto NOA`,v:fee}]:[]),
-      ...(s.incluirArca&&totalTribUSD>0?[{sec:'Tributos ARCA',concepto:`Régimen ${s.regimen}`,v:totalTribUSD,ars:Math.round(totalTribARS).toLocaleString('es-AR')}]:[]),
-    ].filter(r=>r.v>0)
-
     const ruta = s.sentido==='exportacion'
-      ? [s.destinoNoa||'Argentina', s.pasoId?pasosFront.find((p:any)=>p.id===s.pasoId)?.nombre||'Paso fronterizo':'', s.ptoChile||'Puerto Chile'].filter(Boolean).join(' → ')
-      : [s.origen||'Origen', s.ptoChile||'Puerto Chile', s.pasoId?pasosFront.find((p:any)=>p.id===s.pasoId)?.nombre||'Paso fronterizo':'', s.destinoNoa||'Destino'].filter(Boolean).join(' → ')
-
+      ? [s.destinoNoa||'Argentina', s.pasoId?pasosFront.find((p:any)=>p.id===s.pasoId)?.nombre||'Paso':'', s.ptoChile||'Puerto Chile'].filter(Boolean).join(' → ')
+      : [s.origen?s.origen.split(' (')[0]:'Origen', s.ptoChile||'Puerto Chile', s.pasoId?pasosFront.find((p:any)=>p.id===s.pasoId)?.nombre||'Paso':'', s.destinoNoa||'Destino'].filter(Boolean).join(' → ')
     const fecha = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'long',year:'numeric'})
-    const totalPct = (v:number) => totalLanded>0?`${((v/totalLanded)*100).toFixed(1)}%`:''
-
-    const html = `<!DOCTYPE html>
-  <html lang="es">
-  <head>
-  <meta charset="UTF-8"/>
-  <title>Cotización ${cotNumActual||''} — Puerto NOA SpA</title>
-  <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: 'Arial', sans-serif; font-size: 11px; color: #1a1a1a; background: white; padding: 20mm 18mm; }
-    /* Header */
-    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px; padding-bottom:16px; border-bottom:3px solid #1168F8; }
-    .logo { font-size:22px; font-weight:900; color:#052698; letter-spacing:-0.5px; }
-    .logo span { color:#1168F8; }
-    .header-right { text-align:right; }
-    .num-cot { font-size:16px; font-weight:700; color:#052698; font-family:monospace; }
-    .fecha { font-size:10px; color:#666; margin-top:2px; }
-    /* Datos cliente */
-    .seccion { margin-bottom:16px; }
-    .sec-title { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#666; margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:3px; }
-    .dato-row { display:flex; gap:32px; flex-wrap:wrap; }
-    .dato { margin-bottom:4px; }
-    .dato label { font-size:9px; color:#888; display:block; }
-    .dato span { font-size:11px; font-weight:600; color:#1a1a1a; }
-    /* Ruta */
-    .ruta-box { background:#EBF2FF; border-radius:8px; padding:10px 14px; margin-bottom:16px; }
-    .ruta-label { font-size:9px; color:#1168F8; font-weight:700; text-transform:uppercase; margin-bottom:4px; }
-    .ruta-val { font-size:13px; font-weight:700; color:#052698; }
-    .sentido-badge { display:inline-block; background:#052698; color:white; font-size:9px; font-weight:700; padding:2px 8px; border-radius:20px; margin-right:8px; }
-    /* Tabla */
-    table { width:100%; border-collapse:collapse; margin-bottom:16px; }
-    thead tr { background:#052698; }
-    thead th { color:white; font-size:9px; font-weight:700; text-transform:uppercase; padding:7px 10px; text-align:left; }
-    thead th:last-child, thead th:nth-last-child(2) { text-align:right; }
-    tbody tr { border-bottom:1px solid #f0f0f0; }
-    tbody tr:hover { background:#fafafa; }
-    tbody td { padding:6px 10px; font-size:11px; vertical-align:middle; }
-    .td-sec { font-size:9px; color:#666; font-weight:600; }
-    .td-usd { text-align:right; font-family:monospace; font-weight:600; }
-    .td-pct { text-align:right; color:#888; font-size:10px; }
-    .td-ars { font-size:9px; color:#1168F8; font-family:monospace; }
-    .total-row { background:#052698 !important; }
-    .total-row td { color:white; font-weight:700; font-size:12px; padding:9px 10px; }
-    .total-row td:last-child, .total-row td:nth-last-child(2) { text-align:right; font-family:monospace; font-size:13px; }
-    /* Observaciones */
-    .obs-list { list-style:none; }
-    .obs-list li { padding:4px 0; border-bottom:1px solid #f5f5f5; font-size:11px; color:#333; }
-    .obs-list li::before { content:counter(item) '. '; counter-increment:item; color:#888; font-weight:600; }
-    .obs-list { counter-reset:item; }
-    /* Footer */
-    .footer { margin-top:24px; padding-top:12px; border-top:1px solid #eee; display:flex; justify-content:space-between; align-items:flex-end; }
-    .footer-left { font-size:10px; color:#444; }
-    .footer-left .validez { font-weight:700; color:#052698; }
-    .footer-right { font-size:9px; color:#aaa; font-style:italic; font-family:Georgia, serif; }
-    .tc-row { display:flex; gap:16px; font-size:10px; color:#666; margin-top:4px; }
-    .tc-val { font-family:monospace; font-weight:600; color:#333; }
-    @media print { body { padding:10mm 12mm; } @page { margin:0; size:A4; } }
-  </style>
-  </head>
-  <body>
-  <!-- HEADER -->
-  <div class="header">
-    <div>
-      <img src="${window.location.origin}/logo.png" alt="Puerto NOA" style="height:40px;object-fit:contain;"/>
-      <div style="font-size:10px;color:#666;margin-top:4px;">SpA · Servicios logísticos de importación</div>
-    </div>
-    <div class="header-right">
-      <div class="num-cot">${cotNumActual||'BORRADOR'}</div>
-      <div class="fecha">${fecha}</div>
-      ${s.validez?`<div style="font-size:10px;color:#666;margin-top:4px;">Válida por ${s.validez}</div>`:''}
-    </div>
-  </div>
-
-  <!-- CLIENTE -->
-  <div class="seccion">
-    <div class="sec-title">Cliente</div>
-    <div class="dato-row">
-      <div class="dato"><label>Razón social</label><span>${s.cliente||'—'}</span></div>
-      ${s.cuit?`<div class="dato"><label>CUIT</label><span>${s.cuit}</span></div>`:''}
-    </div>
-  </div>
-
-  <!-- RUTA -->
-  <div class="ruta-box">
-    <div class="ruta-label">Ruta de la operación</div>
-    <div>
-      <span class="sentido-badge">${s.sentido==='exportacion'?'EXPORTACIÓN':'IMPORTACIÓN'}</span>
-      <span class="ruta-val">${ruta}</span>
-    </div>
-  </div>
-
-  <!-- DESGLOSE -->
-  <div class="seccion">
-    <div class="sec-title">Desglose de costos</div>
-    <table>
-      <thead>
-        <tr>
-          <th>Bloque</th>
-          <th>Concepto</th>
-          <th>USD</th>
-          ${s.incluirArca?'<th>ARS</th>':''}
-          <th>%</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${filas.map(r=>`
-          <tr>
-            <td class="td-sec">${r.sec}</td>
-            <td>${r.concepto}</td>
-            <td class="td-usd">USD ${fmt(r.v)}</td>
-            ${s.incluirArca?`<td class="td-ars">${(r as any).ars||''}</td>`:''}
-            <td class="td-pct">${totalPct(r.v)}</td>
-          </tr>
-        `).join('')}
-        <tr class="total-row">
-          <td colspan="2">TOTAL ${s.sentido==='exportacion'?'SERVICIO LOGÍSTICO':'LANDED EN DESTINO'}</td>
-          <td>USD ${fmt(totalLanded)}</td>
-          ${s.incluirArca?`<td></td>`:''}
-          <td>100%</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  ${s.observaciones.filter((o:string)=>o.trim()).length>0?`
-  <!-- OBSERVACIONES -->
-  <div class="seccion">
-    <div class="sec-title">Observaciones</div>
-    <ol class="obs-list">
-      ${s.observaciones.filter((o:string)=>o.trim()).map((obs:string)=>`<li>${obs}</li>`).join('')}
-    </ol>
-  </div>
-  `:''}
-
-  <!-- FOOTER -->
-  <div class="footer">
-    <div class="footer-left">
-      ${s.validez?`<div>Oferta <span class="validez">válida por ${s.validez}</span> desde la fecha de emisión</div>`:''}
-      <div class="tc-row">
-        ${s.tcTrib?`<span>TC BNA (ARS/USD): <span class="tc-val">ARS ${fmt(s.tcTrib,0)}</span></span>`:''}
-        ${s.tcClp?`<span>TC (CLP/USD): <span class="tc-val">CLP ${fmt(s.tcClp,0)}</span></span>`:''}
-      </div>
-    </div>
-    <div class="footer-right">Developed by Pablin</div>
-  </div>
-
-  <script>window.onload=()=>{window.print();}</script>
-  </body>
-  </html>`
-
+    const filas = [
+      ...(totalFOB>0?[{sec:'Producto',concepto:'Precio mercadería ('+s.incoterm+')',v:totalFOB,ars:''}]:[]),
+      ...(s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0?[{sec:'Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros,ars:''}]:[]),
+      ...(bloqueActivo(0)&&subFW>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:fwElegida?.proveedorNombre||'Manual',v:subFW,ars:''}]:[]),
+      ...(bloqueActivo(0)&&totalSeg>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:'Seguro',v:totalSeg,ars:''}]:[]),
+      ...(bloqueActivo(1)&&subGastosChile>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Gastos en Chile',v:subGastosChile,ars:''}]:[]),
+      ...(bloqueActivo(1)&&subDescon>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Desconsolidación (Op. '+s.optTransp+')',v:subDescon,ars:''}]:[]),
+      ...(bloqueActivo(1)&&subAlm>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Almacenaje '+fmt(volAlm,2)+' m3 x '+s.almDias+' días',v:subAlm,ars:''}]:[]),
+      ...(bloqueActivo(1)&&subCarga>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Carga al camión',v:subCarga,ars:''}]:[]),
+      ...(bloqueActivo(2)&&subTransp>0?[{sec:bloques[2]?.nombre||'Bloque 3',concepto:'Flete terrestre',v:subTransp,ars:''}]:[]),
+      ...(bloqueActivo(3)&&subGastosArg>0?[{sec:bloques[3]?.nombre||'Bloque 4',concepto:'Despachante y honorarios',v:subGastosArg,ars:''}]:[]),
+      ...(bloqueActivo(3)&&subE>0?[{sec:bloques[3]?.nombre||'Bloque 4',concepto:'Otros gastos Argentina',v:subE,ars:''}]:[]),
+      ...(bloqueActivo(4)&&fee>0?[{sec:bloques[4]?.nombre||'Bloque 5',concepto:'Fee Puerto NOA',v:fee,ars:''}]:[]),
+      ...(s.incluirArca&&totalTribUSD>0?[{sec:'Tributos ARCA',concepto:'Régimen '+s.regimen+' — Base CIF Jama',v:totalTribUSD,ars:'ARS '+Math.round(totalTribARS).toLocaleString('es-AR')}]:[]),
+    ].filter(r=>r.v>0)
+    const comp = [
+      ...(totalFOB>0?[{label:'Valor mercadería',sub:s.incoterm,v:totalFOB,ars:''}]:[]),
+      ...(bloqueActivo(0)&&(subFW+totalSeg)>0?[{label:bloques[0]?.nombre||'Bloque 1',sub:fwElegida?.proveedorNombre||'No asignado',v:subFW+totalSeg,ars:''}]:[]),
+      ...(bloqueActivo(1)&&(subGastosChile+subDescon+subAlm+subCarga)>0?[{label:bloques[1]?.nombre||'Bloque 2',sub:'Op. '+s.optTransp,v:subGastosChile+subDescon+subAlm+subCarga,ars:''}]:[]),
+      ...(bloqueActivo(2)&&subTransp>0?[{label:bloques[2]?.nombre||'Bloque 3',sub:'Bloque 3',v:subTransp,ars:''}]:[]),
+      ...(bloqueActivo(3)&&(subE+subGastosArg)>0?[{label:bloques[3]?.nombre||'Bloque 4',sub:'Bloque 4',v:subE+subGastosArg,ars:''}]:[]),
+      ...(bloqueActivo(4)&&fee>0?[{label:'Fee Puerto NOA',sub:'Bloque 5',v:fee,ars:''}]:[]),
+      ...(s.incluirArca&&totalTribUSD>0?[{label:'Tributos ARCA',sub:'Régimen '+s.regimen,v:totalTribUSD,ars:'ARS '+Math.round(totalTribARS).toLocaleString('es-AR')}]:[]),
+    ].filter(it=>it.v>0)
+    const totalLabel = s.sentido==='exportacion'?'SERVICIO LOGÍSTICO':'LANDED EN DESTINO'
+    const esExpo = s.sentido==='exportacion'
+    const difComp = s.precioArgEquiv>0&&!esExpo ? s.precioArgEquiv-totalLanded : 0
+    const css = `
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;background:white;padding:18mm 16mm}
+      .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #1168F8}
+      .hdr-r{text-align:right}.num{font-size:16px;font-weight:700;color:#052698;font-family:monospace}
+      .fecha{font-size:10px;color:#666;margin-top:2px}
+      .sec{margin-bottom:14px}.sec-t{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#666;margin-bottom:5px;padding-bottom:3px;border-bottom:1px solid #eee}
+      .ruta{background:#EBF2FF;border-radius:6px;padding:8px 12px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+      .badge{background:#052698;color:white;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px}
+      .ruta-v{font-size:12px;font-weight:700;color:#052698}
+      .kpig{display:grid;grid-template-columns:1fr 40px 1fr;gap:8px;margin-bottom:14px;align-items:center}
+      .kpi{background:#f8faff;border:1px solid #e0e8ff;border-top:3px solid #1168F8;border-radius:6px;padding:10px;text-align:center}
+      .kpi-l{font-size:9px;color:#666;margin-bottom:4px}.kpi-v{font-size:18px;font-weight:700;color:#1a1a1a;font-family:monospace}
+      .kpi-s{font-size:9px;color:#888;margin-top:2px}.kpi-vs{text-align:center;font-size:11px;color:#aaa;font-weight:600}
+      .cmp-box{padding:8px 12px;border-radius:6px;font-size:10px;text-align:center;font-weight:600;margin-bottom:14px}
+      .cmp-ok{background:#EBF2FF;color:#052698;border:1px solid #93B8FC}
+      .cmp-bad{background:#fef2f2;color:#b91c1c;border:1px solid #fca5a5}
+      table{width:100%;border-collapse:collapse;margin-bottom:14px}
+      thead tr{background:#052698}thead th{color:white;font-size:9px;font-weight:700;text-transform:uppercase;padding:6px 8px;text-align:left}
+      th.r{text-align:right}tbody tr{border-bottom:1px solid #f0f0f0}tbody td{padding:5px 8px;font-size:11px}
+      .ts{font-size:9px;color:#666;font-weight:600}.tr{text-align:right;font-family:monospace;font-weight:600}
+      .tars{font-size:9px;color:#1168F8;font-family:monospace}
+      .ttot td{background:#052698;color:white;font-weight:700;font-size:12px;padding:8px}
+      .ttot .tr{text-align:right;font-family:monospace;font-size:13px}
+      .crow{display:flex;align-items:center;gap:10px;background:#f8f9fa;border-radius:5px;padding:7px 10px;margin-bottom:5px}
+      .cinfo{flex:1}.clabel{font-size:11px;font-weight:600;color:#1a1a1a}.csub{font-size:9px;color:#888;margin-top:1px}
+      .cbar{width:100%;height:4px;background:#e5e7eb;border-radius:2px;margin-top:4px}
+      .cbar-f{height:4px;background:#1168F8;border-radius:2px}
+      .cvals{text-align:right;flex-shrink:0}.cusd{font-family:monospace;font-weight:700;font-size:12px;color:#1a1a1a}
+      .cars{font-family:monospace;font-size:9px;color:#1168F8}.cpct{font-size:9px;color:#888}
+      .ctot{display:flex;justify-content:space-between;align-items:center;background:#052698;border-radius:6px;padding:10px 12px;color:white;margin-top:4px}
+      .ctot-l{font-size:11px;font-weight:700}.ctot-s{font-size:9px;color:#93c5fd;margin-top:1px}
+      .ctot-v{font-family:monospace;font-size:18px;font-weight:700}
+      .obs-l{counter-reset:item;list-style:none}
+      .obs-l li{counter-increment:item;padding:4px 0;border-bottom:1px solid #f5f5f5;font-size:11px}
+      .obs-l li::before{content:counter(item) '. ';color:#888;font-weight:600}
+      .footer{margin-top:20px;padding-top:10px;border-top:1px solid #eee;display:flex;justify-content:space-between;align-items:flex-end}
+      .footer-r{font-size:9px;color:#aaa;font-style:italic;font-family:Georgia,serif}
+      .tc-r{display:flex;gap:16px;font-size:10px;color:#666;margin-top:4px}
+      .tc-v{font-family:monospace;font-weight:600;background:#EBF2FF;color:#052698;padding:1px 6px;border-radius:4px}
+      @media print{body{padding:10mm 12mm}@page{margin:0;size:A4}}
+    `
+    const kpiDer = !esExpo&&s.precioArgEquiv>0
+      ? '<div class="kpi-l">Precio equiv. en Argentina</div><div class="kpi-v">USD '+fmt(s.precioArgEquiv,0)+'</div>'
+      : '<div class="kpi-l">Por contenedor</div><div class="kpi-v">USD '+fmt(totalLanded/nc,0)+'</div><div class="kpi-s">'+nc+' contenedor(es)</div>'
+    const kpiSub = esExpo ? nc+' contenedor(es)' : 'producto + logística'+(s.incluirArca?' + tributos':'')
+    const cmpHtml = difComp!==0
+      ? '<div class="cmp-box '+(difComp>0?'cmp-ok':'cmp-bad')+'">'+(difComp>0
+          ? 'Importar desde China es USD '+fmt(Math.abs(difComp),0)+' más económico ('+Math.round(Math.abs(difComp)/s.precioArgEquiv*100)+'% de ahorro vs precio local Argentina USD '+fmt(s.precioArgEquiv,0)+')'
+          : 'Importar desde China resulta USD '+fmt(Math.abs(difComp),0)+' más caro que el precio local Argentina (USD '+fmt(s.precioArgEquiv,0)+')')+'</div>'
+      : ''
+    const filasHTML = filas.map(r=>'<tr><td class="ts">'+r.sec+'</td><td>'+r.concepto+'</td><td class="tr">USD '+fmt(r.v)+'</td></tr>'+(r.ars?'<tr><td></td><td class="tars">Equiv. '+r.ars+'</td><td></td></tr>':'')).join('')
+    const compHTML = comp.map(it=>'<div class="crow"><div class="cinfo"><div class="clabel">'+it.label+'</div><div class="csub">'+it.sub+'</div><div class="cbar"><div class="cbar-f" style="width:'+Math.min(100,(it.v/totalLanded)*100).toFixed(1)+'%"></div></div></div><div class="cvals"><div class="cusd">USD '+fmt(it.v,0)+'</div>'+(it.ars?'<div class="cars">'+it.ars+'</div>':'')+'<div class="cpct">'+((it.v/totalLanded)*100).toFixed(1)+'%</div></div></div>').join('')
+    const obsHTML = s.observaciones.filter((o:string)=>o.trim()).length>0
+      ? '<div class="sec"><div class="sec-t">Observaciones</div><ol class="obs-l">'+s.observaciones.filter((o:string)=>o.trim()).map((o:string)=>'<li>'+o+'</li>').join('')+'</ol></div>'
+      : ''
+    const html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><title>Cotizacion '+( cotNumActual||'BORRADOR')+' - Puerto NOA SpA</title><style>'+css+'</style></head><body>'
+      +'<div class="hdr"><div><img src="'+window.location.origin+'/logo.png" alt="Puerto NOA" style="height:38px;object-fit:contain;"/><div style="font-size:10px;color:#666;margin-top:3px;">SpA - Servicios logísticos de importación/exportación</div></div><div class="hdr-r"><div class="num">'+(cotNumActual||'BORRADOR')+'</div><div class="fecha">'+fecha+'</div>'+(s.validez?'<div style="font-size:10px;color:#666;margin-top:3px;">Válida por '+s.validez+'</div>':'')+'</div></div>'
+      +'<div class="sec"><div class="sec-t">Cliente</div><div style="display:flex;gap:24px;"><div><span style="font-size:9px;color:#888;">Razón social </span><strong>'+(s.cliente||'—')+'</strong></div>'+(s.cuit?'<div><span style="font-size:9px;color:#888;">CUIT </span><strong>'+s.cuit+'</strong></div>':'')+'</div></div>'
+      +'<div class="ruta"><span class="badge">'+(esExpo?'EXPORTACIÓN':'IMPORTACIÓN')+'</span><span class="ruta-v">'+ruta+'</span></div>'
+      +'<div class="kpig"><div class="kpi"><div class="kpi-l">'+(esExpo?'Costo total servicio logístico':'Costo total — '+(s.destinoNoa||'destino'))+'</div><div class="kpi-v">USD '+fmt(totalLanded,0)+'</div><div class="kpi-s">'+kpiSub+'</div></div><div class="kpi-vs">VS</div><div class="kpi">'+kpiDer+'</div></div>'
+      +cmpHtml
+      +'<div class="sec"><div class="sec-t">Desglose completo de costos</div><table><thead><tr><th>Bloque</th><th>Concepto</th><th class="r">USD</th></tr></thead><tbody>'+filasHTML+'<tr class="ttot"><td colspan="2">TOTAL '+totalLabel+'</td><td class="tr">USD '+fmt(totalLanded)+'</td></tr></tbody></table></div>'
+      +'<div class="sec"><div class="sec-t">Composición del costo total</div>'+compHTML+'<div class="ctot"><div><div class="ctot-l">TOTAL '+totalLabel+'</div><div class="ctot-s">USD '+fmt(totalLanded/nc,0)+' por contenedor</div></div><div class="ctot-v">USD '+fmt(totalLanded,0)+'</div></div></div>'
+      +obsHTML
+      +'<div class="sec"><div class="sec-t">Tipos de cambio aplicados</div><div class="tc-r">'+(s.tcTrib>0?'<span>TC BNA (ARS/USD) <span class="tc-v">ARS '+fmt(s.tcTrib,0)+'</span></span>':'')+(s.tcClp>0?'<span>TC (CLP/USD) <span class="tc-v">CLP '+fmt(s.tcClp,0)+'</span></span>':'')+'</div></div>'
+      +'<div class="footer"><div>'+(s.validez?'<div style="font-size:10px;color:#444;">Oferta <strong>válida por '+s.validez+'</strong> desde la fecha de emisión</div>':'')+'</div><div class="footer-r">Developed by Pablin</div></div>'
+      +'<script>window.onload=function(){window.print();}</script></body></html>'
     const win = window.open('','_blank','width=900,height=700')
     if(win){ win.document.write(html); win.document.close() }
   }
