@@ -1378,13 +1378,36 @@ const clientesFiltrados=terceros.filter(t=>
               ):(
                 <div className="space-y-2">
                   {s.proformas.map((pf,pi)=>(
-                    <div key={pf.id} className="flex items-center gap-2 p-3 bg-[#EBF2FF] border border-[#93B8FC] rounded-lg">
-                      <div className="grid grid-cols-3 gap-2 flex-1">
-                        <input value={pf.numero} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],numero:e.target.value};u('proformas',n)}} className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="N proforma"/>
-                        <input value={pf.proveedor} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],proveedor:e.target.value};u('proformas',n)}} className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Proveedor chino"/>
-                        <input type="date" value={pf.fecha} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],fecha:e.target.value};u('proformas',n)}} className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white"/>
+                    <div key={pf.id} className="p-3 bg-[#EBF2FF] border border-[#93B8FC] rounded-lg space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="grid grid-cols-3 gap-2 flex-1">
+                          <input value={pf.numero} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],numero:e.target.value};u('proformas',n)}} className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="N° proforma"/>
+                          <input value={pf.proveedor} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],proveedor:e.target.value};u('proformas',n)}} className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Proveedor chino"/>
+                          <input type="date" value={pf.fecha} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],fecha:e.target.value};u('proformas',n)}} className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white"/>
+                        </div>
+                        <button onClick={()=>u('proformas',s.proformas.filter((_,j)=>j!==pi))} className="text-[#93B8FC] hover:text-red-500 text-xs flex-shrink-0">✕</button>
                       </div>
-                      <button onClick={()=>u('proformas',s.proformas.filter((_,j)=>j!==pi))} className="text-[#93B8FC] hover:text-red-500 text-xs">X</button>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1.5 px-2 py-1 border border-dashed border-[#93B8FC] rounded text-[10px] text-[#1168F8] hover:border-[#1168F8] cursor-pointer flex-1 bg-white">
+                          📎 {pf.archivo_nombre || 'Adjuntar PDF / imagen de la proforma'}
+                          <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={async e=>{
+                            const file = e.target.files?.[0]
+                            if(!file) return
+                            const sb = (await import('@/lib/supabase')).createClient()
+                            const ext = file.name.split('.').pop()
+                            const path = `proformas/${pf.id}.${ext}`
+                            await sb.storage.from('comprobantes').upload(path, file, {upsert:true})
+                            const {data:ud} = sb.storage.from('comprobantes').getPublicUrl(path)
+                            const n=[...s.proformas];n[pi]={...n[pi],archivo_url:ud?.publicUrl||'',archivo_nombre:file.name};u('proformas',n)
+                          }}/>
+                        </label>
+                        {pf.archivo_url && (
+                          <a href={pf.archivo_url} target="_blank" rel="noreferrer"
+                            className="px-2 py-1 bg-white border border-[#93B8FC] text-[#1168F8] rounded text-[10px] font-medium hover:bg-[#EBF2FF] flex-shrink-0">
+                            📄 Ver
+                          </a>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
