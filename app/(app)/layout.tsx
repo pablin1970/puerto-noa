@@ -77,20 +77,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
-    // Verificar sesión — con reintentos para flujo OAuth
-    const checkSession = async (retries = 5, delay = 500) => {
-      const { data } = await supabase.auth.getUser()
-      if (data.user) {
-        const { data: u } = await supabase.from('usuarios').select('*').eq('auth_id', data.user.id).single()
-        if (u) { setUser(u as Usuario); return }
-      }
-      if (retries > 0) {
-        setTimeout(() => checkSession(retries - 1, delay), delay)
-      } else {
-        router.push('/')
-      }
-    }
-    checkSession()
+    // El middleware ya protege las rutas — aquí solo cargamos los datos del usuario
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) { router.push('/'); return }
+      const { data: u } = await supabase.from('usuarios').select('*').eq('auth_id', data.user.id).single()
+      if (u) setUser(u as Usuario)
+      else router.push('/')
+    })
     // Escuchar cambios de sesión (logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') { router.push('/'); return }
