@@ -2437,151 +2437,161 @@ const clientesFiltrados=terceros.filter(t=>
         <div className="space-y-4">
           <style>{`
             @media print {
-              /* Ocultar sidebar y navegación */
-              aside, nav, header, [data-sidebar], .sidebar { display: none !important; }
-              /* Ocultar botones de navegación */
+              aside, nav, header, [data-sidebar] { display: none !important; }
               .print\:hidden { display: none !important; }
-              /* Expandir contenido */
-              main, .main-content { margin: 0 !important; padding: 0 !important; width: 100% !important; }
               body { background: white !important; }
-              /* Tamaño de página */
               @page { margin: 15mm; size: A4; }
-              /* Evitar cortes en tablas */
               tr { page-break-inside: avoid; }
             }
           `}</style>
 
-          {/* Header adaptativo según sentido */}
-          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-lg">{s.sentido==='exportacion'?'🚢':'📦'}</span>
-                  <h2 className="font-bold text-base text-gray-900">
-                    {s.sentido==='exportacion'?'Cotización de exportación':'Cotización de importación'}
-                  </h2>
-                </div>
-                <div className="text-xs text-gray-400">
-                  {s.sentido==='exportacion'
-                    ? `${s.destinoNoa||'Argentina'} → ${s.ptoChile||'Puerto Chile'} → Destino`
-                    : `Origen → ${s.ptoChile||'Puerto Chile'} → ${s.destinoNoa||'NOA'}`}
-                  {s.cliente&&<span className="ml-2 font-semibold text-gray-600">· {s.cliente}</span>}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={generarImpresion}
-                  className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50 flex items-center gap-1.5">
-                  🖨 Imprimir / PDF
-                </button>
-                <button onClick={guardar} disabled={saving}
-                  className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-60">
-                  {saving?'Guardando...':'Guardar cotización'}
-                </button>
+          {/* Header con botón imprimir */}
+          <div className="flex items-center justify-between print:hidden">
+            <div>
+              <h2 className="font-bold text-base text-gray-900">
+                {s.sentido==='exportacion'?'Resumen cotización exportación':'Resumen cotización importación'}
+              </h2>
+              <div className="flex gap-2 mt-1 flex-wrap">
+                {bloques.filter((_:any,i:number)=>bloqueActivo(i)).map((b:any)=>(
+                  <span key={b.id} className="px-2 py-0.5 bg-[#EBF2FF] text-[#052698] rounded-full text-[9px] font-semibold">{b.nombre}</span>
+                ))}
+                {s.incluirArca&&<span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[9px] font-semibold">Tributos ARCA</span>}
               </div>
             </div>
-
-            {/* Bloques activos en esta cotización */}
-            <div className="flex flex-wrap gap-2">
-              {bloques.filter((_:any,i:number)=>bloqueActivo(i)).map((b:any,i:number)=>(
-                <span key={b.id} className="px-2.5 py-1 bg-[#EBF2FF] text-[#052698] rounded-full text-[10px] font-semibold">
-                  {b.nombre}
-                </span>
-              ))}
-              {s.incluirArca&&<span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-[10px] font-semibold">Tributos ARCA</span>}
-            </div>
+            <button onClick={generarImpresion}
+              className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50 flex items-center gap-1.5">
+              🖨 Imprimir / PDF
+            </button>
           </div>
 
-          {/* KPI principal */}
+          {/* KPI principal — adaptado según sentido */}
           <div className="grid grid-cols-3 gap-3 items-center">
-            <div className="bg-white border border-gray-100 border-t-4 border-t-[#1168F8] rounded-xl p-5 text-center col-span-2">
+            <div className="bg-white border border-gray-100 border-t-4 border-t-[#1168F8] rounded-xl p-5 text-center">
               <div className="text-[10px] text-gray-400 mb-1">
                 {s.sentido==='exportacion'
-                  ? `Costo total del servicio logístico`
+                  ? `Costo total servicio logístico`
                   : `Costo total ${s.origen?s.origen.split(' (')[0]:'origen'} — ${s.destinoNoa||'destino'}`}
               </div>
-              <div className="text-3xl font-bold text-gray-900 font-mono">USD {fmt(totalLanded,0)}</div>
+              <div className="text-2xl font-semibold text-gray-900">USD {fmt(totalLanded,0)}</div>
               <div className="text-[10px] text-gray-400 mt-1">
-                {s.sentido==='exportacion'
-                  ? `${nc} contenedor(es) · USD ${fmt(totalLanded/nc,0)} por cont.`
-                  : `producto + logística${s.incluirArca?' + tributos':''}`}
+                {s.sentido==='exportacion'?'logística + fee':'producto + logística + tributos'}
               </div>
             </div>
-            {s.precioArgEquiv>0&&s.sentido!=='exportacion'?(
-              <div className={`rounded-xl p-4 text-center border ${(s.precioArgEquiv-totalLanded)>0?'bg-green-50 border-green-100':'bg-red-50 border-red-100'}`}>
-                <div className="text-[10px] text-gray-400 mb-1">vs precio local Argentina</div>
-                <div className={`text-lg font-bold font-mono ${(s.precioArgEquiv-totalLanded)>0?'text-green-700':'text-red-700'}`}>
-                  {(s.precioArgEquiv-totalLanded)>0?'−':'+'} USD {fmt(Math.abs(s.precioArgEquiv-totalLanded),0)}
-                </div>
-                <div className={`text-[10px] mt-1 ${(s.precioArgEquiv-totalLanded)>0?'text-green-600':'text-red-600'}`}>
-                  {(s.precioArgEquiv-totalLanded)>0?'más económico importar':'más caro que precio local'}
-                </div>
-              </div>
-            ):(
-              <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-center">
-                <div className="text-[10px] text-gray-400 mb-1">Tipos de cambio</div>
-                <div className="text-xs font-mono text-gray-700">ARS {fmt(s.tcTrib,0)}</div>
-                <div className="text-xs font-mono text-gray-500">CLP {fmt(s.tcClp,0)}</div>
-              </div>
-            )}
+            <div className="text-center text-sm text-gray-400 font-semibold">VS</div>
+            <div className="bg-white border border-gray-100 border-t-4 border-t-blue-300 rounded-xl p-5 text-center">
+              {s.sentido!=='exportacion'&&s.precioArgEquiv>0?(
+                <>
+                  <div className="text-[10px] text-gray-400 mb-1">Precio equivalente en Argentina</div>
+                  <div className="text-2xl font-semibold text-gray-900">USD {fmt(s.precioArgEquiv,0)}</div>
+                </>
+              ):(
+                <>
+                  <div className="text-[10px] text-gray-400 mb-1">Por contenedor</div>
+                  <div className="text-2xl font-semibold text-gray-900">USD {fmt(totalLanded/nc,0)}</div>
+                  <div className="text-[10px] text-gray-400 mt-1">{nc} contenedor(es)</div>
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Desglose por bloques activos */}
-          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-3.5 border-b border-gray-100 font-semibold text-sm text-gray-900">
-              Desglose de costos
+          {/* Comparativo precio local — solo importación */}
+          {s.precioArgEquiv>0&&s.sentido!=='exportacion'&&(
+            <div className={`text-xs px-4 py-3 rounded-xl text-center font-medium ${(s.precioArgEquiv-totalLanded)>0?'bg-[#EBF2FF] text-[#052698] border border-[#93B8FC]':'bg-red-50 text-red-700 border border-red-200'}`}>
+              {(s.precioArgEquiv-totalLanded)>0
+                ?`Importar desde China es USD ${fmt(Math.abs(s.precioArgEquiv-totalLanded),0)} más económico (${Math.round(Math.abs(s.precioArgEquiv-totalLanded)/s.precioArgEquiv*100)}% de ahorro)`
+                :`Importar desde China resulta USD ${fmt(Math.abs(s.precioArgEquiv-totalLanded),0)} más caro que el precio local`}
             </div>
+          )}
+
+          {/* Desglose completo */}
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Desglose completo de costos</div>
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-semibold uppercase">Bloque</th>
-                  <th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-semibold uppercase">Concepto</th>
-                  <th className="text-right px-4 py-2.5 text-[10px] text-gray-400 font-semibold uppercase">USD</th>
-                  <th className="text-right px-4 py-2.5 text-[10px] text-gray-400 font-semibold uppercase">%</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase">Bloque</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase">Concepto</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] text-gray-400 font-medium uppercase">USD</th>
                 </tr>
               </thead>
               <tbody>
                 {[
-                  // Producto — siempre
-                  ...(totalFOB>0?[{sec:'Producto',concepto:`Mercadería (${s.incoterm})`,v:totalFOB,show:true}]:[]),
-                  ...(s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0?[{sec:'Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros,show:true}]:[]),
-                  // Bloque 1 — ForWarder
-                  ...(bloqueActivo(0)&&subFW>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:fwElegida?.proveedorNombre||'Manual',v:subFW,show:true}]:[]),
-                  ...(bloqueActivo(0)&&totalSeg>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:'Seguro',v:totalSeg,show:true}]:[]),
-                  // Bloque 2 — Chile
-                  ...(bloqueActivo(1)&&subGastosChile>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Gastos en Chile',v:subGastosChile,show:true}]:[]),
-                  ...(bloqueActivo(1)&&subDescon>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:`Desconsolidación (Op. ${s.optTransp})`,v:subDescon,show:true}]:[]),
-                  ...(bloqueActivo(1)&&subAlm>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:`Almacenaje ${fmt(volAlm,2)} m3 × ${s.almDias} días`,v:subAlm,show:true}]:[]),
-                  ...(bloqueActivo(1)&&subCarga>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Carga al camión',v:subCarga,show:true}]:[]),
-                  // Bloque 3 — Flete terrestre
-                  ...(bloqueActivo(2)&&subTransp>0?[{sec:bloques[2]?.nombre||'Bloque 3',concepto:'Flete terrestre',v:subTransp,show:true}]:[]),
-                  // Bloque 4 — Argentina
-                  ...(bloqueActivo(3)&&(subE+subGastosArg)>0?[{sec:bloques[3]?.nombre||'Bloque 4',concepto:'Gastos Argentina',v:subE+subGastosArg,show:true}]:[]),
-                  // Bloque 5 — Fee PN
-                  ...(bloqueActivo(4)&&fee>0?[{sec:bloques[4]?.nombre||'Bloque 5 — Fee PN',concepto:`${nc} cont. × USD ${s.feeCont}`,v:fee,show:true}]:[]),
-                  // Tributos ARCA
-                  ...(s.incluirArca&&totalTribUSD>0?[{sec:'Tributos ARCA',concepto:`Régimen ${s.regimen}`,v:totalTribUSD,ars:Math.round(totalTribARS).toLocaleString('es-AR'),show:true}]:[]),
-                ].filter(r=>r.show&&r.v>0).map((r,i)=>(
+                  ...(totalFOB>0?[{sec:'Producto',concepto:`Precio mercadería (${s.incoterm})`,v:totalFOB}]:[]),
+                  ...(s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0?[{sec:'Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros}]:[]),
+                  ...(bloqueActivo(0)&&subFW>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:fwElegida?.proveedorNombre?`${fwElegida.proveedorNombre}${fwElegida.referencia?` — ${fwElegida.referencia}`:''}`:'Manual',v:subFW}]:[]),
+                  ...(bloqueActivo(0)&&totalSeg>0?[{sec:bloques[0]?.nombre||'Bloque 1',concepto:segFW>0?'Seguro incluido en ForWarder':'Seguro independiente',v:totalSeg}]:[]),
+                  ...(bloqueActivo(1)&&subGastosChile>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Gastos en Chile',v:subGastosChile}]:[]),
+                  ...(bloqueActivo(1)&&subDescon>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:`Desconsolidación (Op. ${s.optTransp})`,v:subDescon}]:[]),
+                  ...(bloqueActivo(1)&&subAlm>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:`Almacenaje ${fmt(volAlm,2)} m3 × ${s.almDias} días`,v:subAlm}]:[]),
+                  ...(bloqueActivo(1)&&subCarga>0?[{sec:bloques[1]?.nombre||'Bloque 2',concepto:'Carga al camión',v:subCarga}]:[]),
+                  ...(bloqueActivo(2)&&subTransp>0?[{sec:bloques[2]?.nombre||'Bloque 3',concepto:'Flete terrestre',v:subTransp}]:[]),
+                  ...(bloqueActivo(3)&&subGastosArg>0?[{sec:bloques[3]?.nombre||'Bloque 4',concepto:'Despachante y honorarios',v:subGastosArg}]:[]),
+                  ...(bloqueActivo(3)&&subE>0?[{sec:bloques[3]?.nombre||'Bloque 4',concepto:'Otros gastos Argentina',v:subE}]:[]),
+                  ...(bloqueActivo(4)&&fee>0?[{sec:bloques[4]?.nombre||'Bloque 5 — Fee PN',concepto:`${nc} cont. × USD ${s.feeCont}`,v:fee}]:[]),
+                  ...(s.incluirArca&&totalTribUSD>0?[{sec:'Tributos ARCA',concepto:`Régimen ${s.regimen} — Base CIF Jama`,v:totalTribUSD}]:[]),
+                ].filter(r=>r.v>0).map((r,i)=>(
                   <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-4 py-2.5 text-[10px] text-gray-400 font-semibold">{r.sec}</td>
+                    <td className="px-4 py-2.5 text-[10px] text-gray-400">{r.sec}</td>
                     <td className="px-4 py-2.5 text-gray-700">{r.concepto}</td>
-                    <td className="px-4 py-2.5 font-mono text-right font-semibold">{fmt(r.v)}</td>
-                    <td className="px-4 py-2.5 text-right text-gray-400">{fmt(r.v/totalLanded*100,1)}%</td>
+                    <td className="px-4 py-2.5 font-mono text-right">{fmt(r.v)}</td>
                   </tr>
                 ))}
                 <tr className="bg-[#EBF2FF] font-semibold border-t-2 border-[#1168F8]">
-                  <td className="px-4 py-3 text-sm text-[#052698] font-bold" colSpan={2}>TOTAL</td>
-                  <td className="px-4 py-3 font-mono text-right text-base text-[#052698] font-bold">{fmt(totalLanded)}</td>
-                  <td className="px-4 py-3 text-right text-[#052698] font-bold">100%</td>
+                  <td className="px-4 py-3 text-sm text-[#052698]" colSpan={2}>
+                    TOTAL {s.sentido==='exportacion'?'SERVICIO LOGÍSTICO':'LANDED EN DESTINO'}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-right text-base text-[#052698]">{fmt(totalLanded)}</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
+          {/* Composición del costo total */}
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-3.5 border-b border-gray-100 font-medium text-sm text-gray-900">Composición del costo total</div>
+            <div className="p-4 space-y-2">
+              {[
+                ...(totalFOB>0?[{label:'Valor mercadería',sub:s.incoterm,v:totalFOB}]:[]),
+                ...(bloqueActivo(0)&&(subFW+totalSeg)>0?[{label:bloques[0]?.nombre||'ForWarder + Seguro',sub:fwElegida?.proveedorNombre||'No asignado',v:subFW+totalSeg}]:[]),
+                ...(bloqueActivo(1)&&(subGastosChile+subDescon+subAlm+subCarga)>0?[{label:bloques[1]?.nombre||'Bloque 2 — Chile',sub:`Op. ${s.optTransp}`,v:subGastosChile+subDescon+subAlm+subCarga}]:[]),
+                ...(bloqueActivo(2)&&subTransp>0?[{label:bloques[2]?.nombre||'Flete terrestre',sub:'Bloque 3',v:subTransp}]:[]),
+                ...(bloqueActivo(3)&&(subE+subGastosArg)>0?[{label:bloques[3]?.nombre||'Gastos Argentina',sub:'Bloque 4',v:subE+subGastosArg}]:[]),
+                ...(bloqueActivo(4)&&fee>0?[{label:'Fee Puerto NOA',sub:'Bloque 5',v:fee}]:[]),
+                ...(s.incluirArca&&totalTribUSD>0?[{label:'Tributos ARCA',sub:`Régimen ${s.regimen}`,v:totalTribUSD,ars:Math.round(totalTribARS).toLocaleString('es-AR')}]:[]),
+              ].filter(it=>it.v>0).map(it=>(
+                <div key={it.label} className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg">
+                  <div className="flex-1 mr-4">
+                    <div className="text-xs font-medium text-gray-700">{it.label}</div>
+                    <div className="text-[10px] text-gray-400">{it.sub}</div>
+                    {/* Barra proporcional */}
+                    <div className="mt-1.5 h-1 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-[#1168F8] rounded-full" style={{width:`${Math.min(100,(it.v/totalLanded)*100)}%`}}/>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="font-mono font-semibold text-gray-800">USD {fmt(it.v,0)}</div>
+                    {(it as any).ars&&<div className="font-mono text-[10px] text-[#052698]">ARS {(it as any).ars}</div>}
+                    <div className="text-[10px] text-gray-400">{fmt(it.v/totalLanded*100,1)}%</div>
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center justify-between px-3 py-3 bg-[#052698] rounded-lg mt-1">
+                <div>
+                  <div className="text-xs font-semibold text-white">
+                    TOTAL {s.sentido==='exportacion'?'SERVICIO LOGÍSTICO':'LANDED EN DESTINO'}
+                  </div>
+                  <div className="text-[10px] text-blue-200">USD {fmt(totalLanded/nc,0)} por contenedor</div>
+                </div>
+                <div className="font-mono font-bold text-white text-xl">USD {fmt(totalLanded,0)}</div>
+              </div>
+            </div>
+          </div>
+
           {/* Observaciones */}
-          {s.observaciones.length>0&&(
+          {s.observaciones.filter((o:string)=>o.trim()).length>0&&(
             <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
               <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3">Observaciones</div>
-              <ol className="space-y-1.5">
+              <ol className="space-y-1.5 list-none">
                 {s.observaciones.filter((o:string)=>o.trim()).map((obs:string,i:number)=>(
                   <li key={i} className="flex gap-2 text-xs text-gray-700">
                     <span className="text-gray-400 font-mono flex-shrink-0">{i+1}.</span>
@@ -2592,7 +2602,16 @@ const clientesFiltrados=terceros.filter(t=>
             </div>
           )}
 
-          {/* Botones navegación */}
+          {/* Tipos de cambio */}
+          <div className="bg-white border border-gray-100 rounded-xl px-5 py-3.5">
+            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Tipos de cambio aplicados</div>
+            <div className="flex flex-wrap gap-4 text-xs">
+              {s.tcTrib>0&&<div className="flex items-center gap-2"><span className="text-gray-500">TC oficial BNA (ARS/USD)</span><span className="font-mono font-semibold text-gray-800 bg-[#EBF2FF] px-2 py-0.5 rounded">ARS {fmt(s.tcTrib,0)}</span></div>}
+              {s.tcClp>0&&<div className="flex items-center gap-2"><span className="text-gray-500">CLP/USD</span><span className="font-mono font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded">CLP {fmt(s.tcClp,0)}</span></div>}
+            </div>
+          </div>
+
+          {/* Botones */}
           <div className="flex justify-between print:hidden">
             <button onClick={()=>cambiarTab(s.incluirArca?'tributos':'logistica')}
               className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
