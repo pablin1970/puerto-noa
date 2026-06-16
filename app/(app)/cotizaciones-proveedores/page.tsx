@@ -488,6 +488,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   })
   const [items, setItems] = useState<Item[]>(cotizacionInicial?.items || [{ ...ITEM_VACIO }])
   const [saving, setSaving] = useState(false)
+  const [compFile, setCompFile] = useState<File|null>(null)
+  const [previewModal, setPreviewModal] = useState<{url:string;nombre:string;tipo:string}|null>(null)
   const [buscarProv, setBuscarProv] = useState('')
   const [showProvDropdown, setShowProvDropdown] = useState(false)
   const [usuarioNombre, setUsuarioNombre] = useState('')
@@ -636,6 +638,18 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       if (cotExtra && itemsValidos.length > 0) {
         await (supabase.from('cotizaciones_proveedor_v2_items') as any)
           .insert(itemsValidos.map((it:any) => ({...it, cotizacion_id: cotExtra.id})))
+      }
+    }
+    // Subir comprobante si hay archivo
+    if (compFile && cot?.id) {
+      const ext = compFile.name.split('.').pop()
+      const path = `cotiz-prov/${cot.id}.${ext}`
+      await supabase.storage.from('comprobantes').upload(path, compFile, { upsert: true })
+      const { data: urlData } = supabase.storage.from('comprobantes').getPublicUrl(path)
+      if (urlData?.publicUrl) {
+        await (supabase.from('cotizaciones_proveedor_v2') as any)
+          .update({ archivo_url: urlData.publicUrl, archivo_nombre: compFile.name })
+          .eq('id', cot.id)
       }
     }
     await onSave()
@@ -1206,6 +1220,22 @@ function AsociarCotizacion({ cotizacion, supabase, cotsSistema, onReload }: any)
           {cotsFiltradas.length === 0 && buscar && (
             <div className="mt-2 text-xs text-gray-400">Sin resultados para "{buscar}"</div>
           )}
+        </div>
+      )}
+      {previewModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={()=>setPreviewModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <span className="font-medium text-sm truncate">{previewModal.nombre}</span>
+              <div className="flex items-center gap-2">
+                <a href={previewModal.url} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs">🔗 Abrir / Descargar</a>
+                <button onClick={()=>setPreviewModal(null)} className="text-gray-400 text-xl px-1">×</button>
+              </div>
+            </div>
+            {previewModal.tipo==='pdf'
+              ? <iframe src={previewModal.url} className="w-full h-[70vh] border-0" title={previewModal.nombre}/>
+              : <img src={previewModal.url} alt={previewModal.nombre} className="max-w-full mx-auto rounded p-4"/>}
+          </div>
         </div>
       )}
     </div>
