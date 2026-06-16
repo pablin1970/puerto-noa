@@ -77,12 +77,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) { router.push('/'); return }
-      const { data: u } = await supabase.from('usuarios').select('*').eq('auth_id', data.user.id).single()
-      if (u) setUser(u as Usuario)
+    // Usar onAuthStateChange para manejar correctamente el flujo OAuth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const { data: u } = await supabase.from('usuarios').select('*').eq('auth_id', session.user.id).single()
+        if (u) setUser(u as Usuario)
+        else router.push('/')
+      } else if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
+        if (!session) router.push('/')
+      }
     })
     loadTC()
+    return () => subscription.unsubscribe()
   }, [])
 
   async function loadTC() {
@@ -231,6 +237,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           )}
+          {/* Ayuda */}
+          <div className={`border-t border-white/10 pt-2 mb-1 ${collapsed?'mx-0':'mx-1'}`}>
+            <Link href="/ayuda"
+              className={`flex items-center gap-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-[11px] py-1.5 ${collapsed?'justify-center px-0':'px-2'}`}>
+              <span className="text-sm">📖</span>
+              {!collapsed && <span className="font-medium">Ayuda</span>}
+            </Link>
+          </div>
           <button onClick={handleLogout}
             className={`w-full text-white/50 hover:text-white/80 text-[10px] transition-colors rounded-lg hover:bg-white/10 py-1 ${collapsed ? 'px-0 text-center' : 'px-2 text-left'}`}>
             {collapsed ? '↪' : '↪ Cerrar sesion'}
