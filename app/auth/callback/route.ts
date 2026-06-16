@@ -10,13 +10,13 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code')
 
   if (code) {
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error && data.session) {
       const user = data.session.user
 
-      // Verificar que el usuario existe y está activo
       const { data: u } = await supabase
         .from('usuarios')
         .select('id, activo')
@@ -28,13 +28,14 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(new URL('/?error=usuario_inactivo', requestUrl.origin))
       }
 
-      // Vincular auth_id y registrar login
       await supabase.from('usuarios').update({
         auth_id: user.id,
         last_login_at: new Date().toISOString()
       }).eq('email', user.email)
 
-      return NextResponse.redirect(new URL('/dashboard', requestUrl.origin))
+      // Redirigir con parámetro para que el layout sepa que viene de OAuth
+      const response = NextResponse.redirect(new URL('/dashboard?auth=ok', requestUrl.origin))
+      return response
     }
   }
 
