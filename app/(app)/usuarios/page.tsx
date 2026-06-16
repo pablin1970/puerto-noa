@@ -560,8 +560,8 @@ export default function UsuariosPage() {
                 </div>
               )}
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs border-collapse" style={{ minWidth: '900px' }}>
+            <div className="overflow-x-auto" style={{WebkitOverflowScrolling:'touch'}}>
+              <table className="text-xs border-collapse" style={{ minWidth: '1200px', width:'max-content' }}>
                 <thead>
                   {/* Fila 1: nombres de roles */}
                   <tr>
