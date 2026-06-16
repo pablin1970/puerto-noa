@@ -592,12 +592,17 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
   }
 
   const TIPOS_DOC_LABEL: Record<string, string> = {
-    estatuto: 'Estatuto / Acta constitutiva',
-    poder: 'Poder notarial',
-    certificado: 'Certificado / Habilitacion',
-    rut: 'RUT / CUIT / Constancia fiscal',
-    contrato: 'Contrato marco',
-    otro: 'Otro',
+    estatuto:          'Estatuto / Acta constitutiva',
+    acta_autoridades:  'Acta designación de autoridades',
+    poder:             'Poder notarial',
+    afip:              'Constancia inscripción AFIP',
+    ib:                'Formulario Ingresos Brutos (IIBB)',
+    rut_cuit:          'RUT / CUIT / Constancia fiscal',
+    certificado:       'Certificado / Habilitación',
+    dni_pasaporte:     'DNI / Pasaporte representante',
+    contrato:          'Contrato marco',
+    factura_proforma:  'Factura proforma',
+    otro:              'Otro',
   }
 
   const tiposDocs = TIPO_DOC_POR_PAIS[form.pais] || TIPO_DOC_POR_PAIS.default
@@ -936,6 +941,11 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
               <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Fecha</label>
                 <input type="date" value={docForm.fecha} onChange={e => setDocForm(f => ({ ...f, fecha: e.target.value }))} className={inp} /></div>
             </div>
+            <div className="mb-3">
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas (opcional)</label>
+              <input value={docForm.notas || ''} onChange={e => setDocForm(f => ({ ...f, notas: e.target.value }))}
+                className={inp} placeholder="Observaciones sobre este documento"/>
+            </div>
             <label className={`flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-[#93B8FC] rounded-xl text-xs text-[#1168F8] hover:bg-[#EBF2FF] cursor-pointer transition-colors ${uploading ? 'opacity-60' : ''} w-fit`}>
               📎 {uploading ? 'Subiendo...' : 'Seleccionar y subir archivo'}
               <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" disabled={uploading}
@@ -947,17 +957,28 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
               <div className="divide-y divide-gray-50">
                 {docs.map((d: any) => (
                   <div key={d.id} className="flex items-center gap-4 px-5 py-3.5">
-                    <div className="flex-1">
-                      <div className="font-medium text-sm text-gray-800">{TIPOS_DOC_LABEL[d.tipo] || d.nombre_custom}</div>
-                      <div className="text-[10px] text-gray-400 flex gap-3 mt-0.5">
+                    <div className="w-8 h-8 rounded-lg bg-[#EBF2FF] flex items-center justify-center text-[#1168F8] text-sm flex-shrink-0">
+                      📄
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-gray-800">{TIPOS_DOC_LABEL[d.tipo] || d.nombre_custom || d.tipo}</div>
+                      <div className="text-[10px] text-gray-400 flex gap-3 mt-0.5 flex-wrap">
                         {d.referencia && <span className="font-mono">Ref: {d.referencia}</span>}
-                        {d.fecha && <span>{d.fecha}</span>}
+                        {d.fecha && <span>{d.fecha.split('-').reverse().join('/')}</span>}
+                        {d.archivo_nombre && <span className="truncate">{d.archivo_nombre}</span>}
                         {d.subido_por && <span>por {d.subido_por}</span>}
                       </div>
+                      {d.notas && <div className="text-[10px] text-gray-500 mt-0.5 italic">{d.notas}</div>}
                     </div>
-                    {d.archivo_url && (
-                      <a href={d.archivo_url} target="_blank" rel="noreferrer"
-                        className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC]">Ver</a>
+                    {d.archivo_url ? (
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <a href={d.archivo_url} target="_blank" rel="noreferrer"
+                          className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC]">📄 Ver</a>
+                        <a href={d.archivo_url} download={d.archivo_nombre || 'documento'}
+                          className="px-3 py-1.5 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-100">⬇ Descargar</a>
+                      </div>
+                    ) : (
+                      <span className="text-gray-300 text-[10px]">Sin archivo</span>
                     )}
                   </div>
                 ))}
