@@ -475,32 +475,24 @@ function CotizacionesProveedoresInner() {
 
 function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, onCancel, cotizacionInicial, initParams }: any) {
   const rubros = rubrosDisp || RUBROS
+  const [sentido, setSentido] = useState<'importacion'|'exportacion'>('importacion')
   const [form, setForm] = useState({
-    proveedor_nombre: '',
-    tercero_id: '',
-    rubro: 'forwarder',
-    tipo: 'generica',
-    referencia: '',
-    fecha: new Date().toISOString().slice(0, 10),
-    fecha_vencimiento: '',
-    moneda: 'USD',
-    estado: 'vigente',
-    origen: 'recibida',
-    seguro_incluido: false,
-    seguro_modo: 'pct',
-    seguro_monto: '',
-    notas: '',
-    cotizacion_id: '',
-    cliente_id: '',
-    bloque_id: '',
-    tramo: '',
-    puerto_china_id: '',
-    puerto_chile_id: '',
-    paso_id: '',
-    ciudad_destino_id: '',
-    tipo_contenedor: '',
-    tc_referencia: '',
-    es_tarifa_base: false,
+    proveedor_nombre: '', tercero_id: '', rubro: 'forwarder', tipo: 'generica',
+    referencia: '', fecha: new Date().toISOString().slice(0, 10), fecha_vencimiento: '',
+    moneda: 'USD', estado: 'vigente', origen: 'recibida',
+    seguro_incluido: false, seguro_modo: 'pct', seguro_monto: '',
+    seguro_alcance: 'maritimo',
+    seguro_terrestre: false, seguro_terrestre_pct: '', seguro_terrestre_min: '',
+    notas: '', cotizacion_id: '', cliente_id: '',
+    bloque_ids: [] as string[], bloque_id: '',
+    puerto_china_id: '', puerto_chile_id: '', paso_id: '', ciudad_origen_id: '', ciudad_destino_id: '',
+    tipo_contenedor: '', tipo_camion: '', tc_referencia: '', es_tarifa_base: false,
+    flete_ida: '', flete_vuelta: '', flete_rt: '',
+    almacen_ubicacion: '', almacen_dias_gratis: '0',
+    almacen_m3_dia: '', almacen_m3_min: '',
+    almacen_pallet_dia: '', almacen_pallet_min: '',
+    almacen_bigbag_dia: '', almacen_bigbag_min: '',
+    almacen_cont_dia: '', almacen_cont_min: '',
     ...cotizacionInicial,
   })
   const [items, setItems] = useState<Item[]>(cotizacionInicial?.items || [{ ...ITEM_VACIO }])
@@ -521,533 +513,721 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [ciudades, setCiudades] = useState<any[]>([])
   const [tiposCont, setTiposCont] = useState<any[]>([])
 
+  const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+  const sel = inp
+  const setF = (k: string, v: any) => setForm((p:any) => ({ ...p, [k]: v }))
+
   useEffect(() => {
     Promise.all([
       supabase.from('cotizador_bloques').select('id,numero,nombre,descripcion').eq('activo',true).order('numero'),
       supabase.from('categorias_precio').select('id,label,codigo,icon,color,bg,tipos_calculo,aplica_contenedor').eq('activo',true).order('orden'),
-      supabase.from('puertos_china').select('id,locode,nombre,ciudad').eq('activo', 'true').order('orden'),
-      supabase.from('puertos_chile').select('id,locode,nombre,ciudad').eq('activo', 'true').order('orden'),
-      supabase.from('pasos_fronterizos').select('id,nombre,provincia_argentina').eq('activo', 'true').order('orden'),
-      supabase.from('ciudades_destino_arg').select('id,ciudad,provincia').eq('activo', 'true').order('orden'),
-      supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo', 'true').order('orden'),
-    ]).then(([bl, cat, ch, cl, ps, ci, tc]) => {
-      if (bl.data) setBloques(bl.data)
-      if (cat.data) setCategorias(cat.data)
-      if (ch.data) setPuertosCh(ch.data)
-      if (cl.data) setPuertosChile(cl.data)
-      if (ps.data) setPasos(ps.data)
-      if (ci.data) setCiudades(ci.data)
-      if (tc.data) setTiposCont(tc.data)
+      supabase.from('puertos_china').select('id,locode,nombre,ciudad').eq('activo','true').order('orden'),
+      supabase.from('puertos_chile').select('id,locode,nombre,ciudad').eq('activo','true').order('orden'),
+      supabase.from('pasos_fronterizos').select('id,nombre,provincia_argentina').eq('activo','true').order('orden'),
+      supabase.from('ciudades_destino_arg').select('id,ciudad,provincia').eq('activo','true').order('orden'),
+      supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo','true').order('orden'),
+    ]).then(([bl,cat,ch,cl,ps,ci,tc]) => {
+      if(bl.data) setBloques(bl.data)
+      if(cat.data) setCategorias(cat.data)
+      if(ch.data) setPuertosCh(ch.data)
+      if(cl.data) setPuertosChile(cl.data)
+      if(ps.data) setPasos(ps.data)
+      if(ci.data) setCiudades(ci.data)
+      if(tc.data) setTiposCont(tc.data)
     })
-    // Cargar terceros + sus rubros juntos (query independiente, no depende del closure)
     Promise.all([
       supabase.from('terceros').select('id,razon_social').eq('activo','true').order('razon_social'),
-      supabase.from('tercero_rubros').select('tercero_id, rubro:proveedor_rubros!inner(codigo)'),
-    ]).then(([tRes, trRes])=>{
+      supabase.from('tercero_rubros').select('tercero_id,rubro:proveedor_rubros!inner(codigo)'),
+    ]).then(([tRes,trRes]) => {
       if(tRes.data){
-        const map:Record<string,string[]>={}
+        const map: Record<string,string[]> = {}
         for(const r of (trRes.data||[]) as any[]){
           if(!map[r.tercero_id]) map[r.tercero_id]=[]
           const cod=(r.rubro as any)?.codigo||''
           if(cod) map[r.tercero_id].push(cod)
         }
-        setTercerosConRubro(tRes.data.map((t:any)=>({...t, rubros: map[t.id]||[]})))
+        setTercerosConRubro(tRes.data.map((t:any)=>({...t,rubros:map[t.id]||[]})))
       }
     })
-    // Cargar nombre del usuario logueado para cotizaciones estimadas
-    supabase.auth.getUser().then(({data})=>{
-      if(data?.user){
-        supabase.from('usuarios').select('nombre_completo,email').eq('auth_id',data.user.id).single()
-          .then(({data:u})=>{
-            const nombre=(u as any)?.nombre_completo||(u as any)?.email||data.user.email||'Puerto NOA'
-            setUsuarioNombre(nombre)
-          })
-      }
+    supabase.auth.getUser().then(({data}:any) => {
+      if(data?.user) supabase.from('usuarios').select('nombre_completo,email').eq('auth_id',data.user.id).single()
+        .then(({data:u}:any) => setUsuarioNombre((u as any)?.nombre_completo||(u as any)?.email||data.user.email||'Puerto NOA'))
     })
+    if(initParams?.proveedor_nombre) setF('proveedor_nombre', initParams.proveedor_nombre)
+    if(initParams?.bloque_id) setF('bloque_id', initParams.bloque_id)
   }, [])
 
-  const cotsFiltradas = (cotsSistema || []).filter((c: any) =>
-    !buscarCot || c.num?.toLowerCase().includes(buscarCot.toLowerCase()) || c.cliente?.toLowerCase().includes(buscarCot.toLowerCase())
-  ).slice(0, 8)
+  // Cálculo flete terrestre: toma el menor entre ida+vuelta vs round trip
+  const fIda = parseN(String(form.flete_ida||0))
+  const fVuelta = parseN(String(form.flete_vuelta||0))
+  const fRt = parseN(String(form.flete_rt||0))
+  const sumaIdaVuelta = fIda + fVuelta
+  const fleteElegido = fRt > 0 && fRt < sumaIdaVuelta ? fRt : sumaIdaVuelta
+  const usaRt = fRt > 0 && fRt < sumaIdaVuelta
 
-  // Filtrar proveedores: por búsqueda Y por rubro seleccionado
   const listaProv = tercerosConRubro.length > 0 ? tercerosConRubro : terceros
-  const provsFiltrados = listaProv.filter((t: any) => {
-    const matchBuscar = !buscarProv || t.razon_social.toLowerCase().includes(buscarProv.toLowerCase())
-    // Si ya cargamos rubros: mostrar solo los que tienen el rubro asignado
-    // Si el tercero no tiene ningún rubro registrado, lo excluimos cuando hay rubro seleccionado
+  const provsFiltrados = listaProv.filter((t:any) => {
+    const matchB = !buscarProv || t.razon_social.toLowerCase().includes(buscarProv.toLowerCase())
     const tieneRubros = t.rubros && t.rubros.length > 0
-    const matchRubro = !form.rubro || !tercerosConRubro.length
-      ? true  // sin datos de rubros cargados → mostrar todos
-      : tieneRubros
-        ? t.rubros.includes(form.rubro)
-        : false  // sin rubros asignados → no mostrar cuando hay filtro de rubro
-    return matchBuscar && matchRubro
-  }).slice(0, 8)
-  const hayProvEnRubro = listaProv.some((t:any) => t.rubros?.includes(form.rubro))
+    const matchR = !form.rubro || !tercerosConRubro.length ? true : tieneRubros ? t.rubros.includes(form.rubro) : false
+    return matchB && matchR
+  }).slice(0,8)
+
+  const cotsFiltradas = (cotsSistema||[]).filter((c:any) =>
+    !buscarCot || c.num?.toLowerCase().includes(buscarCot.toLowerCase()) || c.cliente?.toLowerCase().includes(buscarCot.toLowerCase())
+  ).slice(0,8)
 
   function addItem() { setItems(prev => [...prev, { ...ITEM_VACIO, orden: prev.length }]) }
-  function removeItem(i: number) { setItems(prev => prev.filter((_, idx) => idx !== i)) }
-  function updateItem(i: number, field: string, value: any) {
-    setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [field]: value } : it))
-  }
+  function removeItem(i:number) { setItems(prev => prev.filter((_,idx) => idx!==i)) }
+  function updateItem(i:number, field:string, value:any) { setItems(prev => prev.map((it,idx) => idx===i ? {...it,[field]:value} : it)) }
 
   async function handleSave() {
-    if (!form.proveedor_nombre) { alert('Ingresa el nombre del proveedor'); return }
-    if (items.filter(it => it.descripcion).length === 0) { alert('Agrega al menos un item'); return }
+    if(!form.proveedor_nombre) { alert('Ingresá el nombre del proveedor'); return }
     setSaving(true)
-
     const payload = {
-      proveedor_nombre: form.proveedor_nombre,
-      tercero_id: form.tercero_id || null,
-      rubro: form.rubro,
-      tipo: form.tipo,
-      origen: form.origen || 'recibida',
-      referencia: form.referencia || null,
-      fecha: form.fecha,
-      fecha_vencimiento: form.fecha_vencimiento || null,
-      moneda: form.moneda,
+      proveedor_nombre: form.proveedor_nombre, tercero_id: form.tercero_id||null,
+      rubro: form.rubro, tipo: form.tipo, origen: form.origen||'recibida',
+      referencia: form.referencia||null, fecha: form.fecha,
+      fecha_vencimiento: form.fecha_vencimiento||null, moneda: form.moneda,
       estado: form.estado,
-      seguro_incluido: form.rubro === 'forwarder' ? form.seguro_incluido : false,
-      seguro_modo: form.rubro === 'forwarder' && form.seguro_incluido ? form.seguro_modo : null,
-      seguro_monto: form.rubro === 'forwarder' && form.seguro_incluido ? parseN(form.seguro_monto as any) || null : null,
-      notas: form.notas || null,
-      cotizacion_id: form.cotizacion_id || null,
-      cliente_id: form.tipo === 'especifica' ? (form.cliente_id || null) : null,
-      bloque_id: form.bloque_id || null,
-      tramo: form.tramo || null,
-      puerto_china_id: form.puerto_china_id || null,
-      puerto_chile_id: form.puerto_chile_id || null,
-      paso_id: form.paso_id || null,
-      ciudad_destino_id: form.ciudad_destino_id || null,
-      tipo_contenedor: form.tipo_contenedor || null,
-      tc_referencia: parseN(form.tc_referencia as any) || null,
-      es_tarifa_base: form.es_tarifa_base || false,
+      seguro_incluido: form.rubro==='forwarder' ? form.seguro_incluido : false,
+      seguro_modo: form.rubro==='forwarder'&&form.seguro_incluido ? form.seguro_modo : null,
+      seguro_monto: form.rubro==='forwarder'&&form.seguro_incluido ? parseN(String(form.seguro_monto))||null : null,
+      notas: form.notas||null, cotizacion_id: form.cotizacion_id||null,
+      cliente_id: form.tipo==='especifica' ? (form.cliente_id||null) : null,
+      bloque_id: form.bloque_id||null,
+      puerto_china_id: form.puerto_china_id||null, puerto_chile_id: form.puerto_chile_id||null,
+      paso_id: form.paso_id||null, ciudad_destino_id: form.ciudad_destino_id||null,
+      tipo_contenedor: form.tipo_contenedor||null, tc_referencia: parseN(String(form.tc_referencia))||null,
+      es_tarifa_base: form.es_tarifa_base||false,
     }
-    const { data: cot, error } = await (supabase.from('cotizaciones_proveedor_v2') as any)
-      .insert(payload).select().single()
+    const { data: cot, error } = await (supabase.from('cotizaciones_proveedor_v2') as any).insert(payload).select().single()
+    if(error) { alert('Error: '+error.message); setSaving(false); return }
 
-    if (error) { alert('Error: ' + error.message); setSaving(false); return }
-
-    const itemsValidos = items.filter(it => it.descripcion).map((it, i) => ({
-      cotizacion_id: cot.id,
-      descripcion: it.descripcion,
-      tipo_calculo: it.tipo_calculo,
-      valor: parseN(String(it.valor)) || 0,
-      piso_usd: it.tipo_calculo === 'pct_cif' ? (parseN(String(it.piso_usd)) || 0) : null,
-      techo_usd: it.tipo_calculo === 'pct_cif' ? (parseN(String(it.techo_usd)) || 0) : null,
-      moneda: it.moneda || 'USD',
-      tipo_contenedor: it.tipo_contenedor || null,
-      categoria: (it as any).categoria || null,
-      orden: i,
-    }))
-
-    if (itemsValidos.length > 0) {
-      await (supabase.from('cotizaciones_proveedor_v2_items') as any).insert(itemsValidos)
+    // Items según rubro
+    let itemsFinales: any[] = []
+    if(form.rubro==='transporte_terrestre' && fleteElegido>0) {
+      itemsFinales = [{ cotizacion_id: cot.id, descripcion: usaRt?'Flete round trip':'Flete terrestre '+(fIda>0?'ida':'')+(fVuelta>0?'+vuelta':''), tipo_calculo:'por_contenedor', valor:fleteElegido, moneda:form.moneda, tipo_contenedor:form.tipo_contenedor||null, orden:0 }]
+    } else if(form.rubro==='almacenaje') {
+      let ord=0
+      if(parseN(String(form.almacen_m3_dia))>0) itemsFinales.push({ cotizacion_id:cot.id, descripcion:'Almacenaje por m³/día', tipo_calculo:'por_m3', valor:parseN(String(form.almacen_m3_dia)), moneda:form.moneda, orden:ord++ })
+      if(parseN(String(form.almacen_pallet_dia))>0) itemsFinales.push({ cotizacion_id:cot.id, descripcion:'Almacenaje por pallet/día', tipo_calculo:'fijo_usd', valor:parseN(String(form.almacen_pallet_dia)), moneda:form.moneda, orden:ord++ })
+      if(parseN(String(form.almacen_bigbag_dia))>0) itemsFinales.push({ cotizacion_id:cot.id, descripcion:'Almacenaje por big bag/día', tipo_calculo:'por_bigbag', valor:parseN(String(form.almacen_bigbag_dia)), moneda:form.moneda, orden:ord++ })
+      if(parseN(String(form.almacen_cont_dia))>0) itemsFinales.push({ cotizacion_id:cot.id, descripcion:'Almacenaje por contenedor/día', tipo_calculo:'por_contenedor', valor:parseN(String(form.almacen_cont_dia)), moneda:form.moneda, orden:ord++ })
+    } else {
+      itemsFinales = items.filter(it=>it.descripcion).map((it,i)=>({
+        cotizacion_id: cot.id, descripcion: it.descripcion, tipo_calculo: it.tipo_calculo,
+        valor: parseN(String(it.valor))||0,
+        piso_usd: it.tipo_calculo==='pct_cif'?(parseN(String(it.piso_usd))||0):null,
+        techo_usd: it.tipo_calculo==='pct_cif'?(parseN(String(it.techo_usd))||0):null,
+        moneda: it.moneda||'USD', tipo_contenedor: it.tipo_contenedor||null,
+        categoria: (it as any).categoria||null, orden:i,
+      }))
     }
+    if(itemsFinales.length>0) await (supabase.from('cotizaciones_proveedor_v2_items') as any).insert(itemsFinales)
 
-    // Bloques adicionales: duplicar el registro con los mismos ítems
-    const bloqueIds: string[] = Array.isArray(form.bloque_ids) ? form.bloque_ids : (form.bloque_id ? [form.bloque_id] : [])
-    const bloqueExtras = bloqueIds.filter((id:string) => id !== (form.bloque_id||''))
-    for (const bId of bloqueExtras) {
-      const { data: cotExtra } = await (supabase.from('cotizaciones_proveedor_v2') as any)
-        .insert({...payload, bloque_id: bId}).select().single()
-      if (cotExtra && itemsValidos.length > 0) {
-        await (supabase.from('cotizaciones_proveedor_v2_items') as any)
-          .insert(itemsValidos.map((it:any) => ({...it, cotizacion_id: cotExtra.id})))
+    // Multi-bloque
+    const bloqueIds: string[] = Array.isArray(form.bloque_ids) ? form.bloque_ids : (form.bloque_id?[form.bloque_id]:[])
+    const bloqueExtras = bloqueIds.filter((id:string)=>id!==(form.bloque_id||''))
+    for(const bId of bloqueExtras) {
+      const { data: cotExtra } = await (supabase.from('cotizaciones_proveedor_v2') as any).insert({...payload,bloque_id:bId}).select().single()
+      if(cotExtra && itemsFinales.length>0) {
+        await (supabase.from('cotizaciones_proveedor_v2_items') as any).insert(itemsFinales.map((it:any)=>({...it,cotizacion_id:cotExtra.id})))
       }
     }
-    // Subir comprobante si hay archivo
-    if (compFile && cot?.id) {
+
+    // Adjunto
+    if(compFile && cot?.id) {
       const ext = compFile.name.split('.').pop()
       const path = `cotiz-prov/${cot.id}.${ext}`
-      await supabase.storage.from('comprobantes').upload(path, compFile, { upsert: true })
-      const { data: urlData } = supabase.storage.from('comprobantes').getPublicUrl(path)
-      if (urlData?.publicUrl) {
-        await (supabase.from('cotizaciones_proveedor_v2') as any)
-          .update({ archivo_url: urlData.publicUrl, archivo_nombre: compFile.name })
-          .eq('id', cot.id)
-      }
+      await supabase.storage.from('comprobantes').upload(path, compFile, {upsert:true})
+      const {data:urlData} = supabase.storage.from('comprobantes').getPublicUrl(path)
+      if(urlData?.publicUrl) await (supabase.from('cotizaciones_proveedor_v2') as any).update({archivo_url:urlData.publicUrl,archivo_nombre:compFile.name}).eq('id',cot.id)
     }
-    await onSave()
-    setSaving(false)
+    await onSave(); setSaving(false)
   }
 
-  const totalUSD = items.reduce((t, it) => {
-    if (it.tipo_calculo === 'pct_cif') return t
-    return t + (parseN(String(it.valor)) || 0)
-  }, 0)
+  const RUBRO_ITEMS = [
+    {key:'forwarder', icon:'🚢', label:'ForWarder', desc:'Flete marítimo'},
+    {key:'transporte_terrestre', icon:'🚛', label:'Terrestre', desc:'Flete ida/vuelta/RT'},
+    {key:'almacenaje', icon:'🏭', label:'Almacenaje', desc:'m³ · pallet · big bag'},
+    {key:'despachante', icon:'📋', label:'Despachante', desc:'Honorarios + aduana'},
+    {key:'otro', icon:'·', label:'Otro', desc:'Servicio libre'},
+  ]
 
-  // Número de bloque para contextualizar los ítems
-  const bloqueSeleccionado = bloques.find((b:any) => b.id === form.bloque_id)
-  const bloqueNum = bloqueSeleccionado?.numero || 0
-
-  const setF = (k: string, v: any) => setForm((f: any) => {
-    const updated = { ...f, [k]: v }
-    // Si cambia origen a estimada → proveedor = usuario logueado
-    if(k === 'origen' && v === 'estimada'){
-      updated.proveedor_nombre = usuarioNombre || 'Puerto NOA SpA'
-      updated.tercero_id = ''
-    }
-    // Si vuelve a recibida → limpiar proveedor
-    if(k === 'origen' && v === 'recibida'){
-      updated.proveedor_nombre = ''
-      updated.tercero_id = ''
-    }
-    return updated
-  })
+  const lbl = (s:string) => <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{s}</label>
 
   return (
     <div className="max-w-3xl space-y-4">
-      {/* Banner informativo si viene del cotizador */}
+
+      {/* Banner si viene del cotizador */}
       {initParams?.bloque && (
         <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl px-5 py-3 flex items-center gap-3 text-xs text-[#052698]">
           <span className="text-lg">📋</span>
-          <span>Carga iniciada desde el Cotizador — Bloque {initParams.bloque}{initParams.opcion ? ` · Opción ${initParams.opcion}` : ''}. Al guardar podrás traerla desde el cotizador.</span>
+          <span>Iniciada desde el Cotizador — Bloque {initParams.bloque}{initParams.opcion?` · Op. ${initParams.opcion}`:''}</span>
         </div>
       )}
 
-      {/* Origen — siempre primero */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-        <h3 className="font-bold text-sm text-gray-900 mb-3">Origen de esta cotización</h3>
-        <div className="flex gap-3 mb-1">
-          {[
-            { key: 'recibida', label: 'Recibida', desc: 'Cotización real del proveedor', icon: '📨' },
-            { key: 'estimada', label: 'Estimada', desc: 'Generada internamente por Puerto NOA', icon: '✏️' },
-          ].map(o => (
-            <button key={o.key} onClick={() => setF('origen', o.key)}
-              className={`flex-1 px-4 py-3 rounded-xl border-2 text-left transition-all ${form.origen === o.key ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
-              <div className="flex items-center gap-2">
-                <span className="text-base">{o.icon}</span>
-                <div>
-                  <div className="text-xs font-bold text-gray-900">{o.label}</div>
-                  <div className="text-[10px] text-gray-400">{o.desc}</div>
-                </div>
-              </div>
-            </button>
-          ))}
+      {/* ── BLOQUE 1: Datos generales ── */}
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+          <span className="font-semibold text-sm text-gray-900">Datos generales</span>
         </div>
-        {form.origen === 'estimada' && (
-          <div className="mt-2 px-3 py-2 bg-amber-50 border border-amber-100 rounded-lg text-[10px] text-amber-700">
-            ⚠ Se registrará con tu usuario como proveedor. Útil para análisis de evolución de precios y tarifas de referencia.
-          </div>
-        )}
-
-        {/* Tipo de cotizacion — justo debajo de Recibida/Estimada */}
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Tipo de cotizacion</label>
-          <div className="flex gap-3">
-            {[
-              { key: 'generica', label: 'Genérica', desc: 'Válida para cualquier operación' },
-              { key: 'especifica', label: '⭐ Específica', desc: 'Para un cliente o operación particular' },
-            ].map(o => (
-              <button key={o.key} onClick={() => setF('tipo', o.key)}
-                className={`flex-1 px-4 py-2.5 rounded-xl border-2 text-left transition-all ${form.tipo === o.key ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-200 hover:bg-gray-50'}`}>
-                <div className="text-xs font-bold text-gray-900">{o.label}</div>
-                <div className="text-[10px] text-gray-400">{o.desc}</div>
-              </button>
-            ))}
-          </div>
-          {form.tipo === 'especifica' && (
-            <div className="mt-3">
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cliente al que corresponde *</label>
-              <select value={form.cliente_id} onChange={e => setF('cliente_id', e.target.value)} className={inp}>
-                <option value="">— Sin vincular a cliente —</option>
-                {terceros.filter((t:any)=>Array.isArray(t.tipo)?t.tipo.includes('cliente'):t.tipo==='cliente').map((t: any) => (
-                  <option key={t.id} value={t.id}>{t.razon_social}</option>
-                ))}
-              </select>
-              {form.cliente_id && <div className="mt-1 text-[10px] text-[#1168F8]">Aparecerá sugerida al cotizar para este cliente</div>}
+        <div className="px-5 py-4 space-y-4">
+          {/* Origen */}
+          <div>
+            {lbl('Origen de esta cotización')}
+            <div className="flex gap-2">
+              {[{key:'recibida',icon:'📨',label:'Recibida',desc:'Del proveedor'},{key:'estimada',icon:'✏️',label:'Estimada',desc:'Puerto NOA interno'}].map(o=>(
+                <button key={o.key} onClick={()=>setF('origen',o.key)}
+                  className={`flex-1 flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-left transition-all ${form.origen===o.key?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 hover:bg-gray-50'}`}>
+                  <span>{o.icon}</span>
+                  <div><div className="text-xs font-bold text-gray-900">{o.label}</div><div className="text-[10px] text-gray-400">{o.desc}</div></div>
+                </button>
+              ))}
             </div>
-          )}
-        </div>
-
-        {/* Rubro — debajo de Genérica/Específica */}
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Rubro</label>
-          <div className="grid grid-cols-2 gap-2">
-            {(Object.entries(rubros) as [string,{label:string;color:string;bg:string}][]).map(([key, r]) => (
-              <button key={key} onClick={() => setF('rubro', key)}
-                className="px-3 py-2 rounded-xl border-2 text-left text-xs font-semibold transition-all"
-                style={form.rubro === key
-                  ? { background: r.color, color: 'white', borderColor: r.color }
-                  : { background: r.bg, color: r.color, borderColor: r.color + '40' }}>
-                {r.label}
-              </button>
-            ))}
           </div>
-          {/* Seguro — solo para forwarder */}
-          {form.rubro === 'forwarder' && (
-            <div className="mt-3 p-3 bg-[#EBF2FF] rounded-xl border border-[#93B8FC]">
-              <label className="flex items-center gap-2 cursor-pointer mb-2">
-                <input type="checkbox" checked={form.seguro_incluido}
-                  onChange={e => setF('seguro_incluido', e.target.checked)} className="w-4 h-4 rounded" />
-                <span className="text-xs font-semibold text-[#052698]">Seguro incluido en esta cotizacion</span>
-              </label>
-              {form.seguro_incluido && (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    {[{k:'pct',l:'% sobre FOB'},{k:'fijo',l:'Monto fijo USD'}].map(o=>(
-                      <button key={o.k} onClick={()=>setF('seguro_modo',o.k)}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-colors ${form.seguro_modo===o.k?'bg-[#1168F8] text-white border-[#1168F8]':'border-[#93B8FC] text-[#052698] bg-white'}`}>
-                        {o.l}
-                      </button>
-                    ))}
-                  </div>
-                  <input type="text" inputMode="decimal" value={form.seguro_monto}
-                    onChange={e => setF('seguro_monto', e.target.value)}
-                    className="w-full px-2.5 py-1.5 border border-[#93B8FC] rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white font-mono text-right"
-                    placeholder={form.seguro_modo==='pct'?'ej. 0.5 (%)':'ej. 1200 (USD)'} />
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Proveedor */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-      <h3 className="font-bold text-sm text-gray-900 mb-4">Proveedor</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2 relative">
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre del proveedor *</label>
-            {form.origen === 'estimada' ? (
-              <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 flex items-center gap-2">
-                <span>✏️</span>
-                <span className="font-semibold">{form.proveedor_nombre || usuarioNombre || 'Puerto NOA SpA'}</span>
+          {/* Proveedor */}
+          <div className="relative">
+            {lbl('Proveedor *')}
+            {form.origen==='estimada' ? (
+              <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-700 flex items-center gap-2">
+                <span>✏️</span><span className="font-semibold">{form.proveedor_nombre||usuarioNombre||'Puerto NOA SpA'}</span>
                 <span className="text-[10px] text-gray-400 ml-1">— usuario logueado</span>
               </div>
             ) : (
               <>
-                <input
-                  value={form.proveedor_nombre}
-                  onChange={e => { setF('proveedor_nombre', e.target.value); setBuscarProv(e.target.value); setShowProvDropdown(e.target.value.length > 0) }}
-                  onFocus={() => setShowProvDropdown(form.proveedor_nombre.length > 0)}
-                  onBlur={() => setTimeout(() => setShowProvDropdown(false), 200)}
-                  onClick={e => e.stopPropagation()}
-                  className={inp} placeholder="Nombre o buscar en terceros..."
-                />
-                {showProvDropdown && provsFiltrados.length > 0 && (
-                  <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-48 overflow-y-auto" onClick={e => e.stopPropagation()}>
-                    {provsFiltrados.map((t: any) => (
-                      <button key={t.id} onMouseDown={() => { setF('proveedor_nombre', t.razon_social); setF('tercero_id', t.id); setShowProvDropdown(false) }}
+                <input value={form.proveedor_nombre}
+                  onChange={e=>{setF('proveedor_nombre',e.target.value);setBuscarProv(e.target.value);setShowProvDropdown(e.target.value.length>0)}}
+                  onFocus={()=>setShowProvDropdown(form.proveedor_nombre.length>0)}
+                  onBlur={()=>setTimeout(()=>setShowProvDropdown(false),200)}
+                  className={inp} placeholder="Nombre del proveedor..." />
+                {showProvDropdown && provsFiltrados.length>0 && (
+                  <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-44 overflow-y-auto">
+                    {provsFiltrados.map((t:any)=>(
+                      <button key={t.id} onMouseDown={()=>{setF('proveedor_nombre',t.razon_social);setF('tercero_id',t.id);setShowProvDropdown(false)}}
                         className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
                         <span className="font-semibold text-gray-900">{t.razon_social}</span>
                       </button>
                     ))}
                   </div>
                 )}
-                {form.tercero_id && <div className="mt-1 text-[10px] text-[#1168F8]">Vinculado al tercero en el sistema</div>}
-                {!form.tercero_id && form.rubro && !hayProvEnRubro && tercerosConRubro.length > 0 && (
-                  <div className="mt-1 text-[10px] text-amber-600">
-                    Sin proveedores registrados para este rubro. Podés cargarlo igual o ir a Clientes y Proveedores para agregarlo.
-                  </div>
-                )}
               </>
             )}
           </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Referencia (N cotizacion proveedor)</label>
-            <input value={form.referencia} onChange={e => setF('referencia', e.target.value)} className={inp} placeholder="ej. Q-2026-001" />
+
+          {/* Ref + Moneda + Fechas */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              {lbl('Referencia proveedor')}
+              <input value={form.referencia} onChange={e=>setF('referencia',e.target.value)} className={inp} placeholder="N° cotización del proveedor"/>
+            </div>
+            <div>
+              {lbl('Moneda')}
+              <select value={form.moneda} onChange={e=>setF('moneda',e.target.value)} className={sel}>
+                {['USD','ARS','CLP'].map(m=><option key={m}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              {lbl('Fecha')}
+              <input type="date" value={form.fecha} onChange={e=>setF('fecha',e.target.value)} className={inp}/>
+            </div>
+            <div>
+              {lbl('Vigencia hasta')}
+              <input type="date" value={form.fecha_vencimiento} onChange={e=>setF('fecha_vencimiento',e.target.value)} className={inp}/>
+            </div>
           </div>
-          <div className="col-span-2 relative">
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Asociar a cotizacion del sistema (opcional)</label>
+
+          {/* Tipo + Tarifa base */}
+          <div className="flex gap-3 items-center pt-1 border-t border-gray-50">
+            <div className="flex-1">
+              {lbl('Tipo de cotización')}
+              <div className="flex gap-2">
+                {[{key:'generica',label:'Genérica',desc:'Cualquier operación'},{key:'especifica',label:'⭐ Específica',desc:'Un cliente particular'}].map(o=>(
+                  <button key={o.key} onClick={()=>setF('tipo',o.key)}
+                    className={`flex-1 px-3 py-2 rounded-xl border-2 text-left transition-all ${form.tipo===o.key?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 hover:bg-gray-50'}`}>
+                    <div className="text-xs font-bold text-gray-900">{o.label}</div>
+                    <div className="text-[10px] text-gray-400">{o.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer pt-4">
+              <input type="checkbox" checked={form.es_tarifa_base} onChange={e=>setF('es_tarifa_base',e.target.checked)} className="w-4 h-4 rounded"/>
+              <span className="text-xs text-gray-600">Tarifa base</span>
+            </label>
+          </div>
+          {form.tipo==='especifica' && (
+            <div>
+              {lbl('Cliente')}
+              <select value={form.cliente_id} onChange={e=>setF('cliente_id',e.target.value)} className={sel}>
+                <option value="">— Sin vincular —</option>
+                {terceros.filter((t:any)=>Array.isArray(t.tipo)?t.tipo.includes('cliente'):t.tipo==='cliente').map((t:any)=>(
+                  <option key={t.id} value={t.id}>{t.razon_social}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Asociar a cotización */}
+          <div className="relative pt-1 border-t border-gray-50">
+            {lbl('Asociar a cotización del sistema (opcional)')}
             <input
-              value={form.cotizacion_id
-                ? (cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id)
-                  ? `${(cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id)?.num} — ${(cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id)?.cliente}`
-                  : form.cotizacion_id
-                : buscarCot}
-              onChange={e => { setBuscarCot(e.target.value); setShowCotDropdown(true); if (!e.target.value) setF('cotizacion_id', '') }}
-              onFocus={() => setShowCotDropdown(true)}
-              onBlur={() => setTimeout(() => setShowCotDropdown(false), 200)}
-              className={inp} placeholder="Buscar por N o cliente..."
-            />
-            {form.cotizacion_id && (
-              <button onClick={() => { setF('cotizacion_id', ''); setBuscarCot('') }}
-                className="absolute right-2 top-8 text-gray-400 hover:text-red-500 text-xs">X</button>
-            )}
-            {showCotDropdown && cotsFiltradas.length > 0 && !form.cotizacion_id && (
-              <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-48 overflow-y-auto" onClick={e => e.stopPropagation()}>
-                {cotsFiltradas.map((c: any) => (
-                  <button key={c.id} onMouseDown={() => { setF('cotizacion_id', c.id); setShowCotDropdown(false); setBuscarCot('') }}
+              value={form.cotizacion_id?(cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id)?`${(cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id)?.num} — ${(cotsSistema||[]).find((c:any)=>c.id===form.cotizacion_id)?.cliente}`:form.cotizacion_id:buscarCot}
+              onChange={e=>{setBuscarCot(e.target.value);setShowCotDropdown(true);if(!e.target.value)setF('cotizacion_id','')}}
+              onFocus={()=>setShowCotDropdown(true)}
+              onBlur={()=>setTimeout(()=>setShowCotDropdown(false),200)}
+              className={inp} placeholder="Buscar por N° o cliente..."/>
+            {form.cotizacion_id && <button onClick={()=>{setF('cotizacion_id','');setBuscarCot('')}} className="absolute right-2 top-8 text-gray-400 hover:text-red-500 text-xs">✕</button>}
+            {showCotDropdown && cotsFiltradas.length>0 && !form.cotizacion_id && (
+              <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-44 overflow-y-auto">
+                {cotsFiltradas.map((c:any)=>(
+                  <button key={c.id} onMouseDown={()=>{setF('cotizacion_id',c.id);setShowCotDropdown(false);setBuscarCot('')}}
                     className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
                     <span className="font-mono font-semibold text-[#1168F8]">{c.num}</span>
                     <span className="text-gray-600 ml-2">{c.cliente}</span>
-                    <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded-full ${c.estado==='aceptada'?'bg-green-50 text-green-700':'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
                   </button>
                 ))}
               </div>
             )}
           </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
-            <select value={form.moneda} onChange={e => setF('moneda', e.target.value)} className={inp}>
-              {['USD', 'ARS', 'CLP'].map(m => <option key={m}>{m}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Fecha</label>
-            <input type="date" value={form.fecha} onChange={e => setF('fecha', e.target.value)} className={inp} />
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Fecha vencimiento</label>
-            <input type="date" value={form.fecha_vencimiento} onChange={e => setF('fecha_vencimiento', e.target.value)} className={inp} />
-          </div>
         </div>
       </div>
 
-
-
-      {/* Ruta y tramo */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-sm text-gray-900">Ruta y alcance</h3>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.es_tarifa_base}
-              onChange={e => setF('es_tarifa_base', e.target.checked)} className="w-4 h-4 rounded" />
-            <span className="text-xs text-gray-600 font-medium">Es tarifa base (referencia permanente)</span>
-          </label>
+      {/* ── BLOQUE 2: Tipo de servicio ── */}
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+          <span className="font-semibold text-sm text-gray-900">Tipo de servicio</span>
         </div>
-        <div className="mb-4">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">
-            Bloques del cotizador que cubre esta cotización
-            <span className="ml-2 text-gray-400 normal-case font-normal">(podés tildar más de uno)</span>
-          </label>
-          {bloques.length===0?(
-            <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-3 py-2">Cargando bloques...</div>
-          ):(
-            <div className="grid grid-cols-2 gap-2">
-              {bloques.map(b=>{
-                const bloqueIds: string[] = Array.isArray(form.bloque_ids) ? form.bloque_ids : (form.bloque_id ? [form.bloque_id] : [])
-                const activo = bloqueIds.includes(b.id)
-                return (
-                  <button key={b.id} onClick={()=>{
-                    const current: string[] = Array.isArray(form.bloque_ids) ? form.bloque_ids : (form.bloque_id ? [form.bloque_id] : [])
-                    const next = activo ? current.filter((id:string)=>id!==b.id) : [...current, b.id]
-                    setForm((p:any)=>({...p, bloque_ids: next, bloque_id: next[0]||''}))
-                  }}
-                    className={`px-3 py-2.5 rounded-xl border-2 text-left transition-all ${activo?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 hover:bg-gray-50'}`}>
-                    <div className="flex items-center gap-2">
-                      <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${activo?'bg-[#1168F8] border-[#1168F8]':'border-gray-300 bg-white'}`}>
-                        {activo&&<div className="w-2 h-1.5 border-l-2 border-b-2 border-white" style={{transform:'rotate(-45deg) translate(1px,-1px)'}}/>}
-                      </div>
-                      <span className="w-5 h-5 rounded-full bg-[#1168F8] text-white text-[10px] font-black flex items-center justify-center flex-shrink-0">{b.numero}</span>
-                      <div>
-                        <div className="text-xs font-bold text-gray-900">{b.nombre}</div>
-                        {b.descripcion&&<div className="text-[9px] text-gray-400 mt-0.5">{b.descripcion}</div>}
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          {(form.tramo === 'maritimo' || form.tramo === 'post_entrega_chile') && (
-            <div>
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Puerto China (origen)</label>
-              <select value={form.puerto_china_id} onChange={e => setF('puerto_china_id', e.target.value)} className={inp}>
-                <option value="">— Cualquier puerto —</option>
-                {puertosCh.map((p: any) => <option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
-              </select>
-            </div>
-          )}
-          {(form.tramo === 'maritimo' || form.tramo === 'post_entrega_chile' || form.tramo === 'terrestre') && (
-            <div>
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Puerto Chile</label>
-              <select value={form.puerto_chile_id} onChange={e => setF('puerto_chile_id', e.target.value)} className={inp}>
-                <option value="">— Cualquier puerto —</option>
-                {puertosChile.map((p: any) => <option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
-              </select>
-            </div>
-          )}
-          {(form.tramo === 'terrestre' || form.tramo === 'aduanero') && (
-            <div>
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Paso fronterizo</label>
-              <select value={form.paso_id} onChange={e => setF('paso_id', e.target.value)} className={inp}>
-                <option value="">— Cualquier paso —</option>
-                {pasos.map((p: any) => <option key={p.id} value={p.id}>{p.nombre} ({p.provincia_argentina})</option>)}
-              </select>
-            </div>
-          )}
-          {(form.tramo === 'terrestre' || form.tramo === 'aduanero') && (
-            <div>
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Ciudad destino Argentina</label>
-              <select value={form.ciudad_destino_id} onChange={e => setF('ciudad_destino_id', e.target.value)} className={inp}>
-                <option value="">— Cualquier ciudad —</option>
-                {ciudades.map((c: any) => <option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
-              </select>
-            </div>
-          )}
-
-          {form.moneda !== 'USD' && (
-            <div>
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">TC referencia (al momento de cotizar)</label>
-              <input type="text" inputMode="decimal" value={form.tc_referencia}
-                onChange={e => setF('tc_referencia', e.target.value)}
-                className={inp} placeholder="ej. 1450 (ARS/USD)" />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Items */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
+        <div className="px-5 py-4 space-y-4">
+          {/* Sentido */}
           <div>
-            <h3 className="font-bold text-sm text-gray-900">Ítems de la cotización</h3>
-            <p className="text-[10px] text-gray-400 mt-0.5">Elegí la categoría de cada ítem — los campos se adaptan automáticamente</p>
+            {lbl('Sentido de la operación')}
+            <div className="flex gap-2">
+              {[{key:'importacion',icon:'📦',label:'Importación',desc:'Origen → Argentina/NOA'},{key:'exportacion',icon:'🚢',label:'Exportación',desc:'Argentina/NOA → Destino'}].map(o=>(
+                <button key={o.key} onClick={()=>setSentido(o.key as any)}
+                  className={`flex-1 flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-left transition-all ${sentido===o.key?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 hover:bg-gray-50'}`}>
+                  <span className="text-base">{o.icon}</span>
+                  <div><div className="text-xs font-bold text-gray-900">{o.label}</div><div className="text-[10px] text-gray-400">{o.desc}</div></div>
+                </button>
+              ))}
+            </div>
           </div>
-          <button onClick={addItem} className="px-3 py-1.5 border border-[#1168F8] text-[#1168F8] rounded-xl text-xs font-bold hover:bg-[#EBF2FF]">+ Agregar item</button>
-        </div>
 
-        {items.map((it, i) => (
-          <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={categorias} onChange={updateItem} onRemove={removeItem} editMode={true} />
-        ))}
-
-        {items.filter(it => it.descripcion).length > 0 && (
-          <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
-            <span className="text-xs text-gray-500">Total estimado (items fijos):</span>
-            <span className="font-mono font-bold text-[#052698] text-sm">USD {fmtN(totalUSD)}</span>
+          {/* Rubro */}
+          <div>
+            {lbl('Rubro del proveedor')}
+            <div className="grid grid-cols-5 gap-2">
+              {RUBRO_ITEMS.map(r=>(
+                <button key={r.key} onClick={()=>setF('rubro',r.key)}
+                  className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 text-center transition-all ${form.rubro===r.key?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 hover:bg-gray-50'}`}>
+                  <span className="text-xl leading-none">{r.icon}</span>
+                  <span className={`text-xs font-bold ${form.rubro===r.key?'text-[#052698]':'text-gray-700'}`}>{r.label}</span>
+                  <span className="text-[9px] text-gray-400 leading-tight">{r.desc}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* Notas + Adjunto */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-3">
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Notas / Condiciones</label>
-          <textarea value={form.notas} onChange={e => setF('notas', e.target.value)}
-            className={inp + ' resize-none'} rows={2} placeholder="Condiciones de la cotizacion, vigencia, observaciones..." />
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Comprobante (PDF / imagen)</label>
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1.5 px-3 py-2 border border-dashed border-gray-300 rounded-xl text-xs text-gray-500 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer flex-1">
-              📎 {compFile ? compFile.name : (cotizacionInicial?.archivo_nombre || 'Adjuntar cotización recibida (PDF o imagen)')}
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e=>setCompFile(e.target.files?.[0]||null)}/>
-            </label>
-            {compFile && <button onClick={()=>setCompFile(null)} className="text-gray-400 hover:text-red-500 text-xs">✕</button>}
-            {cotizacionInicial?.archivo_url && !compFile && (
-              <button onClick={()=>setPreviewModal({url:cotizacionInicial.archivo_url,nombre:cotizacionInicial.archivo_nombre||'comprobante',tipo:cotizacionInicial.archivo_nombre?.endsWith('.pdf')?'pdf':'img'})}
-                className="px-3 py-2 bg-[#EBF2FF] text-[#1168F8] rounded-xl text-xs font-medium hover:bg-[#93B8FC]">📄 Ver actual</button>
+          {/* Bloques */}
+          <div>
+            {lbl('Bloques que cubre esta cotización')}
+            {bloques.length===0 ? <div className="text-xs text-gray-400">Cargando...</div> : (
+              <div className="flex flex-wrap gap-2">
+                {bloques.map(b=>{
+                  const bloqueIds:string[] = Array.isArray(form.bloque_ids)?form.bloque_ids:(form.bloque_id?[form.bloque_id]:[])
+                  const activo = bloqueIds.includes(b.id)
+                  return (
+                    <button key={b.id} onClick={()=>{
+                      const current:string[] = Array.isArray(form.bloque_ids)?form.bloque_ids:(form.bloque_id?[form.bloque_id]:[])
+                      const next = activo ? current.filter((id:string)=>id!==b.id) : [...current,b.id]
+                      setForm((p:any)=>({...p,bloque_ids:next,bloque_id:next[0]||''}))
+                    }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all ${activo?'bg-[#052698] border-[#052698] text-white':'bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300'}`}>
+                      {activo && <span className="w-1.5 h-1.5 rounded-full bg-white/60"/>}
+                      {b.nombre}
+                    </button>
+                  )
+                })}
+              </div>
             )}
           </div>
         </div>
       </div>
 
-      <div className="flex justify-between">
+      {/* ── BLOQUE 3: Campos específicos por rubro ── */}
+
+      {/* FORWARDER */}
+      {form.rubro==='forwarder' && (
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #1168F8'}}>
+          <div className="px-5 py-3 border-b border-gray-100 bg-[#EBF2FF] flex items-center gap-2">
+            <span className="text-lg">🚢</span>
+            <span className="font-semibold text-sm text-[#052698]">ForWarder — datos del tramo marítimo</span>
+            <span className="ml-auto text-[10px] text-[#1168F8] font-medium">{sentido==='exportacion'?'Exportación · NOA → Puerto':'Importación · Puerto → NOA'}</span>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            {/* Ruta */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                {lbl(sentido==='exportacion'?'Puerto destino':'Puerto origen (China)')}
+                <select value={form.puerto_china_id} onChange={e=>setF('puerto_china_id',e.target.value)} className={sel}>
+                  <option value="">— Cualquier puerto —</option>
+                  {puertosCh.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
+                </select>
+              </div>
+              <div>
+                {lbl(sentido==='exportacion'?'Puerto Chile (embarque)':'Puerto Chile (descarga)')}
+                <select value={form.puerto_chile_id} onChange={e=>setF('puerto_chile_id',e.target.value)} className={sel}>
+                  <option value="">— Cualquier puerto —</option>
+                  {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
+                </select>
+              </div>
+              <div>
+                {lbl('Tipo de contenedor')}
+                <select value={form.tipo_contenedor} onChange={e=>setF('tipo_contenedor',e.target.value)} className={sel}>
+                  <option value="">— Todos —</option>
+                  {tiposCont.map((t:any)=><option key={t.id} value={t.codigo}>{t.codigo} — {t.nombre}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Ítems */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                {lbl('Conceptos cotizados')}
+                <button onClick={addItem} className="text-[10px] text-[#1168F8] hover:underline font-semibold">+ Agregar concepto</button>
+              </div>
+              <div className="border border-gray-100 rounded-xl overflow-hidden">
+                <div className="grid bg-gray-50 px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider" style={{gridTemplateColumns:'2fr 1fr 1fr 24px'}}>
+                  <span>Concepto</span><span className="text-right">Valor</span><span className="text-center">Tipo cont.</span><span/>
+                </div>
+                {items.map((it,i)=>(
+                  <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={categorias} onChange={updateItem} onRemove={removeItem} editMode={true}/>
+                ))}
+              </div>
+            </div>
+
+            {/* Seguro */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <label className="flex items-center gap-2 cursor-pointer mb-3">
+                <input type="checkbox" checked={form.seguro_incluido} onChange={e=>setF('seguro_incluido',e.target.checked)} className="w-4 h-4"/>
+                <span className="text-xs font-semibold text-amber-800">Seguro de carga incluido en esta cotización</span>
+              </label>
+              {form.seguro_incluido && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      {lbl('Porcentaje sobre FOB')}
+                      <input type="text" inputMode="decimal" value={form.seguro_monto} onChange={e=>setF('seguro_monto',e.target.value)} className={inp} placeholder="ej. 0.5 (%)"/>
+                    </div>
+                    <div>
+                      {lbl('Alcance del seguro')}
+                      <select value={form.seguro_alcance} onChange={e=>setF('seguro_alcance',e.target.value)} className={sel}>
+                        <option value="maritimo">Solo tramo marítimo</option>
+                        <option value="puerta_puerta">Puerta a puerta (hasta destino final)</option>
+                      </select>
+                    </div>
+                  </div>
+                  {form.seguro_alcance==='maritimo' && (
+                    <div className="text-[10px] text-amber-700 bg-amber-100 rounded-lg px-3 py-2">
+                      ℹ El seguro cubre solo el tramo marítimo. Al cotizar al cliente podrás habilitar seguro para el tramo terrestre.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TERRESTRE */}
+      {form.rubro==='transporte_terrestre' && (
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #b45309'}}>
+          <div className="px-5 py-3 border-b border-gray-100 bg-amber-50 flex items-center gap-2">
+            <span className="text-lg">🚛</span>
+            <span className="font-semibold text-sm text-amber-900">Terrestre — datos del flete</span>
+            <span className="ml-auto text-[10px] text-amber-700 font-medium">{sentido==='exportacion'?'NOA → Chile':'Chile → NOA'}</span>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            {/* Ruta: ciudad origen → paso → ciudad destino */}
+            <div>
+              {lbl('Ruta')}
+              <div className="grid grid-cols-3 gap-3 items-end">
+                <div>
+                  <span className="text-[10px] text-gray-400 mb-1 block">{sentido==='exportacion'?'Ciudad origen (NOA)':'Ciudad origen (Chile)'}</span>
+                  {sentido==='exportacion' ? (
+                    <select value={form.ciudad_origen_id} onChange={e=>setF('ciudad_origen_id',e.target.value)} className={sel}>
+                      <option value="">— Cualquier ciudad —</option>
+                      {ciudades.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
+                    </select>
+                  ) : (
+                    <select value={form.puerto_chile_id} onChange={e=>setF('puerto_chile_id',e.target.value)} className={sel}>
+                      <option value="">— Cualquier puerto —</option>
+                      {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                    </select>
+                  )}
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-400 mb-1 block">Paso fronterizo</span>
+                  <select value={form.paso_id} onChange={e=>setF('paso_id',e.target.value)} className={sel}>
+                    <option value="">— Cualquier paso —</option>
+                    {pasos.map((p:any)=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-400 mb-1 block">{sentido==='exportacion'?'Puerto destino (Chile)':'Ciudad destino (NOA)'}</span>
+                  {sentido==='exportacion' ? (
+                    <select value={form.puerto_chile_id} onChange={e=>setF('puerto_chile_id',e.target.value)} className={sel}>
+                      <option value="">— Cualquier puerto —</option>
+                      {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                    </select>
+                  ) : (
+                    <select value={form.ciudad_destino_id} onChange={e=>setF('ciudad_destino_id',e.target.value)} className={sel}>
+                      <option value="">— Cualquier ciudad —</option>
+                      {ciudades.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
+                    </select>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Camión y contenedor */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                {lbl('Tipo de camión')}
+                <input value={form.tipo_camion} onChange={e=>setF('tipo_camion',e.target.value)} className={inp} placeholder="ej. Chasis 40HC, Sider, Carpa..."/>
+              </div>
+              <div>
+                {lbl('Tipo de contenedor')}
+                <select value={form.tipo_contenedor} onChange={e=>setF('tipo_contenedor',e.target.value)} className={sel}>
+                  <option value="">— Todos —</option>
+                  {tiposCont.map((t:any)=><option key={t.id} value={t.codigo}>{t.codigo} — {t.nombre}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Tarifas */}
+            <div className="border border-gray-100 rounded-xl overflow-hidden">
+              <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100">
+                <span className="text-xs font-semibold text-gray-700">Tarifas de flete</span>
+                <span className="text-[10px] text-gray-400 ml-2">— el sistema usa automáticamente la opción más económica</span>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-gray-100">
+                <div className="p-4">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{sentido==='exportacion'?'Flete ida (NOA→Chile)':'Flete ida (Chile→NOA)'}</div>
+                  <div className="text-[10px] text-gray-400 mb-2">Cargado</div>
+                  <input type="text" inputMode="decimal" value={form.flete_ida} onFocus={e=>e.target.select()} onChange={e=>setF('flete_ida',e.target.value)} className={inp+' text-right font-mono'} placeholder="0"/>
+                  <div className="text-[10px] text-gray-400 mt-1 text-right">USD por viaje</div>
+                </div>
+                <div className="p-4">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{sentido==='exportacion'?'Devolución (Chile→NOA)':'Devolución vacío (NOA→Chile)'}</div>
+                  <div className="text-[10px] text-gray-400 mb-2">Vacío</div>
+                  <input type="text" inputMode="decimal" value={form.flete_vuelta} onFocus={e=>e.target.select()} onChange={e=>setF('flete_vuelta',e.target.value)} className={inp+' text-right font-mono'} placeholder="0"/>
+                  <div className="text-[10px] text-gray-400 mt-1 text-right">USD por viaje</div>
+                </div>
+                <div className="p-4 bg-green-50">
+                  <div className="text-[10px] font-semibold text-green-700 uppercase tracking-wider mb-1">Round trip</div>
+                  <div className="text-[10px] text-green-600 mb-2">Ida + vuelta combinado</div>
+                  <input type="text" inputMode="decimal" value={form.flete_rt} onFocus={e=>e.target.select()} onChange={e=>setF('flete_rt',e.target.value)} className={inp+' text-right font-mono border-green-200 focus:border-green-500'} placeholder="0"/>
+                  <div className="text-[10px] text-green-600 mt-1 text-right">USD por viaje</div>
+                </div>
+              </div>
+              {/* Resultado automático */}
+              {(fIda>0||fVuelta>0||fRt>0) && (
+                <div className={`px-4 py-2.5 border-t flex items-center justify-between text-xs font-semibold ${usaRt?'bg-green-50 border-green-100 text-green-700':'bg-[#EBF2FF] border-[#93B8FC] text-[#052698]'}`}>
+                  <span>✓ Se usará: {usaRt?`Round trip — USD ${fmtN(fRt)}`:`Ida + vuelta — USD ${fmtN(sumaIdaVuelta)}`}</span>
+                  {usaRt && sumaIdaVuelta>0 && <span className="text-[10px] font-normal opacity-70">más económico que ida+vuelta (USD {fmtN(sumaIdaVuelta)})</span>}
+                  {!usaRt && fRt>0 && <span className="text-[10px] font-normal opacity-70">más económico que round trip (USD {fmtN(fRt)})</span>}
+                </div>
+              )}
+            </div>
+
+            {/* Seguro terrestre — opcional */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.seguro_terrestre} onChange={e=>setF('seguro_terrestre',e.target.checked)} className="w-4 h-4"/>
+                <span className="text-xs font-semibold text-amber-800">Incluye seguro tramo terrestre</span>
+              </label>
+              {form.seguro_terrestre && (
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    {lbl('% sobre valor mercadería')}
+                    <input type="text" inputMode="decimal" value={form.seguro_terrestre_pct} onChange={e=>setF('seguro_terrestre_pct',e.target.value)} className={inp} placeholder="ej. 0.3"/>
+                  </div>
+                  <div>
+                    {lbl('Mínimo USD')}
+                    <input type="text" inputMode="decimal" value={form.seguro_terrestre_min} onChange={e=>setF('seguro_terrestre_min',e.target.value)} className={inp} placeholder="ej. 100"/>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ALMACENAJE */}
+      {form.rubro==='almacenaje' && (
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #0a9e6e'}}>
+          <div className="px-5 py-3 border-b border-gray-100 bg-green-50 flex items-center gap-2">
+            <span className="text-lg">🏭</span>
+            <span className="font-semibold text-sm text-green-900">Almacenaje — tarifas por unidad</span>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                {lbl('Ubicación del depósito')}
+                <input value={form.almacen_ubicacion} onChange={e=>setF('almacen_ubicacion',e.target.value)} className={inp} placeholder="ej. Iquique — Zona Franca"/>
+              </div>
+              <div>
+                {lbl('Período gratuito (días)')}
+                <input type="text" inputMode="decimal" value={form.almacen_dias_gratis} onChange={e=>setF('almacen_dias_gratis',e.target.value)} className={inp+' text-right font-mono'} placeholder="0"/>
+              </div>
+            </div>
+
+            {/* Tabla de tarifas */}
+            <div className="border border-gray-100 rounded-xl overflow-hidden">
+              <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100 grid text-[10px] font-semibold text-gray-400 uppercase tracking-wider" style={{gridTemplateColumns:'2fr 1fr 1fr'}}>
+                <span>Unidad de almacenaje</span><span className="text-right">Precio / día</span><span className="text-right">Mínimo USD/día</span>
+              </div>
+              {[
+                {key:'m3', label:'Por m³ / día', desc:'Carga suelta desconsolidada', pKey:'almacen_m3_dia', mKey:'almacen_m3_min'},
+                {key:'pallet', label:'Por pallet / día', desc:'Unitización en pallets', pKey:'almacen_pallet_dia', mKey:'almacen_pallet_min'},
+                {key:'bigbag', label:'Por big bag / día', desc:'Bolsones a granel', pKey:'almacen_bigbag_dia', mKey:'almacen_bigbag_min'},
+                {key:'cont', label:'Por contenedor / día', desc:'Contenedor completo en patio', pKey:'almacen_cont_dia', mKey:'almacen_cont_min'},
+              ].map(u=>(
+                <div key={u.key} className="px-4 py-3 border-t border-gray-50 grid gap-4 items-center" style={{gridTemplateColumns:'2fr 1fr 1fr'}}>
+                  <div>
+                    <div className="text-xs font-semibold text-gray-800">{u.label}</div>
+                    <div className="text-[10px] text-gray-400">{u.desc}</div>
+                  </div>
+                  <input type="text" inputMode="decimal" value={(form as any)[u.pKey]} onFocus={e=>e.target.select()} onChange={e=>setF(u.pKey,e.target.value)} className={inp+' text-right font-mono'} placeholder="0.00"/>
+                  <input type="text" inputMode="decimal" value={(form as any)[u.mKey]} onFocus={e=>e.target.select()} onChange={e=>setF(u.mKey,e.target.value)} className={inp+' text-right font-mono'} placeholder="0"/>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DESPACHANTE */}
+      {form.rubro==='despachante' && (
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #6d28d9'}}>
+          <div className="px-5 py-3 border-b border-gray-100 bg-purple-50 flex items-center gap-2">
+            <span className="text-lg">📋</span>
+            <span className="font-semibold text-sm text-purple-900">Despachante — honorarios y gastos</span>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                {lbl('Paso / aduana')}
+                <select value={form.paso_id} onChange={e=>setF('paso_id',e.target.value)} className={sel}>
+                  <option value="">— Cualquier aduana —</option>
+                  {pasos.map((p:any)=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                {lbl('Ciudad / destino')}
+                <select value={form.ciudad_destino_id} onChange={e=>setF('ciudad_destino_id',e.target.value)} className={sel}>
+                  <option value="">— Cualquier ciudad —</option>
+                  {ciudades.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                {lbl('Conceptos y honorarios')}
+                <button onClick={addItem} className="text-[10px] text-[#1168F8] hover:underline font-semibold">+ Agregar concepto</button>
+              </div>
+              <div className="border border-gray-100 rounded-xl overflow-hidden">
+                {items.map((it,i)=>(
+                  <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={categorias} onChange={updateItem} onRemove={removeItem} editMode={true}/>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OTRO */}
+      {form.rubro==='otro' && (
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #6b7280'}}>
+          <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+            <span className="text-lg">·</span>
+            <span className="font-semibold text-sm text-gray-700">Otro servicio — descripción libre</span>
+          </div>
+          <div className="px-5 py-4">
+            <div className="flex items-center justify-between mb-2">
+              {lbl('Ítems del servicio')}
+              <button onClick={addItem} className="text-[10px] text-[#1168F8] hover:underline font-semibold">+ Agregar ítem</button>
+            </div>
+            <div className="border border-gray-100 rounded-xl overflow-hidden">
+              {items.map((it,i)=>(
+                <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={categorias} onChange={updateItem} onRemove={removeItem} editMode={true}/>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── BLOQUE 4: Notas + Adjunto ── */}
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+          <span className="font-semibold text-sm text-gray-900">Notas y comprobante</span>
+        </div>
+        <div className="px-5 py-4 grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Notas / condiciones</label>
+            <textarea value={form.notas} onChange={e=>setF('notas',e.target.value)} rows={3} className={inp+' resize-none'} placeholder="Vigencia, condiciones, observaciones del proveedor..."/>
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Adjuntar cotización recibida (PDF / imagen)</label>
+            <div className="flex items-center gap-2">
+              <label className="flex-1 flex flex-col items-center justify-center px-3 py-4 border border-dashed border-gray-300 rounded-xl text-xs text-gray-500 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer transition-colors">
+                <span className="text-2xl mb-1">📎</span>
+                <span>{compFile ? compFile.name : (cotizacionInicial?.archivo_nombre||'Seleccionar archivo')}</span>
+                <span className="text-[10px] text-gray-400 mt-0.5">PDF, JPG o PNG</span>
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e=>setCompFile(e.target.files?.[0]||null)}/>
+              </label>
+            </div>
+            {compFile && <button onClick={()=>setCompFile(null)} className="text-[10px] text-red-500 hover:underline mt-1">✕ Quitar archivo</button>}
+            {cotizacionInicial?.archivo_url && !compFile && (
+              <button onClick={()=>setPreviewModal({url:cotizacionInicial.archivo_url,nombre:cotizacionInicial.archivo_nombre||'comprobante',tipo:cotizacionInicial.archivo_nombre?.endsWith('.pdf')?'pdf':'img'})}
+                className="mt-2 text-[10px] text-[#1168F8] hover:underline">📄 Ver archivo actual</button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Botones */}
+      <div className="flex justify-between items-center">
         <button onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50">Cancelar</button>
-        <button onClick={handleSave} disabled={saving}
-          className="px-6 py-2.5 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50 shadow-sm">
-          {saving ? 'Guardando...' : 'Guardar cotizacion'}
+        <button onClick={handleSave} disabled={saving} className="px-6 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] disabled:opacity-50 shadow-sm">
+          {saving?'Guardando...':'✓ Guardar cotización'}
         </button>
       </div>
+
+      {/* Modal preview */}
+      {previewModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={()=>setPreviewModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <span className="font-medium text-sm truncate">{previewModal.nombre}</span>
+              <div className="flex items-center gap-2">
+                <a href={previewModal.url} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs">🔗 Abrir / Descargar</a>
+                <button onClick={()=>setPreviewModal(null)} className="text-gray-400 text-xl px-1">×</button>
+              </div>
+            </div>
+            {previewModal.tipo==='pdf'
+              ? <iframe src={previewModal.url} className="w-full h-[70vh] border-0" title={previewModal.nombre}/>
+              : <img src={previewModal.url} alt={previewModal.nombre} className="max-w-full mx-auto rounded p-4"/>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
 
 function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubrosDisp, onReload, onBack, onEliminar }: any) {
   const rubros = rubrosDisp || RUBROS
