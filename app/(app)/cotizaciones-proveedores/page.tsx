@@ -642,7 +642,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       const path = `cotiz-prov/${cot.id}.${ext}`
       await supabase.storage.from('comprobantes').upload(path, compFile, {upsert:true})
       const {data:urlData} = supabase.storage.from('comprobantes').getPublicUrl(path)
-      if(urlData?.publicUrl) await (supabase.from('cotizaciones_proveedor_v2') as any).update({archivo_url:urlData.publicUrl,archivo_nombre:compFile.name}).eq('id',cot.id)
+      if(urlData?.signedUrl) await (supabase.from('cotizaciones_proveedor_v2') as any).update({archivo_url:urlData.signedUrl,archivo_nombre:compFile.name}).eq('id',cot.id)
     }
     await onSave(); setSaving(false)
   }
