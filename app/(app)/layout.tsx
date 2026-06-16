@@ -77,14 +77,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
-    // Usar onAuthStateChange para manejar correctamente el flujo OAuth
+    // Verificar sesión inicial
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) { router.push('/'); return }
+      const { data: u } = await supabase.from('usuarios').select('*').eq('auth_id', data.user.id).single()
+      if (u) setUser(u as Usuario)
+      else router.push('/')
+    })
+    // Escuchar cambios de sesión (logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
+      if (event === 'SIGNED_OUT') { router.push('/'); return }
+      if (event === 'SIGNED_IN' && session?.user) {
         const { data: u } = await supabase.from('usuarios').select('*').eq('auth_id', session.user.id).single()
         if (u) setUser(u as Usuario)
-        else router.push('/')
-      } else if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
-        if (!session) router.push('/')
       }
     })
     loadTC()
