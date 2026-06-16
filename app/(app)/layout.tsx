@@ -57,8 +57,8 @@ const NAV: NavItem[] = [
   // ── CONFIGURACIÓN ──────────────────────────────────
   { label: 'CONFIGURACION', section: true },
   { href: '/catalogos',       label: 'Catálogos',    icon: '📚', modulo: 'catalogos' },
-  { href: '/tributos-config', label: 'Tributos ARCA', icon: '§', adminOnly: true },
-  { href: '/usuarios',        label: 'Usuarios',      icon: '◎', adminOnly: true },
+  { href: '/tributos-config', label: 'Tributos ARCA', icon: '§', adminOnly: true, modulo: 'tributos' },
+  { href: '/usuarios',        label: 'Usuarios',      icon: '◎', adminOnly: true, modulo: 'usuarios' },
 ]
 interface TCWidget {
   ARS: number | null
@@ -209,9 +209,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             if (!item.href) return null
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
             if (item.adminOnly && user?.rol !== 'admin') return null
-            // Filtrar por permisos del rol — si el ítem tiene módulo y el usuario tiene permisos cargados
-            if (item.modulo && Object.keys(permisos).length > 0) {
-              const tienePermiso = permisos[item.modulo] && permisos[item.modulo].includes('ver')
+            // Filtrar por permisos del rol
+            // Si el usuario tiene permisos cargados y el ítem tiene módulo → verificar
+            // Si el módulo no está en permisos → ocultar
+            if (Object.keys(permisos).length > 0 && item.modulo) {
+              const tienePermiso = permisos[item.modulo]?.includes('ver')
               if (!tienePermiso) return null
             }
 
