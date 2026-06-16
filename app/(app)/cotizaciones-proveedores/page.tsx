@@ -1015,11 +1015,27 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         )}
       </div>
 
-      {/* Notas */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-        <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Notas / Condiciones</label>
-        <textarea value={form.notas} onChange={e => setF('notas', e.target.value)}
-          className={inp + ' resize-none'} rows={2} placeholder="Condiciones de la cotizacion, vigencia, observaciones..." />
+      {/* Notas + Adjunto */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-3">
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Notas / Condiciones</label>
+          <textarea value={form.notas} onChange={e => setF('notas', e.target.value)}
+            className={inp + ' resize-none'} rows={2} placeholder="Condiciones de la cotizacion, vigencia, observaciones..." />
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Comprobante (PDF / imagen)</label>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1.5 px-3 py-2 border border-dashed border-gray-300 rounded-xl text-xs text-gray-500 hover:border-[#1168F8] hover:text-[#1168F8] cursor-pointer flex-1">
+              📎 {compFile ? compFile.name : (cotizacionInicial?.archivo_nombre || 'Adjuntar cotización recibida (PDF o imagen)')}
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e=>setCompFile(e.target.files?.[0]||null)}/>
+            </label>
+            {compFile && <button onClick={()=>setCompFile(null)} className="text-gray-400 hover:text-red-500 text-xs">✕</button>}
+            {cotizacionInicial?.archivo_url && !compFile && (
+              <button onClick={()=>setPreviewModal({url:cotizacionInicial.archivo_url,nombre:cotizacionInicial.archivo_nombre||'comprobante',tipo:cotizacionInicial.archivo_nombre?.endsWith('.pdf')?'pdf':'img'})}
+                className="px-3 py-2 bg-[#EBF2FF] text-[#1168F8] rounded-xl text-xs font-medium hover:bg-[#93B8FC]">📄 Ver actual</button>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="flex justify-between">
