@@ -791,7 +791,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
               <div className="grid grid-cols-3 gap-x-8 gap-y-4">
                 {[
                   { l: 'Pais', v: tercero.pais },
-                  { l: 'Actividad', v: tercero.actividad },
+                  { l: 'Actividad principal según ARCA', v: tercero.actividad },
                   { l: 'Condicion IVA', v: tercero.condicion_iva },
                   { l: tercero.tipo_doc || 'Documento', v: tercero.nro_doc },
                   { l: 'N importador', v: tercero.nro_importador },
