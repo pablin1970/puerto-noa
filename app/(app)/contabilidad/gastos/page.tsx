@@ -16,6 +16,8 @@ export default function GastosFijosPage() {
   const [anio, setAnio] = useState(new Date().getFullYear())
   const [mes, setMes] = useState(new Date().getMonth() + 1)
   const [saving, setSaving] = useState(false)
+  const [compFile, setCompFile] = useState<File|null>(null)
+  const [previewModal, setPreviewModal] = useState<{url:string;nombre:string;tipo:string}|null>(null)
   const [tc, setTc] = useState<{ usd: number; ars: number }>({ usd: 908, ars: 0 })
   const [form, setForm] = useState({
     categoria_id: '', descripcion: '', moneda: 'CLP',
