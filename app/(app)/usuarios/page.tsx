@@ -48,7 +48,7 @@ interface LoginLog {
 }
 
 // ── Definición completa de módulos y permisos ──────────────────────
-const ACCIONES = ['ver', 'crear', 'editar', 'eliminar'] as const
+const ACCIONES = ['ver', 'crear', 'editar', 'eliminar', 'descargar'] as const
 type Accion = typeof ACCIONES[number]
 
 interface ModuloItem {
@@ -75,17 +75,17 @@ const MODULOS_PERMISOS: ModuloSeccion[] = [
   {
     section: 'Ventas',
     items: [
-      { modulo: 'cotizaciones',        label: 'Cotizaciones',       acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'cotizaciones',        label: 'Cotizaciones',       acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'cotizaciones_estado', label: '→ Cambiar estado',   acciones: ['ver','editar'], subitem: true },
-      { modulo: 'clientes',            label: 'Clientes',           acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'clientes',            label: 'Clientes',           acciones: ['ver','crear','editar','eliminar','descargar'] },
     ]
   },
   {
     section: 'Operaciones',
     items: [
-      { modulo: 'operaciones',              label: 'Operaciones activas',      acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'operaciones',              label: 'Operaciones activas',      acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'cierre',                   label: 'Liquidación y cierre',     acciones: ['ver','editar'] },
-      { modulo: 'cotizaciones_proveedores', label: 'Cotiz. proveedores',       acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'cotizaciones_proveedores', label: 'Cotiz. proveedores',       acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'precios',                  label: 'Inteligencia de precios',  acciones: ['ver'], soloVer: true },
       { modulo: 'proveedores',              label: 'Proveedores',              acciones: ['ver','crear','editar','eliminar'] },
     ]
@@ -93,26 +93,26 @@ const MODULOS_PERMISOS: ModuloSeccion[] = [
   {
     section: 'Finanzas clientes',
     items: [
-      { modulo: 'facturas_emitidas',        label: 'Facturas emitidas',       acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'facturas_emitidas',        label: 'Facturas emitidas',       acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'facturas_emitidas_anular', label: '→ Anular factura',        acciones: ['ver','editar'], subitem: true },
-      { modulo: 'facturas_recibidas',       label: 'Facturas recibidas',      acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'facturas_recibidas',       label: 'Facturas recibidas',      acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'cte_clientes',             label: 'Cta. cte. clientes',      acciones: ['ver','crear','editar'] },
       { modulo: 'cte_proveedores',          label: 'Cta. cte. proveedores',   acciones: ['ver','crear','editar'] },
-      { modulo: 'fondos_custodia',          label: 'Fondos en custodia',      acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'fondos_custodia',          label: 'Fondos en custodia',      acciones: ['ver','crear','editar','eliminar','descargar'] },
     ]
   },
   {
     section: 'Tesorería',
     items: [
-      { modulo: 'flujo_cuentas', label: 'Flujo cuentas ARG↔CHL', acciones: ['ver','crear','editar'] },
+      { modulo: 'flujo_cuentas', label: 'Flujo cuentas ARG↔CHL', acciones: ['ver','crear','editar','descargar'] },
       { modulo: 'tipos_cambio',  label: 'Tipos de cambio',        acciones: ['ver','editar'] },
     ]
   },
   {
     section: 'Contabilidad',
     items: [
-      { modulo: 'iva',          label: 'Libro IVA',        acciones: ['ver','editar'] },
-      { modulo: 'gastos_fijos', label: 'Gastos fijos PN',  acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'iva',          label: 'Libro IVA',        acciones: ['ver','editar','descargar'] },
+      { modulo: 'gastos_fijos', label: 'Gastos fijos PN',  acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'resultados',   label: 'Resultados',       acciones: ['ver'], soloVer: true },
     ]
   },
@@ -133,18 +133,18 @@ const DEFAULTS: Record<string, Record<string, Accion[]>> = {
   // ── SUPER ADMINISTRADOR: acceso total a todo ───────────────────
   'Super Administrador': {
     dashboard: ['ver'], dashboard_financiero: ['ver'],
-    cotizaciones: ['ver','crear','editar','eliminar'], cotizaciones_estado: ['ver','editar'],
-    clientes: ['ver','crear','editar','eliminar'],
-    operaciones: ['ver','crear','editar','eliminar'], cierre: ['ver','editar'],
-    cotizaciones_proveedores: ['ver','crear','editar','eliminar'],
+    cotizaciones: ['ver','crear','editar','eliminar','descargar'], cotizaciones_estado: ['ver','editar'],
+    clientes: ['ver','crear','editar','eliminar','descargar'],
+    operaciones: ['ver','crear','editar','eliminar','descargar'], cierre: ['ver','editar'],
+    cotizaciones_proveedores: ['ver','crear','editar','eliminar','descargar'],
     precios: ['ver'],
     proveedores: ['ver','crear','editar','eliminar'],
-    facturas_emitidas: ['ver','crear','editar','eliminar'], facturas_emitidas_anular: ['ver','editar'],
-    facturas_recibidas: ['ver','crear','editar','eliminar'],
+    facturas_emitidas: ['ver','crear','editar','eliminar','descargar'], facturas_emitidas_anular: ['ver','editar'],
+    facturas_recibidas: ['ver','crear','editar','eliminar','descargar'],
     cte_clientes: ['ver','crear','editar'], cte_proveedores: ['ver','crear','editar'],
-    fondos_custodia: ['ver','crear','editar','eliminar'],
-    flujo_cuentas: ['ver','crear','editar'], tipos_cambio: ['ver','editar'],
-    iva: ['ver','editar'], gastos_fijos: ['ver','crear','editar','eliminar'], resultados: ['ver'],
+    fondos_custodia: ['ver','crear','editar','eliminar','descargar'],
+    flujo_cuentas: ['ver','crear','editar','descargar'], tipos_cambio: ['ver','editar'],
+    iva: ['ver','editar','descargar'], gastos_fijos: ['ver','crear','editar','eliminar','descargar'], resultados: ['ver'],
     catalogos: ['ver','crear','editar','eliminar'], cuentas_abm: ['ver','crear','editar','eliminar'],
     tributos: ['ver','editar'], usuarios: ['ver','crear','editar','eliminar'],
   },
@@ -152,18 +152,18 @@ const DEFAULTS: Record<string, Record<string, Accion[]>> = {
   // ── ADMINISTRADOR: todo excepto eliminar usuarios y tributos ───
   'Administrador': {
     dashboard: ['ver'], dashboard_financiero: ['ver'],
-    cotizaciones: ['ver','crear','editar','eliminar'], cotizaciones_estado: ['ver','editar'],
-    clientes: ['ver','crear','editar'],
-    operaciones: ['ver','crear','editar'], cierre: ['ver','editar'],
-    cotizaciones_proveedores: ['ver','crear','editar'],
+    cotizaciones: ['ver','crear','editar','eliminar','descargar'], cotizaciones_estado: ['ver','editar'],
+    clientes: ['ver','crear','editar','descargar'],
+    operaciones: ['ver','crear','editar','descargar'], cierre: ['ver','editar'],
+    cotizaciones_proveedores: ['ver','crear','editar','descargar'],
     precios: ['ver'],
     proveedores: ['ver','crear','editar'],
-    facturas_emitidas: ['ver','crear','editar'], facturas_emitidas_anular: ['ver','editar'],
-    facturas_recibidas: ['ver','crear','editar'],
+    facturas_emitidas: ['ver','crear','editar','descargar'], facturas_emitidas_anular: ['ver','editar'],
+    facturas_recibidas: ['ver','crear','editar','descargar'],
     cte_clientes: ['ver','crear','editar'], cte_proveedores: ['ver','crear','editar'],
-    fondos_custodia: ['ver','crear','editar'],
-    flujo_cuentas: ['ver','crear','editar'], tipos_cambio: ['ver','editar'],
-    iva: ['ver','editar'], gastos_fijos: ['ver','crear','editar'], resultados: ['ver'],
+    fondos_custodia: ['ver','crear','editar','descargar'],
+    flujo_cuentas: ['ver','crear','editar','descargar'], tipos_cambio: ['ver','editar'],
+    iva: ['ver','editar','descargar'], gastos_fijos: ['ver','crear','editar','descargar'], resultados: ['ver'],
     catalogos: ['ver','crear','editar','eliminar'], cuentas_abm: ['ver','crear','editar','eliminar'],
     tributos: ['ver'], usuarios: ['ver','crear','editar'],
   },
@@ -171,10 +171,10 @@ const DEFAULTS: Record<string, Record<string, Accion[]>> = {
   // ── EJECUTIVO COMERCIAL: foco en ventas y seguimiento ─────────
   'Ejecutivo comercial': {
     dashboard: ['ver'],
-    cotizaciones: ['ver','crear','editar'], cotizaciones_estado: ['ver','editar'],
-    clientes: ['ver','crear','editar'],
-    operaciones: ['ver'], cierre: ['ver'],
-    cotizaciones_proveedores: ['ver','crear','editar'],
+    cotizaciones: ['ver','crear','editar','descargar'], cotizaciones_estado: ['ver','editar'],
+    clientes: ['ver','crear','editar','descargar'],
+    operaciones: ['ver','descargar'], cierre: ['ver'],
+    cotizaciones_proveedores: ['ver','crear','editar','descargar'],
     precios: ['ver'],
     proveedores: ['ver'],
     tipos_cambio: ['ver'],
@@ -185,36 +185,36 @@ const DEFAULTS: Record<string, Record<string, Accion[]>> = {
     dashboard: ['ver'],
     cotizaciones: ['ver'],
     clientes: ['ver'],
-    operaciones: ['ver','crear','editar'], cierre: ['ver','editar'],
-    cotizaciones_proveedores: ['ver','crear','editar'],
+    operaciones: ['ver','crear','editar','descargar'], cierre: ['ver','editar'],
+    cotizaciones_proveedores: ['ver','crear','editar','descargar'],
     precios: ['ver'],
     proveedores: ['ver','crear','editar'],
-    fondos_custodia: ['ver'],
+    fondos_custodia: ['ver','descargar'],
     tipos_cambio: ['ver'],
   },
 
   // ── CONTABILIDAD: foco financiero y contable ──────────────────
   'Contabilidad': {
     dashboard: ['ver'], dashboard_financiero: ['ver'],
-    cotizaciones: ['ver'], operaciones: ['ver'], cierre: ['ver'],
-    facturas_emitidas: ['ver','crear','editar'], facturas_emitidas_anular: ['ver','editar'],
-    facturas_recibidas: ['ver','crear','editar'],
+    cotizaciones: ['ver'], operaciones: ['ver','descargar'], cierre: ['ver'],
+    facturas_emitidas: ['ver','crear','editar','descargar'], facturas_emitidas_anular: ['ver','editar'],
+    facturas_recibidas: ['ver','crear','editar','descargar'],
     cte_clientes: ['ver','crear','editar'], cte_proveedores: ['ver','crear','editar'],
-    fondos_custodia: ['ver','crear','editar'],
-    flujo_cuentas: ['ver','crear','editar'], tipos_cambio: ['ver'],
-    iva: ['ver','editar'], gastos_fijos: ['ver','crear','editar'], resultados: ['ver'],
+    fondos_custodia: ['ver','crear','editar','descargar'],
+    flujo_cuentas: ['ver','crear','editar','descargar'], tipos_cambio: ['ver'],
+    iva: ['ver','editar','descargar'], gastos_fijos: ['ver','crear','editar','descargar'], resultados: ['ver'],
   },
 
   // ── GERENCIA: visión total solo lectura + resultados ──────────
   'Gerencia': {
     dashboard: ['ver'], dashboard_financiero: ['ver'],
-    cotizaciones: ['ver'], cotizaciones_estado: ['ver'],
-    clientes: ['ver'], operaciones: ['ver'], cierre: ['ver'],
-    cotizaciones_proveedores: ['ver'], precios: ['ver'], proveedores: ['ver'],
-    facturas_emitidas: ['ver'], facturas_recibidas: ['ver'],
+    cotizaciones: ['ver','descargar'], cotizaciones_estado: ['ver'],
+    clientes: ['ver','descargar'], operaciones: ['ver','descargar'], cierre: ['ver'],
+    cotizaciones_proveedores: ['ver','descargar'], precios: ['ver'], proveedores: ['ver'],
+    facturas_emitidas: ['ver','descargar'], facturas_recibidas: ['ver','descargar'],
     cte_clientes: ['ver'], cte_proveedores: ['ver'],
-    fondos_custodia: ['ver'], flujo_cuentas: ['ver'], tipos_cambio: ['ver'],
-    iva: ['ver'], gastos_fijos: ['ver'], resultados: ['ver'],
+    fondos_custodia: ['ver','descargar'], flujo_cuentas: ['ver','descargar'], tipos_cambio: ['ver'],
+    iva: ['ver','descargar'], gastos_fijos: ['ver','descargar'], resultados: ['ver'],
   },
 }
 
