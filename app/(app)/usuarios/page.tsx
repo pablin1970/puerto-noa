@@ -401,7 +401,7 @@ export default function UsuariosPage() {
     return roles.filter(r => (u.roles_ids || []).includes(r.id))
   }
 
-  const accionLabel: Record<Accion, string> = { ver: 'Ver', crear: 'Crear', editar: 'Editar', eliminar: 'Elim.' }
+  const accionLabel: Record<Accion, string> = { ver: 'Ver', crear: 'Crear', editar: 'Editar', eliminar: 'Elim.', descargar: 'Descargar' }
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
