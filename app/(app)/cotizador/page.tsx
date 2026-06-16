@@ -1317,27 +1317,54 @@ const clientesFiltrados=terceros.filter(t=>
 
           {/* ── BLOQUE C: MERCADERÍA Y PROFORMA — solo si ARCA activo ── */}
           {s.incluirArca && <Card title="Mercaderia — Proforma del proveedor">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs mb-2">
-                <thead><tr className="bg-gray-50">{['Descripcion','NCM','Cant.','Precio unit. USD','Subtotal','Peso kg/u','Vol m3/u','Incoterm',''].map(h=><th key={h} className="text-left px-2 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide whitespace-nowrap">{h}</th>)}</tr></thead>
-                <tbody>
-                  {s.productos.map((p,i)=>(
-                    <tr key={i} className="border-b border-gray-50">
-                      <td className="px-2 py-1.5"><input value={p.descripcion} onChange={e=>{const n=[...s.productos];n[i]={...n[i],descripcion:e.target.value};u('productos',n)}} className={inp} placeholder="Producto"/></td>
-                      <td className="px-2 py-1.5"><input value={p.ncm} onChange={e=>{const n=[...s.productos];n[i]={...n[i],ncm:e.target.value};u('productos',n)}} className={inp} placeholder="0000.00.00"/></td>
-                      <td className="px-2 py-1.5"><input type="text" inputMode="decimal" value={p.cantidad} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.productos];const q=parseNum(e.target.value);n[i]={...n[i],cantidad:q,subtotal:q*n[i].precio_unit};u('productos',n)}} className={inp+' text-right w-16'}/></td>
-                      <td className="px-2 py-1.5"><input type="text" inputMode="decimal" value={p.precio_unit} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.productos];const pu=parseNum(e.target.value);n[i]={...n[i],precio_unit:pu,subtotal:pu*n[i].cantidad};u('productos',n)}} className={inp+' text-right w-24'}/></td>
-                      <td className="px-2 py-1.5"><div className="px-2 py-1 bg-[#EBF2FF] border border-[#93B8FC] rounded font-mono text-[11px] text-right w-24 text-[#052698]">{fmt(p.subtotal)}</div></td>
-                      <td className="px-2 py-1.5"><input type="text" inputMode="decimal" value={p.peso_unit} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.productos];n[i]={...n[i],peso_unit:parseNum(e.target.value)};u('productos',n)}} className={inp+' text-right w-20'}/></td>
-                      <td className="px-2 py-1.5"><input type="text" inputMode="decimal" value={p.vol_unit} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.productos];n[i]={...n[i],vol_unit:parseNum(e.target.value)};u('productos',n)}} className={inp+' text-right w-20'}/></td>
-                      <td className="px-2 py-1.5"><select value={p.incoterm} onChange={e=>{const n=[...s.productos];n[i]={...n[i],incoterm:e.target.value};u('productos',n)}} className={sel+' w-20'}>{['FOB','EXW','CIF'].map(v=><option key={v}>{v}</option>)}</select></td>
-                      <td className="px-2 py-1.5"><button onClick={()=>u('productos',s.productos.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs">X</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-2 mb-3">
+              {s.productos.map((p,i)=>(
+                <div key={i} className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+                  {/* Fila 1: descripción + NCM + incoterm + eliminar */}
+                  <div className="grid grid-cols-12 gap-2 mb-2 items-center">
+                    <div className="col-span-5">
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Descripción</label>
+                      <input value={p.descripcion} onChange={e=>{const n=[...s.productos];n[i]={...n[i],descripcion:e.target.value};u('productos',n)}} className={inp} placeholder="Producto"/>
+                    </div>
+                    <div className="col-span-3">
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">NCM</label>
+                      <input value={p.ncm} onChange={e=>{const n=[...s.productos];n[i]={...n[i],ncm:e.target.value};u('productos',n)}} className={inp} placeholder="0000.00.00"/>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Incoterm</label>
+                      <select value={p.incoterm} onChange={e=>{const n=[...s.productos];n[i]={...n[i],incoterm:e.target.value};u('productos',n)}} className={sel}>{['FOB','EXW','CIF'].map(v=><option key={v}>{v}</option>)}</select>
+                    </div>
+                    <div className="col-span-2 flex items-end justify-end pb-1">
+                      <button onClick={()=>u('productos',s.productos.filter((_,j)=>j!==i))} className="text-gray-300 hover:text-red-500 text-xs transition-colors">✕ Eliminar</button>
+                    </div>
+                  </div>
+                  {/* Fila 2: cant + precio + subtotal + peso + vol */}
+                  <div className="grid grid-cols-5 gap-2 items-end">
+                    <div>
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Cantidad</label>
+                      <input type="text" inputMode="decimal" value={p.cantidad} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.productos];const q=parseNum(e.target.value);n[i]={...n[i],cantidad:q,subtotal:q*n[i].precio_unit};u('productos',n)}} className={inp+' text-right'}/>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Precio unit. USD</label>
+                      <input type="text" inputMode="decimal" value={p.precio_unit} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.productos];const pu=parseNum(e.target.value);n[i]={...n[i],precio_unit:pu,subtotal:pu*n[i].cantidad};u('productos',n)}} className={inp+' text-right'}/>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Subtotal USD</label>
+                      <div className="px-2.5 py-1.5 bg-[#EBF2FF] border border-[#93B8FC] rounded-lg font-mono text-xs text-right text-[#052698] font-bold">{fmt(p.subtotal)}</div>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Peso kg/u</label>
+                      <input type="text" inputMode="decimal" value={p.peso_unit} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.productos];n[i]={...n[i],peso_unit:parseNum(e.target.value)};u('productos',n)}} className={inp+' text-right'}/>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Volumen m3/u</label>
+                      <input type="text" inputMode="decimal" value={p.vol_unit} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.productos];n[i]={...n[i],vol_unit:parseNum(e.target.value)};u('productos',n)}} className={inp+' text-right'}/>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <button onClick={()=>u('productos',[...s.productos,{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:s.incoterm,proformaId:''}])} className="text-xs text-[#1168F8] hover:underline">+ Agregar producto</button>
+            <button onClick={()=>u('productos',[...s.productos,{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:s.incoterm,proformaId:''}])} className="text-xs text-[#1168F8] hover:underline font-semibold">+ Agregar producto</button>
             <div className="grid grid-cols-4 gap-3 mt-4">
               {[{label:'Total FOB/EXW (USD)',value:`USD ${fmt(totalFOB)}`},{label:'Peso total',value:`${fmt(cap.totalKg,0)} kg`},{label:'Volumen total',value:`${fmt(cap.totalM3,2)} m3`},{label:'Productos',value:String(s.productos.length)}].map(it=>(
                 <div key={it.label} className="bg-gray-50 border border-gray-100 rounded-lg p-3"><div className="text-[10px] text-gray-400 mb-1">{it.label}</div><div className="font-semibold text-sm text-gray-800">{it.value}</div></div>
