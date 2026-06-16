@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -77,23 +77,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
-    // Verificar sesión inicial — pequeño delay para que las cookies de OAuth se propaguen
-    const checkSession = async () => {
+    // Verificar sesión — con reintentos para flujo OAuth
+    const checkSession = async (retries = 5, delay = 500) => {
       const { data } = await supabase.auth.getUser()
-      if (!data.user) {
-        // Reintentar una vez después de 800ms antes de redirigir
-        setTimeout(async () => {
-          const { data: data2 } = await supabase.auth.getUser()
-          if (!data2.user) { router.push('/'); return }
-          const { data: u2 } = await supabase.from('usuarios').select('*').eq('auth_id', data2.user.id).single()
-          if (u2) setUser(u2 as Usuario)
-          else router.push('/')
-        }, 800)
-        return
+      if (data.user) {
+        const { data: u } = await supabase.from('usuarios').select('*').eq('auth_id', data.user.id).single()
+        if (u) { setUser(u as Usuario); return }
       }
-      const { data: u } = await supabase.from('usuarios').select('*').eq('auth_id', data.user.id).single()
-      if (u) setUser(u as Usuario)
-      else router.push('/')
+      if (retries > 0) {
+        setTimeout(() => checkSession(retries - 1, delay), delay)
+      } else {
+        router.push('/')
+      }
     }
     checkSession()
     // Escuchar cambios de sesión (logout, token refresh)
