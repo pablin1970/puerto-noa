@@ -576,8 +576,8 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
     const ext = file.name.split('.').pop()
     const path = `${tercero.id}/${Date.now()}.${ext}`
     await supabase.storage.from('terceros').upload(path, file, { upsert: true })
-    const { data: urlData } = supabase.storage.from('terceros').getPublicUrl(path)
-    if (urlData?.publicUrl) {
+    const { data: urlData } = await supabase.storage.from('terceros').createSignedUrl(path, 3600)
+    if (urlData?.signedUrl) {
       await (supabase.from('tercero_documentos') as any).insert({
         tercero_id: tercero.id,
         tipo: docForm.tipo,
@@ -585,7 +585,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
         referencia: docForm.referencia || null,
         fecha: docForm.fecha || null,
         notas: docForm.notas || null,
-        archivo_url: urlData.publicUrl,
+        archivo_url: urlData.signedUrl,
         archivo_nombre: file.name,
         subido_por: currentUser?.nombre,
       })
