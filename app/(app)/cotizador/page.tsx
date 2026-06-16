@@ -1330,8 +1330,8 @@ const clientesFiltrados=terceros.filter(t=>
             </div>
           </div>
 
-          {/* ── BLOQUE C: MERCADERÍA Y PROFORMA ── */}
-          <Card title="Mercaderia — Proforma del proveedor">
+          {/* ── BLOQUE C: MERCADERÍA Y PROFORMA — solo si ARCA activo ── */}
+          {s.incluirArca && <Card title="Mercaderia — Proforma del proveedor">
             <div className="overflow-x-auto">
               <table className="w-full text-xs mb-2">
                 <thead><tr className="bg-gray-50">{['Descripcion','NCM','Cant.','Precio unit. USD','Subtotal','Peso kg/u','Vol m3/u','Incoterm',''].map(h=><th key={h} className="text-left px-2 py-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide whitespace-nowrap">{h}</th>)}</tr></thead>
@@ -1416,7 +1416,7 @@ const clientesFiltrados=terceros.filter(t=>
             <div className="mt-4 pt-4 border-t border-gray-100">
               <Field label="Precio equivalente en Argentina (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.precioArgEquiv||''} onChange={e=>u('precioArgEquiv',parseNum(e.target.value))} className={inp} placeholder="0.00"/></Field>
             </div>
-          </Card>
+          </Card>}
           {/* ── OBSERVACIONES ── */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
