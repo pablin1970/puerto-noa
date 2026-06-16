@@ -78,9 +78,9 @@ export default function GastosFijosPage() {
       const ext = compFile.name.split('.').pop()
       const path = `gastos/${gastoData.id}.${ext}`
       await supabase.storage.from('comprobantes').upload(path, compFile, { upsert: true })
-      const { data: urlData } = supabase.storage.from('comprobantes').getPublicUrl(path)
-      if (urlData?.publicUrl) {
-        await (supabase.from('gastos_fijos_pn') as any).update({ archivo_url: urlData.publicUrl, archivo_nombre: compFile.name }).eq('id', gastoData.id)
+      const { data: urlData } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
+      if (urlData?.signedUrl) {
+        await (supabase.from('gastos_fijos_pn') as any).update({ archivo_url: urlData.signedUrl, archivo_nombre: compFile.name }).eq('id', gastoData.id)
       }
     }
     setForm({ categoria_id:'', descripcion:'', moneda:'CLP', monto:'', es_recurrente:false, notas:'', comprobante_ref:'' })
