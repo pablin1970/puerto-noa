@@ -13,49 +13,50 @@ interface NavItem {
   section?: boolean
   adminOnly?: boolean
   soon?: boolean
+  modulo?: string  // para verificar permisos
 }
 
 const NAV: NavItem[] = [
   // ── INICIO ─────────────────────────────────────────
-  { href: '/dashboard',              label: 'Dashboard logístico',  icon: '⊞' },
-  { href: '/contabilidad/dashboard', label: 'Dashboard financiero', icon: '💹' },
+  { href: '/dashboard',              label: 'Dashboard logístico',  icon: '⊞', modulo: 'dashboard' },
+  { href: '/contabilidad/dashboard', label: 'Dashboard financiero', icon: '💹', modulo: 'dashboard_financiero' },
 
   // ── VENTAS ─────────────────────────────────────────
   { label: 'VENTAS', section: true },
-  { href: '/cotizador', label: 'Nueva cotizacion', icon: '✦' },
+  { href: '/cotizador', label: 'Nueva cotizacion', icon: '✦', modulo: 'cotizaciones' },
   { href: '/registro',  label: 'Cotizaciones',     icon: '☰' },
-  { href: '/clientes',  label: 'Clientes',         icon: '🏢' },
+  { href: '/clientes',  label: 'Clientes',         icon: '🏢', modulo: 'clientes' },
 
   // ── OPERACIONES ────────────────────────────────────
   { label: 'OPERACIONES', section: true },
-  { href: '/operaciones',              label: 'Operaciones activas',      icon: '🚢' },
-  { href: '/cierre',                   label: 'Liquidacion y cierre',     icon: '✓' },
-  { href: '/cotizaciones-proveedores', label: 'Cotizaciones proveedores', icon: '📋' },
-  { href: '/precios',                  label: 'Inteligencia de precios',  icon: '📊' },
-  { href: '/clientes',                 label: 'Proveedores',              icon: '📦' },
+  { href: '/operaciones',              label: 'Operaciones activas',      icon: '🚢', modulo: 'operaciones' },
+  { href: '/cierre',                   label: 'Liquidacion y cierre',     icon: '✓', modulo: 'cierre' },
+  { href: '/cotizaciones-proveedores', label: 'Cotizaciones proveedores', icon: '📋', modulo: 'cotizaciones_proveedores' },
+  { href: '/precios',                  label: 'Inteligencia de precios',  icon: '📊', modulo: 'precios' },
+  { href: '/clientes',                 label: 'Proveedores',              icon: '📦', modulo: 'proveedores' },
 
   // ── FINANZAS CLIENTES ──────────────────────────────
   { label: 'FINANZAS CLIENTES', section: true },
-  { href: '/facturacion/emitidas',        label: 'Facturas emitidas',     icon: '📄' },
-  { href: '/facturacion/recibidas',       label: 'Facturas recibidas',    icon: '📥' },
-  { href: '/facturacion/cte-clientes',    label: 'Cta. cte. clientes',    icon: '👥' },
-  { href: '/facturacion/cte-proveedores', label: 'Cta. cte. proveedores', icon: '🤝' },
-  { href: '/fondos',                      label: 'Fondos en custodia',    icon: '🏦' },
+  { href: '/facturacion/emitidas',        label: 'Facturas emitidas',     icon: '📄', modulo: 'facturas_emitidas' },
+  { href: '/facturacion/recibidas',       label: 'Facturas recibidas',    icon: '📥', modulo: 'facturas_recibidas' },
+  { href: '/facturacion/cte-clientes',    label: 'Cta. cte. clientes',    icon: '👥', modulo: 'cte_clientes' },
+  { href: '/facturacion/cte-proveedores', label: 'Cta. cte. proveedores', icon: '🤝', modulo: 'cte_proveedores' },
+  { href: '/fondos',                      label: 'Fondos en custodia',    icon: '🏦', modulo: 'fondos_custodia' },
 
   // ── TESORERÍA ──────────────────────────────────────
   { label: 'TESORERÍA', section: true },
-  { href: '/tesoreria/flujo', label: 'Flujo cuentas',   icon: '↔' },
-  { href: '/tipos-cambio',    label: 'Tipos de cambio', icon: '💱' },
+  { href: '/tesoreria/flujo', label: 'Flujo cuentas',   icon: '↔', modulo: 'flujo_cuentas' },
+  { href: '/tipos-cambio',    label: 'Tipos de cambio', icon: '💱', modulo: 'tipos_cambio' },
 
   // ── CONTABILIDAD ───────────────────────────────────
   { label: 'CONTABILIDAD', section: true },
-  { href: '/contabilidad/iva',        label: 'Libro IVA',       icon: '📖' },
-  { href: '/contabilidad/gastos',     label: 'Gastos y costos', icon: '📉' },
-  { href: '/contabilidad/resultados', label: 'Resultados',      icon: '📈' },
+  { href: '/contabilidad/iva',        label: 'Libro IVA',       icon: '📖', modulo: 'iva' },
+  { href: '/contabilidad/gastos',     label: 'Gastos y costos', icon: '📉', modulo: 'gastos_fijos' },
+  { href: '/contabilidad/resultados', label: 'Resultados',      icon: '📈', modulo: 'resultados' },
 
   // ── CONFIGURACIÓN ──────────────────────────────────
   { label: 'CONFIGURACION', section: true },
-  { href: '/catalogos',       label: 'Catálogos',    icon: '📚' },
+  { href: '/catalogos',       label: 'Catálogos',    icon: '📚', modulo: 'catalogos' },
   { href: '/tributos-config', label: 'Tributos ARCA', icon: '§', adminOnly: true },
   { href: '/usuarios',        label: 'Usuarios',      icon: '◎', adminOnly: true },
 ]
@@ -73,6 +74,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [user, setUser] = useState<Usuario | null>(null)
   const [tc, setTc] = useState<TCWidget>({ ARS: null, CLP: null, CNY: null, fecha: '', hora: '', fuente: '' })
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})  // modulo → acciones permitidas
   const [collapsed, setCollapsed] = useState(false)
   const supabase = useMemo(() => createClient(), [])
 
@@ -81,8 +83,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { router.push('/'); return }
       const { data: u } = await supabase.from('usuarios').select('*').eq('auth_id', data.user.id).single()
-      if (u) setUser(u as Usuario)
-      else router.push('/')
+      if (!u) { router.push('/'); return }
+      setUser(u as Usuario)
+      // Cargar permisos del rol
+      if ((u as any).rol_id) {
+        const { data: perms } = await supabase
+          .from('rol_permisos')
+          .select('modulo, accion')
+          .eq('rol_id', (u as any).rol_id)
+          .eq('permitido', true)
+        if (perms) {
+          const map: Record<string, string[]> = {}
+          for (const p of perms as any[]) {
+            if (!map[p.modulo]) map[p.modulo] = []
+            map[p.modulo].push(p.accion)
+          }
+          setPermisos(map)
+        }
+      }
     })
     // Escuchar cambios de sesión (logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -188,6 +206,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             if (!item.href) return null
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
             if (item.adminOnly && user?.rol !== 'admin') return null
+            // Filtrar por permisos del rol — si el ítem tiene módulo y el usuario tiene permisos cargados
+            if (item.modulo && Object.keys(permisos).length > 0) {
+              const tienePermiso = permisos[item.modulo] && permisos[item.modulo].includes('ver')
+              if (!tienePermiso) return null
+            }
 
             return (
               <div key={item.href} className="relative group">
