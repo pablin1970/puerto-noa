@@ -24,7 +24,7 @@ const NAV: NavItem[] = [
   // ── VENTAS ─────────────────────────────────────────
   { label: 'VENTAS', section: true },
   { href: '/cotizador', label: 'Nueva cotizacion', icon: '✦', modulo: 'cotizaciones' },
-  { href: '/registro',  label: 'Cotizaciones',     icon: '☰' },
+  { href: '/registro',  label: 'Cotizaciones',     icon: '☰', modulo: 'cotizaciones' },
   { href: '/clientes',  label: 'Clientes',         icon: '🏢', modulo: 'clientes' },
 
   // ── OPERACIONES ────────────────────────────────────
