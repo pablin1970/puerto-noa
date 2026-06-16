@@ -567,7 +567,7 @@ export default function UsuariosPage() {
                   <tr>
                     <th className="w-44 bg-gray-50 border-b border-r border-gray-100 px-4 py-2"/>
                     {roles.map(r => (
-                      <th key={r.id} colSpan={4}
+                      <th key={r.id} colSpan={5}
                         className="text-center py-2 text-[11px] font-bold border-b border-l-2 border-gray-200"
                         style={{ color: r.color, background: r.color + '08' }}>
                         {r.nombre}
