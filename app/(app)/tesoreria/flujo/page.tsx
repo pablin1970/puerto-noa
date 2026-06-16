@@ -119,10 +119,10 @@ export default function FlujoCuentasPage() {
       const ext = compFile.name.split('.').pop()
       const path = `flujo/${movData.id}.${ext}`
       await supabase.storage.from('comprobantes').upload(path, compFile, { upsert: true })
-      const { data: urlData } = supabase.storage.from('comprobantes').getPublicUrl(path)
-      if (urlData?.publicUrl) {
+      const { data: urlData } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
+      if (urlData?.signedUrl) {
         await (supabase.from('flujo_cuentas_pn') as any)
-          .update({ archivo_url: urlData.publicUrl, archivo_nombre: compFile.name })
+          .update({ archivo_url: urlData.signedUrl, archivo_nombre: compFile.name })
           .eq('id', movData.id)
       }
     }
