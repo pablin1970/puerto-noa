@@ -30,6 +30,7 @@ const RUBROS: Record<string, { label: string; color: string; bg: string }> = {
 // Bloque por defecto según rubro (número de bloque en cotizador_bloques)
 // Usa los CÓDIGOS REALES de proveedor_rubros (editables desde Catálogos)
 const RUBRO_BLOQUE_DEFAULT: Record<string, number> = {
+  proveedor_mercaderia: 0, // Proveedor de mercadería → bloque Mercadería
   forwarder: 1,           // Freight Forwarder → marítimo
   naviera: 1,             // Naviera → marítimo
   deposito: 2,            // Almacen extra puertario → Chile
@@ -40,6 +41,7 @@ const RUBRO_BLOQUE_DEFAULT: Record<string, number> = {
 
 // Categoría por defecto de los ítems según rubro (para inteligencia de precios)
 const RUBRO_CATEGORIA_DEFAULT: Record<string, string> = {
+  proveedor_mercaderia: 'mercaderia',
   forwarder: 'flete_maritimo',
   naviera: 'flete_maritimo',
   deposito: 'almacenaje',
@@ -51,8 +53,9 @@ const RUBRO_CATEGORIA_DEFAULT: Record<string, string> = {
 // ── Mapeo CÓDIGO de rubro → TIPO de formulario que se muestra ──
 // FUNDAMENTAL: cualquier rubro nuevo en la base que no esté acá cae en 'generico'
 // sin romper nada. No depende de keys hardcodeados de botones.
-type TipoFormulario = 'maritimo' | 'terrestre' | 'almacenaje' | 'despachante' | 'seguro' | 'generico'
+type TipoFormulario = 'maritimo' | 'terrestre' | 'almacenaje' | 'despachante' | 'seguro' | 'mercaderia' | 'generico'
 const FORMULARIO_POR_RUBRO: Record<string, TipoFormulario> = {
+  proveedor_mercaderia: 'mercaderia',
   forwarder: 'maritimo',
   naviera: 'maritimo',
   transporte_terrestre: 'terrestre',
@@ -84,6 +87,12 @@ interface Item {
   moneda: string
   tipo_contenedor: string
   orden: number
+  // Campos de producto (solo rubro proveedor_mercaderia)
+  ncm?: string
+  cantidad?: number
+  peso_unit?: number
+  vol_unit?: number
+  incoterm?: string
 }
 
 interface Cotizacion {
@@ -687,6 +696,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   ).slice(0,8)
 
   function addItem() { setItems(prev => [...prev, { ...ITEM_VACIO, orden: prev.length }]) }
+  function addItemMercaderia() { setItems(prev => [...prev, { ...ITEM_VACIO, tipo_calculo:'producto', cantidad:1, incoterm:'FOB', orden: prev.length }]) }
   function removeItem(i:number) { setItems(prev => prev.filter((_,idx) => idx!==i)) }
   function updateItem(i:number, field:string, value:any) { setItems(prev => prev.map((it,idx) => idx===i ? {...it,[field]:value} : it)) }
 
@@ -792,7 +802,25 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     const itemsDeRubro = (cotizId:string, esExpoForm:boolean, f:any) => {
       const out:any[] = []
       const ruta = rutaItemRubro(tf, esExpoForm, f)
-      if(tf==='almacenaje'){
+      if(tf==='mercaderia'){
+        // Productos de la proforma: cada uno con NCM, cantidad, precio, peso, volumen, incoterm
+        items.filter(it=>it.descripcion).forEach((it,i)=>{
+          out.push({
+            cotizacion_id: cotizId,
+            descripcion: it.descripcion,
+            tipo_calculo: 'producto',
+            valor: parseN(String(it.valor))||0,            // precio unitario USD
+            cantidad: parseN(String(it.cantidad))||0,
+            ncm: it.ncm||null,
+            peso_unit: parseN(String(it.peso_unit))||0,
+            vol_unit: parseN(String(it.vol_unit))||0,
+            incoterm: it.incoterm||'FOB',
+            moneda: it.moneda||'USD',
+            categoria: 'mercaderia',
+            ...ruta, orden:i,
+          })
+        })
+      } else if(tf==='almacenaje'){
         let ord=0
         const add=(cond:boolean, descripcion:string, tipo_calculo:string, valKey:string)=>{
           const v=parseN(String(f[valKey]||0))
@@ -1071,7 +1099,15 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               {RUBRO_ITEMS.map(r=>{
                 const activo = form.rubro===r.key
                 return (
-                <button key={r.key} onClick={()=>setF('rubro',r.key)}
+                <button key={r.key} onClick={()=>{
+                  setF('rubro',r.key)
+                  // Si el rubro es mercadería y el primer item está vacío, darle defaults de producto
+                  if(tipoFormulario(r.key)==='mercaderia'){
+                    setItems(prev=>prev.length>0 && !prev[0].descripcion && prev[0].tipo_calculo!=='producto'
+                      ? prev.map((it,idx)=>idx===0?{...it,tipo_calculo:'producto',cantidad:it.cantidad??1,incoterm:it.incoterm||'FOB'}:it)
+                      : prev)
+                  }
+                }}
                   className="flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 text-center transition-all"
                   style={activo
                     ? {borderColor:r.color, background:(r.color||'#1168F8')+'14'}
@@ -1450,6 +1486,99 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                   <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={categorias} onChange={updateItem} onRemove={removeItem} editMode={true}/>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MERCADERÍA — Proveedor de mercadería (proforma) */}
+      {tf==='mercaderia' && (
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #ca8a04'}}>
+          <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2" style={{background:'#fefce8'}}>
+            <span className="text-lg">📦</span>
+            <span className="font-semibold text-sm" style={{color:'#854d0e'}}>Mercadería — proforma del proveedor</span>
+          </div>
+          <div className="px-5 py-4">
+            <div className="text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 py-2 mb-3">
+              Cargá los productos de la proforma. El NCM, peso y volumen se usan para el cálculo del CIF y la liquidación de tributos ARCA en el cotizador.
+            </div>
+            <div className="flex items-center justify-between mb-2">
+              {lbl('Productos de la proforma')}
+              <button onClick={addItemMercaderia} className="text-[10px] text-[#ca8a04] hover:underline font-semibold">+ Agregar producto</button>
+            </div>
+            <div className="space-y-2">
+              {items.map((it,i)=>(
+                <div key={i} className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+                  {/* Fila 1: descripción + NCM + incoterm + eliminar */}
+                  <div className="grid grid-cols-12 gap-2 mb-2 items-end">
+                    <div className="col-span-5">
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Descripción</label>
+                      <input value={it.descripcion} onChange={e=>updateItem(i,'descripcion',e.target.value)} className={inp} placeholder="Producto"/>
+                    </div>
+                    <div className="col-span-3">
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">NCM</label>
+                      <input value={it.ncm||''} onChange={e=>updateItem(i,'ncm',e.target.value)} className={inp} placeholder="0000.00.00"/>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Incoterm</label>
+                      <select value={it.incoterm||'FOB'} onChange={e=>updateItem(i,'incoterm',e.target.value)} className={sel}>
+                        {['FOB','EXW','CIF'].map(v=><option key={v}>{v}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-2 flex items-center justify-end pb-1">
+                      <button onClick={()=>removeItem(i)} className="text-gray-300 hover:text-red-500 text-xs transition-colors">✕ Eliminar</button>
+                    </div>
+                  </div>
+                  {/* Fila 2: cantidad + precio + subtotal + peso + volumen */}
+                  <div className="grid grid-cols-5 gap-2 items-end">
+                    <div>
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Cantidad</label>
+                      <input type="text" inputMode="decimal" value={it.cantidad??''} onFocus={e=>e.target.select()}
+                        onChange={e=>updateItem(i,'cantidad',parseN(e.target.value))} className={inp+' text-right'} placeholder="1"/>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Precio unit. USD</label>
+                      <input type="text" inputMode="decimal" value={it.valor||''} onFocus={e=>e.target.select()}
+                        onChange={e=>updateItem(i,'valor',parseN(e.target.value))} className={inp+' text-right'} placeholder="0"/>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Subtotal USD</label>
+                      <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl font-mono text-xs text-right font-bold" style={{color:'#854d0e'}}>
+                        {fmtN((parseN(String(it.cantidad||0)))*(parseN(String(it.valor||0))))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Peso kg/u</label>
+                      <input type="text" inputMode="decimal" value={it.peso_unit||''} onFocus={e=>e.target.select()}
+                        onChange={e=>updateItem(i,'peso_unit',parseN(e.target.value))} className={inp+' text-right'} placeholder="0"/>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Volumen m³/u</label>
+                      <input type="text" inputMode="decimal" value={it.vol_unit||''} onFocus={e=>e.target.select()}
+                        onChange={e=>updateItem(i,'vol_unit',parseN(e.target.value))} className={inp+' text-right'} placeholder="0"/>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Totales de la proforma */}
+            <div className="grid grid-cols-4 gap-3 mt-4">
+              {(()=>{
+                const totFOB = items.reduce((t,it)=>t+(parseN(String(it.cantidad||0)))*(parseN(String(it.valor||0))),0)
+                const totKg = items.reduce((t,it)=>t+(parseN(String(it.cantidad||0)))*(parseN(String(it.peso_unit||0))),0)
+                const totM3 = items.reduce((t,it)=>t+(parseN(String(it.cantidad||0)))*(parseN(String(it.vol_unit||0))),0)
+                return [
+                  {label:'Total FOB (USD)', value:`USD ${fmtN(totFOB)}`},
+                  {label:'Peso total', value:`${fmtN(totKg)} kg`},
+                  {label:'Volumen total', value:`${fmtN(totM3)} m³`},
+                  {label:'Productos', value:String(items.filter(it=>it.descripcion).length)},
+                ].map(b=>(
+                  <div key={b.label} className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                    <div className="text-[10px] text-gray-400 mb-1">{b.label}</div>
+                    <div className="font-semibold text-sm text-gray-800">{b.value}</div>
+                  </div>
+                ))
+              })()}
             </div>
           </div>
         </div>
