@@ -36,6 +36,11 @@ interface ItemSelProv {
   destino_id?: string|null
   paso_id?: string|null
   tipo_flete?: string|null
+  // Campos de producto (solo mercadería)
+  ncm?: string
+  pesoUnit?: number
+  volUnit?: number
+  incoterm?: string
 }
 // Cotización de proveedor seleccionada (FW, transporte Chile, transporte terrestre)
 interface CotProvSel {
@@ -87,6 +92,8 @@ interface CotState {
   // Bloque 2 - Transporte Chile-NOA
   cotsProvChile: CotProvSel[]
   gastosChile: GastoChile[]
+  // Bloque 0 - Mercadería (proformas del proveedor)
+  cotsProvMerc: CotProvSel[]
   // Bloque 3 - Transporte terrestre
   cotsProvTransp: CotProvSel[]
   // Bloque 3 - Transporte terrestre (igual que antes)
@@ -129,6 +136,7 @@ const INIT: CotState = {
   cotsProvChile:[],
   gastosChile:[],
   cotsProvTransp:[],
+  cotsProvMerc:[],
   optTransp:'A',rowsDescon:[],
   almModoVol:'auto',almVolM3:0,almCostoDia:0,almDias:0,
   cargaModo:'fijo',cargaValor:0,
@@ -197,6 +205,7 @@ const [tiposCont,setTiposCont]=useState<any[]>([])
 const [tiposCamion,setTiposCamion]=useState<any[]>([])
 const [cotsFWDisponibles,setCotsFWDisponibles]=useState<any[]>([])
 const [cotsTranspDisponibles,setCotsTranspDisponibles]=useState<any[]>([])
+const [cotsMercDisponibles,setCotsMercDisponibles]=useState<any[]>([])
 const [cotsArgDisponibles,setCotsArgDisponibles]=useState<any[]>([])
 const [cotsChileDisponibles,setCotsChileDisponibles]=useState<any[]>([])
 // Cotizaciones de operaciones usadas (para detectar "ya usada en X")
@@ -212,7 +221,7 @@ const [tercerosProv,setTercerosProv]=useState<any[]>([])
 
 
 // Cotizaciones de proveedores seleccionadas por bloque
-const [provUsado,setProvUsado]=useState<Record<number,string|null>>({1:null,2:null,3:null,4:null})
+const [provUsado,setProvUsado]=useState<Record<number,string|null>>({0:null,1:null,2:null,3:null,4:null})
 const [terceros,setTerceros]=useState<any[]>([])
 const [despachantes,setDespachantes]=useState<any[]>([])
 const [despachanteSelId,setDespachanteSelId]=useState<string|null>(null)
@@ -307,6 +316,7 @@ useEffect(()=>{
       setCotsChileDisponibles(cots.filter(c=>c.bloque_id===idPorNum[2]))
       setCotsTranspDisponibles(cots.filter(c=>c.bloque_id===idPorNum[3]))
       setCotsArgDisponibles(cots.filter(c=>c.bloque_id===idPorNum[4]))
+      setCotsMercDisponibles(cots.filter(c=>c.bloque_id===idPorNum[0]))
     }
   })
   // Catálogos geográficos y tipos de camión
@@ -347,8 +357,20 @@ async function loadTrib(){
 const u=<K extends keyof CotState>(k:K,v:CotState[K])=>setS(p=>({...p,[k]:v}))
 const cambiarTab=(t:Tab)=>{setTab(t);setTimeout(()=>{topRef.current?.scrollIntoView({behavior:'smooth',block:'start'})},50)}
 const nc=s.contenedores.reduce((t,c)=>t+c.cantidad,0)||1
-const totalFOB=s.productos.reduce((t,p)=>t+p.subtotal,0)+(s.incoterm==='EXW'?s.exwTransp+s.exwAgente+s.exwOtros:0)
-const totalM3=s.productos.reduce((t,p)=>t+p.vol_unit*p.cantidad,0)
+// Bloque 0: Mercadería — proforma del proveedor elegida (sus productos)
+const mercElegida = s.cotsProvMerc.find(c=>c.elegida)
+const mercItems = mercElegida ? mercElegida.items : []
+// FOB de la proforma: suma de (cantidad × precio unitario) de sus productos
+const fobProforma = mercElegida
+  ? mercItems.reduce((t,it)=>t + (it.cantUsar||it.cantCotizada||0)*(it.valorUnit||0), 0)
+  : 0
+// Si hay proforma elegida, el FOB sale de ella; si no, del modelo viejo (s.productos) por compatibilidad
+const totalFOB = mercElegida
+  ? fobProforma
+  : s.productos.reduce((t,p)=>t+p.subtotal,0)+(s.incoterm==='EXW'?s.exwTransp+s.exwAgente+s.exwOtros:0)
+const totalM3 = mercElegida
+  ? mercItems.reduce((t,it)=>t + (it.cantUsar||it.cantCotizada||0)*((it as any).volUnit||0), 0)
+  : s.productos.reduce((t,p)=>t+p.vol_unit*p.cantidad,0)
 
 // Bloque 1: ForWarder elegido y sus ítems seleccionados
 const fwElegida = s.cotsProvFW.find(c=>c.elegida)
@@ -454,7 +476,10 @@ const arcaActivo = hayMercaderia && s.incluirArca
 const totalTribUSD = arcaActivo ? totalTribARS/s.tcTrib : 0
 const totalLog=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+segIndepCalc+subE+subGastosArg+fee
 const totalLanded=totalFOB+totalLog+totalTribUSD
-const cap=calcCapacidad(s.contenedores,s.productos)
+const productosParaCap = mercElegida
+  ? mercItems.map(it=>({vol_unit:(it as any).volUnit||0, cantidad:it.cantUsar||0, peso_unit:(it as any).pesoUnit||0} as any))
+  : s.productos
+const cap=calcCapacidad(s.contenedores,productosParaCap)
 
 // ── Lógica adaptativa del resumen: solo se muestra lo que se cotiza ──
 // Helper local (la función bloqueActivo se define más abajo; replicamos su lógica acá)
@@ -581,6 +606,46 @@ const bloqueActivo = (idx: number): boolean => {
 }
 const fmtFecha = (f:string) => f ? f.split('-').reverse().join('/') : '—'
 
+// Proforma de mercadería desde el sistema: mapea productos con su cantidad real, NCM, peso, volumen
+function cotMercDesdeSistema(cot:any, usadas:string[]): CotProvSel {
+  const items: ItemSelProv[] = (cot.items||[]).map((it:any)=>{
+    const cant = parseNum(String(it.cantidad||0)) || 1
+    const valorUnit = parseNum(String(it.valor||0))
+    return {
+      itemId: it.id||uid2(),
+      descripcion: it.descripcion||'',
+      tipo_calculo: 'producto',
+      valorUnit,
+      cantCotizada: cant,
+      cantUsar: cant,
+      tipoContenedor: '',
+      subtotal: valorUnit * cant,
+      seleccionado: true, // en mercadería todos los productos van juntos
+      origen_id: null, destino_id: null, paso_id: null, tipo_flete: null,
+      // datos de producto extra (para mostrar y para cálculos futuros por NCM)
+      ncm: it.ncm||'',
+      pesoUnit: parseNum(String(it.peso_unit||0)),
+      volUnit: parseNum(String(it.vol_unit||0)),
+      incoterm: it.incoterm||'FOB',
+    } as any
+  })
+  return {
+    uid: uid2(),
+    cotProvId: cot.id,
+    proveedorNombre: cot.proveedor_nombre||'',
+    referencia: cot.referencia||'',
+    fechaEmision: cot.fecha||'',
+    fechaVencimiento: cot.fecha_vencimiento||'',
+    tipo: cot.tipo==='especifica'?'especifica':'generica',
+    clienteId: cot.cliente_id||null,
+    estado: isVigente(cot.fecha_vencimiento||'')?'vigente':'vencida',
+    usadaEnCots: usadas,
+    items,
+    elegida: false,
+    seguroIncluido: false, seguroModo: 'pct', seguroMonto: 0, segAlcance: 'no',
+  }
+}
+
 function cotProvDesdeSistema(cot:any, contenedoresH1:{tipo:string;cantidad:number}[], usadas:string[]): CotProvSel {
   const items: ItemSelProv[] = (cot.items||[]).map((it:any)=>{
     const esBigbag = it.tipo_calculo === 'por_bigbag'
@@ -648,11 +713,11 @@ function agregarFWManual(){
   setS(p=>({...p, cotsProvFW:[...p.cotsProvFW, nueva]}))
 }
 
-function elegirCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', uid:string){
+function elegirCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc', uid:string){
   setS(p=>({...p, [campo]:p[campo].map((c:CotProvSel)=>({...c,elegida:c.uid===uid}))}))
 }
 
-function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', uid:string){
+function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc', uid:string){
   setS(p=>{
     const nuevas = (p[campo] as CotProvSel[]).filter(c=>c.uid!==uid)
     if(nuevas.length>0&&!nuevas.some(c=>c.elegida)) nuevas[0].elegida=true
@@ -660,7 +725,7 @@ function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', ui
   })
 }
 
-function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', cotUid:string, itemId:string){
+function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc', cotUid:string, itemId:string){
   setS(p=>({...p,[campo]:(p[campo] as CotProvSel[]).map(c=>{
     if(c.uid!==cotUid) return c
     return {...c,items:c.items.map(i=>{
@@ -671,7 +736,7 @@ function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', 
   })}))
 }
 
-function setCantUsarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp', cotUid:string, itemId:string, cant:number){
+function setCantUsarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc', cotUid:string, itemId:string, cant:number){
   setS(p=>({...p,[campo]:(p[campo] as CotProvSel[]).map(c=>{
     if(c.uid!==cotUid) return c
     return {...c,items:c.items.map(i=>{
@@ -705,6 +770,18 @@ function agregarTranspTerrDesdeSistema(cotId:string){
   nueva.elegida = s.cotsProvTransp.length===0
   setS(p=>({...p, cotsProvTransp:[...p.cotsProvTransp, nueva]}))
   setProvUsado(pv=>({...pv,3:cotId}))
+}
+
+// Mercadería: agregar proforma del sistema. Reemplaza la elegida (solo una proforma activa a la vez).
+function agregarMercDesdeSistema(cotId:string){
+  const cot = cotsMercDisponibles.find(c=>c.id===cotId)
+  if(!cot) return
+  const usadas = cotsSistemaUsadas[cotId]||[]
+  const nueva = cotMercDesdeSistema(cot, usadas)
+  nueva.elegida = true
+  // Al elegir una proforma, las demás dejan de estar elegidas
+  setS(p=>({...p, cotsProvMerc:[...p.cotsProvMerc.map(c=>({...c,elegida:false})), nueva]}))
+  setProvUsado(pv=>({...pv,0:cotId}))
 }
 
 // Buscar terceros proveedores por rubros del bloque
@@ -1538,120 +1615,99 @@ const clientesFiltrados=terceros.filter(t=>
             </div>
           </div>
 
-          {/* ── BLOQUE C: MERCADERÍA Y PROFORMA — solo si el bloque Mercadería está activo ── */}
-          {mercaderiaActiva() && <Card title="Mercaderia — Proforma del proveedor">
-            <div className="space-y-2 mb-3">
-              {s.productos.map((p,i)=>(
-                <div key={i} className="bg-gray-50 border border-gray-100 rounded-xl p-3">
-                  {/* Fila 1: descripción + NCM + incoterm + eliminar */}
-                  <div className="grid grid-cols-12 gap-2 mb-2 items-center">
-                    <div className="col-span-5">
-                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Descripción</label>
-                      <input value={p.descripcion} onChange={e=>{const n=[...s.productos];n[i]={...n[i],descripcion:e.target.value};u('productos',n)}} className={inp} placeholder="Producto"/>
-                    </div>
-                    <div className="col-span-3">
-                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">NCM</label>
-                      <input value={p.ncm} onChange={e=>{const n=[...s.productos];n[i]={...n[i],ncm:e.target.value};u('productos',n)}} className={inp} placeholder="0000.00.00"/>
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Incoterm</label>
-                      <select value={p.incoterm} onChange={e=>{const n=[...s.productos];n[i]={...n[i],incoterm:e.target.value};u('productos',n)}} className={sel}>{['FOB','EXW','CIF'].map(v=><option key={v}>{v}</option>)}</select>
-                    </div>
-                    <div className="col-span-2 flex items-end justify-end pb-1">
-                      <button onClick={()=>u('productos',s.productos.filter((_,j)=>j!==i))} className="text-gray-300 hover:text-red-500 text-xs transition-colors">✕ Eliminar</button>
-                    </div>
-                  </div>
-                  {/* Fila 2: cant + precio + subtotal + peso + vol */}
-                  <div className="grid grid-cols-5 gap-2 items-end">
-                    <div>
-                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Cantidad</label>
-                      <input type="text" inputMode="decimal" value={p.cantidad} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.productos];const q=parseNum(e.target.value);n[i]={...n[i],cantidad:q,subtotal:q*n[i].precio_unit};u('productos',n)}} className={inp+' text-right'}/>
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Precio unit. USD</label>
-                      <input type="text" inputMode="decimal" value={p.precio_unit} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.productos];const pu=parseNum(e.target.value);n[i]={...n[i],precio_unit:pu,subtotal:pu*n[i].cantidad};u('productos',n)}} className={inp+' text-right'}/>
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Subtotal USD</label>
-                      <div className="px-2.5 py-1.5 bg-[#EBF2FF] border border-[#93B8FC] rounded-lg font-mono text-xs text-right text-[#052698] font-bold">{fmt(p.subtotal)}</div>
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Peso kg/u</label>
-                      <input type="text" inputMode="decimal" value={p.peso_unit} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.productos];n[i]={...n[i],peso_unit:parseNum(e.target.value)};u('productos',n)}} className={inp+' text-right'}/>
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Volumen m3/u</label>
-                      <input type="text" inputMode="decimal" value={p.vol_unit} onFocus={e=>e.target.select()} onChange={e=>{const n=[...s.productos];n[i]={...n[i],vol_unit:parseNum(e.target.value)};u('productos',n)}} className={inp+' text-right'}/>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button onClick={()=>u('productos',[...s.productos,{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:s.incoterm,proformaId:''}])} className="text-xs text-[#1168F8] hover:underline font-semibold">+ Agregar producto</button>
-            <div className="grid grid-cols-4 gap-3 mt-4">
-              {[{label:'Total FOB/EXW (USD)',value:`USD ${fmt(totalFOB)}`},{label:'Peso total',value:`${fmt(cap.totalKg,0)} kg`},{label:'Volumen total',value:`${fmt(cap.totalM3,2)} m3`},{label:'Productos',value:String(s.productos.length)}].map(it=>(
-                <div key={it.label} className="bg-gray-50 border border-gray-100 rounded-lg p-3"><div className="text-[10px] text-gray-400 mb-1">{it.label}</div><div className="font-semibold text-sm text-gray-800">{it.value}</div></div>
-              ))}
-            </div>
-            {s.incoterm==='EXW'&&(
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <div className="text-xs font-medium text-gray-700 mb-3">Puesta a FOB (precio EXW)</div>
-                <div className="grid grid-cols-3 gap-3">
-                  <Field label="Transporte interno China (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.exwTransp} onChange={e=>u('exwTransp',parseNum(e.target.value))} className={inp}/></Field>
-                  <Field label="Agente exportacion (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.exwAgente} onChange={e=>u('exwAgente',parseNum(e.target.value))} className={inp}/></Field>
-                  <Field label="Otros gastos origen (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.exwOtros} onChange={e=>u('exwOtros',parseNum(e.target.value))} className={inp}/></Field>
-                </div>
+          {/* ── BLOQUE 0: MERCADERÍA — proforma del proveedor (modelo tipo transporte) ── */}
+          {mercaderiaActiva() && (
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-white text-[11px] font-bold" style={{background:'#ca8a04'}}>📦</span>
+              <span className="font-semibold text-sm text-gray-900">{bloqueMerc?.nombre || 'Mercadería'}</span>
+              <span className="text-[10px] text-gray-400">Proforma del proveedor · base imponible CIF</span>
+              <div className="ml-auto flex items-center gap-2 flex-wrap">
+                <select onChange={e=>{if(e.target.value){agregarMercDesdeSistema(e.target.value);e.target.value=''}}}
+                  className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#ca8a04]" defaultValue="">
+                  <option value="">+ Cargar del sistema</option>
+                  {(()=>{
+                    const esp=cotsMercDisponibles.filter((c:any)=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                    const gen=cotsMercDisponibles.filter((c:any)=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                    return(<>
+                      {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}</option>)})}</optgroup>)}
+                      <optgroup label="Proformas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
+                    </>)
+                  })()}
+                </select>
+                <button onClick={()=>{
+                  window.open(`/cotizaciones-proveedores?nuevo=1&bloque=0&rubro=proveedor_mercaderia&cliente_id=${clienteSelId||''}&cliente_nombre=${encodeURIComponent(s.cliente||'')}`, '_blank')
+                }} className="px-3 py-1 text-white rounded-lg text-[10px] font-bold whitespace-nowrap" style={{background:'#ca8a04'}}>+ Manual</button>
               </div>
-            )}
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-medium text-gray-700">Proformas del proveedor</div>
-                <button onClick={()=>u('proformas',[...s.proformas,{id:uid2(),numero:'',proveedor:'',fecha:new Date().toISOString().slice(0,10)}])} className="text-xs text-[#1168F8] hover:underline">+ Agregar proforma</button>
-              </div>
-              {s.proformas.length===0?(
-                <div className="text-[10px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">Sin proformas adjuntas.</div>
+            </div>
+            <div className="px-5 py-4">
+              {s.cotsProvMerc.length===0?(
+                <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 text-center">
+                  Sin proforma de mercadería. Cargala del sistema (proformas de proveedores de mercadería) o creá una nueva con + Manual.
+                </div>
               ):(
-                <div className="space-y-2">
-                  {s.proformas.map((pf,pi)=>(
-                    <div key={pf.id} className="p-3 bg-[#EBF2FF] border border-[#93B8FC] rounded-lg space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="grid grid-cols-3 gap-2 flex-1">
-                          <input value={pf.numero} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],numero:e.target.value};u('proformas',n)}} className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="N° proforma"/>
-                          <input value={pf.proveedor} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],proveedor:e.target.value};u('proformas',n)}} className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Proveedor chino"/>
-                          <input type="date" value={pf.fecha} onChange={e=>{const n=[...s.proformas];n[pi]={...n[pi],fecha:e.target.value};u('proformas',n)}} className="px-2 py-1 border border-[#93B8FC] rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white"/>
+                <div>
+                  {s.cotsProvMerc.map(mc=>{
+                    const vigente=isVigente(mc.fechaVencimiento)
+                    const totalFob=mc.items.reduce((t,i)=>t+(i.cantUsar||0)*(i.valorUnit||0),0)
+                    return (
+                      <div key={mc.uid} className={`border-2 rounded-xl overflow-hidden mb-3 ${mc.elegida?'border-[#ca8a04]':'border-gray-200'}`}>
+                        <div className={`flex items-center gap-0 ${mc.elegida?'bg-amber-50':'bg-gray-50'}`}>
+                          <button onClick={()=>elegirCotProv('cotsProvMerc',mc.uid)} className="w-10 flex-shrink-0 flex items-center justify-center self-stretch hover:bg-black/5">
+                            <div className={`w-4 h-4 rounded-full border-2 ${mc.elegida?'border-[#ca8a04] bg-[#ca8a04]':'border-gray-300 bg-white'}`}>{mc.elegida&&<div className="w-1.5 h-1.5 bg-white rounded-full mx-auto mt-0.5"/>}</div>
+                          </button>
+                          <div className="flex-1 px-3 py-2.5">
+                            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                              <span className="font-semibold text-sm text-gray-900">{mc.proveedorNombre}</span>
+                              {mc.tipo==='especifica'?<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEEDFE] text-[#3C3489]">⭐ Específica</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500">Genérica</span>}
+                              {vigente?<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700">vigente</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700">vencida</span>}
+                              {mc.elegida&&<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#ca8a04] text-white">ELEGIDA</span>}
+                            </div>
+                            <div className="flex gap-4 text-[10px] text-gray-500">
+                              {mc.referencia&&<span className="font-mono">Ref: {mc.referencia}</span>}
+                              {mc.fechaEmision&&<span>Emitida: {fmtFecha(mc.fechaEmision)}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 px-3">
+                            {mc.elegida&&totalFob>0&&<span className="font-mono font-bold text-[#ca8a04] text-sm">FOB USD {fmt(totalFob)}</span>}
+                            <button onClick={()=>eliminarCotProv('cotsProvMerc',mc.uid)} className="text-gray-300 hover:text-red-500 text-xs">✕</button>
+                          </div>
                         </div>
-                        <button onClick={()=>u('proformas',s.proformas.filter((_,j)=>j!==pi))} className="text-[#93B8FC] hover:text-red-500 text-xs flex-shrink-0">✕</button>
+                        <table className="w-full text-xs border-t border-gray-100">
+                          <thead><tr className="bg-gray-50 border-b border-gray-100">
+                            <th className="text-left px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase">Producto</th>
+                            <th className="text-left px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">NCM</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-20">Cant.</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-24">Precio U.</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Subtotal</th>
+                          </tr></thead>
+                          <tbody>
+                            {mc.items.map(it=>(
+                              <tr key={it.itemId} className="border-b border-gray-50">
+                                <td className="px-3 py-2 font-medium text-gray-800">{it.descripcion}</td>
+                                <td className="px-3 py-2 font-mono text-gray-500">{(it as any).ncm||'—'}</td>
+                                <td className="px-3 py-2 text-right font-mono text-gray-700">{(it.cantUsar||0).toLocaleString('es-AR')}</td>
+                                <td className="px-3 py-2 text-right font-mono text-gray-700">USD {fmt(it.valorUnit)}</td>
+                                <td className="px-3 py-2 text-right font-mono font-semibold text-[#052698]">USD {fmt((it.cantUsar||0)*(it.valorUnit||0))}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-1.5 px-2 py-1 border border-dashed border-[#93B8FC] rounded text-[10px] text-[#1168F8] hover:border-[#1168F8] cursor-pointer flex-1 bg-white">
-                          📎 {pf.archivo_nombre || 'Adjuntar PDF / imagen de la proforma'}
-                          <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={async e=>{
-                            const file = e.target.files?.[0]
-                            if(!file) return
-                            const sb = (await import('@/lib/supabase')).createClient()
-                            const ext = file.name.split('.').pop()
-                            const path = `proformas/${pf.id}.${ext}`
-                            await sb.storage.from('comprobantes').upload(path, file, {upsert:true})
-                            const {data:ud} = await sb.storage.from('comprobantes').createSignedUrl(path, 3600)
-                            const n=[...s.proformas];n[pi]={...n[pi],archivo_url:ud?.signedUrl||'',archivo_nombre:file.name};u('proformas',n)
-                          }}/>
-                        </label>
-                        {pf.archivo_url && (
-                          <a href={pf.archivo_url} target="_blank" rel="noreferrer"
-                            className="px-2 py-1 bg-white border border-[#93B8FC] text-[#1168F8] rounded text-[10px] font-medium hover:bg-[#EBF2FF] flex-shrink-0">
-                            📄 Ver
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
+              {/* Precio equivalente en Argentina */}
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <Field label="Precio equivalente en Argentina (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.precioArgEquiv||''} onChange={e=>u('precioArgEquiv',parseNum(e.target.value))} className={inp} placeholder="0.00"/></Field>
+              </div>
             </div>
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <Field label="Precio equivalente en Argentina (USD)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.precioArgEquiv||''} onChange={e=>u('precioArgEquiv',parseNum(e.target.value))} className={inp} placeholder="0.00"/></Field>
+            <div className="flex justify-end items-center gap-2 px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
+              FOB mercadería: <strong className="font-mono text-gray-800">USD {fmt(totalFOB)}</strong>
             </div>
-          </Card>}
+          </div>
+          )}
           {/* ── OBSERVACIONES ── */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
@@ -2591,7 +2647,7 @@ const clientesFiltrados=terceros.filter(t=>
               <Field label="Regimen de importacion"><select value={s.regimen} onChange={e=>u('regimen',e.target.value as any)} className={sel}>{Object.entries(REG_L).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></Field>
               <Field label="TC oficial BNA (ARS/USD)"><div className="px-2.5 py-1.5 bg-[#EBF2FF] border border-[#93B8FC] rounded-lg text-xs font-mono text-right font-semibold text-[#052698]">ARS {fmt(s.tcTrib,0)}</div></Field>
               <Field label="Derechos importacion % (NCM)"><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.derPct} step={0.5} onChange={e=>u('derPct',parseNum(e.target.value))} className={inp}/></Field>
-              <Field label="NCM principal"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono">{s.productos.find(p=>p.ncm)?.ncm||'—'}</div></Field>
+              <Field label="NCM principal"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono">{(mercElegida ? mercItems.find(it=>(it as any).ncm)?.ncm : s.productos.find(p=>p.ncm)?.ncm)||'—'}</div></Field>
             </div>
             {tribCfg.length===0?(
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700">No hay tributos configurados para el Regimen {s.regimen}.</div>
