@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef, Fragment } from 'react'
+import type { KeyboardEvent } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { Rol } from '@/types'
 
@@ -227,6 +228,7 @@ const DEFAULTS: Record<string, Record<string, Accion[]>> = {
 
 const COLORES_ROL = ['#1168F8', '#052698', '#0a9e6e', '#b45309', '#6b21a8', '#dc2626', '#0891b2']
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+const HEAD_BG = '#f9fafb'   // gray-50 sólido para celdas fijas
 
 export default function UsuariosPage() {
   const supabase = useMemo(() => createClient(), [])
@@ -247,7 +249,37 @@ export default function UsuariosPage() {
   const [permisosModificados, setPermisosModificados] = useState<Record<string, boolean>>({})
   const [savingPermisos, setSavingPermisos] = useState(false)
 
+  // Refs y medición para la matriz con cabecera/columna fijas
+  const matrizScrollRef = useRef<HTMLDivElement | null>(null)
+  const headRow1Ref = useRef<HTMLTableRowElement | null>(null)
+  const [row1H, setRow1H] = useState(34)
+
   useEffect(() => { loadAll() }, [])
+
+  // Mide la altura de la primera fila del encabezado para apilar la segunda fila sticky justo debajo
+  useEffect(() => {
+    function measure() { if (headRow1Ref.current) setRow1H(headRow1Ref.current.offsetHeight) }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [roles, tab])
+
+  // Desplazamiento de la matriz con las flechas del teclado (la grilla debe tener foco)
+  function handleMatrizKey(e: KeyboardEvent<HTMLDivElement>) {
+    const el = matrizScrollRef.current
+    if (!el) return
+    const STEP = 64
+    switch (e.key) {
+      case 'ArrowRight': el.scrollLeft += STEP; e.preventDefault(); break
+      case 'ArrowLeft':  el.scrollLeft -= STEP; e.preventDefault(); break
+      case 'ArrowDown':  el.scrollTop  += STEP; e.preventDefault(); break
+      case 'ArrowUp':    el.scrollTop  -= STEP; e.preventDefault(); break
+      case 'PageDown':   el.scrollTop  += el.clientHeight * 0.85; e.preventDefault(); break
+      case 'PageUp':     el.scrollTop  -= el.clientHeight * 0.85; e.preventDefault(); break
+      case 'Home':       el.scrollLeft = 0; e.preventDefault(); break
+      case 'End':        el.scrollLeft = el.scrollWidth; e.preventDefault(); break
+    }
+  }
 
   async function loadAll() {
     setLoading(true)
@@ -548,10 +580,12 @@ export default function UsuariosPage() {
 
           {/* Matriz de permisos */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <div className="font-bold text-sm text-gray-900">Matriz de permisos</div>
-                <div className="text-[10px] text-gray-400 mt-0.5">El checkbox en el encabezado de cada columna activa/desactiva todos los módulos para esa acción</div>
+                <div className="text-[10px] text-gray-400 mt-0.5">
+                  El checkbox del encabezado activa/desactiva toda la columna · cabecera y primera columna fijas · clic en la grilla + flechas del teclado para desplazarte
+                </div>
               </div>
               {Object.keys(permisosModificados).length > 0 && (
                 <div className="flex items-center gap-2">
@@ -567,34 +601,43 @@ export default function UsuariosPage() {
                 </div>
               )}
             </div>
-            <div className="overflow-x-auto" style={{WebkitOverflowScrolling:'touch'}}>
-              <table className="text-xs border-collapse" style={{ minWidth: '1200px', width:'max-content' }}>
+            <div
+              ref={matrizScrollRef}
+              tabIndex={0}
+              onKeyDown={handleMatrizKey}
+              className="overflow-auto focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#1168F8]/30"
+              style={{ maxHeight: '70vh', WebkitOverflowScrolling: 'touch' }}>
+              <table className="text-xs border-separate" style={{ minWidth: '1200px', width: 'max-content', borderSpacing: 0 }}>
                 <thead>
                   {/* Fila 1: nombres de roles */}
-                  <tr>
-                    <th className="w-44 bg-gray-50 border-b border-r border-gray-100 px-4 py-2"/>
+                  <tr ref={headRow1Ref}>
+                    <th className="sticky left-0 top-0 z-30 px-4 py-2 border-r border-b border-gray-200"
+                      style={{ background: HEAD_BG, minWidth: 184, boxShadow: '2px 0 5px -3px rgba(0,0,0,0.12)' }} />
                     {roles.map(r => (
                       <th key={r.id} colSpan={ACCIONES.length}
-                        className="text-center py-2 text-[11px] font-bold border-b border-l-2 border-gray-200"
-                        style={{ color: r.color, background: r.color + '08' }}>
+                        className="sticky top-0 z-20 text-center py-2.5 px-2 text-[11px] font-bold whitespace-nowrap"
+                        style={{ color: r.color, background: HEAD_BG, borderBottom: `3px solid ${r.color}`, borderLeft: `2px solid ${r.color}33` }}>
                         {r.nombre}
                       </th>
                     ))}
                   </tr>
                   {/* Fila 2: acciones + checkbox tilde-todo */}
-                  <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="px-4 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">
+                  <tr>
+                    <th className="sticky left-0 z-30 px-4 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider border-r border-b border-gray-200"
+                      style={{ top: row1H, background: HEAD_BG, minWidth: 184, boxShadow: '2px 2px 5px -3px rgba(0,0,0,0.14)' }}>
                       Módulo
                     </th>
                     {roles.map(r => (
                       ACCIONES.map(ac => (
                         <th key={`${r.id}-${ac}`}
-                          className={`text-center px-1 py-2 text-[10px] text-gray-400 font-semibold ${ac === 'ver' ? 'border-l-2 border-gray-200' : ''}`}>
+                          className="sticky z-20 text-center px-2 py-2 text-[10px] text-gray-500 font-semibold border-b border-gray-200 whitespace-nowrap"
+                          style={{ top: row1H, background: HEAD_BG, ...(ac === 'ver' ? { borderLeft: `2px solid ${r.color}33` } : {}) }}>
                           <div className="flex flex-col items-center gap-1">
                             <input type="checkbox"
                               checked={columnaTodasActivas(r.id, ac)}
                               onChange={() => toggleColumna(r.id, ac)}
-                              className="w-3 h-3 cursor-pointer accent-[#1168F8]"/>
+                              title={`Tildar/destildar "${accionLabel[ac]}" en todos los módulos`}
+                              className="w-3.5 h-3.5 cursor-pointer accent-[#1168F8]"/>
                             <span>{accionLabel[ac]}</span>
                           </div>
                         </th>
@@ -604,18 +647,23 @@ export default function UsuariosPage() {
                 </thead>
                 <tbody>
                   {MODULOS_PERMISOS.map(seccion => (
-                    <>
+                    <Fragment key={seccion.section}>
                       {/* Encabezado de sección */}
-                      <tr key={seccion.section} className="bg-gray-50 border-b border-gray-100">
+                      <tr>
                         <td colSpan={1 + roles.length * ACCIONES.length}
-                          className="px-4 py-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest border-r border-gray-100">
-                          {seccion.section}
+                          className="px-4 py-1.5 border-b border-gray-100"
+                          style={{ background: '#eef1f5' }}>
+                          <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest"
+                            style={{ position: 'sticky', left: '1rem', display: 'inline-block' }}>
+                            {seccion.section}
+                          </span>
                         </td>
                       </tr>
                       {/* Filas de módulos */}
                       {seccion.items.map(item => (
-                        <tr key={item.modulo} className="border-b border-gray-50 hover:bg-blue-50/20 transition-colors">
-                          <td className={`px-4 py-2.5 border-r border-gray-100 ${item.subitem ? 'pl-8 text-gray-400 text-[11px]' : 'text-gray-800 font-medium text-xs'}`}>
+                        <tr key={item.modulo} className="group border-b border-gray-50 hover:bg-blue-50/10 transition-colors">
+                          <td className={`sticky left-0 z-10 px-4 py-2.5 border-r border-gray-200 bg-white group-hover:bg-[#f4f8ff] ${item.subitem ? 'pl-8 text-gray-400 text-[11px]' : 'text-gray-800 font-medium text-xs'}`}
+                            style={{ minWidth: 184, boxShadow: '2px 0 5px -3px rgba(0,0,0,0.08)' }}>
                             {item.label}
                             {item.soloVer && <span className="ml-2 text-[9px] text-gray-300 font-normal">solo lectura</span>}
                           </td>
@@ -626,7 +674,8 @@ export default function UsuariosPage() {
                               const modificado = permisosModificados.hasOwnProperty(`${r.id}|${item.modulo}|${ac}`)
                               return (
                                 <td key={`${r.id}-${ac}`}
-                                  className={`text-center px-1 py-2 ${ac === 'ver' ? 'border-l-2 border-gray-200' : ''} ${modificado ? 'bg-amber-50/50' : ''}`}>
+                                  className={`text-center px-2 py-2 ${modificado ? 'bg-amber-100/70' : ''}`}
+                                  style={ac === 'ver' ? { borderLeft: `2px solid ${r.color}33` } : undefined}>
                                   {aplica ? (
                                     <input type="checkbox"
                                       checked={activo}
@@ -641,7 +690,7 @@ export default function UsuariosPage() {
                           ))}
                         </tr>
                       ))}
-                    </>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
