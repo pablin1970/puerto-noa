@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { fmt, ETAPAS_L, ETAPAS_ORD, nowDate, nowStr } from '@/lib/utils'
 import type { Cotizacion, Operacion, Gasto, MovimientoCC, MinutaItem, EtapaGasto, Moneda } from '@/types'
 import { useSearchParams } from 'next/navigation'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 type Tab = 'resumen' | 'gastos' | 'comparativo' | 'cc' | 'minuta' | 'documentos'
 
@@ -14,9 +15,10 @@ function OperacionesContent() {
   const [selId, setSelId] = useState<string>('')
   const [tab, setTab] = useState<Tab>('resumen')
   const [loading, setLoading] = useState(true)
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
   const supabase = createClient()
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData(); cargarPermisos().then(setPermisos) }, [])
 
   async function loadData() {
     const { data } = await supabase
@@ -54,17 +56,18 @@ function OperacionesContent() {
           {ops.map(o => <option key={o.id} value={o.id}>{o.cotizacion?.num} — {o.cotizacion?.cliente}</option>)}
         </select>
       </div>
-      {op && cot && <OperacionDetail op={op} cot={cot} tab={tab} setTab={setTab} reload={loadData} />}
+      {op && cot && <OperacionDetail op={op} cot={cot} tab={tab} setTab={setTab} reload={loadData} permisos={permisos} />}
     </div>
   )
 }
 
-function OperacionDetail({ op, cot, tab, setTab, reload }: {
+function OperacionDetail({ op, cot, tab, setTab, reload, permisos }: {
   op: Operacion & { cotizacion: Cotizacion }
   cot: Cotizacion
   tab: Tab
   setTab: (t: Tab) => void
   reload: () => void
+  permisos: Record<string, string[]>
 }) {
   const [gastos, setGastos] = useState<Gasto[]>([])
   const [movs, setMovs] = useState<MovimientoCC[]>([])
@@ -171,17 +174,17 @@ function OperacionDetail({ op, cot, tab, setTab, reload }: {
         </div>
       )}
 
-      {tab === 'gastos' && <GastosTab opId={op.id} cot={cot} gastos={gastos} reload={loadDetail} />}
+      {tab === 'gastos' && <GastosTab opId={op.id} cot={cot} gastos={gastos} reload={loadDetail} permisos={permisos} />}
       {tab === 'comparativo' && <ComparativoTab presup={presup} gastos={gastos} />}
-      {tab === 'cc' && <CCTab opId={op.id} movs={movs} reload={loadDetail} />}
+      {tab === 'cc' && <CCTab opId={op.id} movs={movs} reload={loadDetail} permisos={permisos} />}
       {tab === 'minuta' && <MinutaTab opId={op.id} cotNum={cot.num || ''} cliente={cot.cliente} minuta={minuta} reload={loadDetail} />}
-      {tab === 'documentos' && <DocumentosTab opId={op.id} docs={docs} reload={loadDetail} />}
+      {tab === 'documentos' && <DocumentosTab opId={op.id} docs={docs} reload={loadDetail} permisos={permisos} />}
     </>
   )
 }
 
 // ── GASTOS TAB ─────────────────────────────────────────────────
-function GastosTab({ opId, cot, gastos, reload }: { opId: string; cot: Cotizacion; gastos: Gasto[]; reload: () => void }) {
+function GastosTab({ opId, cot, gastos, reload, permisos }: { opId: string; cot: Cotizacion; gastos: Gasto[]; reload: () => void; permisos: Record<string, string[]> }) {
   const supabase = createClient()
 
   // Formulario
@@ -243,13 +246,28 @@ function GastosTab({ opId, cot, gastos, reload }: { opId: string; cot: Cotizacio
     setBuscarProv('')
   }
 
+  // Sube el archivo y devuelve el PATH (la signed URL se genera al vuelo en Ver/Descargar)
   async function uploadComprobante(gastoId: string, file: File): Promise<string | null> {
     const ext = file.name.split('.').pop()
     const path = `gastos/${gastoId}.${ext}`
     const { error } = await supabase.storage.from('comprobantes').upload(path, file, { upsert: true })
     if (error) return null
-    const { data } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
-    return data?.signedUrl || null
+    return path
+  }
+
+  // Abre cualquier archivo (cotización o factura) generando la signed URL al vuelo desde el PATH
+  async function verArchivo(path: string, nombre?: string) {
+    if (!path) return
+    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
+    if (error || !data?.signedUrl) { alert('No se pudo abrir el archivo'); return }
+    setPreviewModal({ url: data.signedUrl, nombre: nombre || 'archivo', tipo: nombre?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'img' })
+  }
+
+  async function descargarArchivo(path: string, nombre?: string) {
+    if (!path) return
+    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600, { download: nombre || 'archivo' })
+    if (error || !data?.signedUrl) { alert('No se pudo descargar el archivo'); return }
+    window.open(data.signedUrl, '_blank')
   }
 
   async function cargar() {
@@ -278,8 +296,8 @@ function GastosTab({ opId, cot, gastos, reload }: { opId: string; cot: Cotizacio
     }).select('id').single()
 
     if (gastoData && compFile) {
-      const url = await uploadComprobante(gastoData.id, compFile)
-      if (url) await (supabase.from('gastos') as any).update({ comprobante_url: url, comprobante_nombre: compFile.name }).eq('id', gastoData.id)
+      const path = await uploadComprobante(gastoData.id, compFile)
+      if (path) await (supabase.from('gastos') as any).update({ comprobante_url: path, comprobante_nombre: compFile.name }).eq('id', gastoData.id)
     }
 
     setForm(f => ({ ...f, monto: '', ref: '', notas: '', factura_a_nombre_cliente: false }))
@@ -310,15 +328,13 @@ function GastosTab({ opId, cot, gastos, reload }: { opId: string; cot: Cotizacio
     reload()
   }
 
+  // Guarda el PATH (no la signed URL, que expira a 1h)
   async function subirComprobante(g: Gasto, file: File) {
     const ext = file.name.split('.').pop()
     const path = `gastos/${g.id}.${ext}`
     await supabase.storage.from('comprobantes').upload(path, file, { upsert: true })
-    const { data } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
-    if (data?.signedUrl) {
-      await (supabase.from('gastos') as any).update({ comprobante_url: data.signedUrl, comprobante_nombre: file.name }).eq('id', g.id)
-      reload()
-    }
+    await (supabase.from('gastos') as any).update({ comprobante_url: path, comprobante_nombre: file.name }).eq('id', g.id)
+    reload()
   }
 
   async function togglePago(g: Gasto) {
@@ -337,6 +353,9 @@ function GastosTab({ opId, cot, gastos, reload }: { opId: string; cot: Cotizacio
   // Separar gastos: propios vs del cliente
   const gastosPropios = gastos.filter(g => !(g as any).es_factura_propia)
   const facturasPropias = gastos.filter(g => (g as any).es_factura_propia)
+
+  const puedeVer = puede(permisos, 'operaciones', 'ver')
+  const puedeDescargar = puede(permisos, 'operaciones', 'descargar')
 
   return (
     <div>
@@ -552,8 +571,16 @@ function GastosTab({ opId, cot, gastos, reload }: { opId: string; cot: Cotizacio
                       <div className="flex items-center gap-1">
                         <span className="text-[9px] text-gray-400 w-12">Cotiz.</span>
                         {(g as any).cotizacion_url ? (
-                          <button onClick={() => setPreviewModal({ url: (g as any).cotizacion_url, nombre: (g as any).cotizacion_nombre || 'cotizacion', tipo: (g as any).cotizacion_nombre?.endsWith('.pdf') ? 'pdf' : 'img' })}
-                            className="px-1.5 py-0.5 bg-[#EBF2FF] text-[#1168F8] rounded text-[9px]">📄 Ver</button>
+                          <>
+                            {puedeVer && (
+                              <button onClick={() => verArchivo((g as any).cotizacion_url, (g as any).cotizacion_nombre)}
+                                className="px-1.5 py-0.5 bg-[#EBF2FF] text-[#1168F8] rounded text-[9px]">📄 Ver</button>
+                            )}
+                            {puedeDescargar && (
+                              <button onClick={() => descargarArchivo((g as any).cotizacion_url, (g as any).cotizacion_nombre)}
+                                className="px-1.5 py-0.5 border border-gray-200 text-gray-500 rounded text-[9px] hover:bg-gray-50">⬇</button>
+                            )}
+                          </>
                         ) : (
                           <label className="px-1.5 py-0.5 border border-dashed border-gray-200 rounded text-[9px] text-gray-400 hover:border-[#1168F8] cursor-pointer">
                             📎
@@ -562,8 +589,7 @@ function GastosTab({ opId, cot, gastos, reload }: { opId: string; cot: Cotizacio
                               const ext = f.name.split('.').pop()
                               const path = `gastos/cot_${g.id}.${ext}`
                               await supabase.storage.from('comprobantes').upload(path, f, { upsert: true })
-                              const { data } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
-                              if (data?.signedUrl) { await (supabase.from('gastos') as any).update({ cotizacion_url: data.signedUrl, cotizacion_nombre: f.name }).eq('id', g.id); reload() }
+                              await (supabase.from('gastos') as any).update({ cotizacion_url: path, cotizacion_nombre: f.name }).eq('id', g.id); reload()
                             }} />
                           </label>
                         )}
@@ -571,8 +597,16 @@ function GastosTab({ opId, cot, gastos, reload }: { opId: string; cot: Cotizacio
                       <div className="flex items-center gap-1">
                         <span className="text-[9px] text-gray-400 w-12">Factura</span>
                         {(g as any).comprobante_url ? (
-                          <button onClick={() => setPreviewModal({ url: (g as any).comprobante_url, nombre: (g as any).comprobante_nombre || 'comprobante', tipo: (g as any).comprobante_nombre?.endsWith('.pdf') ? 'pdf' : 'img' })}
-                            className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded text-[9px]">📄 Ver</button>
+                          <>
+                            {puedeVer && (
+                              <button onClick={() => verArchivo((g as any).comprobante_url, (g as any).comprobante_nombre)}
+                                className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded text-[9px]">📄 Ver</button>
+                            )}
+                            {puedeDescargar && (
+                              <button onClick={() => descargarArchivo((g as any).comprobante_url, (g as any).comprobante_nombre)}
+                                className="px-1.5 py-0.5 border border-gray-200 text-gray-500 rounded text-[9px] hover:bg-gray-50">⬇</button>
+                            )}
+                          </>
                         ) : (
                           <label className="px-1.5 py-0.5 border border-dashed border-gray-200 rounded text-[9px] text-gray-400 hover:border-green-500 cursor-pointer">
                             📎
@@ -766,7 +800,7 @@ function ComparativoTab({ presup, gastos }: { presup: any[]; gastos: Gasto[] }) 
 }
 
 // ── CC TAB ─────────────────────────────────────────────────────
-function CCTab({ opId, movs, reload }: { opId: string; movs: MovimientoCC[]; reload: () => void }) {
+function CCTab({ opId, movs, reload, permisos }: { opId: string; movs: MovimientoCC[]; reload: () => void; permisos: Record<string, string[]> }) {
   const [form, setForm] = useState({ tipo: 'ingreso', concepto: '', moneda: 'USD', monto: '', tc: '', fecha: nowDate(), ref: '' })
   const [compFile, setCompFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -776,13 +810,16 @@ function CCTab({ opId, movs, reload }: { opId: string; movs: MovimientoCC[]; rel
   const totalEg = movs.filter(m => m.tipo === 'egreso').reduce((s, m) => s + m.usd, 0)
   const saldo = totalIng - totalEg
 
+  const puedeVer = puede(permisos, 'operaciones', 'ver')
+  const puedeDescargar = puede(permisos, 'operaciones', 'descargar')
+
+  // Sube y devuelve el PATH (la signed URL se genera al vuelo en Ver/Descargar)
   async function uploadComp(movId: string, file: File): Promise<string | null> {
     const ext = file.name.split('.').pop()
     const path = `movimientos/${movId}.${ext}`
     const { error } = await supabase.storage.from('comprobantes').upload(path, file, { upsert: true })
     if (error) return null
-    const { data } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
-    return data?.signedUrl || null
+    return path
   }
 
   async function cargar() {
@@ -795,8 +832,8 @@ function CCTab({ opId, movs, reload }: { opId: string; movs: MovimientoCC[]; rel
       moneda: form.moneda as Moneda, monto, tc, usd, fecha: form.fecha, ref: form.ref
     }).select('id').single()
     if (movData && compFile) {
-      const url = await uploadComp(movData.id, compFile)
-      if (url) await (supabase.from('movimientos_cc') as any).update({ comprobante_url: url, comprobante_nombre: compFile.name }).eq('id', movData.id)
+      const path = await uploadComp(movData.id, compFile)
+      if (path) await (supabase.from('movimientos_cc') as any).update({ comprobante_url: path, comprobante_nombre: compFile.name }).eq('id', movData.id)
     }
     setForm(f => ({ ...f, monto: '', concepto: '', ref: '' }))
     setCompFile(null)
@@ -804,22 +841,32 @@ function CCTab({ opId, movs, reload }: { opId: string; movs: MovimientoCC[]; rel
     reload()
   }
 
+  // Guarda el PATH (no la signed URL, que expira a 1h)
   async function subirComp(m: MovimientoCC, file: File) {
     const ext = file.name.split('.').pop()
     const path = `movimientos/${m.id}.${ext}`
     await supabase.storage.from('comprobantes').upload(path, file, { upsert: true })
-    const { data } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
-    if (data?.signedUrl) {
-      await (supabase.from('movimientos_cc') as any).update({ comprobante_url: data.signedUrl, comprobante_nombre: file.name }).eq('id', m.id)
-      reload()
-    }
+    await (supabase.from('movimientos_cc') as any).update({ comprobante_url: path, comprobante_nombre: file.name }).eq('id', m.id)
+    reload()
   }
 
-  function verComp(m: MovimientoCC) {
-    const url = (m as any).comprobante_url
+  // Genera la signed URL al vuelo desde el PATH guardado
+  async function verComp(m: MovimientoCC) {
+    const path = (m as any).comprobante_url
     const nombre = (m as any).comprobante_nombre || 'comprobante'
-    if (!url) return
-    setPreviewModal({ url, nombre, tipo: nombre.toLowerCase().endsWith('.pdf') ? 'pdf' : 'img' })
+    if (!path) return
+    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
+    if (error || !data?.signedUrl) { alert('No se pudo abrir el comprobante'); return }
+    setPreviewModal({ url: data.signedUrl, nombre, tipo: nombre.toLowerCase().endsWith('.pdf') ? 'pdf' : 'img' })
+  }
+
+  async function descargarComp(m: MovimientoCC) {
+    const path = (m as any).comprobante_url
+    const nombre = (m as any).comprobante_nombre || 'comprobante'
+    if (!path) return
+    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600, { download: nombre })
+    if (error || !data?.signedUrl) { alert('No se pudo descargar el comprobante'); return }
+    window.open(data.signedUrl, '_blank')
   }
 
   let saldoAcum = 0
@@ -921,7 +968,10 @@ function CCTab({ opId, movs, reload }: { opId: string; movs: MovimientoCC[]; rel
                 <span className={`font-mono font-medium min-w-24 text-right ${m.tipo === 'ingreso' ? 'text-green-700' : 'text-red-600'}`}>{m.tipo === 'ingreso' ? '+' : '−'} USD {fmt(m.usd)}</span>
                 <span className={`font-mono text-[10px] min-w-24 text-right ${saldoAcum >= 0 ? 'text-green-700' : 'text-red-600'}`}>= USD {fmt(saldoAcum)}</span>
                 {(m as any).comprobante_url ? (
-                  <button onClick={() => verComp(m)} className="px-2 py-0.5 bg-[#EBF2FF] text-[#1168F8] rounded text-[10px]">📄 Ver</button>
+                  <div className="flex gap-1">
+                    {puedeVer && <button onClick={() => verComp(m)} className="px-2 py-0.5 bg-[#EBF2FF] text-[#1168F8] rounded text-[10px]">📄 Ver</button>}
+                    {puedeDescargar && <button onClick={() => descargarComp(m)} className="px-2 py-0.5 border border-gray-200 text-gray-500 rounded text-[10px] hover:bg-gray-50">⬇</button>}
+                  </div>
                 ) : (
                   <label className="px-2 py-0.5 border border-dashed border-gray-200 rounded text-[10px] text-gray-400 hover:border-[#1168F8] cursor-pointer">
                     📎 <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) subirComp(m, f) }} />
@@ -1085,13 +1135,16 @@ const TIPOS_DOC = [
   { key: 'otro', label: 'Otro (definir nombre)' },
 ]
 
-function DocumentosTab({ opId, docs, reload }: { opId: string; docs: any[]; reload: () => void }) {
+function DocumentosTab({ opId, docs, reload, permisos }: { opId: string; docs: any[]; reload: () => void; permisos: Record<string, string[]> }) {
   const supabase = createClient()
   const [form, setForm] = useState({ tipo: 'bl', nombre_custom: '', referencia: '', fecha: '', notas: '' })
   const [uploading, setUploading] = useState(false)
   const [previewModal, setPreviewModal] = useState<{ url: string; nombre: string; tipo: string } | null>(null)
   const [currentUser, setCurrentUser] = useState<{ id: string; nombre: string } | null>(null)
   const inp = 'w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]'
+
+  const puedeVer = puede(permisos, 'operaciones', 'ver')
+  const puedeDescargar = puede(permisos, 'operaciones', 'descargar')
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -1115,12 +1168,27 @@ function DocumentosTab({ opId, docs, reload }: { opId: string; docs: any[]; relo
       const ext = file.name.split('.').pop()
       const path = `documentos/${opId}/${docData.id}.${ext}`
       await supabase.storage.from('comprobantes').upload(path, file, { upsert: true })
-      const { data: urlData } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
-      if (urlData?.signedUrl) await (supabase.from('operacion_documentos') as any).update({ archivo_url: urlData.signedUrl }).eq('id', docData.id)
+      // Guardamos el PATH (la signed URL expira a 1h). La firma se genera al vuelo en Ver/Descargar.
+      await (supabase.from('operacion_documentos') as any).update({ archivo_url: path }).eq('id', docData.id)
     }
     setForm({ tipo: 'bl', nombre_custom: '', referencia: '', fecha: '', notas: '' })
     setUploading(false)
     reload()
+  }
+
+  // Genera la signed URL al vuelo desde el PATH guardado
+  async function verDoc(doc: any) {
+    if (!doc.archivo_url) return
+    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(doc.archivo_url, 3600)
+    if (error || !data?.signedUrl) { alert('No se pudo abrir el documento'); return }
+    setPreviewModal({ url: data.signedUrl, nombre: doc.archivo_nombre, tipo: doc.archivo_nombre?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'img' })
+  }
+
+  async function descargarDoc(doc: any) {
+    if (!doc.archivo_url) return
+    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(doc.archivo_url, 3600, { download: doc.archivo_nombre || 'documento' })
+    if (error || !data?.signedUrl) { alert('No se pudo descargar el documento'); return }
+    window.open(data.signedUrl, '_blank')
   }
 
   async function eliminar(id: string) {
@@ -1184,9 +1252,13 @@ function DocumentosTab({ opId, docs, reload }: { opId: string; docs: any[]; relo
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {doc.archivo_url && (
-                      <button onClick={() => setPreviewModal({ url: doc.archivo_url, nombre: doc.archivo_nombre, tipo: doc.archivo_nombre?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'img' })}
+                    {doc.archivo_url && puedeVer && (
+                      <button onClick={() => verDoc(doc)}
                         className="px-2.5 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-[10px] font-medium">📄 Ver</button>
+                    )}
+                    {doc.archivo_url && puedeDescargar && (
+                      <button onClick={() => descargarDoc(doc)}
+                        className="px-2.5 py-1.5 border border-gray-200 text-gray-600 rounded-lg text-[10px] font-medium hover:bg-gray-50">⬇ Descargar</button>
                     )}
                     <button onClick={() => eliminar(doc.id)} className="p-1.5 border border-gray-200 rounded-lg text-gray-400 hover:text-red-500 text-[10px]">🗑</button>
                   </div>
