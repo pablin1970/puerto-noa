@@ -206,70 +206,55 @@ export default function AyudaPage() {
         <div className="flex-1 overflow-y-auto px-6 py-6">
           <div className="max-w-2xl mx-auto space-y-4">
 
-            <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-[#EBF2FF] flex items-center justify-center text-2xl flex-shrink-0">📋</div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-gray-900 mb-1">Descripción del sistema</h3>
-                  <p className="text-xs text-gray-500 mb-3 leading-relaxed">
-                    Documento completo con la descripción de todos los módulos, flujo de trabajo, integraciones automáticas y roles de usuario. Ideal para nuevos usuarios o para presentar el sistema.
-                  </p>
-                  <div className="flex gap-2">
-                    <a href="/puerto_noa_sistema.pdf" target="_blank" rel="noreferrer"
-                      className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#052698] transition-colors">
-                      📄 Ver PDF
-                    </a>
-                    <a href="/puerto_noa_sistema.pdf" download
-                      className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-semibold hover:bg-gray-50 transition-colors">
-                      ⬇ Descargar
-                    </a>
+            {[
+              {
+                icon: '📋', bg: 'bg-[#EBF2FF]', btnColor: 'bg-[#1168F8] hover:bg-[#052698]',
+                titulo: 'Descripción del sistema',
+                desc: 'Documento con la descripción de todos los módulos, flujo de trabajo, integraciones automáticas y roles de usuario.',
+                url: '/Puerto_NOA_Sistema.pdf', btnLabel: '📄 Ver PDF',
+              },
+              {
+                icon: '📖', bg: 'bg-blue-50', btnColor: 'bg-[#052698] hover:bg-[#1168F8]',
+                titulo: 'Manual del sistema',
+                desc: 'Guía completa paso a paso para el uso de cada módulo del sistema. Incluye ejemplos y casos de uso reales.',
+                url: '/Manual_PuertoNOA.pdf', btnLabel: '📖 Ver manual',
+              },
+              {
+                icon: '🗂', bg: 'bg-green-50', btnColor: 'bg-[#0a9e6e] hover:bg-[#087a54]',
+                titulo: 'Fichas de módulos',
+                desc: 'Una ficha por módulo con sus partes internas, acciones disponibles e integraciones con otros módulos del sistema.',
+                url: '/Fichas_Modulos_PuertoNOA.pdf', btnLabel: '🗂 Ver fichas',
+              },
+              {
+                icon: '🗺', bg: 'bg-purple-50', btnColor: 'bg-[#7C3AED] hover:bg-[#6D28D9]',
+                titulo: 'Diagrama de interacciones',
+                desc: 'Diagrama visual con los módulos del sistema y sus flujos de integración automática entre ellos.',
+                url: '/Diagrama_Interacciones_PuertoNOA.pdf', btnLabel: '🗺 Ver diagrama',
+              },
+            ].map((doc, i) => (
+              <div key={i} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-start gap-4">
+                  <div className={`w-12 h-12 rounded-xl ${doc.bg} flex items-center justify-center text-2xl flex-shrink-0`}>{doc.icon}</div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-gray-900 mb-1">{doc.titulo}</h3>
+                    <p className="text-xs text-gray-500 mb-3 leading-relaxed">{doc.desc}</p>
+                    <div className="flex gap-2">
+                      <a href={doc.url} target="_blank" rel="noreferrer"
+                        className={`px-4 py-2 ${doc.btnColor} text-white rounded-xl text-xs font-bold transition-colors`}>
+                        {doc.btnLabel}
+                      </a>
+                      <a href={doc.url} download
+                        className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-semibold hover:bg-gray-50 transition-colors">
+                        ⬇ Descargar
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-2xl flex-shrink-0">🗺</div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-gray-900 mb-1">Diagrama integral del sistema</h3>
-                  <p className="text-xs text-gray-500 mb-3 leading-relaxed">
-                    Diagrama visual en formato A3 con todos los módulos, acciones disponibles en cada uno e integraciones automáticas entre ellos. Útil para entender el sistema de un vistazo.
-                  </p>
-                  <div className="flex gap-2">
-                    <a href="/puerto_noa_diagrama.pdf" target="_blank" rel="noreferrer"
-                      className="px-4 py-2 bg-[#0a9e6e] text-white rounded-xl text-xs font-bold hover:bg-[#087a54] transition-colors">
-                      🗺 Ver diagrama
-                    </a>
-                    <a href="/puerto_noa_diagrama.pdf" download
-                      className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-semibold hover:bg-gray-50 transition-colors">
-                      ⬇ Descargar
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white border border-amber-100 rounded-2xl p-6 shadow-sm">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-2xl flex-shrink-0">📖</div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-gray-900 mb-1">Manual del sistema</h3>
-                  <p className="text-xs text-gray-500 mb-3 leading-relaxed">
-                    Manual detallado con instrucciones paso a paso para cada módulo. Incluirá capturas de pantalla y ejemplos reales de uso.
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-xs font-semibold">
-                      🚧 En preparación
-                    </span>
-                    <span className="text-[10px] text-gray-400">Disponible próximamente</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            ))}
 
             <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-5 py-4 text-xs text-[#052698]">
-              💡 <strong>Tip:</strong> Usá el <strong>Asistente IA</strong> para resolver dudas rápidas sobre cualquier módulo sin necesidad de buscar en el manual.
+              💡 <strong>Tip:</strong> Usá el <strong>Asistente IA</strong> para resolver dudas rápidas sobre cualquier módulo sin necesidad de buscar en la documentación.
             </div>
           </div>
         </div>
