@@ -274,7 +274,7 @@ function CotizacionesProveedoresInner() {
       supabase.from('cotizaciones_proveedor_v2_items')
         .select('*')
         .order('orden', { ascending: true }),
-      supabase.from('terceros').select('id,razon_social,tipo').eq('activo', 'true').order('razon_social'),
+      supabase.from('terceros').select('id,razon_social,tipo,nro_doc,tipo_doc,nombre_fantasia').eq('activo', 'true').order('razon_social'),
       supabase.from('cotizaciones').select('id,num,cliente,estado').order('created_at', { ascending: false }).limit(200),
       supabase.from('proveedor_rubros').select('id,nombre,codigo,activo').eq('activo', true).order('nombre'),
     ])
@@ -635,7 +635,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       }
     })
     Promise.all([
-      supabase.from('terceros').select('id,razon_social').eq('activo','true').order('razon_social'),
+      supabase.from('terceros').select('id,razon_social,nro_doc,tipo_doc,nombre_fantasia').eq('activo','true').order('razon_social'),
       supabase.from('tercero_rubros').select('tercero_id,rubro:proveedor_rubros!inner(codigo)'),
     ]).then(([tRes,trRes]) => {
       if(tRes.data){
@@ -698,7 +698,11 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
 
   const listaProv = tercerosConRubro.length > 0 ? tercerosConRubro : terceros
   const provsFiltrados = listaProv.filter((t:any) => {
-    const matchB = !buscarProv || t.razon_social.toLowerCase().includes(buscarProv.toLowerCase())
+    const q = buscarProv.toLowerCase()
+    const matchB = !buscarProv
+      || t.razon_social.toLowerCase().includes(q)
+      || (t.nro_doc||'').toLowerCase().includes(q)
+      || (t.nombre_fantasia||'').toLowerCase().includes(q)
     const tieneRubros = t.rubros && t.rubros.length > 0
     const matchR = !form.rubro || !tercerosConRubro.length ? true : tieneRubros ? t.rubros.includes(form.rubro) : false
     return matchB && matchR
@@ -1237,6 +1241,13 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                       <button key={t.id} onMouseDown={()=>{setF('proveedor_nombre',t.razon_social);setF('tercero_id',t.id);setShowProvDropdown(false)}}
                         className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
                         <span className="font-semibold text-gray-900">{t.razon_social}</span>
+                        {(t.nro_doc||t.nombre_fantasia)&&(
+                          <span className="block text-[10px] text-gray-400 mt-0.5">
+                            {t.nro_doc&&<span className="font-mono">{t.tipo_doc?`${t.tipo_doc}: `:''}{t.nro_doc}</span>}
+                            {t.nro_doc&&t.nombre_fantasia&&<span> · </span>}
+                            {t.nombre_fantasia&&<span>{t.nombre_fantasia}</span>}
+                          </span>
+                        )}
                       </button>
                     ))}
                     {/* Si no hay coincidencia exacta, ofrecer crear el proveedor */}
