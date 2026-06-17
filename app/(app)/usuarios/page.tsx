@@ -557,30 +557,30 @@ export default function UsuariosPage() {
       {/* ── ROLES Y PERMISOS ── */}
       {tab === 'roles' && (
         <div>
-          {/* Cards de roles */}
-          <div className="grid grid-cols-6 gap-3 mb-5">
+          {/* Tira compacta de roles */}
+          <div className="flex flex-wrap gap-2 mb-4">
             {roles.map(r => (
-              <div key={r.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ background: r.color }}>
-                    {r.nombre.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div className="flex gap-1">
-                    <button onClick={() => { setFormR({ nombre: r.nombre, descripcion: r.descripcion, color: r.color }); setModalRol({ type: 'editar', rol: r }) }}
-                      className="text-gray-400 hover:text-[#1168F8] text-xs p-1">✏</button>
-                    <button onClick={() => eliminarRol(r.id)} className="text-gray-400 hover:text-red-500 text-xs p-1">🗑</button>
-                  </div>
+              <div key={r.id} title={r.descripcion}
+                className="group flex items-center gap-2 bg-white border border-gray-100 rounded-xl pl-2 pr-1.5 py-1.5 shadow-sm">
+                <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: r.color }}>
+                  {r.nombre.slice(0, 2).toUpperCase()}
                 </div>
-                <div className="font-bold text-xs text-gray-900 mb-0.5">{r.nombre}</div>
-                <div className="text-[10px] text-gray-400 leading-tight">{r.descripcion}</div>
-                <div className="text-[9px] text-gray-300 mt-2">{usuarios.filter(u => (u.roles_ids || []).includes(r.id)).length} usuario(s)</div>
+                <div className="leading-tight">
+                  <div className="font-bold text-[11px] text-gray-900 whitespace-nowrap">{r.nombre}</div>
+                  <div className="text-[9px] text-gray-400">{usuarios.filter(u => (u.roles_ids || []).includes(r.id)).length} usuario(s)</div>
+                </div>
+                <div className="flex gap-0.5 ml-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => { setFormR({ nombre: r.nombre, descripcion: r.descripcion, color: r.color }); setModalRol({ type: 'editar', rol: r }) }}
+                    className="text-gray-400 hover:text-[#1168F8] text-[11px] p-1">✏</button>
+                  <button onClick={() => eliminarRol(r.id)} className="text-gray-400 hover:text-red-500 text-[11px] p-1">🗑</button>
+                </div>
               </div>
             ))}
           </div>
 
           {/* Matriz de permisos */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <div className="font-bold text-sm text-gray-900">Matriz de permisos</div>
                 <div className="text-[10px] text-gray-400 mt-0.5">
@@ -606,7 +606,7 @@ export default function UsuariosPage() {
               tabIndex={0}
               onKeyDown={handleMatrizKey}
               className="overflow-auto focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#1168F8]/30"
-              style={{ maxHeight: '70vh', WebkitOverflowScrolling: 'touch' }}>
+              style={{ maxHeight: 'calc(100vh - 230px)', minHeight: 360, WebkitOverflowScrolling: 'touch' }}>
               <table className="text-xs border-separate" style={{ minWidth: '1200px', width: 'max-content', borderSpacing: 0 }}>
                 <thead>
                   {/* Fila 1: nombres de roles */}
