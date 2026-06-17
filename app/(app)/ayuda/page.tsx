@@ -62,7 +62,7 @@ export default function AyudaPage() {
   const [mensajes, setMensajes] = useState<Mensaje[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [tab, setTab] = useState<'chat'|'docs'>('chat')
+  const [tab, setTab] = useState<'chat'|'docs'>('docs')
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
