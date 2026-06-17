@@ -1143,11 +1143,11 @@ const clientesFiltrados=terceros.filter(t=>
               {s.sentido==='exportacion' ? (
                 /* ── EXPORTACIÓN: Argentina → Chile → Destino ── */
                 <>
-                  {/* 1. Ciudad origen Argentina */}
+                  {/* 1. Tramo terrestre de salida: ciudad origen Argentina → paso → puerto Chile destino */}
                   {(bloqueActivo(3) || bloqueActivo(2)) && (
                     <div>
-                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Origen Argentina</div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Tramo terrestre (salida)</div>
+                      <div className="grid grid-cols-3 gap-3">
                         <Field label="Ciudad origen Argentina">
                           <select value={s.ciudadDestinoId} onChange={e=>{
                             u('ciudadDestinoId',e.target.value)
@@ -1158,7 +1158,7 @@ const clientesFiltrados=terceros.filter(t=>
                             {ciudadesArg.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
                           </select>
                         </Field>
-                        {(bloqueActivo(2)||bloqueActivo(1)) && (
+                        {(bloqueActivo(2)||bloqueActivo(1)||bloqueActivo(3)) && (
                           <Field label="Paso fronterizo">
                             <select value={s.pasoId} onChange={e=>{u('pasoId',e.target.value)}} className={sel}>
                               <option value="">— Seleccionar paso —</option>
@@ -1168,13 +1168,26 @@ const clientesFiltrados=terceros.filter(t=>
                             </select>
                           </Field>
                         )}
+                        {/* Puerto Chile destino del camión — misma condición que ciudad/paso; se oculta si el marítimo ya lo muestra abajo */}
+                        {(bloqueActivo(2)||bloqueActivo(3)) && !(bloqueActivo(1)||bloqueActivo(0)) && (
+                          <Field label="Puerto Chile (destino camión)">
+                            <select value={s.puertoChileId} onChange={e=>{
+                              u('puertoChileId',e.target.value)
+                              const p=puertosChile.find((x:any)=>x.id===e.target.value)
+                              if(p) u('ptoChile',p.locode)
+                            }} className={sel}>
+                              <option value="">— Seleccionar puerto —</option>
+                              {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
+                            </select>
+                          </Field>
+                        )}
                       </div>
                     </div>
                   )}
-                  {/* 2. Puerto Chile embarque */}
+                  {/* 2. Puerto Chile embarque marítimo + destino final */}
                   {(bloqueActivo(1) || bloqueActivo(0)) && (
                     <div className="pt-3 border-t border-gray-100">
-                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Puerto Chile (carga)</div>
+                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Puerto Chile (carga) · Destino</div>
                       <div className="grid grid-cols-2 gap-3">
                         <Field label="Puerto Chile (embarque)">
                           <select value={s.puertoChileId} onChange={e=>{
