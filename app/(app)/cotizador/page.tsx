@@ -1253,9 +1253,9 @@ const clientesFiltrados=terceros.filter(t=>
                   {(bloqueActivo(1) || bloqueActivo(2) || bloqueActivo(3)) && (
                     <div className={(bloqueActivo(0)||bloqueActivo(1))?"pt-3 border-t border-gray-100":""}>
                       <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Tramo terrestre</div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {/* Puerto Chile origen del camión — visible si Bloque 3 activo y no se eligió arriba (marítimo Bloque 1 lo muestra) */}
-                        {bloqueActivo(3) && !bloqueActivo(0) && (
+                      <div className="grid grid-cols-3 gap-3">
+                        {/* Puerto Chile origen del camión — siempre visible si Bloque 3 activo (sincroniza con el del marítimo si existe) */}
+                        {bloqueActivo(3) && (
                           <Field label="Puerto Chile (origen camión)">
                             <select value={s.puertoChileId} onChange={e=>{
                               u('puertoChileId',e.target.value)
