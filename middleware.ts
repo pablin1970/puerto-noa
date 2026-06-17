@@ -28,6 +28,9 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|logo.png|.*\\.png|.*\\.jpg|.*\\.svg).*)',
+    // Excluye /api (rutas de API, p.ej. el cron de tipos de cambio), los assets de
+    // Next y las imágenes del control de sesión del navegador. Las rutas /api se
+    // protegen por su cuenta (el cron usa ?secret=), no con la cookie de sesión.
+    '/((?!api|_next/static|_next/image|favicon.ico|logo.png|.*\\.png|.*\\.jpg|.*\\.svg).*)',
   ],
 }
