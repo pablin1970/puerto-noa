@@ -28,21 +28,41 @@ const RUBROS: Record<string, { label: string; color: string; bg: string }> = {
 }
 
 // Bloque por defecto según rubro (número de bloque en cotizador_bloques)
-// forwarder=1 (marítimo), almacenaje=2 (Chile), terrestre=3, despachante=4 (Argentina)
+// Usa los CÓDIGOS REALES de proveedor_rubros (editables desde Catálogos)
 const RUBRO_BLOQUE_DEFAULT: Record<string, number> = {
-  forwarder: 1,
-  almacenaje: 2,
-  transporte_terrestre: 3,
-  despachante: 4,
+  forwarder: 1,           // Freight Forwarder → marítimo
+  naviera: 1,             // Naviera → marítimo
+  deposito: 2,            // Almacen extra puertario → Chile
+  transporte_chile: 2,    // Agente → Chile
+  transporte_terrestre: 3,// Transporte terrestre
+  gastos_argentina: 4,    // Despachante de aduana → Argentina
 }
 
 // Categoría por defecto de los ítems según rubro (para inteligencia de precios)
 const RUBRO_CATEGORIA_DEFAULT: Record<string, string> = {
   forwarder: 'flete_maritimo',
-  almacenaje: 'almacenaje',
-  despachante: 'honorarios_despachante',
+  naviera: 'flete_maritimo',
+  deposito: 'almacenaje',
+  gastos_argentina: 'honorarios_despachante',
   transporte_terrestre: 'flete_terrestre',
+  seguro: 'seguro',
 }
+
+// ── Mapeo CÓDIGO de rubro → TIPO de formulario que se muestra ──
+// FUNDAMENTAL: cualquier rubro nuevo en la base que no esté acá cae en 'generico'
+// sin romper nada. No depende de keys hardcodeados de botones.
+type TipoFormulario = 'maritimo' | 'terrestre' | 'almacenaje' | 'despachante' | 'seguro' | 'generico'
+const FORMULARIO_POR_RUBRO: Record<string, TipoFormulario> = {
+  forwarder: 'maritimo',
+  naviera: 'maritimo',
+  transporte_terrestre: 'terrestre',
+  deposito: 'almacenaje',
+  gastos_argentina: 'despachante',
+  seguro: 'seguro',
+  transporte_chile: 'generico', // Agente
+  otro: 'generico',
+}
+const tipoFormulario = (codigo: string): TipoFormulario => FORMULARIO_POR_RUBRO[codigo] || 'generico'
 
 
 const TIPO_CALCULO: Record<string, string> = {
@@ -562,6 +582,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [pasos, setPasos] = useState<any[]>([])
   const [ciudades, setCiudades] = useState<any[]>([])
   const [tiposCont, setTiposCont] = useState<any[]>([])
+  const [rubrosCatalogo, setRubrosCatalogo] = useState<any[]>([])
 
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
   const sel = inp
@@ -576,7 +597,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       supabase.from('pasos_fronterizos').select('id,nombre,provincia_argentina').eq('activo','true').order('orden'),
       supabase.from('ciudades_destino_arg').select('id,ciudad,provincia').eq('activo','true').order('orden'),
       supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo','true').order('orden'),
-    ]).then(([bl,cat,ch,cl,ps,ci,tc]) => {
+      supabase.from('proveedor_rubros').select('*').eq('activo',true).order('nombre'),
+    ]).then(([bl,cat,ch,cl,ps,ci,tc,ru]) => {
       if(bl.data) setBloques(bl.data)
       if(cat.data) setCategorias(cat.data)
       if(ch.data) setPuertosCh(ch.data)
@@ -584,6 +606,19 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       if(ps.data) setPasos(ps.data)
       if(ci.data) setCiudades(ci.data)
       if(tc.data) setTiposCont(tc.data)
+      if(ru.data){
+        // Normalizar: cada rubro con su código (fallback al nombre normalizado)
+        const lista = (ru.data as any[]).map(r=>({
+          ...r,
+          _codigo: r.codigo || (r.nombre||'').toLowerCase().replace(/ /g,'_'),
+        }))
+        setRubrosCatalogo(lista)
+        // Si el rubro inicial del form no existe en la lista, usar el primero disponible
+        setForm((p:any)=>{
+          const existe = lista.some(r=>r._codigo===p.rubro)
+          return existe ? p : { ...p, rubro: lista[0]?._codigo || p.rubro }
+        })
+      }
     })
     Promise.all([
       supabase.from('terceros').select('id,razon_social').eq('activo','true').order('razon_social'),
@@ -675,6 +710,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     }
     // categoría por defecto de los ítems según rubro
     const catDefault = RUBRO_CATEGORIA_DEFAULT[form.rubro] || null
+    // tipo de formulario del rubro elegido (maritimo/terrestre/almacenaje/despachante/seguro/generico)
+    const tf = tipoFormulario(form.rubro)
 
     const payload = {
       proveedor_nombre: form.proveedor_nombre, tercero_id: form.tercero_id||null,
@@ -683,9 +720,9 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       fecha_vencimiento: form.fecha_vencimiento||null, moneda: form.moneda,
       estado: form.estado,
       sentido: sentidoA, grupo_id: grupoId,
-      seguro_incluido: form.rubro==='forwarder' ? form.seguro_incluido : false,
-      seguro_modo: form.rubro==='forwarder'&&form.seguro_incluido ? form.seguro_modo : null,
-      seguro_monto: form.rubro==='forwarder'&&form.seguro_incluido ? parseN(String(form.seguro_monto))||null : null,
+      seguro_incluido: (tf==='maritimo'||tf==='seguro') ? form.seguro_incluido : false,
+      seguro_modo: (tf==='maritimo'||tf==='seguro')&&form.seguro_incluido ? form.seguro_modo : null,
+      seguro_monto: (tf==='maritimo'||tf==='seguro')&&form.seguro_incluido ? parseN(String(form.seguro_monto))||null : null,
       notas: form.notas||null, cotizacion_id: form.cotizacion_id||null,
       cliente_id: form.tipo==='especifica' ? (form.cliente_id||null) : null,
       bloque_id: bloqueIdFinal||null,
@@ -728,8 +765,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
 
     // Ruta estructurada de los ítems según rubro y sentido (para inteligencia de precios entre puntos)
     // Reutiliza puntos de cabecera. esExpoForm: true si la versión actual es exportación.
-    const rutaItemRubro = (rubro:string, esExpoForm:boolean, f:any) => {
-      if(rubro==='forwarder'){
+    const rutaItemRubro = (tfRubro:string, esExpoForm:boolean, f:any) => {
+      if(tfRubro==='maritimo'){
         // impo: China → Chile ; expo: Chile → China (destino)
         const china = f.puerto_china_id||null
         const chile = f.puerto_chile_id||null
@@ -737,12 +774,12 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           ? { origen_id: chile, origen_tipo: chile?'puerto':null, destino_id: china, destino_tipo: china?'puerto_china':null, paso_id: null }
           : { origen_id: china, origen_tipo: china?'puerto_china':null, destino_id: chile, destino_tipo: chile?'puerto':null, paso_id: null }
       }
-      if(rubro==='almacenaje'){
+      if(tfRubro==='almacenaje'){
         // ubicación = puerto chile (mismo en ambos sentidos)
         const chile = f.puerto_chile_id||null
         return { origen_id: chile, origen_tipo: chile?'puerto':null, destino_id: null, destino_tipo: null, paso_id: null }
       }
-      if(rubro==='despachante'){
+      if(tfRubro==='despachante'){
         // aduana: paso + ciudad destino NOA
         const ciudad = f.ciudad_destino_id||null
         return { origen_id: null, origen_tipo: null, destino_id: ciudad, destino_tipo: ciudad?'ciudad':null, paso_id: f.paso_id||null }
@@ -750,12 +787,12 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       return { origen_id: null, origen_tipo: null, destino_id: null, destino_tipo: null, paso_id: null }
     }
 
-    // Genera ítems de los rubros NO multi-tramo (forwarder, almacenaje, despachante, otro)
+    // Genera ítems de los rubros NO multi-tramo (marítimo, almacenaje, despachante, seguro, genérico)
     // cotizId: cotización destino; esExpoForm: sentido de esta versión; f: form base (A) o formB-equivalente
     const itemsDeRubro = (cotizId:string, esExpoForm:boolean, f:any) => {
       const out:any[] = []
-      const ruta = rutaItemRubro(form.rubro, esExpoForm, f)
-      if(form.rubro==='almacenaje'){
+      const ruta = rutaItemRubro(tf, esExpoForm, f)
+      if(tf==='almacenaje'){
         let ord=0
         const add=(cond:boolean, descripcion:string, tipo_calculo:string, valKey:string)=>{
           const v=parseN(String(f[valKey]||0))
@@ -766,7 +803,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         add(true,'Almacenaje por big bag/día','por_bigbag','almacen_bigbag_dia')
         add(true,'Almacenaje por contenedor/día','por_contenedor','almacen_cont_dia')
       } else {
-        // forwarder, despachante, otro → items[] genéricos
+        // marítimo, despachante, seguro, genérico → items[] genéricos
         items.filter(it=>it.descripcion).forEach((it,i)=>{
           out.push({
             cotizacion_id: cotizId, descripcion: it.descripcion, tipo_calculo: it.tipo_calculo,
@@ -784,18 +821,18 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
 
     // Items según rubro
     let itemsFinales: any[] = []
-    if(form.rubro==='transporte_terrestre') {
+    if(tf==='terrestre') {
       // Multi-tramo: vale para sentido simple Y para la versión A del modo "ambos" (ambas usan `tramos`)
       itemsFinales = itemsDeTramos(tramos, cot.id)
     } else {
-      // forwarder, almacenaje, despachante, otro — versión A (impo o el sentido simple elegido)
+      // marítimo, almacenaje, despachante, seguro, genérico — versión A
       itemsFinales = itemsDeRubro(cot.id, sentido==='exportacion', form)
     }
     if(itemsFinales.length>0) await (supabase.from('cotizaciones_proveedor_v2_items') as any).insert(itemsFinales)
 
     // ── Versión B (exportación) — en modo "ambos" para todos los rubros con ruta ──
     let cotB: any = null
-    if(esAmbos && form.rubro==='transporte_terrestre') {
+    if(esAmbos && tf==='terrestre') {
       const payloadB = {
         ...payload,
         sentido: 'exportacion',
@@ -814,8 +851,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         const itemsB = itemsDeTramos(tramosB, cotB.id)
         if(itemsB.length>0) await (supabase.from('cotizaciones_proveedor_v2_items') as any).insert(itemsB)
       }
-    } else if(esAmbos && (form.rubro==='forwarder' || form.rubro==='almacenaje' || form.rubro==='despachante')) {
-      // Rubros no multi-tramo: versión B hereda la misma cabecera, sentido exportación.
+    } else if(esAmbos && (tf==='maritimo' || tf==='almacenaje' || tf==='despachante')) {
+      // Rubros no multi-tramo con ruta: versión B hereda la misma cabecera, sentido exportación.
       // Mismos ítems con la ruta estructurada invertida (esExpoForm=true).
       const payloadB = { ...payload, sentido: 'exportacion', grupo_id: grupoId }
       const { data: cotBData, error: errB } = await (supabase.from('cotizaciones_proveedor_v2') as any).insert(payloadB).select().single()
@@ -851,15 +888,28 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     await onSave(); setSaving(false)
   }
 
-  const RUBRO_ITEMS = [
-    {key:'forwarder', icon:'🚢', label:'ForWarder', desc:'Flete marítimo'},
-    {key:'transporte_terrestre', icon:'🚛', label:'Terrestre', desc:'Flete ida/vuelta/RT'},
-    {key:'almacenaje', icon:'🏭', label:'Almacenaje', desc:'m³ · pallet · big bag'},
-    {key:'despachante', icon:'📋', label:'Despachante', desc:'Honorarios + aduana'},
-    {key:'otro', icon:'·', label:'Otro', desc:'Servicio libre'},
-  ]
+  // Íconos de respaldo por tipo de formulario (si el rubro no trae ícono en la base)
+  const ICONO_FALLBACK: Record<string,string> = {
+    maritimo: '🚢', terrestre: '🚛', almacenaje: '🏭',
+    despachante: '📋', seguro: '🛡', generico: '·',
+  }
+  // Botones de rubro generados desde el catálogo (proveedor_rubros). Editable desde Catálogos.
+  const RUBRO_ITEMS = rubrosCatalogo.length > 0
+    ? rubrosCatalogo.map(r=>({
+        key: r._codigo,
+        icon: r.icon || ICONO_FALLBACK[tipoFormulario(r._codigo)] || '·',
+        label: r.nombre || r._codigo,
+        desc: r.descripcion || '',
+        color: r.color || '#1168F8',
+      }))
+    : [
+        {key:'forwarder', icon:'🚢', label:'ForWarder', desc:'Flete marítimo', color:'#1168F8'},
+        {key:'transporte_terrestre', icon:'🚛', label:'Terrestre', desc:'Flete ida/vuelta/RT', color:'#b45309'},
+      ]
 
   const lbl = (s:string) => <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{s}</label>
+  // tipo de formulario del rubro elegido — decide qué bloque de campos se muestra
+  const tf = tipoFormulario(form.rubro)
 
   // Render reutilizable de una lista de tramos (se usa en sentido simple y en versión A/B de "ambos")
   const renderTramos = (lista:any[], esExpoLista:boolean, fnSet:(i:number,k:string,v:any)=>void, fnAdd:()=>void, fnRemove:(i:number)=>void) => (
@@ -1009,7 +1059,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             {sentido==='ambos' && (
               <div className="mt-2 flex items-center gap-2 text-[11px] text-[#052698] bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-3 py-2">
                 <span>ℹ️</span>
-                <span>Se guardarán <strong>dos cotizaciones hermanadas</strong>: versión A (importación) y versión B (exportación). El proveedor, las fechas y el comprobante son compartidos.{form.rubro==='transporte_terrestre' ? ' La ruta y las tarifas se cargan por separado en cada versión.' : (form.rubro==='otro' ? ' Nota: el rubro "Otro" no desdobla A/B; se guardará una sola versión con el sentido elegido.' : ' Los ítems se replican en ambas versiones con la ruta invertida según el sentido.')}</span>
+                <span>Se guardarán <strong>dos cotizaciones hermanadas</strong>: versión A (importación) y versión B (exportación). El proveedor, las fechas y el comprobante son compartidos.{tf==='terrestre' ? ' La ruta y las tarifas se cargan por separado en cada versión.' : ((tf==='maritimo'||tf==='almacenaje'||tf==='despachante') ? ' Los ítems se replican en ambas versiones con la ruta invertida según el sentido.' : ' Nota: este rubro no desdobla A/B; se guardará una sola versión con el sentido elegido.')}</span>
               </div>
             )}
           </div>
@@ -1017,15 +1067,20 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           {/* Rubro */}
           <div>
             {lbl('Rubro del proveedor')}
-            <div className="grid grid-cols-5 gap-2">
-              {RUBRO_ITEMS.map(r=>(
+            <div className="grid grid-cols-4 gap-2">
+              {RUBRO_ITEMS.map(r=>{
+                const activo = form.rubro===r.key
+                return (
                 <button key={r.key} onClick={()=>setF('rubro',r.key)}
-                  className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 text-center transition-all ${form.rubro===r.key?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 hover:bg-gray-50'}`}>
+                  className="flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 text-center transition-all"
+                  style={activo
+                    ? {borderColor:r.color, background:(r.color||'#1168F8')+'14'}
+                    : {borderColor:'#e5e7eb', background:'white'}}>
                   <span className="text-xl leading-none">{r.icon}</span>
-                  <span className={`text-xs font-bold ${form.rubro===r.key?'text-[#052698]':'text-gray-700'}`}>{r.label}</span>
+                  <span className="text-xs font-bold" style={{color:activo?r.color:'#374151'}}>{r.label}</span>
                   <span className="text-[9px] text-gray-400 leading-tight">{r.desc}</span>
                 </button>
-              ))}
+              )})}
             </div>
           </div>
 
@@ -1171,7 +1226,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       {/* ── BLOQUE 3: Campos específicos por rubro ── */}
 
       {/* FORWARDER */}
-      {form.rubro==='forwarder' && (
+      {tf==='maritimo' && (
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #1168F8'}}>
           <div className="px-5 py-3 border-b border-gray-100 bg-[#EBF2FF] flex items-center gap-2">
             <span className="text-lg">🚢</span>
@@ -1254,7 +1309,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       )}
 
       {/* TERRESTRE — sentido SIMPLE (impo o expo): multi-tramo */}
-      {form.rubro==='transporte_terrestre' && sentido!=='ambos' && (()=>{ const esExpoA = sentido==='exportacion'; return (
+      {tf==='terrestre' && sentido!=='ambos' && (()=>{ const esExpoA = sentido==='exportacion'; return (
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #b45309'}}>
           <div className="px-5 py-3 border-b border-gray-100 bg-amber-50 flex items-center gap-2">
             <span className="text-lg">🚛</span>
@@ -1288,7 +1343,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       )})()}
 
       {/* TERRESTRE — modo "ambos": Versión A (Importación) — multi-tramo */}
-      {form.rubro==='transporte_terrestre' && sentido==='ambos' && (
+      {tf==='terrestre' && sentido==='ambos' && (
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #b45309'}}>
           <div className="px-5 py-3 border-b border-gray-100 bg-amber-50 flex items-center gap-2">
             <span className="text-lg">🚛</span>
@@ -1302,7 +1357,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       )}
 
       {/* TERRESTRE — Versión B (Exportación), solo en modo "ambos" */}
-      {form.rubro==='transporte_terrestre' && sentido==='ambos' && (
+      {tf==='terrestre' && sentido==='ambos' && (
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #0a9e6e'}}>
           <div className="px-5 py-3 border-b border-gray-100 bg-green-50 flex items-center gap-2">
             <span className="text-lg">🚛</span>
@@ -1316,7 +1371,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       )}
 
       {/* ALMACENAJE */}
-      {form.rubro==='almacenaje' && (
+      {tf==='almacenaje' && (
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #0a9e6e'}}>
           <div className="px-5 py-3 border-b border-gray-100 bg-green-50 flex items-center gap-2">
             <span className="text-lg">🏭</span>
@@ -1361,7 +1416,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       )}
 
       {/* DESPACHANTE */}
-      {form.rubro==='despachante' && (
+      {tf==='despachante' && (
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #6d28d9'}}>
           <div className="px-5 py-3 border-b border-gray-100 bg-purple-50 flex items-center gap-2">
             <span className="text-lg">📋</span>
@@ -1401,16 +1456,60 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       )}
 
       {/* OTRO */}
-      {form.rubro==='otro' && (
+      {tf==='generico' && (
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #6b7280'}}>
           <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
             <span className="text-lg">·</span>
-            <span className="font-semibold text-sm text-gray-700">Otro servicio — descripción libre</span>
+            <span className="font-semibold text-sm text-gray-700">Servicio — descripción libre</span>
           </div>
           <div className="px-5 py-4">
             <div className="flex items-center justify-between mb-2">
               {lbl('Ítems del servicio')}
               <button onClick={addItem} className="text-[10px] text-[#1168F8] hover:underline font-semibold">+ Agregar ítem</button>
+            </div>
+            <div className="border border-gray-100 rounded-xl overflow-hidden">
+              {items.map((it,i)=>(
+                <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={categorias} onChange={updateItem} onRemove={removeItem} editMode={true}/>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SEGURO — Aseguradora */}
+      {tf==='seguro' && (
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #15803d'}}>
+          <div className="px-5 py-3 border-b border-gray-100 bg-green-50 flex items-center gap-2">
+            <span className="text-lg">🛡</span>
+            <span className="font-semibold text-sm text-green-900">Seguro de transporte — aseguradora</span>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            <div className="text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+              Cargá el costo del seguro. Puede ser un monto fijo o un porcentaje sobre el valor de la mercadería (FOB).
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                {lbl('Modo de cálculo')}
+                <select value={form.seguro_modo} onChange={e=>setF('seguro_modo',e.target.value)} className={sel}>
+                  <option value="pct">% sobre FOB</option>
+                  <option value="fijo">Monto fijo USD</option>
+                </select>
+              </div>
+              <div>
+                {lbl(form.seguro_modo==='fijo'?'Monto fijo (USD)':'Porcentaje sobre FOB (%)')}
+                <input type="text" inputMode="decimal" value={form.seguro_monto} onFocus={e=>e.target.select()} onChange={e=>{setF('seguro_monto',e.target.value);setF('seguro_incluido',true)}} className={inp+' text-right font-mono'} placeholder={form.seguro_modo==='fijo'?'ej. 350':'ej. 0.5'}/>
+              </div>
+            </div>
+            <div>
+              {lbl('Alcance del seguro')}
+              <select value={form.seguro_alcance} onChange={e=>setF('seguro_alcance',e.target.value)} className={sel}>
+                <option value="maritimo">Solo tramo marítimo</option>
+                <option value="puerta_puerta">Puerta a puerta (hasta destino final)</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between mb-2 pt-2 border-t border-gray-50">
+              {lbl('Conceptos adicionales (opcional)')}
+              <button onClick={addItem} className="text-[10px] text-[#1168F8] hover:underline font-semibold">+ Agregar concepto</button>
             </div>
             <div className="border border-gray-100 rounded-xl overflow-hidden">
               {items.map((it,i)=>(
