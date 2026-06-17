@@ -585,7 +585,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
         referencia: docForm.referencia || null,
         fecha: docForm.fecha || null,
         notas: docForm.notas || null,
-        archivo_url: urlData.signedUrl,
+        archivo_url: path,  // guardamos el path para generar signed URL al mostrar
         archivo_nombre: file.name,
         subido_por: currentUser?.nombre,
       })
@@ -980,10 +980,14 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                     </div>
                     {d.archivo_url ? (
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <a href={d.archivo_url} target="_blank" rel="noreferrer"
-                          className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC]">📄 Ver</a>
-                        <a href={d.archivo_url} download={d.archivo_nombre || 'documento'}
-                          className="px-3 py-1.5 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-100">⬇ Descargar</a>
+                        <button onClick={async()=>{
+                          const {data} = await supabase.storage.from('terceros').createSignedUrl(d.archivo_url,3600)
+                          if(data?.signedUrl) window.open(data.signedUrl,'_blank')
+                        }} className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC]">📄 Ver</button>
+                        <button onClick={async()=>{
+                          const {data} = await supabase.storage.from('terceros').createSignedUrl(d.archivo_url,3600)
+                          if(data?.signedUrl){const a=document.createElement('a');a.href=data.signedUrl;a.download=d.archivo_nombre||'documento';a.click()}
+                        }} className="px-3 py-1.5 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-100">⬇ Descargar</button>
                       </div>
                     ) : (
                       <span className="text-gray-300 text-[10px]">Sin archivo</span>
