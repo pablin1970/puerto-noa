@@ -488,6 +488,13 @@ function CotizacionesProveedoresInner() {
 function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, onCancel, cotizacionInicial, initParams }: any) {
   const rubros = rubrosDisp || RUBROS
   const [sentido, setSentido] = useState<'importacion'|'exportacion'|'ambos'>('importacion')
+  // ── Multi-tramo terrestre (sentido simple) ──
+  // Cada tramo = un ítem con ruta estructurada + tarifas. Permite cargar varias rutas en una cotización.
+  const TRAMO_VACIO = { origen_id:'', origen_tipo:'', destino_id:'', destino_tipo:'', paso_id:'', tipo_camion:'', tipo_contenedor:'', flete_ida:'', flete_vuelta:'', flete_rt:'' }
+  const [tramos, setTramos] = useState<any[]>([{ ...TRAMO_VACIO }])
+  const setTramo = (i:number, k:string, v:any) => setTramos(prev => prev.map((t,idx)=> idx===i ? {...t,[k]:v} : t))
+  const addTramo = () => setTramos(prev => [...prev, { ...TRAMO_VACIO }])
+  const removeTramo = (i:number) => setTramos(prev => prev.length>1 ? prev.filter((_,idx)=>idx!==i) : prev)
   // Versión B (exportación) — solo se usa cuando sentido==='ambos'. Campos que cambian por sentido en terrestre.
   const [formB, setFormB] = useState({
     puerto_chile_id: '', paso_id: '', ciudad_origen_id: '', ciudad_destino_id: '',
@@ -591,6 +598,23 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const fleteElegidoB = fRtB > 0 && fRtB < sumaIdaVueltaB ? fRtB : sumaIdaVueltaB
   const usaRtB = fRtB > 0 && fRtB < sumaIdaVueltaB
 
+  // Helper: tarifa elegida de un tramo (round-trip vs ida+vuelta, la más económica)
+  const calcTramo = (t:any) => {
+    const ida = parseN(String(t.flete_ida||0))
+    const vue = parseN(String(t.flete_vuelta||0))
+    const rt = parseN(String(t.flete_rt||0))
+    const suma = ida + vue
+    const usaRtT = rt > 0 && rt < suma
+    return { ida, vue, rt, suma, elegido: usaRtT ? rt : suma, usaRt: usaRtT }
+  }
+  // Nombre legible de un punto (puerto chileno o ciudad NOA) para la descripción del ítem
+  const nombrePunto = (id:string, tipo:string) => {
+    if(!id) return '—'
+    if(tipo==='puerto') return (puertosChile.find((p:any)=>p.id===id)?.nombre) || 'Puerto'
+    if(tipo==='ciudad') return (ciudades.find((c:any)=>c.id===id)?.ciudad) || 'Ciudad'
+    return '—'
+  }
+
   const listaProv = tercerosConRubro.length > 0 ? tercerosConRubro : terceros
   const provsFiltrados = listaProv.filter((t:any) => {
     const matchB = !buscarProv || t.razon_social.toLowerCase().includes(buscarProv.toLowerCase())
@@ -639,8 +663,31 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
 
     // Items según rubro
     let itemsFinales: any[] = []
-    if(form.rubro==='transporte_terrestre' && fleteElegido>0) {
-      itemsFinales = [{ cotizacion_id: cot.id, descripcion: usaRt?'Flete round trip':'Flete terrestre '+(fIda>0?'ida':'')+(fVuelta>0?'+vuelta':''), tipo_calculo:'por_contenedor', valor:fleteElegido, moneda:form.moneda, tipo_contenedor:form.tipo_contenedor||null, orden:0 }]
+    if(form.rubro==='transporte_terrestre' && sentido!=='ambos') {
+      // Multi-tramo: un ítem por tramo, con ruta estructurada + categoría flete_terrestre
+      const esExpo = sentido==='exportacion'
+      itemsFinales = tramos.map((t:any, idx:number) => {
+        const ct = calcTramo(t)
+        if(ct.elegido<=0) return null
+        const oNom = nombrePunto(t.origen_id, t.origen_tipo)
+        const dNom = nombrePunto(t.destino_id, t.destino_tipo)
+        const ruta = (oNom!=='—'||dNom!=='—') ? `${oNom} → ${dNom}` : 'Tramo'
+        return {
+          cotizacion_id: cot.id,
+          descripcion: `Flete terrestre: ${ruta}${ct.usaRt?' (round trip)':''}`,
+          tipo_calculo: 'por_contenedor',
+          valor: ct.elegido,
+          moneda: form.moneda,
+          tipo_contenedor: t.tipo_contenedor||null,
+          categoria: 'flete_terrestre',
+          origen_id: t.origen_id||null, origen_tipo: t.origen_tipo||null,
+          destino_id: t.destino_id||null, destino_tipo: t.destino_tipo||null,
+          paso_id: t.paso_id||null,
+          orden: idx,
+        }
+      }).filter(Boolean) as any[]
+    } else if(form.rubro==='transporte_terrestre' && fleteElegido>0) {
+      itemsFinales = [{ cotizacion_id: cot.id, descripcion: usaRt?'Flete round trip':'Flete terrestre '+(fIda>0?'ida':'')+(fVuelta>0?'+vuelta':''), tipo_calculo:'por_contenedor', valor:fleteElegido, moneda:form.moneda, tipo_contenedor:form.tipo_contenedor||null, categoria:'flete_terrestre', orden:0 }]
     } else if(form.rubro==='almacenaje') {
       let ord=0
       if(parseN(String(form.almacen_m3_dia))>0) itemsFinales.push({ cotizacion_id:cot.id, descripcion:'Almacenaje por m³/día', tipo_calculo:'por_m3', valor:parseN(String(form.almacen_m3_dia)), moneda:form.moneda, orden:ord++ })
@@ -1006,13 +1053,140 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         </div>
       )}
 
-      {/* TERRESTRE */}
-      {form.rubro==='transporte_terrestre' && (()=>{ const esExpoA = sentido==='exportacion'; return (
+      {/* TERRESTRE — sentido SIMPLE (impo o expo): multi-tramo */}
+      {form.rubro==='transporte_terrestre' && sentido!=='ambos' && (()=>{ const esExpoA = sentido==='exportacion'; return (
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #b45309'}}>
           <div className="px-5 py-3 border-b border-gray-100 bg-amber-50 flex items-center gap-2">
             <span className="text-lg">🚛</span>
-            <span className="font-semibold text-sm text-amber-900">Terrestre — datos del flete{sentido==='ambos'?' · Versión A (Importación)':''}</span>
-            <span className="ml-auto text-[10px] text-amber-700 font-medium">{esExpoA?'NOA → Chile':'Chile → NOA'}</span>
+            <span className="font-semibold text-sm text-amber-900">Terrestre — tramos del flete</span>
+            <span className="ml-auto text-[10px] text-amber-700 font-medium">{tramos.length} tramo{tramos.length!==1?'s':''} · {esExpoA?'NOA → Chile':'Chile → NOA'}</span>
+          </div>
+          <div className="px-5 py-4 space-y-3">
+            {tramos.map((t:any, i:number)=>{ const ct = calcTramo(t); return (
+              <div key={i} className="border border-gray-200 rounded-xl p-3 bg-gray-50/50">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">Tramo {i+1}</span>
+                  <span className="text-[10px] text-gray-400">{nombrePunto(esExpoA?t.destino_id:t.origen_id, esExpoA?'puerto':'puerto')!=='—'||nombrePunto(t.destino_id,'ciudad')!=='—'?'':''}</span>
+                  {tramos.length>1 && <button onClick={()=>removeTramo(i)} className="ml-auto text-gray-300 hover:text-red-500 text-xs">✕ Quitar</button>}
+                </div>
+
+                {/* Ruta del tramo */}
+                <div className="grid grid-cols-3 gap-3 items-end mb-3">
+                  <div>
+                    <span className="text-[10px] text-gray-400 mb-1 block">{esExpoA?'Ciudad origen (NOA)':'Puerto origen (Chile)'}</span>
+                    {esExpoA ? (
+                      <select value={t.origen_id} onChange={e=>{setTramo(i,'origen_id',e.target.value);setTramo(i,'origen_tipo','ciudad')}} className={sel}>
+                        <option value="">— Cualquier ciudad —</option>
+                        {ciudades.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
+                      </select>
+                    ) : (
+                      <select value={t.origen_id} onChange={e=>{setTramo(i,'origen_id',e.target.value);setTramo(i,'origen_tipo','puerto')}} className={sel}>
+                        <option value="">— Cualquier puerto —</option>
+                        {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                      </select>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-gray-400 mb-1 block">Paso fronterizo</span>
+                    <select value={t.paso_id} onChange={e=>setTramo(i,'paso_id',e.target.value)} className={sel}>
+                      <option value="">— Cualquier paso —</option>
+                      {pasos.map((p:any)=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-gray-400 mb-1 block">{esExpoA?'Puerto destino (Chile)':'Ciudad destino (NOA)'}</span>
+                    {esExpoA ? (
+                      <select value={t.destino_id} onChange={e=>{setTramo(i,'destino_id',e.target.value);setTramo(i,'destino_tipo','puerto')}} className={sel}>
+                        <option value="">— Cualquier puerto —</option>
+                        {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                      </select>
+                    ) : (
+                      <select value={t.destino_id} onChange={e=>{setTramo(i,'destino_id',e.target.value);setTramo(i,'destino_tipo','ciudad')}} className={sel}>
+                        <option value="">— Cualquier ciudad —</option>
+                        {ciudades.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
+                      </select>
+                    )}
+                  </div>
+                </div>
+
+                {/* Camión y contenedor del tramo */}
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <span className="text-[10px] text-gray-400 mb-1 block">Tipo de camión</span>
+                    <input value={t.tipo_camion} onChange={e=>setTramo(i,'tipo_camion',e.target.value)} className={inp} placeholder="ej. Chasis 40HC, Sider..."/>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-gray-400 mb-1 block">Tipo de contenedor</span>
+                    <select value={t.tipo_contenedor} onChange={e=>setTramo(i,'tipo_contenedor',e.target.value)} className={sel}>
+                      <option value="">— Todos —</option>
+                      {tiposCont.map((tc:any)=><option key={tc.id} value={tc.codigo}>{tc.codigo} — {tc.nombre}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Tarifas del tramo (round-trip intacto) */}
+                <div className="border border-gray-100 rounded-xl overflow-hidden bg-white">
+                  <div className="grid grid-cols-3 divide-x divide-gray-100">
+                    <div className="p-3">
+                      <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{esExpoA?'Flete ida (NOA→Chile)':'Flete ida (Chile→NOA)'}</div>
+                      <div className="text-[10px] text-gray-400 mb-2">Cargado</div>
+                      <input type="text" inputMode="decimal" value={t.flete_ida} onFocus={e=>e.target.select()} onChange={e=>setTramo(i,'flete_ida',e.target.value)} className={inp+' text-right font-mono'} placeholder="0"/>
+                    </div>
+                    <div className="p-3">
+                      <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{esExpoA?'Devolución (Chile→NOA)':'Devolución vacío (NOA→Chile)'}</div>
+                      <div className="text-[10px] text-gray-400 mb-2">Vacío</div>
+                      <input type="text" inputMode="decimal" value={t.flete_vuelta} onFocus={e=>e.target.select()} onChange={e=>setTramo(i,'flete_vuelta',e.target.value)} className={inp+' text-right font-mono'} placeholder="0"/>
+                    </div>
+                    <div className="p-3 bg-green-50">
+                      <div className="text-[10px] font-semibold text-green-700 uppercase tracking-wider mb-1">Round trip</div>
+                      <div className="text-[10px] text-green-600 mb-2">Ida + vuelta combinado</div>
+                      <input type="text" inputMode="decimal" value={t.flete_rt} onFocus={e=>e.target.select()} onChange={e=>setTramo(i,'flete_rt',e.target.value)} className={inp+' text-right font-mono border-green-200 focus:border-green-500'} placeholder="0"/>
+                    </div>
+                  </div>
+                  {(ct.ida>0||ct.vue>0||ct.rt>0) && (
+                    <div className={`px-4 py-2 border-t flex items-center justify-between text-xs font-semibold ${ct.usaRt?'bg-green-50 border-green-100 text-green-700':'bg-[#EBF2FF] border-[#93B8FC] text-[#052698]'}`}>
+                      <span>✓ Se usará: {ct.usaRt?`Round trip — USD ${fmtN(ct.rt)}`:`Ida + vuelta — USD ${fmtN(ct.suma)}`}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )})}
+
+            {/* Botón agregar tramo */}
+            <button onClick={addTramo} className="w-full py-2.5 border border-dashed border-gray-300 rounded-xl text-xs font-semibold text-[#1168F8] hover:bg-[#EBF2FF] transition-colors">
+              + Agregar tramo
+            </button>
+
+            {/* Seguro terrestre — opcional (común a la cotización) */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.seguro_terrestre} onChange={e=>setF('seguro_terrestre',e.target.checked)} className="w-4 h-4"/>
+                <span className="text-xs font-semibold text-amber-800">Incluye seguro tramo terrestre</span>
+              </label>
+              {form.seguro_terrestre && (
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    {lbl('% sobre valor mercadería')}
+                    <input type="text" inputMode="decimal" value={form.seguro_terrestre_pct} onChange={e=>setF('seguro_terrestre_pct',e.target.value)} className={inp} placeholder="ej. 0.3"/>
+                  </div>
+                  <div>
+                    {lbl('Mínimo USD')}
+                    <input type="text" inputMode="decimal" value={form.seguro_terrestre_min} onChange={e=>setF('seguro_terrestre_min',e.target.value)} className={inp} placeholder="ej. 100"/>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )})()}
+
+      {/* TERRESTRE — modo "ambos": Versión A (un tramo, se mejora en etapa siguiente) */}
+      {form.rubro==='transporte_terrestre' && sentido==='ambos' && (()=>{ const esExpoA = false; return (
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #b45309'}}>
+          <div className="px-5 py-3 border-b border-gray-100 bg-amber-50 flex items-center gap-2">
+            <span className="text-lg">🚛</span>
+            <span className="font-semibold text-sm text-amber-900">Terrestre — datos del flete · Versión A (Importación)</span>
+            <span className="ml-auto text-[10px] text-amber-700 font-medium">Chile → NOA</span>
           </div>
           <div className="px-5 py-4 space-y-4">
             {/* Ruta: ciudad origen → paso → ciudad destino */}
