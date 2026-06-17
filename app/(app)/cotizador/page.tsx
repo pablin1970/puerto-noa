@@ -233,6 +233,13 @@ const [buscarCliente,setBuscarCliente]=useState('')
 const [showClienteDropdown,setShowClienteDropdown]=useState(false)
 const [clienteSelId,setClienteSelId]=useState<string|null>(null)
 const [histCliente,setHistCliente]=useState<any[]>([])
+// Alta rápida de cliente no registrado
+const [showAltaCli,setShowAltaCli]=useState(false)
+const [altaCliNombre,setAltaCliNombre]=useState('')
+const [altaCliTipoDoc,setAltaCliTipoDoc]=useState('CUIT')
+const [altaCliNroDoc,setAltaCliNroDoc]=useState('')
+const [altaCliIva,setAltaCliIva]=useState('')
+const [altaCliSaving,setAltaCliSaving]=useState(false)
 const [showHist,setShowHist]=useState(false)
 
 const [tribCfg,setTribCfg]=useState<TribCfg[]>([])
@@ -870,6 +877,43 @@ async function selectCliente(t:any){
   setShowHist(true)
 }
 
+// ── Alta rápida de cliente no registrado ──
+function abrirAltaCliente(){
+  setAltaCliNombre(s.cliente||buscarCliente||'')
+  setAltaCliTipoDoc('CUIT')
+  setAltaCliNroDoc(s.cuit||'')
+  setAltaCliIva('')
+  setShowClienteDropdown(false)
+  setShowAltaCli(true)
+}
+async function crearClienteRapido(){
+  if(!altaCliNombre.trim()){alert('Ingresá la razón social');return}
+  setAltaCliSaving(true)
+  try {
+    const payload:any={ razon_social:altaCliNombre.trim(), tipo:['cliente'], activo:true, pais:'Argentina' }
+    if(altaCliNroDoc.trim()){ payload.tipo_doc=altaCliTipoDoc; payload.nro_doc=altaCliNroDoc.trim() }
+    if(altaCliIva){ payload.condicion_iva=altaCliIva }
+    const {data:nuevo,error}=await (supabase.from('terceros') as any)
+      .insert(payload).select('id,razon_social,nro_doc,tipo_doc,condicion_iva').single()
+    if(error||!nuevo){alert('Error al crear el cliente: '+(error?.message||''));setAltaCliSaving(false);return}
+    // Vincular a la cotización
+    u('cliente',nuevo.razon_social)
+    u('cuit',nuevo.nro_doc||'')
+    if(nuevo.condicion_iva) u('ivaCondicion',nuevo.condicion_iva)
+    setClienteSelId(nuevo.id)
+    setBuscarCliente(nuevo.razon_social)
+    // Agregar a la lista local para que quede disponible enseguida
+    setTerceros((prev:any[])=>[...prev,{id:nuevo.id,razon_social:nuevo.razon_social,nro_doc:nuevo.nro_doc,tipo_doc:nuevo.tipo_doc,condicion_iva:nuevo.condicion_iva,contactos:[]}])
+    setShowAltaCli(false)
+    setShowHist(false)
+    setAltaCliSaving(false)
+  } catch(e:any){
+    console.error('Error en alta rápida de cliente:',e)
+    alert('Error al crear el cliente: '+(e?.message||'revisá la consola'))
+    setAltaCliSaving(false)
+  }
+}
+
 async function duplicarCotizacion(cotId:string){
   const {data:orig}=await supabase.from('cotizaciones').select('*').eq('id',cotId).single()
   if(!orig) return
@@ -1229,8 +1273,16 @@ const clientesFiltrados=terceros.filter(t=>
                     </button>
                   )):(
                     <div className="px-4 py-3 text-xs text-gray-400">
-                      {terceros.length===0?'Cargando clientes...':'No encontrado — se cargara como nuevo cliente al guardar'}
+                      {terceros.length===0?'Cargando clientes...':'Sin coincidencias'}
                     </div>
+                  )}
+                  {/* Si no hay coincidencia exacta y hay texto, ofrecer crear el cliente */}
+                  {terceros.length>0 && (buscarCliente||s.cliente).length>0 && !clientesFiltrados.some(t=>t.razon_social.toLowerCase()===(buscarCliente||s.cliente).toLowerCase()) && (
+                    <button onMouseDown={abrirAltaCliente}
+                      className="w-full text-left px-4 py-2.5 hover:bg-green-50 text-xs border-t border-gray-100 bg-green-50/40">
+                      <span className="font-semibold text-green-700">+ Crear cliente «{buscarCliente||s.cliente}»</span>
+                      <span className="block text-[10px] text-gray-400 mt-0.5">No está registrado — cargalo ahora para vincularlo</span>
+                    </button>
                   )}
                 </div>
               )}
@@ -3005,6 +3057,54 @@ const clientesFiltrados=terceros.filter(t=>
               <button onClick={guardar} disabled={saving}
                 className="bg-[#1168F8] text-white px-6 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] disabled:opacity-60">
                 {saving?'Guardando...':'Guardar cotización'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal alta rápida de cliente */}
+      {showAltaCli && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4 print:hidden" onClick={()=>!altaCliSaving&&setShowAltaCli(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e=>e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2" style={{background:'#EBF2FF'}}>
+              <span className="text-lg">👤</span>
+              <span className="font-semibold text-sm text-[#052698]">Nuevo cliente</span>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div className="text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+                Cargá lo mínimo para vincularlo a la cotización. Después podés completar el resto (dirección, contactos, datos bancarios) en Clientes.
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Razón social *</label>
+                <input value={altaCliNombre} onChange={e=>setAltaCliNombre(e.target.value)} className={inp} placeholder="Nombre del cliente" autoFocus/>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Tipo doc</label>
+                  <select value={altaCliTipoDoc} onChange={e=>setAltaCliTipoDoc(e.target.value)} className={sel}>
+                    {['CUIT','CUIL','RUT','DNI','Pasaporte'].map(v=><option key={v}>{v}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-semibold text-gray-500 uppercase mb-1">N° documento</label>
+                  <input value={altaCliNroDoc} onChange={e=>setAltaCliNroDoc(e.target.value)} className={inp} placeholder="Opcional"/>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Condición IVA</label>
+                <select value={altaCliIva} onChange={e=>setAltaCliIva(e.target.value)} className={sel}>
+                  <option value="">— Sin especificar —</option>
+                  {['Responsable Inscripto','Monotributo','Exento','Consumidor Final','No Responsable'].map(v=><option key={v}>{v}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={()=>setShowAltaCli(false)} disabled={altaCliSaving}
+                className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+              <button onClick={crearClienteRapido} disabled={altaCliSaving}
+                className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
+                {altaCliSaving?'Creando...':'Crear y usar'}
               </button>
             </div>
           </div>
