@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 const fmtN = (n: number) => (n||0).toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -23,6 +24,7 @@ export default function FlujoCuentasPage() {
   const [saving, setSaving] = useState(false)
   const [compFile, setCompFile] = useState<File|null>(null)
   const [previewModal, setPreviewModal] = useState<{url:string;nombre:string;tipo:string}|null>(null)
+  const [permisos, setPermisos] = useState<Record<string,string[]>>({})
   const [tc, setTc] = useState<{usd:number,ars:number}>({usd:908,ars:1450})
   const [form, setForm] = useState({
     tipo: 'transferencia_arg_chile',
@@ -41,7 +43,7 @@ export default function FlujoCuentasPage() {
     notas: '',
   })
 
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => { loadAll(); cargarPermisos().then(setPermisos) }, [])
 
   async function loadAll() {
     setLoading(true)
@@ -86,6 +88,22 @@ export default function FlujoCuentasPage() {
     return monto * calcTCaplicado()
   }
 
+  // Genera la signed URL al vuelo desde el PATH guardado y abre el modal de preview
+  async function verComprobante(m: any) {
+    if (!m.archivo_url) return
+    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(m.archivo_url, 3600)
+    if (error || !data?.signedUrl) { alert('No se pudo abrir el comprobante'); return }
+    setPreviewModal({ url: data.signedUrl, nombre: m.archivo_nombre || 'comprobante', tipo: m.archivo_nombre?.endsWith('.pdf') ? 'pdf' : 'img' })
+  }
+
+  // Descarga el comprobante generando una signed URL con opción download
+  async function descargarComprobante(m: any) {
+    if (!m.archivo_url) return
+    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(m.archivo_url, 3600, { download: m.archivo_nombre || 'comprobante' })
+    if (error || !data?.signedUrl) { alert('No se pudo descargar el comprobante'); return }
+    window.open(data.signedUrl, '_blank')
+  }
+
   async function handleSave() {
     if (!form.descripcion || !form.monto_origen) { alert('Completá descripción y monto'); return }
     setSaving(true)
@@ -119,12 +137,10 @@ export default function FlujoCuentasPage() {
       const ext = compFile.name.split('.').pop()
       const path = `flujo/${movData.id}.${ext}`
       await supabase.storage.from('comprobantes').upload(path, compFile, { upsert: true })
-      const { data: urlData } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
-      if (urlData?.signedUrl) {
-        await (supabase.from('flujo_cuentas_pn') as any)
-          .update({ archivo_url: urlData.signedUrl, archivo_nombre: compFile.name })
-          .eq('id', movData.id)
-      }
+      // Guardamos el PATH (la signed URL expira a 1h). La firma se genera al vuelo en Ver/Descargar.
+      await (supabase.from('flujo_cuentas_pn') as any)
+        .update({ archivo_url: path, archivo_nombre: compFile.name })
+        .eq('id', movData.id)
     }
     setCompFile(null)
     setForm({ tipo:'transferencia_arg_chile', descripcion:'', cuenta_origen_id:'', cuenta_origen_tipo:'propia_argentina', cuenta_origen_nombre:'', cuenta_destino_id:'', cuenta_destino_tipo:'propia_chile', cuenta_destino_nombre:'', monto_origen:'', moneda_origen:'ARS', monto_destino:'', moneda_destino:'CLP', referencia:'', notas:'' })
@@ -328,9 +344,17 @@ export default function FlujoCuentasPage() {
                   <td className="px-3 py-3 text-right font-mono">{m.moneda_destino} {fmtN(m.monto_destino)}</td>
                   <td className="px-3 py-3 text-right font-mono font-bold text-[#052698]">USD {fmtN(m.monto_usd_equiv)}</td>
                   <td className="px-3 py-3">
-                    {m.archivo_url ? (
-                      <button onClick={()=>setPreviewModal({url:m.archivo_url,nombre:m.archivo_nombre||'comprobante',tipo:m.archivo_nombre?.endsWith('.pdf')?'pdf':'img'})}
-                        className="px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-[10px] font-medium hover:bg-[#93B8FC]">📄 Ver</button>
+                    {m.archivo_url && (puede(permisos,'flujo_cuentas','ver') || puede(permisos,'flujo_cuentas','descargar')) ? (
+                      <div className="flex gap-1">
+                        {puede(permisos,'flujo_cuentas','ver') && (
+                          <button onClick={()=>verComprobante(m)}
+                            className="px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-[10px] font-medium hover:bg-[#93B8FC]">📄 Ver</button>
+                        )}
+                        {puede(permisos,'flujo_cuentas','descargar') && (
+                          <button onClick={()=>descargarComprobante(m)}
+                            className="px-2 py-1 border border-gray-200 text-gray-600 rounded-lg text-[10px] font-medium hover:bg-gray-50">⬇</button>
+                        )}
+                      </div>
                     ) : <span className="text-gray-300 text-[10px]">—</span>}
                   </td>
                 </tr>
@@ -346,7 +370,7 @@ export default function FlujoCuentasPage() {
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
               <span className="font-medium text-sm truncate">{previewModal.nombre}</span>
               <div className="flex items-center gap-2">
-                <a href={previewModal.url} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs">🔗 Abrir / Descargar</a>
+                <a href={previewModal.url} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs">🔗 Abrir</a>
                 <button onClick={()=>setPreviewModal(null)} className="text-gray-400 text-xl px-1">×</button>
               </div>
             </div>
