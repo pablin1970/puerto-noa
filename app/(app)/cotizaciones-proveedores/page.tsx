@@ -480,7 +480,14 @@ function CotizacionesProveedoresInner() {
 
 function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, onCancel, cotizacionInicial, initParams }: any) {
   const rubros = rubrosDisp || RUBROS
-  const [sentido, setSentido] = useState<'importacion'|'exportacion'>('importacion')
+  const [sentido, setSentido] = useState<'importacion'|'exportacion'|'ambos'>('importacion')
+  // Versión B (exportación) — solo se usa cuando sentido==='ambos'. Campos que cambian por sentido en terrestre.
+  const [formB, setFormB] = useState({
+    puerto_chile_id: '', paso_id: '', ciudad_origen_id: '', ciudad_destino_id: '',
+    tipo_camion: '', tipo_contenedor: '',
+    flete_ida: '', flete_vuelta: '', flete_rt: '',
+  })
+  const setFB = (k: string, v: any) => setFormB((p:any) => ({ ...p, [k]: v }))
   const [form, setForm] = useState({
     proveedor_nombre: '', tercero_id: '', rubro: 'forwarder', tipo: 'generica',
     referencia: '', fecha: new Date().toISOString().slice(0, 10), fecha_vencimiento: '',
@@ -569,6 +576,13 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const sumaIdaVuelta = fIda + fVuelta
   const fleteElegido = fRt > 0 && fRt < sumaIdaVuelta ? fRt : sumaIdaVuelta
   const usaRt = fRt > 0 && fRt < sumaIdaVuelta
+  // Versión B (exportación) — mismos cálculos
+  const fIdaB = parseN(String(formB.flete_ida||0))
+  const fVueltaB = parseN(String(formB.flete_vuelta||0))
+  const fRtB = parseN(String(formB.flete_rt||0))
+  const sumaIdaVueltaB = fIdaB + fVueltaB
+  const fleteElegidoB = fRtB > 0 && fRtB < sumaIdaVueltaB ? fRtB : sumaIdaVueltaB
+  const usaRtB = fRtB > 0 && fRtB < sumaIdaVueltaB
 
   const listaProv = tercerosConRubro.length > 0 ? tercerosConRubro : terceros
   const provsFiltrados = listaProv.filter((t:any) => {
@@ -589,12 +603,19 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   async function handleSave() {
     if(!form.proveedor_nombre) { alert('Ingresá el nombre del proveedor'); return }
     setSaving(true)
+
+    const esAmbos = sentido==='ambos'
+    const grupoId = esAmbos ? (crypto?.randomUUID?.() || null) : null
+    // Sentido de la versión A: si es ambos, A = importación
+    const sentidoA = esAmbos ? 'importacion' : sentido
+
     const payload = {
       proveedor_nombre: form.proveedor_nombre, tercero_id: form.tercero_id||null,
       rubro: form.rubro, tipo: form.tipo, origen: form.origen||'recibida',
       referencia: form.referencia||null, fecha: form.fecha,
       fecha_vencimiento: form.fecha_vencimiento||null, moneda: form.moneda,
       estado: form.estado,
+      sentido: sentidoA, grupo_id: grupoId,
       seguro_incluido: form.rubro==='forwarder' ? form.seguro_incluido : false,
       seguro_modo: form.rubro==='forwarder'&&form.seguro_incluido ? form.seguro_modo : null,
       seguro_monto: form.rubro==='forwarder'&&form.seguro_incluido ? parseN(String(form.seguro_monto))||null : null,
@@ -631,7 +652,30 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     }
     if(itemsFinales.length>0) await (supabase.from('cotizaciones_proveedor_v2_items') as any).insert(itemsFinales)
 
-    // Multi-bloque
+    // ── Versión B (exportación) — solo en modo "ambos" y rubro terrestre ──
+    let cotB: any = null
+    if(esAmbos && form.rubro==='transporte_terrestre') {
+      const payloadB = {
+        ...payload,
+        sentido: 'exportacion',
+        grupo_id: grupoId,
+        // Ruta y datos propios de la versión B
+        puerto_chile_id: formB.puerto_chile_id||null,
+        paso_id: formB.paso_id||null,
+        ciudad_destino_id: formB.ciudad_destino_id||null,
+        tipo_contenedor: formB.tipo_contenedor||null,
+      }
+      const { data: cotBData, error: errB } = await (supabase.from('cotizaciones_proveedor_v2') as any).insert(payloadB).select().single()
+      if(errB) { alert('Error al guardar versión B: '+errB.message); setSaving(false); return }
+      cotB = cotBData
+      // Items de la versión B (flete propio)
+      if(cotB && fleteElegidoB>0) {
+        const itemsB = [{ cotizacion_id: cotB.id, descripcion: usaRtB?'Flete round trip':'Flete terrestre '+(fIdaB>0?'ida':'')+(fVueltaB>0?'+vuelta':''), tipo_calculo:'por_contenedor', valor:fleteElegidoB, moneda:form.moneda, tipo_contenedor:formB.tipo_contenedor||null, orden:0 }]
+        await (supabase.from('cotizaciones_proveedor_v2_items') as any).insert(itemsB)
+      }
+    }
+
+    // Multi-bloque (no aplica a versión B; se mantiene como estaba para la cotización A)
     const bloqueIds: string[] = Array.isArray(form.bloque_ids) ? form.bloque_ids : (form.bloque_id?[form.bloque_id]:[])
     const bloqueExtras = bloqueIds.filter((id:string)=>id!==(form.bloque_id||''))
     for(const bId of bloqueExtras) {
@@ -641,12 +685,16 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       }
     }
 
-    // Adjunto
+    // Adjunto — compartido entre versión A y B
     if(compFile && cot?.id) {
       const ext = compFile.name.split('.').pop()
       const path = `cotiz-prov/${cot.id}.${ext}`
       await supabase.storage.from('comprobantes').upload(path, compFile, {upsert:true})
       await (supabase.from('cotizaciones_proveedor_v2') as any).update({archivo_url:path,archivo_nombre:compFile.name}).eq('id',cot.id)
+      // La versión B referencia el mismo archivo
+      if(cotB?.id) {
+        await (supabase.from('cotizaciones_proveedor_v2') as any).update({archivo_url:path,archivo_nombre:compFile.name}).eq('id',cotB.id)
+      }
     }
     await onSave(); setSaving(false)
   }
@@ -809,7 +857,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           <div>
             {lbl('Sentido de la operación')}
             <div className="flex gap-2">
-              {[{key:'importacion',icon:'📦',label:'Importación',desc:'Origen → Argentina/NOA'},{key:'exportacion',icon:'🚢',label:'Exportación',desc:'Argentina/NOA → Destino'}].map(o=>(
+              {[{key:'importacion',icon:'📦',label:'Importación',desc:'Origen → Argentina/NOA'},{key:'exportacion',icon:'🚢',label:'Exportación',desc:'Argentina/NOA → Destino'},{key:'ambos',icon:'🔄',label:'Ambos sentidos',desc:'Carga versión A + B'}].map(o=>(
                 <button key={o.key} onClick={()=>setSentido(o.key as any)}
                   className={`flex-1 flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-left transition-all ${sentido===o.key?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 hover:bg-gray-50'}`}>
                   <span className="text-base">{o.icon}</span>
@@ -817,6 +865,12 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 </button>
               ))}
             </div>
+            {sentido==='ambos' && (
+              <div className="mt-2 flex items-center gap-2 text-[11px] text-[#052698] bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-3 py-2">
+                <span>ℹ️</span>
+                <span>Se guardarán <strong>dos cotizaciones hermanadas</strong>: versión A (importación) y versión B (exportación). El proveedor, las fechas y el comprobante son compartidos; la ruta y las tarifas se cargan por separado.{form.rubro!=='transporte_terrestre' && ' Por ahora el desdoblado A/B aplica al rubro Terrestre.'}</span>
+              </div>
+            )}
           </div>
 
           {/* Rubro */}
@@ -946,12 +1000,12 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       )}
 
       {/* TERRESTRE */}
-      {form.rubro==='transporte_terrestre' && (
+      {form.rubro==='transporte_terrestre' && (()=>{ const esExpoA = sentido==='exportacion'; return (
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #b45309'}}>
           <div className="px-5 py-3 border-b border-gray-100 bg-amber-50 flex items-center gap-2">
             <span className="text-lg">🚛</span>
-            <span className="font-semibold text-sm text-amber-900">Terrestre — datos del flete</span>
-            <span className="ml-auto text-[10px] text-amber-700 font-medium">{sentido==='exportacion'?'NOA → Chile':'Chile → NOA'}</span>
+            <span className="font-semibold text-sm text-amber-900">Terrestre — datos del flete{sentido==='ambos'?' · Versión A (Importación)':''}</span>
+            <span className="ml-auto text-[10px] text-amber-700 font-medium">{esExpoA?'NOA → Chile':'Chile → NOA'}</span>
           </div>
           <div className="px-5 py-4 space-y-4">
             {/* Ruta: ciudad origen → paso → ciudad destino */}
@@ -959,8 +1013,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               {lbl('Ruta')}
               <div className="grid grid-cols-3 gap-3 items-end">
                 <div>
-                  <span className="text-[10px] text-gray-400 mb-1 block">{sentido==='exportacion'?'Ciudad origen (NOA)':'Ciudad origen (Chile)'}</span>
-                  {sentido==='exportacion' ? (
+                  <span className="text-[10px] text-gray-400 mb-1 block">{esExpoA?'Ciudad origen (NOA)':'Ciudad origen (Chile)'}</span>
+                  {esExpoA ? (
                     <select value={form.ciudad_origen_id} onChange={e=>setF('ciudad_origen_id',e.target.value)} className={sel}>
                       <option value="">— Cualquier ciudad —</option>
                       {ciudades.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
@@ -980,8 +1034,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                   </select>
                 </div>
                 <div>
-                  <span className="text-[10px] text-gray-400 mb-1 block">{sentido==='exportacion'?'Puerto destino (Chile)':'Ciudad destino (NOA)'}</span>
-                  {sentido==='exportacion' ? (
+                  <span className="text-[10px] text-gray-400 mb-1 block">{esExpoA?'Puerto destino (Chile)':'Ciudad destino (NOA)'}</span>
+                  {esExpoA ? (
                     <select value={form.puerto_chile_id} onChange={e=>setF('puerto_chile_id',e.target.value)} className={sel}>
                       <option value="">— Cualquier puerto —</option>
                       {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre}</option>)}
@@ -1019,13 +1073,13 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               </div>
               <div className="grid grid-cols-3 divide-x divide-gray-100">
                 <div className="p-4">
-                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{sentido==='exportacion'?'Flete ida (NOA→Chile)':'Flete ida (Chile→NOA)'}</div>
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{esExpoA?'Flete ida (NOA→Chile)':'Flete ida (Chile→NOA)'}</div>
                   <div className="text-[10px] text-gray-400 mb-2">Cargado</div>
                   <input type="text" inputMode="decimal" value={form.flete_ida} onFocus={e=>e.target.select()} onChange={e=>setF('flete_ida',e.target.value)} className={inp+' text-right font-mono'} placeholder="0"/>
                   <div className="text-[10px] text-gray-400 mt-1 text-right">USD por viaje</div>
                 </div>
                 <div className="p-4">
-                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{sentido==='exportacion'?'Devolución (Chile→NOA)':'Devolución vacío (NOA→Chile)'}</div>
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{esExpoA?'Devolución (Chile→NOA)':'Devolución vacío (NOA→Chile)'}</div>
                   <div className="text-[10px] text-gray-400 mb-2">Vacío</div>
                   <input type="text" inputMode="decimal" value={form.flete_vuelta} onFocus={e=>e.target.select()} onChange={e=>setF('flete_vuelta',e.target.value)} className={inp+' text-right font-mono'} placeholder="0"/>
                   <div className="text-[10px] text-gray-400 mt-1 text-right">USD por viaje</div>
@@ -1063,6 +1117,97 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                     {lbl('Mínimo USD')}
                     <input type="text" inputMode="decimal" value={form.seguro_terrestre_min} onChange={e=>setF('seguro_terrestre_min',e.target.value)} className={inp} placeholder="ej. 100"/>
                   </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )})()}
+
+      {/* TERRESTRE — Versión B (Exportación), solo en modo "ambos" */}
+      {form.rubro==='transporte_terrestre' && sentido==='ambos' && (
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #0a9e6e'}}>
+          <div className="px-5 py-3 border-b border-gray-100 bg-green-50 flex items-center gap-2">
+            <span className="text-lg">🚛</span>
+            <span className="font-semibold text-sm text-green-900">Terrestre — datos del flete · Versión B (Exportación)</span>
+            <span className="ml-auto text-[10px] text-green-700 font-medium">NOA → Chile</span>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            {/* Ruta B (exportación) */}
+            <div>
+              {lbl('Ruta')}
+              <div className="grid grid-cols-3 gap-3 items-end">
+                <div>
+                  <span className="text-[10px] text-gray-400 mb-1 block">Ciudad origen (NOA)</span>
+                  <select value={formB.ciudad_origen_id} onChange={e=>setFB('ciudad_origen_id',e.target.value)} className={sel}>
+                    <option value="">— Cualquier ciudad —</option>
+                    {ciudades.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad} ({c.provincia})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-400 mb-1 block">Paso fronterizo</span>
+                  <select value={formB.paso_id} onChange={e=>setFB('paso_id',e.target.value)} className={sel}>
+                    <option value="">— Cualquier paso —</option>
+                    {pasos.map((p:any)=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-400 mb-1 block">Puerto destino (Chile)</span>
+                  <select value={formB.puerto_chile_id} onChange={e=>setFB('puerto_chile_id',e.target.value)} className={sel}>
+                    <option value="">— Cualquier puerto —</option>
+                    {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Camión y contenedor B */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                {lbl('Tipo de camión')}
+                <input value={formB.tipo_camion} onChange={e=>setFB('tipo_camion',e.target.value)} className={inp} placeholder="ej. Chasis 40HC, Sider, Carpa..."/>
+              </div>
+              <div>
+                {lbl('Tipo de contenedor')}
+                <select value={formB.tipo_contenedor} onChange={e=>setFB('tipo_contenedor',e.target.value)} className={sel}>
+                  <option value="">— Todos —</option>
+                  {tiposCont.map((t:any)=><option key={t.id} value={t.codigo}>{t.codigo} — {t.nombre}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Tarifas B */}
+            <div className="border border-gray-100 rounded-xl overflow-hidden">
+              <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100">
+                <span className="text-xs font-semibold text-gray-700">Tarifas de flete</span>
+                <span className="text-[10px] text-gray-400 ml-2">— el sistema usa automáticamente la opción más económica</span>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-gray-100">
+                <div className="p-4">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Flete ida (NOA→Chile)</div>
+                  <div className="text-[10px] text-gray-400 mb-2">Cargado</div>
+                  <input type="text" inputMode="decimal" value={formB.flete_ida} onFocus={e=>e.target.select()} onChange={e=>setFB('flete_ida',e.target.value)} className={inp+' text-right font-mono'} placeholder="0"/>
+                  <div className="text-[10px] text-gray-400 mt-1 text-right">USD por viaje</div>
+                </div>
+                <div className="p-4">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Devolución (Chile→NOA)</div>
+                  <div className="text-[10px] text-gray-400 mb-2">Vacío</div>
+                  <input type="text" inputMode="decimal" value={formB.flete_vuelta} onFocus={e=>e.target.select()} onChange={e=>setFB('flete_vuelta',e.target.value)} className={inp+' text-right font-mono'} placeholder="0"/>
+                  <div className="text-[10px] text-gray-400 mt-1 text-right">USD por viaje</div>
+                </div>
+                <div className="p-4 bg-green-50">
+                  <div className="text-[10px] font-semibold text-green-700 uppercase tracking-wider mb-1">Round trip</div>
+                  <div className="text-[10px] text-green-600 mb-2">Ida + vuelta combinado</div>
+                  <input type="text" inputMode="decimal" value={formB.flete_rt} onFocus={e=>e.target.select()} onChange={e=>setFB('flete_rt',e.target.value)} className={inp+' text-right font-mono border-green-200 focus:border-green-500'} placeholder="0"/>
+                  <div className="text-[10px] text-green-600 mt-1 text-right">USD por viaje</div>
+                </div>
+              </div>
+              {/* Resultado automático B */}
+              {(fIdaB>0||fVueltaB>0||fRtB>0) && (
+                <div className={`px-4 py-2.5 border-t flex items-center justify-between text-xs font-semibold ${usaRtB?'bg-green-50 border-green-100 text-green-700':'bg-[#EBF2FF] border-[#93B8FC] text-[#052698]'}`}>
+                  <span>✓ Se usará: {usaRtB?`Round trip — USD ${fmtN(fRtB)}`:`Ida + vuelta — USD ${fmtN(sumaIdaVueltaB)}`}</span>
+                  {usaRtB && sumaIdaVueltaB>0 && <span className="text-[10px] font-normal opacity-70">más económico que ida+vuelta (USD {fmtN(sumaIdaVueltaB)})</span>}
+                  {!usaRtB && fRtB>0 && <span className="text-[10px] font-normal opacity-70">más económico que round trip (USD {fmtN(fRtB)})</span>}
                 </div>
               )}
             </div>
