@@ -654,6 +654,14 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     })
     if(initParams?.proveedor_nombre) setF('proveedor_nombre', initParams.proveedor_nombre)
     if(initParams?.bloque_id) setF('bloque_id', initParams.bloque_id)
+    if(initParams?.rubro) {
+      setF('rubro', initParams.rubro)
+      // Si el rubro es mercadería, preparar el primer item como producto
+      if(tipoFormulario(initParams.rubro)==='mercaderia'){
+        setItems(prev=>prev.length>0 ? prev.map((it,idx)=>idx===0?{...it,tipo_calculo:'producto',cantidad:it.cantidad??1,incoterm:it.incoterm||'FOB'}:it) : prev)
+      }
+    }
+    if(initParams?.cliente_id) { setF('tipo','especifica'); setF('cliente_id', initParams.cliente_id) }
   }, [])
 
   // Cálculo flete terrestre: toma el menor entre ida+vuelta vs round trip
