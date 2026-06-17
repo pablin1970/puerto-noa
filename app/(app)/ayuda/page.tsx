@@ -79,12 +79,10 @@ export default function AyudaPage() {
     setMensajes(nuevos)
 
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch('/api/ayuda', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1000,
           system: CONTEXTO_SISTEMA,
           messages: nuevos.map(m => ({
             role: m.rol === 'user' ? 'user' : 'assistant',
