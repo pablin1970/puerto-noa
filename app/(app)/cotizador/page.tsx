@@ -438,6 +438,14 @@ const cap=calcCapacidad(s.contenedores,s.productos)
 // ── Helpers para manejar CotProvSel genéricamente ──────────────
 const isVigente = (fv:string) => !fv || new Date(fv) >= new Date()
 
+// Filtro por sentido: muestra las cotizaciones del sentido actual + las sin sentido (legacy)
+const coincideSentido = (c:any) => !c.sentido || c.sentido === s.sentido
+// Listas filtradas por sentido — reaccionan al cambiar s.sentido
+const cotsFW = cotsFWDisponibles.filter(coincideSentido)
+const cotsChile = cotsChileDisponibles.filter(coincideSentido)
+const cotsTransp = cotsTranspDisponibles.filter(coincideSentido)
+const cotsArg = cotsArgDisponibles.filter(coincideSentido)
+
 // Verificar si un bloque está activo (por índice 0-based en array de bloques cargados)
 const bloqueActivo = (idx: number): boolean => {
   if (s.bloquesActivos.length === 0) return true
@@ -1514,8 +1522,8 @@ const clientesFiltrados=terceros.filter(t=>
                     className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
                     <option value="">+ Cargar del sistema</option>
                     {(()=>{
-                      const especificas=cotsFWDisponibles.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
-                      const genericas=cotsFWDisponibles.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                      const especificas=cotsFW.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                      const genericas=cotsFW.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
                       return(<>
                         {especificas.length>0&&(<optgroup label="⭐ Específicas para este cliente">
                           {especificas.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}{!isVigente(c.fecha_vencimiento||'')?'  (VENCIDA)':''}</option>)})}
@@ -1742,8 +1750,8 @@ const clientesFiltrados=terceros.filter(t=>
                       className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#0a9e6e]" defaultValue="">
                       <option value="">+ Cargar del sistema</option>
                       {(()=>{
-                        const esp=cotsChileDisponibles.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
-                        const gen=cotsChileDisponibles.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                        const esp=cotsChile.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                        const gen=cotsChile.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
                         return(<>
                           {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}</option>)})}</optgroup>)}
                           <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
@@ -1865,8 +1873,8 @@ const clientesFiltrados=terceros.filter(t=>
                         className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#b45309]" defaultValue="">
                         <option value="">+ Cargar del sistema</option>
                         {(()=>{
-                          const esp=cotsTranspDisponibles.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
-                          const gen=cotsTranspDisponibles.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                          const esp=cotsTransp.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                          const gen=cotsTransp.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
                           return(<>
                             {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}</option>)})}</optgroup>)}
                             <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
@@ -1968,13 +1976,13 @@ const clientesFiltrados=terceros.filter(t=>
                   {/* Selector del sistema */}
                   <div className="flex items-center gap-2 mb-3 flex-wrap">
                     <span className="text-[10px] text-gray-500">Cotizaciones:</span>
-                  {cotsTranspDisponibles.length>0&&(
+                  {cotsTransp.length>0&&(
                     <select onChange={e=>{if(e.target.value){agregarTranspTerrDesdeSistema(e.target.value);e.target.value=''}}}
                       className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#b45309]" defaultValue="">
                       <option value="">+ Cargar del sistema</option>
                         {(()=>{
-                          const esp=cotsTranspDisponibles.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
-                          const gen=cotsTranspDisponibles.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                          const esp=cotsTransp.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                          const gen=cotsTransp.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
                           return(<>
                             {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}</option>)})}</optgroup>)}
                             <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
@@ -2243,8 +2251,8 @@ const clientesFiltrados=terceros.filter(t=>
                     }} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#6b21a8]" defaultValue="">
                       <option value="">+ Cargar del sistema</option>
                       {(()=>{
-                        const esp=cotsArgDisponibles.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
-                        const gen=cotsArgDisponibles.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                        const esp=cotsArg.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                        const gen=cotsArg.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
                         return(<>
                           {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}</option>)})}</optgroup>)}
                           <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
