@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt } from '@/lib/utils'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 type Tab = 'arqueo' | 'movimientos' | 'por_operacion' | 'conciliacion'
 
@@ -25,8 +26,9 @@ export default function FondosCustodiaPage() {
   const [tcActual, setTcActual] = useState<{ ARS: number; CLP: number }>({ ARS: 1450, CLP: 910 })
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
 
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => { loadAll(); cargarPermisos().then(setPermisos) }, [])
 
   async function loadAll() {
     setLoading(true)
@@ -263,6 +265,7 @@ export default function FondosCustodiaPage() {
           operaciones={operaciones}
           tcActual={tcActual}
           currentUser={currentUser}
+          permisos={permisos}
           reload={loadAll}
         />
       )}
@@ -292,7 +295,7 @@ export default function FondosCustodiaPage() {
 }
 
 // ── MOVIMIENTOS TAB ────────────────────────────────────────────
-function MovimientosTab({ supabase, cuentas, movimientos, operaciones, tcActual, currentUser, reload }: any) {
+function MovimientosTab({ supabase, cuentas, movimientos, operaciones, tcActual, currentUser, permisos, reload }: any) {
   const [form, setForm] = useState({
     fecha: nowDate(),
     tipo: 'ingreso_cliente',
@@ -361,15 +364,29 @@ function MovimientosTab({ supabase, cuentas, movimientos, operaciones, tcActual,
       const ext = compFile.name.split('.').pop()
       const path = `fondos/${movData.id}.${ext}`
       await supabase.storage.from('comprobantes').upload(path, compFile, { upsert: true })
-      const { data: urlData } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
-      if (urlData?.signedUrl) {
-        await (supabase.from('fondos_movimientos') as any).update({ comprobante_url: urlData.signedUrl, comprobante_nombre: compFile.name }).eq('id', movData.id)
-      }
+      // Guardamos el PATH (la signed URL expira a 1h). La firma se genera al vuelo en Ver/Descargar.
+      await (supabase.from('fondos_movimientos') as any).update({ comprobante_url: path, comprobante_nombre: compFile.name }).eq('id', movData.id)
     }
     setForm(f => ({ ...f, monto: '', concepto: '', nro_referencia: '', notas: '', banco_origen: '', cuenta_origen: '', banco_destino: '', cuenta_destino_texto: '' }))
     setCompFile(null)
     setSaving(false)
     reload()
+  }
+
+  // Abre el comprobante en el modal generando una signed URL al vuelo desde el PATH
+  async function verComprobante(m: any) {
+    if (!m.comprobante_url) return
+    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(m.comprobante_url, 3600)
+    if (error || !data?.signedUrl) { alert('No se pudo abrir el comprobante'); return }
+    setPreviewModal({ url: data.signedUrl, nombre: m.comprobante_nombre || 'comprobante', tipo: m.comprobante_nombre?.endsWith('.pdf') ? 'pdf' : 'img' })
+  }
+
+  // Descarga el comprobante generando una signed URL con opción download
+  async function descargarComprobante(m: any) {
+    if (!m.comprobante_url) return
+    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(m.comprobante_url, 3600, { download: m.comprobante_nombre || 'comprobante' })
+    if (error || !data?.signedUrl) { alert('No se pudo descargar el comprobante'); return }
+    window.open(data.signedUrl, '_blank')
   }
 
   async function eliminar(id: string) {
@@ -612,9 +629,17 @@ function MovimientosTab({ supabase, cuentas, movimientos, operaciones, tcActual,
                     </td>
                     <td className="px-4 py-3 text-[10px] text-gray-400 font-mono">{m.nro_referencia || '—'}</td>
                     <td className="px-4 py-3">
-                      {m.comprobante_url ? (
-                        <button onClick={() => setPreviewModal({ url: m.comprobante_url, nombre: m.comprobante_nombre || 'comprobante', tipo: m.comprobante_nombre?.endsWith('.pdf') ? 'pdf' : 'img' })}
-                          className="px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-[10px] font-medium hover:bg-[#93B8FC]">📄 Ver</button>
+                      {m.comprobante_url && (puede(permisos, 'fondos_custodia', 'ver') || puede(permisos, 'fondos_custodia', 'descargar')) ? (
+                        <div className="flex gap-1">
+                          {puede(permisos, 'fondos_custodia', 'ver') && (
+                            <button onClick={() => verComprobante(m)}
+                              className="px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-[10px] font-medium hover:bg-[#93B8FC]">📄 Ver</button>
+                          )}
+                          {puede(permisos, 'fondos_custodia', 'descargar') && (
+                            <button onClick={() => descargarComprobante(m)}
+                              className="px-2 py-1 border border-gray-200 text-gray-600 rounded-lg text-[10px] font-medium hover:bg-gray-50">⬇</button>
+                          )}
+                        </div>
                       ) : <span className="text-gray-300 text-[10px]">—</span>}
                     </td>
                     <td className="px-4 py-3">
