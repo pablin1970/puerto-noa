@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 // Colores por código — se combina con rubros dinámicos de DB
 const RUBRO_COLORS: Record<string, { color: string; bg: string }> = {
@@ -195,9 +196,11 @@ function CotizacionesProveedoresInner() {
   const [filtroTipo, setFiltroTipo] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
   const [buscar, setBuscar] = useState('')
+  const [permisos, setPermisos] = useState<Record<string,string[]>>({})
 
   useEffect(() => {
     loadAll()
+    cargarPermisos().then(setPermisos)
     // Detectar si viene del cotizador con params prellenados
     const esNuevo = searchParams.get('nuevo')
     if(esNuevo === '1') {
@@ -459,7 +462,9 @@ function CotizacionesProveedoresInner() {
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
               <span className="font-medium text-sm truncate">{previewModal.nombre}</span>
               <div className="flex items-center gap-2">
-                <a href={previewModal.url} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs">🔗 Abrir / Descargar</a>
+                {puede(permisos,'cotizaciones_proveedores','descargar') && (
+                <a href={previewModal.url} download={previewModal.nombre} className="px-3 py-1.5 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg text-xs">⬇ Descargar</a>
+                )}
                 <button onClick={()=>setPreviewModal(null)} className="text-gray-400 text-xl px-1">×</button>
               </div>
             </div>
@@ -641,8 +646,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       const ext = compFile.name.split('.').pop()
       const path = `cotiz-prov/${cot.id}.${ext}`
       await supabase.storage.from('comprobantes').upload(path, compFile, {upsert:true})
-      const {data:urlData} = supabase.storage.from('comprobantes').getPublicUrl(path)
-      if(urlData?.signedUrl) await (supabase.from('cotizaciones_proveedor_v2') as any).update({archivo_url:urlData.signedUrl,archivo_nombre:compFile.name}).eq('id',cot.id)
+      await (supabase.from('cotizaciones_proveedor_v2') as any).update({archivo_url:path,archivo_nombre:compFile.name}).eq('id',cot.id)
     }
     await onSave(); setSaving(false)
   }
@@ -1192,7 +1196,10 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             </div>
             {compFile && <button onClick={()=>setCompFile(null)} className="text-[10px] text-red-500 hover:underline mt-1">✕ Quitar archivo</button>}
             {cotizacionInicial?.archivo_url && !compFile && (
-              <button onClick={()=>setPreviewModal({url:cotizacionInicial.archivo_url,nombre:cotizacionInicial.archivo_nombre||'comprobante',tipo:cotizacionInicial.archivo_nombre?.endsWith('.pdf')?'pdf':'img'})}
+              <button onClick={async()=>{
+                  const {data}=await supabase.storage.from('comprobantes').createSignedUrl(cotizacionInicial.archivo_url,3600)
+                  if(data?.signedUrl) setPreviewModal({url:data.signedUrl,nombre:cotizacionInicial.archivo_nombre||'comprobante',tipo:cotizacionInicial.archivo_nombre?.endsWith('.pdf')?'pdf':'img'})
+                }}
                 className="mt-2 text-[10px] text-[#1168F8] hover:underline">📄 Ver archivo actual</button>
             )}
           </div>
