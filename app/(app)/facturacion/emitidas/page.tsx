@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt } from '@/lib/utils'
 import Link from 'next/link'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 interface FacturaEmitida {
   id: string; tipo_doc: string; folio: number | null; estado: string
@@ -45,8 +46,9 @@ export default function FacturasEmitidasPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [terceros, setTerceros] = useState<any[]>([])
   const [operaciones, setOperaciones] = useState<any[]>([])
+  const [permisos, setPermisos] = useState<Record<string,string[]>>({})
 
-  useEffect(() => { loadUser(); loadData() }, [])
+  useEffect(() => { loadUser(); loadData(); cargarPermisos().then(setPermisos) }, [])
 
   async function loadUser() {
     const { data: auth } = await supabase.auth.getUser()
@@ -174,7 +176,7 @@ export default function FacturasEmitidasPage() {
       )}
 
       {view === 'nueva' && <FormFactura supabase={supabase} currentUser={currentUser} terceros={terceros} operaciones={operaciones} onSave={async () => { await loadData(); setView('lista') }} onCancel={() => setView('lista')} />}
-      {view === 'detalle' && sel && <DetalleFactura factura={sel} supabase={supabase} onReload={loadData} onImprimir={() => setView('impresion')} onBack={() => setView('lista')} />}
+      {view === 'detalle' && sel && <DetalleFactura factura={sel} supabase={supabase} permisos={permisos} onReload={loadData} onImprimir={() => setView('impresion')} onBack={() => setView('lista')} />}
       {view === 'impresion' && sel && <ImpresionFactura factura={sel} onBack={() => setView('detalle')} />}
     </div>
   )
@@ -225,10 +227,8 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, onSave, onC
       const ext = compFile.name.split('.').pop()
       const path = `facturas-emitidas/${factData.id}.${ext}`
       await supabase.storage.from('comprobantes').upload(path, compFile, { upsert: true })
-      const { data: urlData } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
-      if (urlData?.signedUrl) {
-        await (supabase.from('facturas_emitidas') as any).update({ archivo_url: urlData.signedUrl, archivo_nombre: compFile.name }).eq('id', factData.id)
-      }
+      // Guardamos el PATH (no la URL firmada, que expira a 1h). La signed URL se genera al vuelo en Ver/Descargar.
+      await (supabase.from('facturas_emitidas') as any).update({ archivo_url: path, archivo_nombre: compFile.name }).eq('id', factData.id)
     }
     setCompFile(null)
     await onSave(); setSaving(false)
@@ -390,10 +390,11 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, onSave, onC
   )
 }
 
-function DetalleFactura({ factura, supabase, onReload, onImprimir, onBack }: any) {
+function DetalleFactura({ factura, supabase, permisos, onReload, onImprimir, onBack }: any) {
   const [editandoFolio, setEditandoFolio] = useState(false)
   const [folio, setFolio] = useState(String(factura.folio || ''))
   const [saving, setSaving] = useState(false)
+  const [abriendo, setAbriendo] = useState(false)
 
   async function guardarFolio() {
     setSaving(true)
@@ -404,6 +405,18 @@ function DetalleFactura({ factura, supabase, onReload, onImprimir, onBack }: any
   async function cambiarEstado(estado: string) {
     await (supabase.from('facturas_emitidas') as any).update({ estado }).eq('id', factura.id)
     await onReload()
+  }
+
+  // Genera la signed URL al vuelo desde el PATH guardado (las firmadas expiran a 1h, por eso no se guardan).
+  async function abrirArchivo(descargar: boolean) {
+    if (!factura.archivo_url || abriendo) return
+    setAbriendo(true)
+    try {
+      const opts = descargar ? { download: factura.archivo_nombre || 'factura' } : undefined
+      const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(factura.archivo_url, 3600, opts)
+      if (error || !data?.signedUrl) { alert('No se pudo abrir el archivo'); return }
+      window.open(data.signedUrl, '_blank')
+    } finally { setAbriendo(false) }
   }
 
   const fmtCLP = (n: number) => Math.round(n).toLocaleString('es-CL')
@@ -493,7 +506,7 @@ function DetalleFactura({ factura, supabase, onReload, onImprimir, onBack }: any
       {factura.glosa && <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800"><span className="font-semibold">Glosa: </span>{factura.glosa}</div>}
 
       {/* Comprobante adjunto */}
-      {factura.archivo_url && (
+      {factura.archivo_url && (puede(permisos,'facturas_emitidas','ver') || puede(permisos,'facturas_emitidas','descargar')) && (
         <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-xl">📄</span>
@@ -503,8 +516,12 @@ function DetalleFactura({ factura, supabase, onReload, onImprimir, onBack }: any
             </div>
           </div>
           <div className="flex gap-2">
-            <a href={factura.archivo_url} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC]">📄 Ver</a>
-            <a href={factura.archivo_url} download={factura.archivo_nombre || 'factura'} className="px-3 py-1.5 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50">⬇ Descargar</a>
+            {puede(permisos,'facturas_emitidas','ver') && (
+              <button onClick={() => abrirArchivo(false)} disabled={abriendo} className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC] disabled:opacity-50">📄 Ver</button>
+            )}
+            {puede(permisos,'facturas_emitidas','descargar') && (
+              <button onClick={() => abrirArchivo(true)} disabled={abriendo} className="px-3 py-1.5 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 disabled:opacity-50">⬇ Descargar</button>
+            )}
           </div>
         </div>
       )}
