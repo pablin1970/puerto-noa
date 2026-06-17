@@ -204,6 +204,7 @@ const [cotsSistemaUsadas,setCotsSistemaUsadas]=useState<Record<string,string[]>>
 // Rubros por bloque (desde cotizador_bloque_rubros)
 const [rubrosBloque,setRubrosBloque]=useState<Record<number,string[]>>({1:[],2:[],3:[],4:[]})
 const [bloques,setBloques]=useState<any[]>([])
+const [bloqueMerc,setBloqueMerc]=useState<any>(null)
 const [cotNumActual,setCotNumActual]=useState<string>('')
 // Terceros proveedores por rubro (para búsqueda en carga manual)
 const [tercerosProv,setTercerosProv]=useState<any[]>([])
@@ -267,12 +268,17 @@ useEffect(()=>{
       .select('tercero_id, rubro:proveedor_rubros!inner(nombre), tercero:terceros!inner(id,razon_social,activo)')
       .filter('tercero.activo','eq','true'),
   ]).then(([bloqRes,cotRes,usadasRes,trRes])=>{
-    // Guardar nombres de bloques para UI
+    // Separar el bloque Mercadería (numero=0) de los bloques logísticos.
+    // Los logísticos mantienen sus números 1-4 y los MISMOS índices de array de siempre
+    // (0=Marítimo...3=Argentina), para no romper bloqueActivo(N)/bloques[N]/idPorNum existentes.
+    const todos = (bloqRes.data || []) as any[]
+    const bloqueMercaderia = todos.find(b=>b.numero===0 || /mercader/i.test(b.nombre||''))
+    const logisticos = todos.filter(b=>!(b.numero===0 || /mercader/i.test(b.nombre||'')))
+    if(bloqueMercaderia) setBloqueMerc(bloqueMercaderia)
+    // Guardar nombres de bloques para UI (rubros por bloque sigue usando numero original)
     const rb:Record<number,string[]>={1:[],2:[],3:[],4:[]}
-    if(bloqRes.data){
-      for(const b of bloqRes.data as any[]) rb[b.numero]=[b.nombre]
-    }
-    if(bloqRes.data) setBloques(bloqRes.data as any[])
+    for(const b of logisticos) rb[b.numero]=[b.nombre]
+    setBloques(logisticos)
     setRubrosBloque(rb)
     // Terceros proveedores
     if(trRes.data){
@@ -434,10 +440,55 @@ function calcTrib(cfg:TribCfg[],cifARS:number,derPct:number){
 }
 const tributos=calcTrib(tribCfg,cifARS,s.derPct)
 const totalTribARS=tributos.reduce((t,r)=>t+r.imp,0)
-const totalTribUSD=s.incluirArca?totalTribARS/s.tcTrib:0
+// ── REGLA FUNDAMENTAL: ARCA solo existe si hay mercadería (base CIF) ──
+// Sin mercadería no puede haber tributos aduaneros. La mercadería puede existir sin ARCA, pero no al revés.
+// Mercadería "existe" si su bloque está activo Y tiene valor FOB cargado.
+const hayMercaderia = mercaderiaActiva() && totalFOB > 0
+const arcaActivo = hayMercaderia && s.incluirArca
+const totalTribUSD = arcaActivo ? totalTribARS/s.tcTrib : 0
 const totalLog=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+segIndepCalc+subE+subGastosArg+fee
 const totalLanded=totalFOB+totalLog+totalTribUSD
 const cap=calcCapacidad(s.contenedores,s.productos)
+
+// ── Mercadería como bloque: activa si su id está en bloquesActivos (o si la lista está vacía = todos activos) ──
+const mercaderiaActiva = (): boolean => {
+  if (!bloqueMerc) return s.incluirArca // fallback legacy si no se cargó el bloque
+  if (s.bloquesActivos.length === 0) return true
+  return s.bloquesActivos.includes(bloqueMerc.id)
+}
+
+// ── Lógica adaptativa del resumen: solo se muestra lo que se cotiza ──
+// Helper local (la función bloqueActivo se define más abajo; replicamos su lógica acá)
+const bloqueActivoCalc = (idx:number):boolean => {
+  if (s.bloquesActivos.length === 0) return true
+  const bloque = bloques[idx]
+  if (!bloque) return true
+  return s.bloquesActivos.includes((bloque as any).id)
+}
+// Subtotales por bloque (ya con su condición de bloque activo)
+const subBloque0 = bloqueActivoCalc(0) ? subFW+totalSeg : 0                    // marítimo (FW + seguro)
+const subBloque1 = bloqueActivoCalc(1) ? subGastosChile+subDescon+subAlm+subCarga : 0  // Chile
+const subBloque2 = bloqueActivoCalc(2) ? subTransp : 0                          // terrestre
+const subBloque3 = bloqueActivoCalc(3) ? subE+subGastosArg : 0                  // Argentina
+const subBloque4 = bloqueActivoCalc(4) ? fee : 0                                // fee
+// Lista de bloques logísticos con valor > 0 (para contar cuántos hay y armar la etiqueta)
+const bloquesConValor = [
+  {idx:0, sub:subBloque0, etiqueta:'Flete marítimo'},
+  {idx:1, sub:subBloque1, etiqueta:'Gastos en Chile'},
+  {idx:2, sub:subBloque2, etiqueta:'Flete terrestre'},
+  {idx:3, sub:subBloque3, etiqueta:'Gastos en Argentina'},
+  {idx:4, sub:subBloque4, etiqueta:'Fee de servicio'},
+].filter(b=>b.sub>0)
+// Denominador para los porcentajes: el total REAL de lo que se cotiza (no un landed con mercadería inexistente)
+const totalReal = totalLanded // ya incluye solo lo que tiene valor (FOB=0 si no hay merc, ARCA=0 si no aplica)
+// Etiqueta adaptativa del total y del KPI principal
+const etiquetaTotal = hayMercaderia
+  ? 'Mercadería puesta en destino'
+  : bloquesConValor.length===1
+    ? bloquesConValor[0].etiqueta
+    : (totalLog>0 ? 'Costo logístico total' : (arcaActivo ? 'Tributos ARCA' : 'Total de la operación'))
+
+
 
 // ── Helpers para manejar CotProvSel genéricamente ──────────────
 const isVigente = (fv:string) => !fv || new Date(fv) >= new Date()
@@ -843,8 +894,8 @@ const clientesFiltrados=terceros.filter(t=>
     const fecha = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'long',year:'numeric'})
 
     const filas = [
-      ...(totalFOB>0?[{sec:'Mercadería',concepto:'Valor '+s.incoterm+' · precio en origen',v:totalFOB,sub:false,mercaderia:true}]:[]),
-      ...(s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0?[{sec:'· Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros,sub:true}]:[]),
+      ...(hayMercaderia?[{sec:'Mercadería',concepto:'Valor '+s.incoterm+' · precio en origen',v:totalFOB,sub:false,mercaderia:true}]:[]),
+      ...(hayMercaderia&&s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0?[{sec:'· Puesta a FOB',concepto:'Transporte + agente + otros',v:s.exwTransp+s.exwAgente+s.exwOtros,sub:true}]:[]),
       ...(bloqueActivo(0)&&subFW>0?[{sec:'· '+( bloques[0]?.nombre||'Marítimo'),concepto:fwElegida?.proveedorNombre||'ForWarder',v:subFW,sub:true}]:[]),
       ...(bloqueActivo(0)&&totalSeg>0?[{sec:'· Seguro',concepto:segFW>0?'Incluido en ForWarder':'Independiente',v:totalSeg,sub:true}]:[]),
       ...(bloqueActivo(1)&&(subGastosChile+subDescon+subAlm+subCarga)>0?[{sec:'· '+(bloques[1]?.nombre||'Chile'),concepto:'Gastos en Chile · Op. '+s.optTransp,v:subGastosChile+subDescon+subAlm+subCarga,sub:true}]:[]),
@@ -854,13 +905,13 @@ const clientesFiltrados=terceros.filter(t=>
     ].filter(r=>r.v>0)
 
     const pagosARS = [
-      ...(s.incluirArca&&totalTribUSD>0?[{concepto:'Tributos ARCA',quien:'AFIP / aduana argentina',monto:Math.round(totalTribARS).toLocaleString('es-AR'),moneda:'ARS'}]:[]),
+      ...(arcaActivo&&totalTribUSD>0?[{concepto:'Tributos ARCA',quien:'AFIP / aduana argentina',monto:Math.round(totalTribARS).toLocaleString('es-AR'),moneda:'ARS'}]:[]),
       ...(bloqueActivo(3)&&subGastosArg>0?[{concepto:'Despachante de aduana',quien:'Honorarios + gastos despacho',monto:Math.round(subGastosArg*s.tcTrib).toLocaleString('es-AR'),moneda:'ARS'}]:[]),
       ...(bloqueActivo(2)&&subTransp>0?[{concepto:'Flete terrestre',quien:esExpo?'NOA → Puerto Chile':'Puerto Chile → destino NOA',monto:Math.round(subTransp*s.tcTrib).toLocaleString('es-AR'),moneda:'ARS'}]:[]),
     ]
-    const totalPagosARS = Math.round((s.incluirArca?totalTribARS:0)+(bloqueActivo(3)&&subGastosArg>0?subGastosArg*s.tcTrib:0)+(bloqueActivo(2)&&subTransp>0?subTransp*s.tcTrib:0))
+    const totalPagosARS = Math.round((arcaActivo?totalTribARS:0)+(bloqueActivo(3)&&subGastosArg>0?subGastosArg*s.tcTrib:0)+(bloqueActivo(2)&&subTransp>0?subTransp*s.tcTrib:0))
 
-    const bloquesActivos2 = bloques.filter((_:any,i:number)=>bloqueActivo(i)).map((b:any)=>b.nombre).join(' · ')
+    const bloquesActivos2 = [...(hayMercaderia?[bloqueMerc?.nombre||'Mercadería']:[]), ...bloques.filter((_:any,i:number)=>bloqueActivo(i)).map((b:any)=>b.nombre)].join(' · ')
 
     const css = `
       *{margin:0;padding:0;box-sizing:border-box}
@@ -914,10 +965,12 @@ const clientesFiltrados=terceros.filter(t=>
     `
 
     const filasHTML = filas.map(r=>{
-      if(r.mercaderia) return '<tr><td class="td-merc">'+r.sec+'</td><td style="color:#666;font-size:11px">'+r.concepto+'</td><td class="td-r" style="font-size:13px;color:#052698">'+fmt(r.v)+'</td><td class="td-pct">'+fmt(r.v/totalLanded*100,1)+'%</td></tr>'
+      if((r as any).mercaderia) return '<tr><td class="td-merc">'+r.sec+'</td><td style="color:#666;font-size:11px">'+r.concepto+'</td><td class="td-r" style="font-size:13px;color:#052698">'+fmt(r.v)+'</td><td class="td-pct">'+fmt(r.v/totalReal*100,1)+'%</td></tr>'
+        // tras la fila de mercadería, insertar el separador "Logística"
+        + (totalLog>0?'<tr><td class="td-sep" colspan="4">Logística</td></tr>':'')
       if(!r.sub) return ''
-      return '<tr><td class="td-sub">'+r.sec+'</td><td style="color:#999;font-size:10px">'+r.concepto+'</td><td class="td-r" style="color:#888">'+fmt(r.v)+'</td><td class="td-pct">'+fmt(r.v/totalLanded*100,1)+'%</td></tr>'
-    }).join('')+'<tr><td class="td-sep" colspan="4">Logística</td></tr>'
+      return '<tr><td class="td-sub">'+r.sec+'</td><td style="color:#999;font-size:10px">'+r.concepto+'</td><td class="td-r" style="color:#888">'+fmt(r.v)+'</td><td class="td-pct">'+fmt(r.v/totalReal*100,1)+'%</td></tr>'
+    }).join('')
 
     const pagosHTML = pagosARS.map(p=>'<tr><td style="font-weight:600">'+p.concepto+'</td><td style="color:#888;font-size:10px">'+p.quien+'</td><td class="td-r">'+p.monto+'</td><td style="text-align:right"><span class="pill-ars">'+p.moneda+'</span></td></tr>').join('')
 
@@ -930,16 +983,16 @@ const clientesFiltrados=terceros.filter(t=>
       +'<div class="page">'
       +'<div class="hdr"><div><img src="'+window.location.origin+'/logo.png" alt="Puerto NOA" style="height:36px;object-fit:contain;"/><div style="font-size:10px;color:#666;margin-top:3px">SpA · Servicios logísticos de importación/exportación</div></div><div class="hdr-right"><div class="num">'+(cotNumActual||'BORRADOR')+'</div><div class="fecha">'+fecha+'</div>'+(s.validez?'<div style="font-size:10px;color:#666;margin-top:2px">Válida por '+s.validez+'</div>':'')+'</div></div>'
       // Cliente + ruta
-      +'<div class="kpi-grid" style="margin-bottom:10px"><div><div class="sec-t">Cliente</div><div style="font-size:13px;font-weight:700;color:#111">'+(s.cliente||'—')+'</div>'+(s.cuit?'<div style="font-size:10px;color:#666">CUIT '+s.cuit+'</div>':'')+'</div><div><div class="sec-t">Ruta</div><div style="font-size:11px;color:#333"><span style="background:#EBF2FF;color:#052698;border-radius:10px;padding:1px 7px;font-size:9px;font-weight:700;margin-right:6px">'+(esExpo?'EXPORTACIÓN':'IMPORTACIÓN')+'</span>'+ruta+'</div><div class="badges">'+(bloquesActivos2 ? bloquesActivos2.split(' · ').map((b:string)=>'<span class="badge">'+b+'</span>').join(''):'')+(s.incluirArca?'<span class="badge badge-amber">ARCA</span>':'')+'</div></div></div>'
+      +'<div class="kpi-grid" style="margin-bottom:10px"><div><div class="sec-t">Cliente</div><div style="font-size:13px;font-weight:700;color:#111">'+(s.cliente||'—')+'</div>'+(s.cuit?'<div style="font-size:10px;color:#666">CUIT '+s.cuit+'</div>':'')+'</div><div><div class="sec-t">Ruta</div><div style="font-size:11px;color:#333"><span style="background:#EBF2FF;color:#052698;border-radius:10px;padding:1px 7px;font-size:9px;font-weight:700;margin-right:6px">'+(esExpo?'EXPORTACIÓN':'IMPORTACIÓN')+'</span>'+ruta+'</div><div class="badges">'+(bloquesActivos2 ? bloquesActivos2.split(' · ').map((b:string)=>'<span class="badge">'+b+'</span>').join(''):'')+(arcaActivo?'<span class="badge badge-amber">ARCA</span>':'')+'</div></div></div>'
       // KPI
-      +'<div class="kpi-box"><div class="kpi-label">Mercadería puesta en destino · '+destinoLabel+'</div><div class="kpi-val">USD '+fmt(totalLanded,0)+'</div><div class="kpi-sub">'+nc+' contenedor(es) · USD '+fmt(totalLanded/nc,0)+' c/u · producto + logística'+(s.incluirArca?' + tributos ARCA':'')+'</div></div>'
+      +'<div class="kpi-box"><div class="kpi-label">'+etiquetaTotal+' · '+destinoLabel+'</div><div class="kpi-val">USD '+fmt(totalReal,0)+'</div><div class="kpi-sub">'+nc+' contenedor(es) · USD '+fmt(totalReal/nc,0)+' c/u · '+[hayMercaderia?'mercadería':null,totalLog>0?'logística':null,arcaActivo?'tributos ARCA':null].filter(Boolean).join(' + ')+'</div></div>'
       // Tabla desglose
       +'<div class="sec-t">Desglose por bloque</div>'
       +'<table><thead><tr><th style="width:22%">Bloque</th><th>Concepto</th><th class="r" style="width:16%">USD</th><th class="r" style="width:10%">%</th></tr></thead><tbody>'
       +filasHTML
-      +(totalLog>0?'<tr class="row-subtot"><td colspan="2">Subtotal logístico</td><td class="td-r" style="font-size:13px">'+fmt(totalLog)+'</td><td class="td-pct">'+fmt(totalLog/totalLanded*100,1)+'%</td></tr>':'')
-      +(s.incluirArca&&totalTribUSD>0?'<tr class="row-arca"><td>Tributos ARCA</td><td style="font-size:10px;color:#633806">Régimen '+s.regimen+' — base CIF Jama</td><td class="td-r" style="font-size:13px">'+fmt(totalTribUSD)+'</td><td class="td-pct" style="color:#854f0b">'+fmt(totalTribUSD/totalLanded*100,1)+'%</td></tr>':'')
-      +'<tr class="row-total"><td colspan="2">Total — mercadería puesta en destino</td><td class="td-r" style="font-size:14px">'+fmt(totalLanded)+'</td><td class="td-pct" style="color:#052698">100%</td></tr>'
+      +(totalLog>0&&(hayMercaderia||arcaActivo)?'<tr class="row-subtot"><td colspan="2">Subtotal logístico</td><td class="td-r" style="font-size:13px">'+fmt(totalLog)+'</td><td class="td-pct">'+fmt(totalLog/totalReal*100,1)+'%</td></tr>':'')
+      +(arcaActivo&&totalTribUSD>0?'<tr class="row-arca"><td>Tributos ARCA</td><td style="font-size:10px;color:#633806">Régimen '+s.regimen+' — base CIF Jama</td><td class="td-r" style="font-size:13px">'+fmt(totalTribUSD)+'</td><td class="td-pct" style="color:#854f0b">'+fmt(totalTribUSD/totalReal*100,1)+'%</td></tr>':'')
+      +'<tr class="row-total"><td colspan="2">Total — '+etiquetaTotal.toLowerCase()+'</td><td class="td-r" style="font-size:14px">'+fmt(totalReal)+'</td><td class="td-pct" style="color:#052698">100%</td></tr>'
       +'</tbody></table>'
       +'</div>'
       // PÁGINA 2
@@ -976,7 +1029,7 @@ const clientesFiltrados=terceros.filter(t=>
       </div>
 
       <div className="flex gap-2 mb-5 flex-wrap items-center">
-        {([{key:'embarque',label:'Embarque'},{key:'logistica',label:'Logistica'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as {key:string,label:string}[]).filter(t=>t.key!=='tributos'||s.incluirArca).map(t=>(
+        {([{key:'embarque',label:'Embarque'},{key:'logistica',label:'Logistica'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as {key:string,label:string}[]).filter(t=>t.key!=='tributos'||arcaActivo).map(t=>(
           <button key={t.key} onClick={()=>{setTab(t.key as Tab);setTimeout(()=>{topRef.current?.scrollIntoView({behavior:'smooth',block:'start'})},50)}} className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm ${tab===t.key?'bg-[#1168F8] text-white shadow-md':'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{t.label}</button>
         ))}
         <div className="ml-auto">
@@ -1018,12 +1071,36 @@ const clientesFiltrados=terceros.filter(t=>
                 <span className="text-[10px] text-gray-300">Cargando...</span>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
+                  {/* Pill MERCADERÍA — primero. Al desactivarlo, se apaga ARCA en cascada. */}
+                  {bloqueMerc && (()=>{
+                    const idsTodos = [bloqueMerc.id, ...bloques.map((x:any)=>x.id)]
+                    const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(bloqueMerc.id)
+                    return (
+                      <button key={bloqueMerc.id} onClick={()=>{
+                        if (s.bloquesActivos.length === 0) {
+                          // estaban todos activos → desactivo solo mercadería y apago ARCA
+                          u('bloquesActivos', idsTodos.filter((id:string)=>id!==bloqueMerc.id))
+                          u('incluirArca', false)
+                        } else if (activo) {
+                          u('bloquesActivos', s.bloquesActivos.filter((id:string)=>id!==bloqueMerc.id))
+                          u('incluirArca', false) // cascada: sin mercadería no hay ARCA
+                        } else {
+                          u('bloquesActivos', [...s.bloquesActivos, bloqueMerc.id])
+                        }
+                      }}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all ${activo?'bg-[#1168F8] border-[#1168F8] text-white':'bg-gray-100 border-gray-200 text-gray-400 line-through'}`}>
+                        {activo && <span className="w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0"/>}
+                        {bloqueMerc.nombre}
+                      </button>
+                    )
+                  })()}
                   {bloques.map((b:any) => {
                     const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(b.id)
                     return (
                       <button key={b.id} onClick={()=>{
+                        const idsTodos = bloqueMerc ? [bloqueMerc.id, ...bloques.map((x:any)=>x.id)] : bloques.map((x:any)=>x.id)
                         if (s.bloquesActivos.length === 0) {
-                          u('bloquesActivos', bloques.filter((x:any)=>x.id!==b.id).map((x:any)=>x.id))
+                          u('bloquesActivos', idsTodos.filter((id:string)=>id!==b.id))
                         } else if (activo) {
                           u('bloquesActivos', s.bloquesActivos.filter((id:string)=>id!==b.id))
                         } else {
@@ -1040,12 +1117,20 @@ const clientesFiltrados=terceros.filter(t=>
               )}
               {/* Separador */}
               <div className="h-5 w-px bg-gray-200 mx-1 flex-shrink-0"/>
-              {/* ARCA como pill */}
-              <button onClick={()=>u('incluirArca',!s.incluirArca)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all flex-shrink-0 ${s.incluirArca?'bg-amber-500 border-amber-500 text-white':'bg-gray-100 border-gray-200 text-gray-400 line-through'}`}>
-                {s.incluirArca && <span className="w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0"/>}
-                Tributos ARCA
-              </button>
+              {/* ARCA como pill — deshabilitado si no hay bloque mercadería activo (sin mercadería no hay tributos) */}
+              {(()=>{
+                const mercOn = mercaderiaActiva()
+                return (
+                  <button onClick={()=>{ if(mercOn) u('incluirArca',!s.incluirArca) }}
+                    disabled={!mercOn}
+                    title={mercOn?'':'Requiere el bloque Mercadería activo'}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all flex-shrink-0 ${!mercOn?'bg-gray-50 border-gray-200 text-gray-300 cursor-not-allowed':s.incluirArca?'bg-amber-500 border-amber-500 text-white':'bg-gray-100 border-gray-200 text-gray-400 line-through'}`}>
+                    {mercOn && s.incluirArca && <span className="w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0"/>}
+                    Tributos ARCA
+                    {!mercOn && <span className="text-[9px] font-normal ml-0.5">(requiere mercadería)</span>}
+                  </button>
+                )
+              })()}
             </div>
           </div>
 
@@ -1454,8 +1539,8 @@ const clientesFiltrados=terceros.filter(t=>
             </div>
           </div>
 
-          {/* ── BLOQUE C: MERCADERÍA Y PROFORMA — solo si ARCA activo ── */}
-          {s.incluirArca && <Card title="Mercaderia — Proforma del proveedor">
+          {/* ── BLOQUE C: MERCADERÍA Y PROFORMA — solo si el bloque Mercadería está activo ── */}
+          {mercaderiaActiva() && <Card title="Mercaderia — Proforma del proveedor">
             <div className="space-y-2 mb-3">
               {s.productos.map((p,i)=>(
                 <div key={i} className="bg-gray-50 border border-gray-100 rounded-xl p-3">
@@ -2487,7 +2572,7 @@ const clientesFiltrados=terceros.filter(t=>
 
           <div className="flex justify-between">
             <button onClick={()=>cambiarTab('embarque')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
-            <button onClick={()=>cambiarTab(s.incluirArca?'tributos':'resumen')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">{s.incluirArca?'Tributos ARCA':'Ver resumen'}</button>
+            <button onClick={()=>cambiarTab(arcaActivo?'tributos':'resumen')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">{arcaActivo?'Tributos ARCA':'Ver resumen'}</button>
           </div>
         </div>
       )}
@@ -2559,10 +2644,11 @@ const clientesFiltrados=terceros.filter(t=>
                 {s.sentido==='exportacion'?'Resumen cotización exportación':'Resumen cotización importación'}
               </h2>
               <div className="flex gap-2 mt-1 flex-wrap">
+                {mercaderiaActiva()&&hayMercaderia&&<span className="px-2 py-0.5 bg-[#EBF2FF] text-[#1168F8] rounded-full text-[9px] font-semibold">{bloqueMerc?.nombre||'Mercadería'}</span>}
                 {bloques.filter((_:any,i:number)=>bloqueActivo(i)).map((b:any)=>(
                   <span key={b.id} className="px-2 py-0.5 bg-[#EBF2FF] text-[#052698] rounded-full text-[9px] font-semibold">{b.nombre}</span>
                 ))}
-                {s.incluirArca&&<span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[9px] font-semibold">Tributos ARCA</span>}
+                {arcaActivo&&<span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[9px] font-semibold">Tributos ARCA</span>}
               </div>
             </div>
             <button onClick={generarImpresion}
@@ -2573,16 +2659,16 @@ const clientesFiltrados=terceros.filter(t=>
 
           {/* KPI principal */}
           <div className="bg-white border border-gray-100 border-t-4 border-t-[#1168F8] rounded-xl p-5">
-            <div className="text-[10px] text-gray-400 mb-1 uppercase tracking-wider font-semibold">Mercadería puesta en destino</div>
-            <div className="text-3xl font-bold text-gray-900 font-mono">USD {fmt(totalLanded,0)}</div>
+            <div className="text-[10px] text-gray-400 mb-1 uppercase tracking-wider font-semibold">{etiquetaTotal}</div>
+            <div className="text-3xl font-bold text-gray-900 font-mono">USD {fmt(totalReal,0)}</div>
             <div className="text-xs text-gray-400 mt-1.5 flex items-center gap-2 flex-wrap">
               <span>{s.sentido==='exportacion'
                 ? (s.origen?s.origen.split(' (')[0]:'Origen')
                 : (s.destinoNoa||'destino final')}</span>
               <span className="text-gray-200">·</span>
-              <span>{nc} contenedor(es) {nc>0&&`— USD ${fmt(totalLanded/nc,0)} c/u`}</span>
+              <span>{nc} contenedor(es) {nc>0&&`— USD ${fmt(totalReal/nc,0)} c/u`}</span>
               <span className="text-gray-200">·</span>
-              <span>{s.sentido==='exportacion'?'logística + fee':'producto + logística'}{s.incluirArca?' + tributos ARCA':''}</span>
+              <span>{[hayMercaderia?'mercadería':null, totalLog>0?'logística':null, arcaActivo?'tributos ARCA':null].filter(Boolean).join(' + ')}</span>
             </div>
           </div>
 
@@ -2600,20 +2686,20 @@ const clientesFiltrados=terceros.filter(t=>
               </thead>
               <tbody>
                 {/* Mercadería — fila principal destacada */}
-                {totalFOB>0&&(
+                {hayMercaderia&&(
                   <tr className="border-t-2 border-gray-300">
                     <td className="px-5 py-3 font-semibold text-sm text-gray-900">Mercadería</td>
                     <td className="px-3 py-3 text-gray-500 text-[11px]">Valor {s.incoterm} · precio en origen</td>
                     <td className="px-5 py-3 text-right font-semibold text-sm font-mono text-gray-900">{fmt(totalFOB)}</td>
-                    <td className="px-5 py-3 text-right font-semibold text-gray-500">{fmt(totalFOB/totalLanded*100,1)}%</td>
+                    <td className="px-5 py-3 text-right font-semibold text-gray-500">{fmt(totalFOB/totalReal*100,1)}%</td>
                   </tr>
                 )}
-                {s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0&&(
+                {hayMercaderia&&s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0&&(
                   <tr className="border-t border-gray-50 bg-gray-50">
                     <td className="px-5 py-2 pl-8 text-gray-400 text-[11px]">· Puesta a FOB</td>
                     <td className="px-3 py-2 text-gray-400 text-[11px]">Transporte + agente + otros</td>
                     <td className="px-5 py-2 text-right font-mono text-gray-500">{fmt(s.exwTransp+s.exwAgente+s.exwOtros)}</td>
-                    <td className="px-5 py-2 text-right text-gray-400">{fmt((s.exwTransp+s.exwAgente+s.exwOtros)/totalLanded*100,1)}%</td>
+                    <td className="px-5 py-2 text-right text-gray-400">{fmt((s.exwTransp+s.exwAgente+s.exwOtros)/totalReal*100,1)}%</td>
                   </tr>
                 )}
 
@@ -2632,7 +2718,7 @@ const clientesFiltrados=terceros.filter(t=>
                     <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[0]?.nombre||'Marítimo'}</td>
                     <td className="px-3 py-2.5 text-gray-400 text-[11px]">{fwElegida?.proveedorNombre||'ForWarder'}{fwElegida?.referencia?` — ${fwElegida.referencia}`:''}</td>
                     <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subFW)}</td>
-                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(subFW/totalLanded*100,1)}%</td>
+                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(subFW/totalReal*100,1)}%</td>
                   </tr>
                 )}
                 {bloqueActivo(0)&&totalSeg>0&&(
@@ -2640,7 +2726,7 @@ const clientesFiltrados=terceros.filter(t=>
                     <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· Seguro</td>
                     <td className="px-3 py-2.5 text-gray-400 text-[11px]">{segFW>0?'Incluido en ForWarder':'Contratado independiente'}</td>
                     <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(totalSeg)}</td>
-                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(totalSeg/totalLanded*100,1)}%</td>
+                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(totalSeg/totalReal*100,1)}%</td>
                   </tr>
                 )}
                 {bloqueActivo(1)&&(subGastosChile+subDescon+subAlm+subCarga)>0&&(
@@ -2648,7 +2734,7 @@ const clientesFiltrados=terceros.filter(t=>
                     <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[1]?.nombre||'Chile'}</td>
                     <td className="px-3 py-2.5 text-gray-400 text-[11px]">Gastos en Chile · Op. {s.optTransp}</td>
                     <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subGastosChile+subDescon+subAlm+subCarga)}</td>
-                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt((subGastosChile+subDescon+subAlm+subCarga)/totalLanded*100,1)}%</td>
+                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt((subGastosChile+subDescon+subAlm+subCarga)/totalReal*100,1)}%</td>
                   </tr>
                 )}
                 {bloqueActivo(2)&&subTransp>0&&(
@@ -2656,7 +2742,7 @@ const clientesFiltrados=terceros.filter(t=>
                     <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[2]?.nombre||'Terrestre'}</td>
                     <td className="px-3 py-2.5 text-gray-400 text-[11px]">Flete terrestre</td>
                     <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subTransp)}</td>
-                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(subTransp/totalLanded*100,1)}%</td>
+                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(subTransp/totalReal*100,1)}%</td>
                   </tr>
                 )}
                 {bloqueActivo(3)&&(subE+subGastosArg)>0&&(
@@ -2664,7 +2750,7 @@ const clientesFiltrados=terceros.filter(t=>
                     <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[3]?.nombre||'Argentina'}</td>
                     <td className="px-3 py-2.5 text-gray-400 text-[11px]">Despachante + honorarios + otros</td>
                     <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subE+subGastosArg)}</td>
-                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt((subE+subGastosArg)/totalLanded*100,1)}%</td>
+                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt((subE+subGastosArg)/totalReal*100,1)}%</td>
                   </tr>
                 )}
                 {bloqueActivo(4)&&fee>0&&(
@@ -2672,33 +2758,33 @@ const clientesFiltrados=terceros.filter(t=>
                     <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[4]?.nombre||'Fee PN'}</td>
                     <td className="px-3 py-2.5 text-gray-400 text-[11px]">Fee de servicio logístico</td>
                     <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(fee)}</td>
-                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(fee/totalLanded*100,1)}%</td>
+                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(fee/totalReal*100,1)}%</td>
                   </tr>
                 )}
 
-                {/* Subtotal logístico */}
-                {totalLog>0&&(
+                {/* Subtotal logístico — solo tiene sentido mostrarlo si hay mercadería o ARCA arriba/abajo que lo separe del total */}
+                {totalLog>0&&(hayMercaderia||arcaActivo)&&(
                   <tr className="border-t-2 border-gray-300">
                     <td colSpan={2} className="px-5 py-3 font-semibold text-sm text-gray-900">Subtotal logístico</td>
                     <td className="px-5 py-3 text-right font-semibold text-sm font-mono text-gray-900">{fmt(totalLog)}</td>
-                    <td className="px-5 py-3 text-right font-semibold text-gray-500">{fmt(totalLog/totalLanded*100,1)}%</td>
+                    <td className="px-5 py-3 text-right font-semibold text-gray-500">{fmt(totalLog/totalReal*100,1)}%</td>
                   </tr>
                 )}
 
-                {/* ARCA */}
-                {s.incluirArca&&totalTribUSD>0&&(
+                {/* ARCA — solo si hay mercadería + toggle activo + tributos > 0 */}
+                {arcaActivo&&totalTribUSD>0&&(
                   <tr className="border-t-2" style={{borderColor:'#ef9f27',background:'#faeeda'}}>
                     <td className="px-5 py-3 font-semibold text-sm" style={{color:'#412402'}}>Tributos ARCA</td>
                     <td className="px-3 py-3 text-[11px]" style={{color:'#633806'}}>Régimen {s.regimen} — base CIF Jama</td>
                     <td className="px-5 py-3 text-right font-semibold text-sm font-mono" style={{color:'#412402'}}>{fmt(totalTribUSD)}</td>
-                    <td className="px-5 py-3 text-right font-semibold" style={{color:'#854f0b'}}>{fmt(totalTribUSD/totalLanded*100,1)}%</td>
+                    <td className="px-5 py-3 text-right font-semibold" style={{color:'#854f0b'}}>{fmt(totalTribUSD/totalReal*100,1)}%</td>
                   </tr>
                 )}
 
-                {/* Total */}
+                {/* Total — etiqueta adaptativa */}
                 <tr className="border-t-2 border-[#1168F8] bg-[#EBF2FF]">
-                  <td colSpan={2} className="px-5 py-3.5 font-bold text-sm text-[#052698]">Total — mercadería puesta en destino</td>
-                  <td className="px-5 py-3.5 text-right font-bold text-base font-mono text-[#052698]">{fmt(totalLanded)}</td>
+                  <td colSpan={2} className="px-5 py-3.5 font-bold text-sm text-[#052698]">Total — {etiquetaTotal.toLowerCase()}</td>
+                  <td className="px-5 py-3.5 text-right font-bold text-base font-mono text-[#052698]">{fmt(totalReal)}</td>
                   <td className="px-5 py-3.5 text-right font-bold text-[#052698]">100%</td>
                 </tr>
               </tbody>
@@ -2706,7 +2792,7 @@ const clientesFiltrados=terceros.filter(t=>
           </div>
 
           {/* Cuadro 2: Pagos en ARS — solo si hay algo que pagar en pesos */}
-          {(s.incluirArca||bloqueActivo(3)||bloqueActivo(2))&&(subGastosArg>0||subE>0||subTransp>0||totalTribUSD>0)&&(
+          {(arcaActivo||bloqueActivo(3)||bloqueActivo(2))&&(subGastosArg>0||subE>0||subTransp>0||totalTribUSD>0)&&(
             <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm" style={{borderLeft:'3px solid #ef9f27'}}>
               <div className="px-5 py-3.5 border-b flex items-center gap-2" style={{borderColor:'#ef9f27',background:'#faeeda'}}>
                 <span className="text-base">💵</span>
@@ -2722,7 +2808,7 @@ const clientesFiltrados=terceros.filter(t=>
                   </tr>
                 </thead>
                 <tbody>
-                  {s.incluirArca&&totalTribUSD>0&&(
+                  {arcaActivo&&totalTribUSD>0&&(
                     <tr className="border-t border-gray-50">
                       <td className="px-5 py-3 text-gray-800 font-semibold">Tributos ARCA</td>
                       <td className="px-3 py-3 text-gray-400">AFIP / aduana argentina</td>
@@ -2749,7 +2835,7 @@ const clientesFiltrados=terceros.filter(t=>
                   <tr className="border-t-2" style={{borderColor:'#ef9f27',background:'#faeeda'}}>
                     <td colSpan={2} className="px-5 py-3.5 font-bold text-sm" style={{color:'#412402'}}>Total a desembolsar en ARS</td>
                     <td className="px-5 py-3.5 text-right font-bold text-sm font-mono" style={{color:'#412402'}}>
-                      {Math.round((s.incluirArca?totalTribARS:0)+(bloqueActivo(3)&&subGastosArg>0?subGastosArg*s.tcTrib:0)+(bloqueActivo(2)&&subTransp>0?subTransp*s.tcTrib:0)).toLocaleString('es-AR')}
+                      {Math.round((arcaActivo?totalTribARS:0)+(bloqueActivo(3)&&subGastosArg>0?subGastosArg*s.tcTrib:0)+(bloqueActivo(2)&&subTransp>0?subTransp*s.tcTrib:0)).toLocaleString('es-AR')}
                     </td>
                     <td className="px-5 py-3.5 text-right"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{background:'#ef9f27',color:'#412402'}}>ARS</span></td>
                   </tr>
@@ -2763,14 +2849,18 @@ const clientesFiltrados=terceros.filter(t=>
 
           {/* Composición + TC */}
           <div className="grid grid-cols-2 gap-3">
-            {/* Torta SVG */}
+            {/* Torta SVG — solo si hay 2+ componentes (con 1 solo es 100%, no aporta) */}
+            {(()=>{
+              const componentes = [hayMercaderia, totalLog>0, arcaActivo].filter(Boolean).length
+              if(componentes < 2) return null
+              return (
             <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
               <div className="font-semibold text-sm text-gray-900 mb-4">Composición del costo total</div>
               <div className="flex items-center gap-4">
                 {(()=>{
-                  const mercPct = totalLanded>0?totalFOB/totalLanded:0
-                  const logPct  = totalLanded>0?totalLog/totalLanded:0
-                  const arcPct  = totalLanded>0?totalTribUSD/totalLanded:0
+                  const mercPct = totalReal>0&&hayMercaderia?totalFOB/totalReal:0
+                  const logPct  = totalReal>0?totalLog/totalReal:0
+                  const arcPct  = totalReal>0&&arcaActivo?totalTribUSD/totalReal:0
                   const r = 52, cx = 60, cy = 60
                   function slice(start:number, end:number, color:string, key:string) {
                     if(end-start<0.001) return null
@@ -2790,26 +2880,28 @@ const clientesFiltrados=terceros.filter(t=>
                       {slice(s2,s3,'#ef9f27','arc')}
                       <circle cx="60" cy="60" r="32" fill="white"/>
                       <text x="60" y="57" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="#052698" fontWeight="bold">USD</text>
-                      <text x="60" y="70" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="#6b7280">{fmt(totalLanded,0)}</text>
+                      <text x="60" y="70" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="#6b7280">{fmt(totalReal,0)}</text>
                     </svg>
                   )
                 })()}
                 <div className="flex flex-col gap-3 flex-1">
-                  {totalFOB>0&&<div className="flex items-center gap-2">
+                  {hayMercaderia&&<div className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{background:'#1168F8'}}/>
-                    <div><div className="text-xs font-semibold text-gray-800">Mercadería</div><div className="text-[10px] text-gray-400">USD {fmt(totalFOB,0)} · {fmt(totalFOB/totalLanded*100,1)}%</div></div>
+                    <div><div className="text-xs font-semibold text-gray-800">Mercadería</div><div className="text-[10px] text-gray-400">USD {fmt(totalFOB,0)} · {fmt(totalFOB/totalReal*100,1)}%</div></div>
                   </div>}
                   {totalLog>0&&<div className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{background:'#93B8FC'}}/>
-                    <div><div className="text-xs font-semibold text-gray-800">Logística</div><div className="text-[10px] text-gray-400">USD {fmt(totalLog,0)} · {fmt(totalLog/totalLanded*100,1)}%</div></div>
+                    <div><div className="text-xs font-semibold text-gray-800">Logística</div><div className="text-[10px] text-gray-400">USD {fmt(totalLog,0)} · {fmt(totalLog/totalReal*100,1)}%</div></div>
                   </div>}
-                  {s.incluirArca&&totalTribUSD>0&&<div className="flex items-center gap-2">
+                  {arcaActivo&&totalTribUSD>0&&<div className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{background:'#ef9f27'}}/>
-                    <div><div className="text-xs font-semibold" style={{color:'#633806'}}>Tributos ARCA</div><div className="text-[10px]" style={{color:'#854f0b'}}>USD {fmt(totalTribUSD,0)} · {fmt(totalTribUSD/totalLanded*100,1)}%</div></div>
+                    <div><div className="text-xs font-semibold" style={{color:'#633806'}}>Tributos ARCA</div><div className="text-[10px]" style={{color:'#854f0b'}}>USD {fmt(totalTribUSD,0)} · {fmt(totalTribUSD/totalReal*100,1)}%</div></div>
                   </div>}
                 </div>
               </div>
             </div>
+              )
+            })()}
 
             {/* TC y validez */}
             <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
@@ -2848,7 +2940,7 @@ const clientesFiltrados=terceros.filter(t=>
 
           {/* Botones */}
           <div className="flex justify-between print:hidden">
-            <button onClick={()=>cambiarTab(s.incluirArca?'tributos':'logistica')}
+            <button onClick={()=>cambiarTab(arcaActivo?'tributos':'logistica')}
               className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
             <div className="flex gap-2">
               <button onClick={generarImpresion}
