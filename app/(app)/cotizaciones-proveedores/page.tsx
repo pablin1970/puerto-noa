@@ -27,6 +27,24 @@ const RUBROS: Record<string, { label: string; color: string; bg: string }> = {
   otro:                 { label: 'Otro',                 color: '#6b7280', bg: '#F3F4F6' },
 }
 
+// Bloque por defecto según rubro (número de bloque en cotizador_bloques)
+// forwarder=1 (marítimo), almacenaje=2 (Chile), terrestre=3, despachante=4 (Argentina)
+const RUBRO_BLOQUE_DEFAULT: Record<string, number> = {
+  forwarder: 1,
+  almacenaje: 2,
+  transporte_terrestre: 3,
+  despachante: 4,
+}
+
+// Categoría por defecto de los ítems según rubro (para inteligencia de precios)
+const RUBRO_CATEGORIA_DEFAULT: Record<string, string> = {
+  forwarder: 'flete_maritimo',
+  almacenaje: 'almacenaje',
+  despachante: 'honorarios_despachante',
+  transporte_terrestre: 'flete_terrestre',
+}
+
+
 const TIPO_CALCULO: Record<string, string> = {
   fijo_usd:        'Fijo USD',
   fijo_ars:        'Fijo ARS',
@@ -646,6 +664,18 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     // Sentido de la versión A: si es ambos, A = importación
     const sentidoA = esAmbos ? 'importacion' : sentido
 
+    // bloque_id inferido del rubro si el usuario no marcó ninguno (corrige bug de bloque_id null)
+    let bloqueIdFinal = form.bloque_id || ''
+    if(!bloqueIdFinal){
+      const numDefault = RUBRO_BLOQUE_DEFAULT[form.rubro]
+      if(numDefault){
+        const bl = bloques.find((b:any)=>b.numero===numDefault)
+        if(bl) bloqueIdFinal = bl.id
+      }
+    }
+    // categoría por defecto de los ítems según rubro
+    const catDefault = RUBRO_CATEGORIA_DEFAULT[form.rubro] || null
+
     const payload = {
       proveedor_nombre: form.proveedor_nombre, tercero_id: form.tercero_id||null,
       rubro: form.rubro, tipo: form.tipo, origen: form.origen||'recibida',
@@ -658,7 +688,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       seguro_monto: form.rubro==='forwarder'&&form.seguro_incluido ? parseN(String(form.seguro_monto))||null : null,
       notas: form.notas||null, cotizacion_id: form.cotizacion_id||null,
       cliente_id: form.tipo==='especifica' ? (form.cliente_id||null) : null,
-      bloque_id: form.bloque_id||null,
+      bloque_id: bloqueIdFinal||null,
       puerto_china_id: form.puerto_china_id||null, puerto_chile_id: form.puerto_chile_id||null,
       paso_id: form.paso_id||null, ciudad_destino_id: form.ciudad_destino_id||null,
       tipo_contenedor: form.tipo_contenedor||null, tc_referencia: parseN(String(form.tc_referencia))||null,
@@ -696,30 +726,74 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       return out
     }
 
+    // Ruta estructurada de los ítems según rubro y sentido (para inteligencia de precios entre puntos)
+    // Reutiliza puntos de cabecera. esExpoForm: true si la versión actual es exportación.
+    const rutaItemRubro = (rubro:string, esExpoForm:boolean, f:any) => {
+      if(rubro==='forwarder'){
+        // impo: China → Chile ; expo: Chile → China (destino)
+        const china = f.puerto_china_id||null
+        const chile = f.puerto_chile_id||null
+        return esExpoForm
+          ? { origen_id: chile, origen_tipo: chile?'puerto':null, destino_id: china, destino_tipo: china?'puerto_china':null, paso_id: null }
+          : { origen_id: china, origen_tipo: china?'puerto_china':null, destino_id: chile, destino_tipo: chile?'puerto':null, paso_id: null }
+      }
+      if(rubro==='almacenaje'){
+        // ubicación = puerto chile (mismo en ambos sentidos)
+        const chile = f.puerto_chile_id||null
+        return { origen_id: chile, origen_tipo: chile?'puerto':null, destino_id: null, destino_tipo: null, paso_id: null }
+      }
+      if(rubro==='despachante'){
+        // aduana: paso + ciudad destino NOA
+        const ciudad = f.ciudad_destino_id||null
+        return { origen_id: null, origen_tipo: null, destino_id: ciudad, destino_tipo: ciudad?'ciudad':null, paso_id: f.paso_id||null }
+      }
+      return { origen_id: null, origen_tipo: null, destino_id: null, destino_tipo: null, paso_id: null }
+    }
+
+    // Genera ítems de los rubros NO multi-tramo (forwarder, almacenaje, despachante, otro)
+    // cotizId: cotización destino; esExpoForm: sentido de esta versión; f: form base (A) o formB-equivalente
+    const itemsDeRubro = (cotizId:string, esExpoForm:boolean, f:any) => {
+      const out:any[] = []
+      const ruta = rutaItemRubro(form.rubro, esExpoForm, f)
+      if(form.rubro==='almacenaje'){
+        let ord=0
+        const add=(cond:boolean, descripcion:string, tipo_calculo:string, valKey:string)=>{
+          const v=parseN(String(f[valKey]||0))
+          if(v>0) out.push({ cotizacion_id:cotizId, descripcion, tipo_calculo, valor:v, moneda:form.moneda, categoria:'almacenaje', ...ruta, orden:ord++ })
+        }
+        add(true,'Almacenaje por m³/día','por_m3','almacen_m3_dia')
+        add(true,'Almacenaje por pallet/día','fijo_usd','almacen_pallet_dia')
+        add(true,'Almacenaje por big bag/día','por_bigbag','almacen_bigbag_dia')
+        add(true,'Almacenaje por contenedor/día','por_contenedor','almacen_cont_dia')
+      } else {
+        // forwarder, despachante, otro → items[] genéricos
+        items.filter(it=>it.descripcion).forEach((it,i)=>{
+          out.push({
+            cotizacion_id: cotizId, descripcion: it.descripcion, tipo_calculo: it.tipo_calculo,
+            valor: parseN(String(it.valor))||0,
+            piso_usd: it.tipo_calculo==='pct_cif'?(parseN(String(it.piso_usd))||0):null,
+            techo_usd: it.tipo_calculo==='pct_cif'?(parseN(String(it.techo_usd))||0):null,
+            moneda: it.moneda||'USD', tipo_contenedor: it.tipo_contenedor||null,
+            categoria: (it as any).categoria || catDefault || null,
+            ...ruta, orden:i,
+          })
+        })
+      }
+      return out
+    }
+
     // Items según rubro
     let itemsFinales: any[] = []
     if(form.rubro==='transporte_terrestre') {
       // Multi-tramo: vale para sentido simple Y para la versión A del modo "ambos" (ambas usan `tramos`)
       itemsFinales = itemsDeTramos(tramos, cot.id)
-    } else if(form.rubro==='almacenaje') {
-      let ord=0
-      if(parseN(String(form.almacen_m3_dia))>0) itemsFinales.push({ cotizacion_id:cot.id, descripcion:'Almacenaje por m³/día', tipo_calculo:'por_m3', valor:parseN(String(form.almacen_m3_dia)), moneda:form.moneda, orden:ord++ })
-      if(parseN(String(form.almacen_pallet_dia))>0) itemsFinales.push({ cotizacion_id:cot.id, descripcion:'Almacenaje por pallet/día', tipo_calculo:'fijo_usd', valor:parseN(String(form.almacen_pallet_dia)), moneda:form.moneda, orden:ord++ })
-      if(parseN(String(form.almacen_bigbag_dia))>0) itemsFinales.push({ cotizacion_id:cot.id, descripcion:'Almacenaje por big bag/día', tipo_calculo:'por_bigbag', valor:parseN(String(form.almacen_bigbag_dia)), moneda:form.moneda, orden:ord++ })
-      if(parseN(String(form.almacen_cont_dia))>0) itemsFinales.push({ cotizacion_id:cot.id, descripcion:'Almacenaje por contenedor/día', tipo_calculo:'por_contenedor', valor:parseN(String(form.almacen_cont_dia)), moneda:form.moneda, orden:ord++ })
     } else {
-      itemsFinales = items.filter(it=>it.descripcion).map((it,i)=>({
-        cotizacion_id: cot.id, descripcion: it.descripcion, tipo_calculo: it.tipo_calculo,
-        valor: parseN(String(it.valor))||0,
-        piso_usd: it.tipo_calculo==='pct_cif'?(parseN(String(it.piso_usd))||0):null,
-        techo_usd: it.tipo_calculo==='pct_cif'?(parseN(String(it.techo_usd))||0):null,
-        moneda: it.moneda||'USD', tipo_contenedor: it.tipo_contenedor||null,
-        categoria: (it as any).categoria||null, orden:i,
-      }))
+      // forwarder, almacenaje, despachante, otro — versión A (impo o el sentido simple elegido)
+      itemsFinales = itemsDeRubro(cot.id, sentido==='exportacion', form)
     }
     if(itemsFinales.length>0) await (supabase.from('cotizaciones_proveedor_v2_items') as any).insert(itemsFinales)
 
-    // ── Versión B (exportación) — solo en modo "ambos" y rubro terrestre ──
+    // ── Versión B (exportación) — en modo "ambos" para todos los rubros con ruta ──
     let cotB: any = null
     if(esAmbos && form.rubro==='transporte_terrestre') {
       const payloadB = {
@@ -740,11 +814,22 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         const itemsB = itemsDeTramos(tramosB, cotB.id)
         if(itemsB.length>0) await (supabase.from('cotizaciones_proveedor_v2_items') as any).insert(itemsB)
       }
+    } else if(esAmbos && (form.rubro==='forwarder' || form.rubro==='almacenaje' || form.rubro==='despachante')) {
+      // Rubros no multi-tramo: versión B hereda la misma cabecera, sentido exportación.
+      // Mismos ítems con la ruta estructurada invertida (esExpoForm=true).
+      const payloadB = { ...payload, sentido: 'exportacion', grupo_id: grupoId }
+      const { data: cotBData, error: errB } = await (supabase.from('cotizaciones_proveedor_v2') as any).insert(payloadB).select().single()
+      if(errB) { alert('Error al guardar versión B: '+errB.message); setSaving(false); return }
+      cotB = cotBData
+      if(cotB){
+        const itemsB = itemsDeRubro(cotB.id, true, form)
+        if(itemsB.length>0) await (supabase.from('cotizaciones_proveedor_v2_items') as any).insert(itemsB)
+      }
     }
 
     // Multi-bloque (no aplica a versión B; se mantiene como estaba para la cotización A)
-    const bloqueIds: string[] = Array.isArray(form.bloque_ids) ? form.bloque_ids : (form.bloque_id?[form.bloque_id]:[])
-    const bloqueExtras = bloqueIds.filter((id:string)=>id!==(form.bloque_id||''))
+    const bloqueIds: string[] = Array.isArray(form.bloque_ids) ? form.bloque_ids : (bloqueIdFinal?[bloqueIdFinal]:[])
+    const bloqueExtras = bloqueIds.filter((id:string)=>id!==(bloqueIdFinal||''))
     for(const bId of bloqueExtras) {
       const { data: cotExtra } = await (supabase.from('cotizaciones_proveedor_v2') as any).insert({...payload,bloque_id:bId}).select().single()
       if(cotExtra && itemsFinales.length>0) {
@@ -1029,7 +1114,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             {sentido==='ambos' && (
               <div className="mt-2 flex items-center gap-2 text-[11px] text-[#052698] bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-3 py-2">
                 <span>ℹ️</span>
-                <span>Se guardarán <strong>dos cotizaciones hermanadas</strong>: versión A (importación) y versión B (exportación). El proveedor, las fechas y el comprobante son compartidos; la ruta y las tarifas se cargan por separado.{form.rubro!=='transporte_terrestre' && ' Por ahora el desdoblado A/B aplica al rubro Terrestre.'}</span>
+                <span>Se guardarán <strong>dos cotizaciones hermanadas</strong>: versión A (importación) y versión B (exportación). El proveedor, las fechas y el comprobante son compartidos.{form.rubro==='transporte_terrestre' ? ' La ruta y las tarifas se cargan por separado en cada versión.' : (form.rubro==='otro' ? ' Nota: el rubro "Otro" no desdobla A/B; se guardará una sola versión con el sentido elegido.' : ' Los ítems se replican en ambas versiones con la ruta invertida según el sentido.')}</span>
               </div>
             )}
           </div>
@@ -1083,7 +1168,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           <div className="px-5 py-3 border-b border-gray-100 bg-[#EBF2FF] flex items-center gap-2">
             <span className="text-lg">🚢</span>
             <span className="font-semibold text-sm text-[#052698]">ForWarder — datos del tramo marítimo</span>
-            <span className="ml-auto text-[10px] text-[#1168F8] font-medium">{sentido==='exportacion'?'Exportación · NOA → Puerto':'Importación · Puerto → NOA'}</span>
+            <span className="ml-auto text-[10px] text-[#1168F8] font-medium">{sentido==='ambos'?'Ambos sentidos · A+B':sentido==='exportacion'?'Exportación · NOA → Puerto':'Importación · Puerto → NOA'}</span>
           </div>
           <div className="px-5 py-4 space-y-4">
             {/* Ruta */}
@@ -1228,6 +1313,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           <div className="px-5 py-3 border-b border-gray-100 bg-green-50 flex items-center gap-2">
             <span className="text-lg">🏭</span>
             <span className="font-semibold text-sm text-green-900">Almacenaje — tarifas por unidad</span>
+            <span className="ml-auto text-[10px] text-green-700 font-medium">{sentido==='ambos'?'Ambos sentidos · A+B':sentido==='exportacion'?'Exportación':'Importación'}</span>
           </div>
           <div className="px-5 py-4 space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -1272,6 +1358,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           <div className="px-5 py-3 border-b border-gray-100 bg-purple-50 flex items-center gap-2">
             <span className="text-lg">📋</span>
             <span className="font-semibold text-sm text-purple-900">Despachante — honorarios y gastos</span>
+            <span className="ml-auto text-[10px] text-purple-700 font-medium">{sentido==='ambos'?'Ambos sentidos · A+B':sentido==='exportacion'?'Exportación':'Importación'}</span>
           </div>
           <div className="px-5 py-4 space-y-4">
             <div className="grid grid-cols-2 gap-3">
