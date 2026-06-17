@@ -440,6 +440,12 @@ function calcTrib(cfg:TribCfg[],cifARS:number,derPct:number){
 }
 const tributos=calcTrib(tribCfg,cifARS,s.derPct)
 const totalTribARS=tributos.reduce((t,r)=>t+r.imp,0)
+// ── Mercadería como bloque: activa si su id está en bloquesActivos (o si la lista está vacía = todos activos) ──
+const mercaderiaActiva = (): boolean => {
+  if (!bloqueMerc) return s.incluirArca // fallback legacy si no se cargó el bloque
+  if (s.bloquesActivos.length === 0) return true
+  return s.bloquesActivos.includes(bloqueMerc.id)
+}
 // ── REGLA FUNDAMENTAL: ARCA solo existe si hay mercadería (base CIF) ──
 // Sin mercadería no puede haber tributos aduaneros. La mercadería puede existir sin ARCA, pero no al revés.
 // Mercadería "existe" si su bloque está activo Y tiene valor FOB cargado.
@@ -449,13 +455,6 @@ const totalTribUSD = arcaActivo ? totalTribARS/s.tcTrib : 0
 const totalLog=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+segIndepCalc+subE+subGastosArg+fee
 const totalLanded=totalFOB+totalLog+totalTribUSD
 const cap=calcCapacidad(s.contenedores,s.productos)
-
-// ── Mercadería como bloque: activa si su id está en bloquesActivos (o si la lista está vacía = todos activos) ──
-const mercaderiaActiva = (): boolean => {
-  if (!bloqueMerc) return s.incluirArca // fallback legacy si no se cargó el bloque
-  if (s.bloquesActivos.length === 0) return true
-  return s.bloquesActivos.includes(bloqueMerc.id)
-}
 
 // ── Lógica adaptativa del resumen: solo se muestra lo que se cotiza ──
 // Helper local (la función bloqueActivo se define más abajo; replicamos su lógica acá)
