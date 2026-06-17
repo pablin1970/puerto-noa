@@ -32,6 +32,10 @@ interface ItemSelProv {
   tipoContenedor: string
   subtotal: number
   seleccionado: boolean
+  origen_id?: string|null
+  destino_id?: string|null
+  paso_id?: string|null
+  tipo_flete?: string|null
 }
 // Cotización de proveedor seleccionada (FW, transporte Chile, transporte terrestre)
 interface CotProvSel {
@@ -464,6 +468,20 @@ const coincidenciaRuta = (c:any): ''|'parcial'|'fuerte' => {
   return fuerte ? 'fuerte' : parcial ? 'parcial' : ''
 }
 
+// ¿Un ítem terrestre (tarifa) pertenece al tramo que coincide con la ruta de la operación?
+// El par {origen,destino} se compara SIN orden, así ida, vuelta y round trip del mismo tramo coinciden todas.
+const itemCoincideRuta = (it:any): boolean => {
+  const esExpo = s.sentido==='exportacion'
+  const ptoChile = s.puertoChileId
+  const ciudadNoa = s.ciudadDestinoId
+  const opPaso = s.pasoId
+  if(!ptoChile || !ciudadNoa) return false
+  const par = new Set([it.origen_id, it.destino_id])
+  const coincidePar = par.has(ptoChile) && par.has(ciudadNoa)
+  const coincidePaso = !opPaso || it.paso_id===opPaso
+  return coincidePar && coincidePaso
+}
+
 // Listas filtradas por sentido — reaccionan al cambiar s.sentido
 const cotsFW = cotsFWDisponibles.filter(coincideSentido)
 const cotsChile = cotsChileDisponibles.filter(coincideSentido)
@@ -496,6 +514,10 @@ function cotProvDesdeSistema(cot:any, contenedoresH1:{tipo:string;cantidad:numbe
       tipoContenedor: it.tipo_contenedor||'',
       subtotal: valorUnit * cantSug,
       seleccionado: false,
+      origen_id: it.origen_id||null,
+      destino_id: it.destino_id||null,
+      paso_id: it.paso_id||null,
+      tipo_flete: it.tipo_flete||null,
     }
   })
   return {
@@ -1232,8 +1254,8 @@ const clientesFiltrados=terceros.filter(t=>
                     <div className={(bloqueActivo(0)||bloqueActivo(1))?"pt-3 border-t border-gray-100":""}>
                       <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Tramo terrestre</div>
                       <div className="grid grid-cols-2 gap-3">
-                        {/* Puerto Chile origen del camión — visible si el Bloque 3 está activo y no se eligió arriba (marítimo/Chile) */}
-                        {bloqueActivo(3) && !bloqueActivo(0) && !bloqueActivo(1) && (
+                        {/* Puerto Chile origen del camión — visible si Bloque 3 activo y no se eligió arriba (marítimo Bloque 1 lo muestra) */}
+                        {bloqueActivo(3) && !bloqueActivo(0) && (
                           <Field label="Puerto Chile (origen camión)">
                             <select value={s.puertoChileId} onChange={e=>{
                               u('puertoChileId',e.target.value)
@@ -1971,7 +1993,7 @@ const clientesFiltrados=terceros.filter(t=>
                               {ct.items.map(it=>{
                                 const coincide=s.contenedores.some(c=>c.tipo===it.tipoContenedor)
                                 return (
-                                  <tr key={it.itemId} className={`border-b border-gray-50 ${it.seleccionado?'bg-amber-50/40':'hover:bg-gray-50'}`}>
+                                  <tr key={it.itemId} className={`border-b border-gray-50 ${itemCoincideRuta(it)?'bg-green-50 border-l-4 border-l-green-500':it.seleccionado?'bg-amber-50/40':'hover:bg-gray-50'}`}>
                                     <td className="px-2 py-2 text-center">
                                       <button onClick={()=>toggleItemCotProv('cotsProvTransp',ct.uid,it.itemId)}>
                                         <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${it.seleccionado?'bg-[#b45309] border-[#b45309]':'border-gray-300 hover:border-[#b45309]'}`}>
@@ -1982,6 +2004,7 @@ const clientesFiltrados=terceros.filter(t=>
                                     <td className="px-3 py-2">
                                       <div className="font-medium text-gray-800">{it.descripcion}</div>
                                       {coincide&&<span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full font-semibold">✓ coincide hoja 1</span>}
+                                      {itemCoincideRuta(it)&&<span className="text-[9px] bg-green-100 text-green-700 border border-green-300 px-1.5 py-0.5 rounded-full font-semibold ml-1">✓ tu ruta</span>}
                                     </td>
                                     <td className="px-3 py-2 text-right font-mono text-gray-700">USD {fmt(it.valorUnit)}</td>
                                     <td className="px-3 py-2 text-center text-gray-400 font-mono">{it.cantCotizada>0?it.cantCotizada:'—'}</td>
@@ -2076,7 +2099,7 @@ const clientesFiltrados=terceros.filter(t=>
                             {ct.items.map(it=>{
                               const coincide=s.contenedores.some(c=>c.tipo===it.tipoContenedor)
                               return (
-                                <tr key={it.itemId} className={`border-b border-gray-50 ${it.seleccionado?'bg-amber-50/40':'hover:bg-gray-50'}`}>
+                                <tr key={it.itemId} className={`border-b border-gray-50 ${itemCoincideRuta(it)?'bg-green-50 border-l-4 border-l-green-500':it.seleccionado?'bg-amber-50/40':'hover:bg-gray-50'}`}>
                                   <td className="px-2 py-2 text-center">
                                     <button onClick={()=>toggleItemCotProv('cotsProvTransp',ct.uid,it.itemId)}>
                                       <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${it.seleccionado?'bg-[#b45309] border-[#b45309]':'border-gray-300 hover:border-[#b45309]'}`}>
@@ -2087,6 +2110,7 @@ const clientesFiltrados=terceros.filter(t=>
                                   <td className="px-3 py-2">
                                     <div className="font-medium text-gray-800">{it.descripcion}</div>
                                     {coincide&&<span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full font-semibold">✓ coincide hoja 1</span>}
+                                      {itemCoincideRuta(it)&&<span className="text-[9px] bg-green-100 text-green-700 border border-green-300 px-1.5 py-0.5 rounded-full font-semibold ml-1">✓ tu ruta</span>}
                                   </td>
                                   <td className="px-3 py-2 text-right font-mono text-gray-700">USD {fmt(it.valorUnit)}</td>
                                   <td className="px-3 py-2 text-center text-gray-400 font-mono">{it.cantCotizada>0?it.cantCotizada:'—'}</td>
