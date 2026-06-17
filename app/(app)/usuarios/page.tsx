@@ -606,7 +606,7 @@ export default function UsuariosPage() {
               tabIndex={0}
               onKeyDown={handleMatrizKey}
               className="overflow-auto focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#1168F8]/30"
-              style={{ maxHeight: 'calc(100vh - 230px)', minHeight: 360, WebkitOverflowScrolling: 'touch' }}>
+              style={{ maxHeight: 'calc(100vh - 175px)', minHeight: 460, WebkitOverflowScrolling: 'touch' }}>
               <table className="text-xs border-separate" style={{ minWidth: '1200px', width: 'max-content', borderSpacing: 0 }}>
                 <thead>
                   {/* Fila 1: nombres de roles */}
