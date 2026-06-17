@@ -440,6 +440,30 @@ const isVigente = (fv:string) => !fv || new Date(fv) >= new Date()
 
 // Filtro por sentido: muestra las cotizaciones del sentido actual + las sin sentido (legacy)
 const coincideSentido = (c:any) => !c.sentido || c.sentido === s.sentido
+
+// Coincidencia de ruta de una cotización terrestre con la operación actual.
+// Devuelve 'fuerte' (origen+paso+destino igual), 'parcial' (destino+paso igual, otro origen) o '' (no coincide / sin datos).
+// En impo: origen=puerto Chile, destino=ciudad NOA. En expo: origen=ciudad NOA, destino=puerto Chile.
+const coincidenciaRuta = (c:any): ''|'parcial'|'fuerte' => {
+  const items = c.items || []
+  if(items.length===0) return ''
+  const esExpo = s.sentido==='exportacion'
+  const opOrigen  = esExpo ? s.ciudadDestinoId : s.puertoChileId   // de dónde sale el camión
+  const opDestino = esExpo ? s.puertoChileId : s.ciudadDestinoId   // a dónde llega
+  const opPaso    = s.pasoId
+  // Si la operación no tiene destino ni paso definidos, no podemos evaluar
+  if(!opDestino && !opPaso) return ''
+  let fuerte=false, parcial=false
+  for(const it of items){
+    const okDestino = opDestino && it.destino_id===opDestino
+    const okPaso    = !opPaso || it.paso_id===opPaso
+    const okOrigen  = opOrigen && it.origen_id===opOrigen
+    if(okDestino && okPaso && okOrigen) fuerte=true
+    else if(okDestino && okPaso) parcial=true
+  }
+  return fuerte ? 'fuerte' : parcial ? 'parcial' : ''
+}
+
 // Listas filtradas por sentido — reaccionan al cambiar s.sentido
 const cotsFW = cotsFWDisponibles.filter(coincideSentido)
 const cotsChile = cotsChileDisponibles.filter(coincideSentido)
@@ -1208,7 +1232,20 @@ const clientesFiltrados=terceros.filter(t=>
                     <div className={(bloqueActivo(0)||bloqueActivo(1))?"pt-3 border-t border-gray-100":""}>
                       <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Tramo terrestre</div>
                       <div className="grid grid-cols-2 gap-3">
-                        {(bloqueActivo(1)||bloqueActivo(2)) && (
+                        {/* Puerto Chile origen del camión — visible si el Bloque 3 está activo y no se eligió arriba (marítimo/Chile) */}
+                        {bloqueActivo(3) && !bloqueActivo(0) && !bloqueActivo(1) && (
+                          <Field label="Puerto Chile (origen camión)">
+                            <select value={s.puertoChileId} onChange={e=>{
+                              u('puertoChileId',e.target.value)
+                              const p=puertosChile.find((x:any)=>x.id===e.target.value)
+                              if(p) u('ptoChile',p.locode)
+                            }} className={sel}>
+                              <option value="">— Seleccionar puerto —</option>
+                              {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
+                            </select>
+                          </Field>
+                        )}
+                        {(bloqueActivo(1)||bloqueActivo(2)||bloqueActivo(3)) && (
                           <Field label="Paso fronterizo">
                             <select value={s.pasoId} onChange={e=>{u('pasoId',e.target.value)}} className={sel}>
                               <option value="">— Seleccionar paso —</option>
@@ -1877,7 +1914,7 @@ const clientesFiltrados=terceros.filter(t=>
                           const gen=cotsTransp.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
                           return(<>
                             {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}</option>)})}</optgroup>)}
-                            <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
+                            <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>({c,m:coincidenciaRuta(c)})).sort((a:any,b:any)=>{const r:any={fuerte:0,parcial:1,'':2};return r[a.m]-r[b.m]}).map(({c,m}:any)=>(<option key={c.id} value={c.id}>{m==='fuerte'?'✓ ':m==='parcial'?'~ ':''}{c.proveedor_nombre} — {c.referencia||c.fecha}{m==='fuerte'?'  · coincide ruta':m==='parcial'?'  · mismo destino/paso':''}</option>))}</optgroup>
                           </>)
                         })()}
                       </select>
@@ -1985,7 +2022,7 @@ const clientesFiltrados=terceros.filter(t=>
                           const gen=cotsTransp.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
                           return(<>
                             {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}</option>)})}</optgroup>)}
-                            <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
+                            <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>({c,m:coincidenciaRuta(c)})).sort((a:any,b:any)=>{const r:any={fuerte:0,parcial:1,'':2};return r[a.m]-r[b.m]}).map(({c,m}:any)=>(<option key={c.id} value={c.id}>{m==='fuerte'?'✓ ':m==='parcial'?'~ ':''}{c.proveedor_nombre} — {c.referencia||c.fecha}{m==='fuerte'?'  · coincide ruta':m==='parcial'?'  · mismo destino/paso':''}</option>))}</optgroup>
                           </>)
                         })()}
                     </select>
