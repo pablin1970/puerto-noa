@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt } from '@/lib/utils'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 interface FacturaRecibida {
   id: string
@@ -66,8 +67,9 @@ export default function FacturasRecibidasPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [terceros, setTerceros] = useState<any[]>([])
   const [operaciones, setOperaciones] = useState<any[]>([])
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
 
-  useEffect(() => { loadUser(); loadData() }, [])
+  useEffect(() => { loadUser(); loadData(); cargarPermisos().then(setPermisos) }, [])
 
   async function loadUser() {
     const { data: auth } = await supabase.auth.getUser()
@@ -228,7 +230,7 @@ export default function FacturasRecibidasPage() {
 
       {view === 'detalle' && sel && (
         <DetalleFacturaRecibida
-          factura={sel} supabase={supabase}
+          factura={sel} supabase={supabase} permisos={permisos}
           onReload={async () => { await loadData() }}
           onBack={() => setView('lista')}
         />
@@ -261,7 +263,7 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
   const [showProvDD, setShowProvDD] = useState(false)
   const [saving, setSaving] = useState(false)
   const [uploadingDoc, setUploadingDoc] = useState(false)
-  const [docUrl, setDocUrl] = useState('')
+  const [docPath, setDocPath] = useState('')   // guarda el PATH en el bucket privado (no URL pública)
   const [docNombre, setDocNombre] = useState('')
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
   const fmtCLP = (n: number) => Math.round(n).toLocaleString('es-CL')
@@ -287,9 +289,16 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
     const ext = file.name.split('.').pop()
     const path = `recibidas/${Date.now()}.${ext}`
     await supabase.storage.from('facturas').upload(path, file, { upsert: true })
-    const { data } = supabase.storage.from('facturas').getPublicUrl(path)
-    if (data?.publicUrl) { setDocUrl(data.publicUrl); setDocNombre(file.name) }
+    // Bucket privado: guardamos el PATH, no una URL pública (que no funciona). La firma se genera al vuelo.
+    setDocPath(path); setDocNombre(file.name)
     setUploadingDoc(false)
+  }
+
+  // Abre el adjunto recién subido generando una signed URL temporal desde el path
+  async function verPreview() {
+    if (!docPath) return
+    const { data } = await supabase.storage.from('facturas').createSignedUrl(docPath, 3600)
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
   }
 
   async function guardar() {
@@ -305,7 +314,7 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
       credito_fiscal: form.afecta_iva ? Math.round(totales.iva) : 0,
       total_usd: tcRef ? totales.total / tcRef : null,
       estado: 'recibida',
-      archivo_url: docUrl || null, archivo_nombre: docNombre || null,
+      archivo_url: docPath || null, archivo_nombre: docNombre || null,
       creado_por: currentUser?.nombre, creado_por_id: currentUser?.id,
     })
     await onSave()
@@ -466,11 +475,11 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
 
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <h3 className="font-bold text-sm text-gray-900 mb-3">Adjuntar documento</h3>
-        {docUrl ? (
+        {docPath ? (
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-700">📎 {docNombre}</span>
-            <a href={docUrl} target="_blank" className="text-xs text-[#1168F8] hover:underline">Ver</a>
-            <button onClick={() => { setDocUrl(''); setDocNombre('') }} className="text-xs text-red-500">✕ Quitar</button>
+            <button onClick={verPreview} className="text-xs text-[#1168F8] hover:underline">Ver</button>
+            <button onClick={() => { setDocPath(''); setDocNombre('') }} className="text-xs text-red-500">✕ Quitar</button>
           </div>
         ) : (
           <label className={`flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-[#93B8FC] rounded-xl text-xs text-[#1168F8] hover:bg-[#EBF2FF] cursor-pointer w-fit ${uploadingDoc ? 'opacity-60' : ''}`}>
@@ -491,13 +500,26 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
   )
 }
 
-function DetalleFacturaRecibida({ factura, supabase, onReload, onBack }: any) {
+function DetalleFacturaRecibida({ factura, supabase, permisos, onReload, onBack }: any) {
   const fmtCLP = (n: number) => Math.round(n).toLocaleString('es-CL')
   const items = Array.isArray(factura.items) ? factura.items : []
+  const [abriendo, setAbriendo] = useState(false)
 
   async function cambiarEstado(estado: string) {
     await (supabase.from('facturas_recibidas') as any).update({ estado }).eq('id', factura.id)
     await onReload()
+  }
+
+  // Bucket privado: la signed URL se genera al vuelo desde el PATH guardado en archivo_url.
+  async function abrirArchivo(descargar: boolean) {
+    if (!factura.archivo_url || abriendo) return
+    setAbriendo(true)
+    try {
+      const opts = descargar ? { download: factura.archivo_nombre || 'factura' } : undefined
+      const { data, error } = await supabase.storage.from('facturas').createSignedUrl(factura.archivo_url, 3600, opts)
+      if (error || !data?.signedUrl) { alert('No se pudo abrir el archivo'); return }
+      window.open(data.signedUrl, '_blank')
+    } finally { setAbriendo(false) }
   }
 
   return (
@@ -555,10 +577,25 @@ function DetalleFacturaRecibida({ factura, supabase, onReload, onBack }: any) {
           </tbody>
         </table>
       </div>
-      {factura.archivo_url && (
-        <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm flex items-center gap-3">
-          <span className="text-xs text-gray-600 font-medium">📎 Documento adjunto:</span>
-          <a href={factura.archivo_url} target="_blank" className="text-xs text-[#1168F8] hover:underline font-medium">{factura.archivo_nombre || 'Ver archivo'}</a>
+
+      {/* Documento adjunto */}
+      {factura.archivo_url && (puede(permisos, 'facturas_recibidas', 'ver') || puede(permisos, 'facturas_recibidas', 'descargar')) && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">📄</span>
+            <div>
+              <div className="text-xs font-semibold text-gray-800">{factura.archivo_nombre || 'Documento adjunto'}</div>
+              <div className="text-[10px] text-gray-400">Factura / comprobante del proveedor</div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {puede(permisos, 'facturas_recibidas', 'ver') && (
+              <button onClick={() => abrirArchivo(false)} disabled={abriendo} className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC] disabled:opacity-50">📄 Ver</button>
+            )}
+            {puede(permisos, 'facturas_recibidas', 'descargar') && (
+              <button onClick={() => abrirArchivo(true)} disabled={abriendo} className="px-3 py-1.5 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 disabled:opacity-50">⬇ Descargar</button>
+            )}
+          </div>
         </div>
       )}
     </div>
