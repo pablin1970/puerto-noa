@@ -70,6 +70,7 @@ const MODULOS_PERMISOS: ModuloSeccion[] = [
     items: [
       { modulo: 'dashboard',            label: 'Dashboard logístico',  acciones: ['ver'], soloVer: true },
       { modulo: 'dashboard_financiero', label: 'Dashboard financiero', acciones: ['ver'], soloVer: true },
+      { modulo: 'ayuda',                label: 'Ayuda / Documentación', acciones: ['ver','descargar'] },
     ]
   },
   {
@@ -133,6 +134,7 @@ const DEFAULTS: Record<string, Record<string, Accion[]>> = {
   // ── SUPER ADMINISTRADOR: acceso total a todo ───────────────────
   'Super Administrador': {
     dashboard: ['ver'], dashboard_financiero: ['ver'],
+    ayuda: ['ver','descargar'],
     cotizaciones: ['ver','crear','editar','eliminar','descargar'], cotizaciones_estado: ['ver','editar'],
     clientes: ['ver','crear','editar','eliminar','descargar'],
     operaciones: ['ver','crear','editar','eliminar','descargar'], cierre: ['ver','editar'],
@@ -152,6 +154,7 @@ const DEFAULTS: Record<string, Record<string, Accion[]>> = {
   // ── ADMINISTRADOR: todo excepto eliminar usuarios y tributos ───
   'Administrador': {
     dashboard: ['ver'], dashboard_financiero: ['ver'],
+    ayuda: ['ver','descargar'],
     cotizaciones: ['ver','crear','editar','eliminar','descargar'], cotizaciones_estado: ['ver','editar'],
     clientes: ['ver','crear','editar','descargar'],
     operaciones: ['ver','crear','editar','descargar'], cierre: ['ver','editar'],
@@ -171,6 +174,7 @@ const DEFAULTS: Record<string, Record<string, Accion[]>> = {
   // ── EJECUTIVO COMERCIAL: foco en ventas y seguimiento ─────────
   'Ejecutivo comercial': {
     dashboard: ['ver'],
+    ayuda: ['ver','descargar'],
     cotizaciones: ['ver','crear','editar','descargar'], cotizaciones_estado: ['ver','editar'],
     clientes: ['ver','crear','editar','descargar'],
     operaciones: ['ver','descargar'], cierre: ['ver'],
@@ -183,6 +187,7 @@ const DEFAULTS: Record<string, Record<string, Accion[]>> = {
   // ── OPERACIONES: foco logístico, sin acceso financiero ────────
   'Operaciones': {
     dashboard: ['ver'],
+    ayuda: ['ver','descargar'],
     cotizaciones: ['ver'],
     clientes: ['ver'],
     operaciones: ['ver','crear','editar','descargar'], cierre: ['ver','editar'],
@@ -196,6 +201,7 @@ const DEFAULTS: Record<string, Record<string, Accion[]>> = {
   // ── CONTABILIDAD: foco financiero y contable ──────────────────
   'Contabilidad': {
     dashboard: ['ver'], dashboard_financiero: ['ver'],
+    ayuda: ['ver','descargar'],
     cotizaciones: ['ver'], operaciones: ['ver','descargar'], cierre: ['ver'],
     facturas_emitidas: ['ver','crear','editar','descargar'], facturas_emitidas_anular: ['ver','editar'],
     facturas_recibidas: ['ver','crear','editar','descargar'],
@@ -208,6 +214,7 @@ const DEFAULTS: Record<string, Record<string, Accion[]>> = {
   // ── GERENCIA: visión total solo lectura + resultados ──────────
   'Gerencia': {
     dashboard: ['ver'], dashboard_financiero: ['ver'],
+    ayuda: ['ver','descargar'],
     cotizaciones: ['ver','descargar'], cotizaciones_estado: ['ver'],
     clientes: ['ver','descargar'], operaciones: ['ver','descargar'], cierre: ['ver'],
     cotizaciones_proveedores: ['ver','descargar'], precios: ['ver'], proveedores: ['ver'],
