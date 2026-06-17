@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 const fmtN = (n: number) => (n||0).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -18,13 +19,14 @@ export default function GastosFijosPage() {
   const [saving, setSaving] = useState(false)
   const [compFile, setCompFile] = useState<File|null>(null)
   const [previewModal, setPreviewModal] = useState<{url:string;nombre:string;tipo:string}|null>(null)
+  const [permisos, setPermisos] = useState<Record<string,string[]>>({})
   const [tc, setTc] = useState<{ usd: number; ars: number }>({ usd: 908, ars: 0 })
   const [form, setForm] = useState({
     categoria_id: '', descripcion: '', moneda: 'CLP',
     monto: '', es_recurrente: false, notas: '', comprobante_ref: ''
   })
 
-  useEffect(() => { loadCats(); loadTC() }, [])
+  useEffect(() => { loadCats(); loadTC(); cargarPermisos().then(setPermisos) }, [])
   useEffect(() => { load() }, [anio, mes])
 
   async function loadTC() {
@@ -55,6 +57,22 @@ export default function GastosFijosPage() {
     return monto
   }
 
+  // Genera la signed URL al vuelo desde el PATH guardado y abre el modal de preview
+  async function verComprobante(g: any) {
+    if (!g.archivo_url) return
+    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(g.archivo_url, 3600)
+    if (error || !data?.signedUrl) { alert('No se pudo abrir el comprobante'); return }
+    setPreviewModal({ url: data.signedUrl, nombre: g.archivo_nombre || 'comprobante', tipo: g.archivo_nombre?.endsWith('.pdf') ? 'pdf' : 'img' })
+  }
+
+  // Descarga el comprobante generando una signed URL con opción download
+  async function descargarComprobante(g: any) {
+    if (!g.archivo_url) return
+    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(g.archivo_url, 3600, { download: g.archivo_nombre || 'comprobante' })
+    if (error || !data?.signedUrl) { alert('No se pudo descargar el comprobante'); return }
+    window.open(data.signedUrl, '_blank')
+  }
+
   async function handleSave() {
     if (!form.categoria_id || !form.descripcion || !form.monto) { alert('Completá categoría, descripción y monto'); return }
     setSaving(true)
@@ -78,10 +96,8 @@ export default function GastosFijosPage() {
       const ext = compFile.name.split('.').pop()
       const path = `gastos/${gastoData.id}.${ext}`
       await supabase.storage.from('comprobantes').upload(path, compFile, { upsert: true })
-      const { data: urlData } = await supabase.storage.from('comprobantes').createSignedUrl(path, 3600)
-      if (urlData?.signedUrl) {
-        await (supabase.from('gastos_fijos_pn') as any).update({ archivo_url: urlData.signedUrl, archivo_nombre: compFile.name }).eq('id', gastoData.id)
-      }
+      // Guardamos el PATH (la signed URL expira a 1h). La firma se genera al vuelo en Ver/Descargar.
+      await (supabase.from('gastos_fijos_pn') as any).update({ archivo_url: path, archivo_nombre: compFile.name }).eq('id', gastoData.id)
     }
     setForm({ categoria_id:'', descripcion:'', moneda:'CLP', monto:'', es_recurrente:false, notas:'', comprobante_ref:'' })
     setCompFile(null)
@@ -238,9 +254,17 @@ export default function GastosFijosPage() {
                   </td>
                   <td className="px-4 py-3.5 font-mono text-right font-bold text-gray-900">$ {fmtN(g.monto_clp_equiv)}</td>
                   <td className="px-4 py-3.5">
-                    {g.archivo_url ? (
-                      <button onClick={()=>setPreviewModal({url:g.archivo_url,nombre:g.archivo_nombre||'comprobante',tipo:g.archivo_nombre?.endsWith('.pdf')?'pdf':'img'})}
-                        className="px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-[10px] font-medium hover:bg-[#93B8FC]">📄 Ver</button>
+                    {g.archivo_url && (puede(permisos,'gastos_fijos','ver') || puede(permisos,'gastos_fijos','descargar')) ? (
+                      <div className="flex gap-1">
+                        {puede(permisos,'gastos_fijos','ver') && (
+                          <button onClick={()=>verComprobante(g)}
+                            className="px-2 py-1 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-[10px] font-medium hover:bg-[#93B8FC]">📄 Ver</button>
+                        )}
+                        {puede(permisos,'gastos_fijos','descargar') && (
+                          <button onClick={()=>descargarComprobante(g)}
+                            className="px-2 py-1 border border-gray-200 text-gray-600 rounded-lg text-[10px] font-medium hover:bg-gray-50">⬇</button>
+                        )}
+                      </div>
                     ) : g.comprobante_ref ? (
                       <span className="text-gray-400 text-[10px] font-mono">{g.comprobante_ref}</span>
                     ) : <span className="text-gray-300 text-[10px]">—</span>}
@@ -260,7 +284,7 @@ export default function GastosFijosPage() {
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
               <span className="font-medium text-sm truncate">{previewModal.nombre}</span>
               <div className="flex items-center gap-2">
-                <a href={previewModal.url} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs">🔗 Abrir / Descargar</a>
+                <a href={previewModal.url} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs">🔗 Abrir</a>
                 <button onClick={()=>setPreviewModal(null)} className="text-gray-400 text-xl px-1">×</button>
               </div>
             </div>
