@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 interface Tercero {
   id: string
@@ -463,6 +464,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
   const [ops, setOps] = useState<any[]>([])
   const [rubros, setRubros] = useState<any[]>([])
   const [todosRubros, setTodosRubros] = useState<any[]>([])
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
   const [editando, setEditando] = useState(false)
   const [form, setForm] = useState<any>({
     ...tercero,
@@ -477,6 +479,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
 
   useEffect(() => {
     loadDocs(); loadOps(); loadCuentas()
+    cargarPermisos().then(setPermisos)
     if (tercero.tipo?.includes('proveedor')) loadRubros()
   }, [])
 
@@ -609,6 +612,11 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
   }
 
   const tiposDocs = TIPO_DOC_POR_PAIS[form.pais] || TIPO_DOC_POR_PAIS.default
+
+  // Permisos de archivos: esta pantalla es la de terceros (ruta /clientes); el control de
+  // Ver/Descargar de documentos va por el módulo `clientes`.
+  const puedeVerDoc = puede(permisos, 'clientes', 'ver')
+  const puedeDescargarDoc = puede(permisos, 'clientes', 'descargar')
 
   return (
     <div>
@@ -979,16 +987,24 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                       {d.notas && <div className="text-[10px] text-gray-500 mt-0.5 italic">{d.notas}</div>}
                     </div>
                     {d.archivo_url ? (
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <button onClick={async()=>{
-                          const {data} = await supabase.storage.from('terceros').createSignedUrl(d.archivo_url,3600)
-                          if(data?.signedUrl) window.open(data.signedUrl,'_blank')
-                        }} className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC]">📄 Ver</button>
-                        <button onClick={async()=>{
-                          const {data} = await supabase.storage.from('terceros').createSignedUrl(d.archivo_url,3600)
-                          if(data?.signedUrl){const a=document.createElement('a');a.href=data.signedUrl;a.download=d.archivo_nombre||'documento';a.click()}
-                        }} className="px-3 py-1.5 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-100">⬇ Descargar</button>
-                      </div>
+                      (puedeVerDoc || puedeDescargarDoc) ? (
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {puedeVerDoc && (
+                            <button onClick={async()=>{
+                              const {data} = await supabase.storage.from('terceros').createSignedUrl(d.archivo_url,3600)
+                              if(data?.signedUrl) window.open(data.signedUrl,'_blank')
+                            }} className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC]">📄 Ver</button>
+                          )}
+                          {puedeDescargarDoc && (
+                            <button onClick={async()=>{
+                              const {data} = await supabase.storage.from('terceros').createSignedUrl(d.archivo_url,3600,{download:d.archivo_nombre||'documento'})
+                              if(data?.signedUrl){const a=document.createElement('a');a.href=data.signedUrl;a.download=d.archivo_nombre||'documento';a.click()}
+                            }} className="px-3 py-1.5 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-100">⬇ Descargar</button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-300 text-[10px] flex-shrink-0">Sin permiso</span>
+                      )
                     ) : (
                       <span className="text-gray-300 text-[10px]">Sin archivo</span>
                     )}
