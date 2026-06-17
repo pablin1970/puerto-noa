@@ -62,6 +62,8 @@ interface Cotizacion {
   moneda: string
   estado: string
   origen: string
+  sentido?: string | null
+  grupo_id?: string | null
   seguro_incluido: boolean
   seguro_monto: number | null
   notas: string
@@ -376,10 +378,15 @@ function CotizacionesProveedoresInner() {
                         onClick={() => { setSelId(c.id); setView('detalle') }}>
                         <td className="px-4 py-3.5">
                           <div className="font-semibold text-gray-900">{c.proveedor_nombre}</div>
-                          {c.referencia && <div className="text-[10px] text-gray-400 font-mono">{c.referencia}</div>}
+                          {c.referencia && <div className="text-[10px] text-gray-400 font-mono">{c.referencia}{c.sentido==='importacion'?' /I':c.sentido==='exportacion'?' /E':''}</div>}
                         </td>
                         <td className="px-4 py-3.5">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: r.bg, color: r.color }}>{r.label}</span>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: r.bg, color: r.color }}>{r.label}</span>
+                            {c.sentido==='importacion' && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EBF2FF] text-[#052698]">📦 Impo</span>}
+                            {c.sentido==='exportacion' && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-50 text-green-700">🚢 Expo</span>}
+                            {c.grupo_id && <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-gray-100 text-gray-400" title="Cotización con versión Impo y Expo hermanadas">🔗</span>}
+                          </div>
                         </td>
                         <td className="px-4 py-3.5">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${c.tipo === 'especifica' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
