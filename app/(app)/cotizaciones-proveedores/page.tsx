@@ -352,7 +352,7 @@ function CotizacionesProveedoresInner() {
       {view === 'lista' && stats.length > 0 && (
         <div className="flex gap-2 mb-5 flex-wrap">
           {stats.map(s => {
-            const r = RUBROS[s.rubro]
+            const r = rubrosDB[s.rubro] || RUBROS[s.rubro] || RUBROS.otro || {label:s.rubro,color:'#6b7280',bg:'#f3f4f6'}
             return (
               <button key={s.rubro} onClick={() => setFiltroRubro(filtroRubro === s.rubro ? '' : s.rubro)}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all"
@@ -581,6 +581,11 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [buscarProv, setBuscarProv] = useState('')
   const [showProvDropdown, setShowProvDropdown] = useState(false)
   const [usuarioNombre, setUsuarioNombre] = useState('')
+  // Alta rápida de proveedor no registrado
+  const [showAltaProv, setShowAltaProv] = useState(false)
+  const [altaProvNombre, setAltaProvNombre] = useState('')
+  const [altaProvRubroId, setAltaProvRubroId] = useState('')
+  const [altaProvSaving, setAltaProvSaving] = useState(false)
   const [tercerosConRubro, setTercerosConRubro] = useState<any[]>([])
   const [buscarCot, setBuscarCot] = useState('')
   const [showCotDropdown, setShowCotDropdown] = useState(false)
@@ -700,10 +705,49 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   function removeItem(i:number) { setItems(prev => prev.filter((_,idx) => idx!==i)) }
   function updateItem(i:number, field:string, value:any) { setItems(prev => prev.map((it,idx) => idx===i ? {...it,[field]:value} : it)) }
 
+  // ── Alta rápida de proveedor no registrado ──
+  function abrirAltaProveedor() {
+    setAltaProvNombre(form.proveedor_nombre || buscarProv || '')
+    // Presugerir el rubro de la cotización actual (por código)
+    const rubroActual = rubrosCatalogo.find((r:any)=>r._codigo===form.rubro)
+    setAltaProvRubroId(rubroActual?.id || '')
+    setShowProvDropdown(false)
+    setShowAltaProv(true)
+  }
+  async function crearProveedorRapido() {
+    if(!altaProvNombre.trim()) { alert('Ingresá la razón social'); return }
+    if(!altaProvRubroId) { alert('Elegí el rubro del proveedor'); return }
+    setAltaProvSaving(true)
+    try {
+      // 1. Crear el tercero (proveedor) con datos mínimos
+      const { data: nuevo, error: errT } = await (supabase.from('terceros') as any)
+        .insert({ razon_social: altaProvNombre.trim(), tipo: ['proveedor'], activo: true, pais: 'Argentina' })
+        .select('id,razon_social').single()
+      if(errT || !nuevo) { alert('Error al crear el proveedor: '+(errT?.message||'')); setAltaProvSaving(false); return }
+      // 2. Vincular el rubro
+      const { error: errR } = await (supabase.from('tercero_rubros') as any)
+        .insert({ tercero_id: nuevo.id, rubro_id: altaProvRubroId })
+      if(errR) { alert('Proveedor creado, pero falló la asignación de rubro: '+errR.message) }
+      // 3. Vincular a la cotización y cerrar
+      setF('proveedor_nombre', nuevo.razon_social)
+      setF('tercero_id', nuevo.id)
+      setBuscarProv(nuevo.razon_social)
+      // Agregar a la lista local con su rubro, para que quede disponible enseguida
+      const codigoRubro = rubrosCatalogo.find((r:any)=>r.id===altaProvRubroId)?._codigo || form.rubro
+      setTercerosConRubro((prev:any[])=>[...prev, {id:nuevo.id, razon_social:nuevo.razon_social, rubros:[codigoRubro]}])
+      setShowAltaProv(false)
+      setAltaProvSaving(false)
+    } catch(e:any) {
+      console.error('Error en alta rápida de proveedor:', e)
+      alert('Error al crear el proveedor: '+(e?.message||'revisá la consola'))
+      setAltaProvSaving(false)
+    }
+  }
+
   async function handleSave() {
     if(!form.proveedor_nombre) { alert('Ingresá el nombre del proveedor'); return }
     setSaving(true)
-
+    try {
     const esAmbos = sentido==='ambos'
     const grupoId = esAmbos ? (crypto?.randomUUID?.() || null) : null
     // Sentido de la versión A: si es ambos, A = importación
@@ -713,7 +757,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     let bloqueIdFinal = form.bloque_id || ''
     if(!bloqueIdFinal){
       const numDefault = RUBRO_BLOQUE_DEFAULT[form.rubro]
-      if(numDefault){
+      if(numDefault!==undefined){
+        // numDefault puede ser 0 (Mercadería). `bloques` incluye todos los activos.
         const bl = bloques.find((b:any)=>b.numero===numDefault)
         if(bl) bloqueIdFinal = bl.id
       }
@@ -914,6 +959,11 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       }
     }
     await onSave(); setSaving(false)
+    } catch(e:any) {
+      console.error('Error al guardar cotización:', e)
+      alert('Error al guardar: '+(e?.message||'revisá la consola del navegador para más detalle'))
+      setSaving(false)
+    }
   }
 
   // Íconos de respaldo por tipo de formulario (si el rubro no trae ícono en la base)
@@ -1167,7 +1217,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                   onFocus={()=>setShowProvDropdown(form.proveedor_nombre.length>0)}
                   onBlur={()=>setTimeout(()=>setShowProvDropdown(false),200)}
                   className={inp} placeholder="Nombre del proveedor..." />
-                {showProvDropdown && provsFiltrados.length>0 && (
+                {showProvDropdown && form.proveedor_nombre.length>0 && (
                   <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-44 overflow-y-auto">
                     {provsFiltrados.map((t:any)=>(
                       <button key={t.id} onMouseDown={()=>{setF('proveedor_nombre',t.razon_social);setF('tercero_id',t.id);setShowProvDropdown(false)}}
@@ -1175,6 +1225,14 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                         <span className="font-semibold text-gray-900">{t.razon_social}</span>
                       </button>
                     ))}
+                    {/* Si no hay coincidencia exacta, ofrecer crear el proveedor */}
+                    {!provsFiltrados.some((t:any)=>t.razon_social.toLowerCase()===form.proveedor_nombre.toLowerCase()) && (
+                      <button onMouseDown={abrirAltaProveedor}
+                        className="w-full text-left px-4 py-2.5 hover:bg-green-50 text-xs border-t border-gray-100 bg-green-50/40">
+                        <span className="font-semibold text-green-700">+ Crear proveedor «{form.proveedor_nombre}»</span>
+                        <span className="block text-[10px] text-gray-400 mt-0.5">No está registrado — cargalo ahora con razón social y rubro</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </>
@@ -1688,6 +1746,45 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           {saving?'Guardando...':'✓ Guardar cotización'}
         </button>
       </div>
+
+      {/* Modal alta rápida de proveedor */}
+      {showAltaProv && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4" onClick={()=>!altaProvSaving&&setShowAltaProv(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e=>e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2" style={{background:'#EBF2FF'}}>
+              <span className="text-lg">🏢</span>
+              <span className="font-semibold text-sm text-[#052698]">Nuevo proveedor</span>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div className="text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+                Cargá lo mínimo para vincularlo a la cotización. Después podés completar el resto (CUIT, dirección, contactos) en Clientes y Proveedores.
+              </div>
+              <div>
+                {lbl('Razón social *')}
+                <input value={altaProvNombre} onChange={e=>setAltaProvNombre(e.target.value)} className={inp} placeholder="Nombre del proveedor" autoFocus/>
+              </div>
+              <div>
+                {lbl('Rubro *')}
+                <select value={altaProvRubroId} onChange={e=>setAltaProvRubroId(e.target.value)} className={sel}>
+                  <option value="">— Seleccionar rubro —</option>
+                  {rubrosCatalogo.map((r:any)=>(
+                    <option key={r.id} value={r.id}>{r.nombre}</option>
+                  ))}
+                </select>
+                <div className="text-[10px] text-gray-400 mt-1">Determina en qué bloque del cotizador aparece este proveedor.</div>
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={()=>setShowAltaProv(false)} disabled={altaProvSaving}
+                className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+              <button onClick={crearProveedorRapido} disabled={altaProvSaving}
+                className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
+                {altaProvSaving?'Creando...':'Crear y usar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal preview */}
       {previewModal && (
