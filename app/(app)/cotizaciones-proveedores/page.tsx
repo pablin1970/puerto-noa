@@ -763,6 +763,12 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         if(bl) bloqueIdFinal = bl.id
       }
     }
+    // Bloque obligatorio: sin bloque, el cotizador no puede traer esta cotización.
+    if(!bloqueIdFinal){
+      alert('Asigná un bloque antes de guardar.\n\nEste rubro no tiene un bloque por defecto, así que tenés que elegir manualmente a qué bloque del cotizador pertenece. Sin bloque, la cotización no aparecerá al cargar desde el cotizador.')
+      setSaving(false)
+      return
+    }
     // categoría por defecto de los ítems según rubro
     const catDefault = RUBRO_CATEGORIA_DEFAULT[form.rubro] || null
     // tipo de formulario del rubro elegido (maritimo/terrestre/almacenaje/despachante/seguro/generico)
@@ -1820,7 +1826,9 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
   }, [])
 
   const r = rubros[cotizacion.rubro] || rubros.otro || RUBROS.otro
+  const esMercaderia = tipoFormulario(cotizacion.rubro) === 'mercaderia'
   const totalUSD = items.reduce((t, it) => {
+    if (esMercaderia) return t + (parseN(String(it.cantidad||0)))*(parseN(String(it.valor||0)))
     if (it.tipo_calculo === 'pct_cif') return t
     return t + (parseN(String(it.valor)) || 0)
   }, 0)
@@ -1831,13 +1839,19 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
     const itemsValidos = items.filter(it => it.descripcion).map((it, i) => ({
       cotizacion_id: cotizacion.id,
       descripcion: it.descripcion,
-      tipo_calculo: it.tipo_calculo,
+      tipo_calculo: esMercaderia ? 'producto' : it.tipo_calculo,
       valor: parseN(String(it.valor)) || 0,
       piso_usd: it.tipo_calculo === 'pct_cif' ? (parseN(String(it.piso_usd)) || 0) : null,
       techo_usd: it.tipo_calculo === 'pct_cif' ? (parseN(String(it.techo_usd)) || 0) : null,
       moneda: it.moneda || 'USD',
       tipo_contenedor: it.tipo_contenedor || null,
-      categoria: (it as any).categoria || null,
+      categoria: esMercaderia ? 'mercaderia' : ((it as any).categoria || null),
+      // Campos de producto (solo mercadería)
+      ncm: esMercaderia ? (it.ncm||null) : null,
+      cantidad: esMercaderia ? (parseN(String(it.cantidad||0))||0) : null,
+      peso_unit: esMercaderia ? (parseN(String(it.peso_unit||0))||0) : null,
+      vol_unit: esMercaderia ? (parseN(String(it.vol_unit||0))||0) : null,
+      incoterm: esMercaderia ? (it.incoterm||'FOB') : null,
       orden: i,
     }))
     if (itemsValidos.length > 0) {
@@ -1849,6 +1863,7 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
   }
 
   function addItem() { setItems(prev => [...prev, { ...ITEM_VACIO, orden: prev.length }]) }
+  function addItemMercaderiaDetalle() { setItems(prev => [...prev, { ...ITEM_VACIO, tipo_calculo:'producto', cantidad:1, incoterm:'FOB', orden: prev.length }]) }
   function removeItem(i: number) { setItems(prev => prev.filter((_, idx) => idx !== i)) }
   function updateItem(i: number, field: string, value: any) {
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [field]: value } : it))
@@ -1881,7 +1896,7 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
               {cotizacion.referencia && <span className="font-mono">Ref: {cotizacion.referencia}</span>}
               <span>Fecha: {cotizacion.fecha}</span>
               {cotizacion.fecha_vencimiento && <span>Vence: {cotizacion.fecha_vencimiento}</span>}
-              {totalUSD > 0 && <span className="font-mono font-semibold text-[#052698]">USD {fmtN(totalUSD)} (items fijos)</span>}
+              {totalUSD > 0 && <span className="font-mono font-semibold text-[#052698]">USD {fmtN(totalUSD)} {esMercaderia?'(FOB)':'(items fijos)'}</span>}
             </div>
           </div>
           <div className="flex gap-2">
@@ -1903,9 +1918,56 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
 
         {editando ? (
           <>
-            {items.map((it, i) => (
-              <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={[]} onChange={updateItem} onRemove={removeItem} editMode={true} />
-            ))}
+            {esMercaderia ? (
+              <div className="space-y-2">
+                {items.map((it, i) => (
+                  <div key={i} className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+                    <div className="grid grid-cols-12 gap-2 mb-2 items-end">
+                      <div className="col-span-5">
+                        <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Descripción</label>
+                        <input value={it.descripcion} onChange={e=>updateItem(i,'descripcion',e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Producto"/>
+                      </div>
+                      <div className="col-span-3">
+                        <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">NCM</label>
+                        <input value={it.ncm||''} onChange={e=>updateItem(i,'ncm',e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="0000.00.00"/>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Incoterm</label>
+                        <select value={it.incoterm||'FOB'} onChange={e=>updateItem(i,'incoterm',e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+                          {['FOB','EXW','CIF'].map(v=><option key={v}>{v}</option>)}
+                        </select>
+                      </div>
+                      <div className="col-span-2 flex items-center justify-end pb-1">
+                        <button onClick={()=>removeItem(i)} className="text-gray-300 hover:text-red-500 text-xs">✕ Eliminar</button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 items-end">
+                      <div>
+                        <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Cantidad</label>
+                        <input type="text" inputMode="decimal" value={it.cantidad??''} onFocus={e=>e.target.select()} onChange={e=>updateItem(i,'cantidad',parseN(e.target.value))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs text-right focus:outline-none focus:border-[#1168F8] bg-white"/>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Precio unit. USD</label>
+                        <input type="text" inputMode="decimal" value={it.valor||''} onFocus={e=>e.target.select()} onChange={e=>updateItem(i,'valor',parseN(e.target.value))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs text-right focus:outline-none focus:border-[#1168F8] bg-white"/>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Peso kg/u</label>
+                        <input type="text" inputMode="decimal" value={it.peso_unit||''} onFocus={e=>e.target.select()} onChange={e=>updateItem(i,'peso_unit',parseN(e.target.value))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs text-right focus:outline-none focus:border-[#1168F8] bg-white"/>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-1">Vol m³/u</label>
+                        <input type="text" inputMode="decimal" value={it.vol_unit||''} onFocus={e=>e.target.select()} onChange={e=>updateItem(i,'vol_unit',parseN(e.target.value))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs text-right focus:outline-none focus:border-[#1168F8] bg-white"/>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <button onClick={addItemMercaderiaDetalle} className="text-[10px] text-[#ca8a04] hover:underline font-semibold">+ Agregar producto</button>
+              </div>
+            ) : (
+              items.map((it, i) => (
+                <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={[]} onChange={updateItem} onRemove={removeItem} editMode={true} />
+              ))
+            )}
             <div className="flex justify-end mt-3">
               <button onClick={saveItems} disabled={saving}
                 className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
@@ -1913,6 +1975,38 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
               </button>
             </div>
           </>
+        ) : esMercaderia ? (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                {['Producto', 'NCM', 'Incoterm', 'Cantidad', 'Precio unit.', 'Peso kg/u', 'Vol m³/u', 'Subtotal'].map(h => (
+                  <th key={h} className={`px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider ${['Cantidad','Precio unit.','Peso kg/u','Vol m³/u','Subtotal'].includes(h)?'text-right':'text-left'}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, i) => {
+                const cant = parseN(String(it.cantidad||0))
+                const sub = cant*(parseN(String(it.valor||0)))
+                return (
+                  <tr key={i} className="border-b border-gray-50">
+                    <td className="px-3 py-2.5 font-medium text-gray-800">{it.descripcion}</td>
+                    <td className="px-3 py-2.5 font-mono text-gray-500">{it.ncm||'—'}</td>
+                    <td className="px-3 py-2.5 text-gray-500">{it.incoterm||'—'}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-gray-700">{cant.toLocaleString('es-AR')}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-gray-700">USD {fmtN(parseN(String(it.valor||0)))}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-gray-500">{parseN(String(it.peso_unit||0))||'—'}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-gray-500">{parseN(String(it.vol_unit||0))||'—'}</td>
+                    <td className="px-3 py-2.5 text-right font-mono font-semibold text-[#052698]">USD {fmtN(sub)}</td>
+                  </tr>
+                )
+              })}
+              <tr className="bg-[#EBF2FF] border-t-2 border-[#1168F8]">
+                <td colSpan={7} className="px-3 py-2 text-xs font-bold text-[#052698]">TOTAL FOB</td>
+                <td className="px-3 py-2 font-mono font-bold text-[#052698] text-right">USD {fmtN(totalUSD)}</td>
+              </tr>
+            </tbody>
+          </table>
         ) : (
           <table className="w-full text-xs">
             <thead>
