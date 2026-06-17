@@ -574,7 +574,7 @@ export default function UsuariosPage() {
                   <tr>
                     <th className="w-44 bg-gray-50 border-b border-r border-gray-100 px-4 py-2"/>
                     {roles.map(r => (
-                      <th key={r.id} colSpan={5}
+                      <th key={r.id} colSpan={ACCIONES.length}
                         className="text-center py-2 text-[11px] font-bold border-b border-l-2 border-gray-200"
                         style={{ color: r.color, background: r.color + '08' }}>
                         {r.nombre}
@@ -607,7 +607,7 @@ export default function UsuariosPage() {
                     <>
                       {/* Encabezado de sección */}
                       <tr key={seccion.section} className="bg-gray-50 border-b border-gray-100">
-                        <td colSpan={1 + roles.length * 4}
+                        <td colSpan={1 + roles.length * ACCIONES.length}
                           className="px-4 py-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest border-r border-gray-100">
                           {seccion.section}
                         </td>
