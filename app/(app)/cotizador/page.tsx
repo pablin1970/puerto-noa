@@ -471,7 +471,6 @@ const coincidenciaRuta = (c:any): ''|'parcial'|'fuerte' => {
 // ¿Un ítem terrestre (tarifa) pertenece al tramo que coincide con la ruta de la operación?
 // El par {origen,destino} se compara SIN orden, así ida, vuelta y round trip del mismo tramo coinciden todas.
 const itemCoincideRuta = (it:any): boolean => {
-  const esExpo = s.sentido==='exportacion'
   const ptoChile = s.puertoChileId
   const ciudadNoa = s.ciudadDestinoId
   const opPaso = s.pasoId
@@ -480,6 +479,41 @@ const itemCoincideRuta = (it:any): boolean => {
   const coincidePar = par.has(ptoChile) && par.has(ciudadNoa)
   const coincidePaso = !opPaso || it.paso_id===opPaso
   return coincidePar && coincidePaso
+}
+
+// ── Forwarder (Bloque 1): coincidencia por puertos China ↔ Chile ──
+// Coincidencia de una cotización de forwarder con la ruta marítima de la operación.
+const coincidenciaRutaFW = (c:any): ''|'parcial'|'fuerte' => {
+  const items = c.items || []
+  const china = s.puertoChiId
+  const chile = s.puertoChileId
+  if(!china && !chile) return ''
+  // Usa la ruta de cabecera de la cotización si los ítems no tienen puntos
+  const checkPar = (oId:any,dId:any) => {
+    const par = new Set([oId,dId])
+    const okChina = !china || par.has(china)
+    const okChile = !chile || par.has(chile)
+    return { fuerte: (china&&chile)? (par.has(china)&&par.has(chile)) : false, parcial: okChina||okChile }
+  }
+  let fuerte=false, parcial=false
+  if(items.length>0){
+    for(const it of items){
+      const r=checkPar(it.origen_id,it.destino_id)
+      if(r.fuerte) fuerte=true; else if(r.parcial) parcial=true
+    }
+  }
+  // fallback a cabecera
+  const rc=checkPar(c.puerto_china_id,c.puerto_chile_id)
+  if(rc.fuerte) fuerte=true; else if(rc.parcial) parcial=true
+  return fuerte ? 'fuerte' : parcial ? 'parcial' : ''
+}
+// ¿Un ítem de forwarder coincide con la ruta marítima? (par puertos sin orden)
+const itemCoincideRutaFW = (it:any): boolean => {
+  const china = s.puertoChiId
+  const chile = s.puertoChileId
+  if(!china || !chile) return false
+  const par = new Set([it.origen_id, it.destino_id])
+  return par.has(china) && par.has(chile)
 }
 
 // Listas filtradas por sentido — reaccionan al cambiar s.sentido
@@ -1601,7 +1635,7 @@ const clientesFiltrados=terceros.filter(t=>
                           {especificas.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}{!isVigente(c.fecha_vencimiento||'')?'  (VENCIDA)':''}</option>)})}
                         </optgroup>)}
                         <optgroup label="Genéricas vigentes">
-                          {genericas.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}
+                          {genericas.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>({c,m:coincidenciaRutaFW(c)})).sort((a:any,b:any)=>{const r:any={fuerte:0,parcial:1,'':2};return r[a.m]-r[b.m]}).map(({c,m}:any)=>(<option key={c.id} value={c.id}>{m==='fuerte'?'✓ ':m==='parcial'?'~ ':''}{c.proveedor_nombre} — {c.referencia||c.fecha}{m==='fuerte'?'  · coincide ruta':m==='parcial'?'  · mismo puerto':''}</option>))}
                         </optgroup>
                       </>)
                     })()}
@@ -1705,7 +1739,7 @@ const clientesFiltrados=terceros.filter(t=>
                                   const coincide=s.contenedores.some(c=>c.tipo===it.tipoContenedor)
                                   const cantSug=s.contenedores.find(c=>c.tipo===it.tipoContenedor)?.cantidad
                                   return (
-                                    <tr key={it.itemId} className={`border-b border-gray-50 ${it.seleccionado?'bg-[#EBF2FF]/60':'hover:bg-gray-50'}`}>
+                                    <tr key={it.itemId} className={`border-b border-gray-50 ${itemCoincideRutaFW(it)?'bg-green-50 border-l-4 border-l-green-500':it.seleccionado?'bg-[#EBF2FF]/60':'hover:bg-gray-50'}`}>
                                       <td className="px-2 py-2.5 text-center">
                                         <button onClick={()=>toggleItemCotProv('cotsProvFW',fw.uid,it.itemId)}>
                                           <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${it.seleccionado?'bg-[#1168F8] border-[#1168F8]':'border-gray-300 hover:border-[#1168F8]'}`}>
