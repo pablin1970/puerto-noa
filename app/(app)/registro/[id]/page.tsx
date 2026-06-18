@@ -97,6 +97,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
   const [cot, setCot] = useState<Cotizacion | null>(null)
   const [loading, setLoading] = useState(true)
   const [ejecutivo, setEjecutivo] = useState<any>(null)
+  const [condGenerales, setCondGenerales] = useState<string[]>([])
   const [mostrarComparativa, setMostrarComparativa] = useState(false)
   const supabase = createClient()
   const router = useRouter()
@@ -109,6 +110,8 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
       if (cotId) setId(cotId)
     }
     if (!cotId) return
+    supabase.from('condiciones_generales').select('texto,orden,activo').eq('activo', true).order('orden')
+      .then(({ data }) => { if (data) setCondGenerales((data as any[]).map(c => c.texto)) })
     supabase.from('cotizaciones').select('*').eq('id', cotId).single().then(({ data, error }) => {
       if (error) console.error('Error:', error)
       if (data) {
@@ -499,6 +502,25 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
             </div>
           )}
 
+          {/* Condiciones particulares de esta cotización */}
+          {Array.isArray((cot as any).condiciones_particulares) && (cot as any).condiciones_particulares.filter((o: string) => o && o.trim()).length > 0 && (
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden', marginBottom: '14px' }}>
+              <div style={{ padding: '7px 16px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe', fontWeight: 700, fontSize: '10px', color: '#052698', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Condiciones particulares de esta cotización
+              </div>
+              <div style={{ padding: '12px 18px' }}>
+                <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                  {(cot as any).condiciones_particulares.filter((o: string) => o && o.trim()).map((c: string, i: number) => (
+                    <li key={i} style={{ display: 'flex', gap: '10px', marginBottom: '8px', fontSize: '10.5px', color: '#374151', lineHeight: 1.4 }}>
+                      <span style={{ color: '#1168F8', fontWeight: 700, flexShrink: 0, width: '16px' }}>{i + 1}.</span>
+                      <span>{c}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          )}
+
           {/* Condiciones generales */}
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden', marginBottom: '14px' }}>
             <div style={{ padding: '7px 16px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb', fontWeight: 700, fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '1px' }}>
@@ -506,7 +528,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
             </div>
             <div style={{ padding: '12px 18px' }}>
               <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                {CONDICIONES.map((c, i) => (
+                {(condGenerales.length > 0 ? condGenerales : CONDICIONES).map((c, i) => (
                   <li key={i} style={{ display: 'flex', gap: '10px', marginBottom: '8px', fontSize: '10.5px', color: '#6b7280', lineHeight: 1.4 }}>
                     <span style={{ color: '#1168F8', fontWeight: 700, flexShrink: 0, width: '16px' }}>{i + 1}.</span>
                     <span>{c}</span>
