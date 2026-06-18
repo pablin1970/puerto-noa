@@ -2712,15 +2712,24 @@ const clientesFiltrados=terceros.filter(t=>
 
           <div className="flex justify-between">
             <button onClick={()=>cambiarTab('mercaderia')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
-            <button onClick={()=>cambiarTab(arcaActivo?'tributos':'resumen')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">{arcaActivo?'Tributos ARCA':'Ver resumen'}</button>
+            <button onClick={()=>cambiarTab(s.incluirArca?'tributos':'resumen')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">{s.incluirArca?'Tributos ARCA':'Ver resumen'}</button>
           </div>
         </div>
       )}
 
       {/* ── TRIBUTOS (igual que antes) ── */}
       {tab==='tributos'&&(
-        arcaActivo ? (
+        s.incluirArca ? (
         <div className="space-y-4">
+          {!hayMercaderia && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-2.5">
+              <span className="text-lg leading-none">⚠️</span>
+              <div>
+                <div className="text-xs font-semibold text-amber-800">Tributos ARCA activado, pero falta cargar mercadería</div>
+                <div className="text-[11px] text-amber-700 mt-0.5">La liquidación necesita una proforma de mercadería con valor FOB para calcular la base imponible CIF. Cargala en la pestaña <button onClick={()=>cambiarTab('mercaderia')} className="underline font-semibold hover:text-amber-900">Mercadería</button> y los tributos se calcularán automáticamente.</div>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-3">
             {[
               {label:'FOB China',value:`USD ${fmt(totalFOB,0)}`,sub:'Precio mercaderia + puesta a FOB',bg:'bg-[#EBF2FF] border-[#93B8FC]',tl:'text-[#052698]',tv:'text-[#1168F8]',ts:'text-[#1168F8]'},
@@ -2765,7 +2774,7 @@ const clientesFiltrados=terceros.filter(t=>
           <div className="bg-white border border-gray-100 rounded-2xl p-10 shadow-sm text-center">
             <div className="text-4xl mb-3">§</div>
             <div className="font-semibold text-gray-700 mb-1">Los tributos ARCA están desactivados</div>
-            <div className="text-xs text-gray-400 mb-4">Activá el toggle "Tributos ARCA" desde la pestaña Embarque. Requiere tener el bloque Mercadería activo con valor FOB cargado.</div>
+            <div className="text-xs text-gray-400 mb-4">Activá el toggle "Tributos ARCA" desde los pills de la pestaña Embarque. Requiere tener el bloque Mercadería activo.</div>
             <button onClick={()=>cambiarTab('embarque')} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">Ir a Embarque</button>
           </div>
           <div className="flex justify-between">
@@ -3108,7 +3117,7 @@ const clientesFiltrados=terceros.filter(t=>
 
           {/* Botones */}
           <div className="flex justify-between print:hidden">
-            <button onClick={()=>cambiarTab(arcaActivo?'tributos':'logistica')}
+            <button onClick={()=>cambiarTab(s.incluirArca?'tributos':'logistica')}
               className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
             <div className="flex gap-2">
               <button onClick={generarImpresion}
