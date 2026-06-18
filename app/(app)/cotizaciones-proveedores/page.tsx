@@ -802,7 +802,6 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       puerto_china_id: form.puerto_china_id||null, puerto_chile_id: form.puerto_chile_id||null,
       paso_id: form.paso_id||null, ciudad_destino_id: form.ciudad_destino_id||null,
       tipo_contenedor: form.tipo_contenedor||null, tc_referencia: parseN(String(form.tc_referencia))||null,
-      es_tarifa_base: form.es_tarifa_base||false,
     }
     const { data: cot, error } = await (supabase.from('cotizaciones_proveedor_v2') as any).insert(payload).select().single()
     if(error) { alert('Error: '+error.message); setSaving(false); return }
@@ -1286,7 +1285,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             </div>
           </div>
 
-          {/* Tipo + Tarifa base */}
+          {/* Tipo de cotización */}
           <div className="flex gap-3 items-center pt-1 border-t border-gray-50">
             <div className="flex-1">
               {lbl('Tipo de cotización')}
@@ -1300,10 +1299,6 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 ))}
               </div>
             </div>
-            <label className="flex items-center gap-2 cursor-pointer pt-4">
-              <input type="checkbox" checked={form.es_tarifa_base} onChange={e=>setF('es_tarifa_base',e.target.checked)} className="w-4 h-4 rounded"/>
-              <span className="text-xs text-gray-600">Tarifa base</span>
-            </label>
           </div>
           {form.tipo==='especifica' && (
             <div>
