@@ -389,6 +389,18 @@ const totalM3 = mercElegida
   ? mercItems.reduce((t,it)=>t + (it.cantUsar||it.cantCotizada||0)*((it as any).volUnit||0), 0)
   : s.productos.reduce((t,p)=>t+p.vol_unit*p.cantidad,0)
 
+// Productos en el formato que espera el documento (CotizacionDoc): {descripcion, ncm, cantidad, precio_unit, subtotal}
+// Si la mercadería viene de una proforma del proveedor, mapeamos sus items; si no, usamos el modelo viejo s.productos
+const productosDoc = mercElegida
+  ? mercItems.map(it=>({
+      descripcion: it.descripcion||'',
+      ncm: (it as any).ncm||'',
+      cantidad: it.cantUsar||it.cantCotizada||0,
+      precio_unit: it.valorUnit||0,
+      subtotal: (it.cantUsar||it.cantCotizada||0)*(it.valorUnit||0),
+    }))
+  : s.productos
+
 // Bloque 1: ForWarder elegido y sus ítems seleccionados
 const fwElegida = s.cotsProvFW.find(c=>c.elegida)
 const subFW = fwElegida
@@ -1013,7 +1025,7 @@ async function guardar(){
       puerto_chile_id:s.puertoChileId||null,
       paso_id:s.pasoId||null,
       ciudad_destino_id:s.ciudadDestinoId||null,
-      tipo_contenedores:s.contenedores,productos:s.productos,proformas:s.proformas,
+      tipo_contenedores:s.contenedores,productos:productosDoc,proformas:s.proformas,
       total_fob:totalFOB,total_logistico:totalLog,
       total_tributos_usd:totalTribUSD,total_tributos_ars:totalTribARS,
       total_landed:totalLanded,precio_arg_equiv:s.precioArgEquiv||null,
@@ -1070,7 +1082,7 @@ const clientesFiltrados=terceros.filter(t=>
       origen:s.origen, puerto_chile:s.ptoChile, destino_noa:s.destinoNoa, incoterm:s.incoterm,
       transito:s.transito, notas:s.notas, validez:s.validez, estado:'borrador',
       condiciones_particulares:s.observaciones.filter((o:string)=>o&&o.trim()),
-      tipo_contenedores:s.contenedores, productos:s.productos,
+      tipo_contenedores:s.contenedores, productos:productosDoc,
       total_fob:totalFOB, total_logistico:totalLog,
       total_tributos_usd:totalTribUSD, total_tributos_ars:totalTribARS,
       total_landed:totalLanded, precio_arg_equiv:s.precioArgEquiv||0,
