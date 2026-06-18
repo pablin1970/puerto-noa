@@ -270,11 +270,11 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
                 </tr>
               </thead>
               <tbody>
-                <tr style={{ background: '#eff6ff', borderBottom: '1px solid #dbeafe' }}>
-                  <td style={{ ...td, fontWeight: 700, color: '#052698', fontSize: '10px' }}>Mercadería</td>
-                  <td style={{ ...td, color: '#374151' }}>Valor {cot.incoterm} China · {productos.length} producto(s)</td>
-                  <td style={{ ...td, textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', color: '#111827' }}>{fmt(totalFOB, 0)}</td>
-                  <td style={{ ...td, textAlign: 'right', color: '#9ca3af', fontSize: '10px' }}>{totalLanded > 0 ? fmt(totalFOB / totalLanded * 100, 1) : '0'}%</td>
+                <tr style={{ background: '#dbeafe', borderBottom: '2px solid #93c5fd', borderLeft: '4px solid #1168F8' }}>
+                  <td style={{ ...td, fontWeight: 900, color: '#052698', fontSize: '11px' }}>Mercadería</td>
+                  <td style={{ ...td, color: '#1e3a5f', fontWeight: 600 }}>Valor {cot.incoterm} China · {productos.length} producto(s)</td>
+                  <td style={{ ...td, textAlign: 'right', fontWeight: 900, fontFamily: 'monospace', color: '#052698', fontSize: '12px' }}>{fmt(totalFOB, 0)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: '#1168F8', fontSize: '10px', fontWeight: 700 }}>{totalLanded > 0 ? fmt(totalFOB / totalLanded * 100, 1) : '0'}%</td>
                 </tr>
                 {presup.filter((it: any) => it.tipo !== 'tributos').map((it: any, i: number) => (
                   <tr key={i} style={{ borderBottom: '1px solid #f8fafc' }}>
@@ -284,16 +284,16 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
                     <td style={{ ...td, textAlign: 'right', color: '#d1d5db', fontSize: '10px' }}>{totalLanded > 0 ? fmt(it.usd / totalLanded * 100, 1) : '0'}%</td>
                   </tr>
                 ))}
-                <tr style={{ background: '#f8fafc', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
-                  <td colSpan={2} style={{ ...td, fontWeight: 700, fontSize: '11px', color: '#374151' }}>Subtotal costos logísticos</td>
-                  <td style={{ ...td, textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', color: '#374151' }}>{fmt(totalLog, 0)}</td>
-                  <td style={{ ...td, textAlign: 'right', color: '#9ca3af', fontSize: '10px' }}>{totalLanded > 0 ? fmt(totalLog / totalLanded * 100, 1) : '0'}%</td>
+                <tr style={{ background: '#e5e7eb', borderTop: '2px solid #9ca3af', borderBottom: '2px solid #9ca3af', borderLeft: '4px solid #6b7280' }}>
+                  <td colSpan={2} style={{ ...td, fontWeight: 900, fontSize: '11px', color: '#1f2937' }}>Subtotal costos logísticos</td>
+                  <td style={{ ...td, textAlign: 'right', fontWeight: 900, fontFamily: 'monospace', color: '#1f2937', fontSize: '12px' }}>{fmt(totalLog, 0)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: '#4b5563', fontSize: '10px', fontWeight: 700 }}>{totalLanded > 0 ? fmt(totalLog / totalLanded * 100, 1) : '0'}%</td>
                 </tr>
-                <tr style={{ background: '#fffbeb', borderBottom: '1px solid #fde68a' }}>
-                  <td style={{ ...td, fontWeight: 700, color: '#b45309', fontSize: '10px' }}>Tributos ARCA</td>
-                  <td style={{ ...td, color: '#374151' }}>Régimen {regimen} · Aduana Jujuy · Base CIF Jama{tcRef > 0 ? ` (TC ref. ARS ${fmt(tcRef, 0)})` : ''}</td>
-                  <td style={{ ...td, textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', color: '#111827' }}>{fmt(totalTribUSD, 0)}</td>
-                  <td style={{ ...td, textAlign: 'right', color: '#9ca3af', fontSize: '10px' }}>{totalLanded > 0 ? fmt(totalTribUSD / totalLanded * 100, 1) : '0'}%</td>
+                <tr style={{ background: '#fef3c7', borderTop: '2px solid #fbbf24', borderBottom: '2px solid #fbbf24', borderLeft: '4px solid #ef9f27' }}>
+                  <td style={{ ...td, fontWeight: 900, color: '#92400e', fontSize: '11px' }}>Tributos ARCA</td>
+                  <td style={{ ...td, color: '#78350f', fontWeight: 600 }}>Régimen {regimen} · Aduana Jujuy · Base CIF Jama{tcRef > 0 ? ` (TC ref. ARS ${fmt(tcRef, 0)})` : ''}</td>
+                  <td style={{ ...td, textAlign: 'right', fontWeight: 900, fontFamily: 'monospace', color: '#92400e', fontSize: '12px' }}>{fmt(totalTribUSD, 0)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: '#b45309', fontSize: '10px', fontWeight: 700 }}>{totalLanded > 0 ? fmt(totalTribUSD / totalLanded * 100, 1) : '0'}%</td>
                 </tr>
               </tbody>
               <tfoot>
@@ -407,6 +407,8 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
             </div>
           )}
 
+          <div style={{ flex: 1 }}></div>
+
           {/* Condiciones particulares de esta cotización */}
           {Array.isArray((cot as any).condiciones_particulares) && (cot as any).condiciones_particulares.filter((o: string) => o && o.trim()).length > 0 && (
             <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden', marginBottom: '14px' }}>
@@ -462,7 +464,6 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
             </div>
           </div>
 
-          <div style={{ flex: 1 }}></div>
           <DocFooter cot={cot} fechaEmision={fechaEmision} pagina={2} total={TOTAL_PAGS} />
         </div>
 
