@@ -1222,7 +1222,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         <div className="px-5 py-4 space-y-4">
           {/* Proveedor */}
           <div className="relative">
-            {lbl('Proveedor *')}
+            {lbl('Proveedor * (buscá por nombre, CUIT/RUT o fantasía)')}
             {form.origen==='estimada' ? (
               <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-700 flex items-center gap-2">
                 <span>✏️</span><span className="font-semibold">{form.proveedor_nombre||usuarioNombre||'Puerto NOA SpA'}</span>
@@ -1234,7 +1234,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                   onChange={e=>{setF('proveedor_nombre',e.target.value);setBuscarProv(e.target.value);setShowProvDropdown(e.target.value.length>0)}}
                   onFocus={()=>setShowProvDropdown(form.proveedor_nombre.length>0)}
                   onBlur={()=>setTimeout(()=>setShowProvDropdown(false),200)}
-                  className={inp} placeholder="Nombre del proveedor..." />
+                  className={inp} placeholder="Buscar por nombre, CUIT/RUT o fantasía..." />
                 {showProvDropdown && form.proveedor_nombre.length>0 && (
                   <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-44 overflow-y-auto">
                     {provsFiltrados.map((t:any)=>(
