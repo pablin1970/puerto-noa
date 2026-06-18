@@ -1257,10 +1257,11 @@ const clientesFiltrados=terceros.filter(t=>
           <Card title="Cliente">
             {/* Buscador */}
             <div className="relative mb-3">
+              <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Buscá por nombre, CUIT/RUT o fantasía</label>
               <input value={buscarCliente||s.cliente}
                 onChange={e=>{setBuscarCliente(e.target.value);u('cliente',e.target.value);setShowClienteDropdown(e.target.value.length>0);if(!e.target.value){setClienteSelId(null);setShowHist(false)}}}
                 onFocus={()=>setShowClienteDropdown(true)} onClick={e=>e.stopPropagation()}
-                className={inp} placeholder="Buscar cliente..."/>
+                className={inp} placeholder="Buscar por nombre, CUIT/RUT o fantasía..."/>
               {showClienteDropdown&&(
                 <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto mt-1" onClick={e=>e.stopPropagation()}>
                   {clientesFiltrados.length>0?clientesFiltrados.map(t=>(
