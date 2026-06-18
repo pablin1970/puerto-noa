@@ -36,6 +36,8 @@ export default function InteligenciaPreciosPage() {
   const [filtCat, setFiltCat] = useState('flete_maritimo')
   const [filtProvs, setFiltProvs] = useState<string[]>([])
   const [filtMeses, setFiltMeses] = useState(12)
+  // Filtro global por tipo de cotización (afecta Evolución y Comparativa)
+  const [filtTipo, setFiltTipo] = useState<'todas'|'generica'|'especifica'>('todas')
 
   // Filtros Tab 2
   const [filtCat2, setFiltCat2] = useState('flete_maritimo')
@@ -51,7 +53,7 @@ export default function InteligenciaPreciosPage() {
     setLoading(true)
     const [itemsRes, cotsRes, tcRes] = await Promise.all([
       supabase.from('cotizaciones_proveedor_v2_items')
-        .select('*, cotizacion:cotizaciones_proveedor_v2(id,proveedor_nombre,fecha,rubro,estado,referencia,tramo,puerto_china_id,puerto_chile_id)')
+        .select('*, cotizacion:cotizaciones_proveedor_v2(id,proveedor_nombre,fecha,rubro,estado,referencia,tramo,tipo,cliente_id,puerto_china_id,puerto_chile_id)')
         .order('cotizacion_id'),
       supabase.from('cotizaciones_proveedor_v2')
         .select('id,proveedor_nombre,fecha,rubro,estado,referencia,tramo')
@@ -78,9 +80,10 @@ export default function InteligenciaPreciosPage() {
       if (it.categoria !== filtCat) return false
       if (filtProvs.length > 0 && !filtProvs.includes(it.cotizacion?.proveedor_nombre)) return false
       if (it.tipo_calculo === 'pct_cif') return false // excluir % del gráfico de valores
+      if (filtTipo !== 'todas' && (it.cotizacion?.tipo || 'generica') !== filtTipo) return false
       return true
     })
-  }, [items, filtCat, filtProvs, filtMeses])
+  }, [items, filtCat, filtProvs, filtMeses, filtTipo])
 
   const proveedoresDisp = useMemo(() => {
     const cats = items.filter(it => it.categoria === filtCat && it.tipo_calculo !== 'pct_cif')
@@ -130,13 +133,14 @@ export default function InteligenciaPreciosPage() {
     return items.filter(it => {
       if (it.categoria !== filtCat2) return false
       if (it.tipo_calculo === 'pct_cif') return false
+      if (filtTipo !== 'todas' && (it.cotizacion?.tipo || 'generica') !== filtTipo) return false
       if (filtFecha2) {
         const fecha = it.cotizacion?.fecha || ''
         return fecha >= filtFecha2
       }
       return true
     })
-  }, [items, filtCat2, filtFecha2])
+  }, [items, filtCat2, filtFecha2, filtTipo])
 
   // Última cotización de cada proveedor para esa categoría
   const ultimasPorProv = useMemo(() => {
@@ -242,6 +246,15 @@ export default function InteligenciaPreciosPage() {
                 <option value={12}>Último año</option>
                 <option value={24}>Últimos 2 años</option>
                 <option value={120}>Todo el historial</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Tipo cotización</label>
+              <select value={filtTipo} onChange={e => setFiltTipo(e.target.value as any)}
+                className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
+                <option value="todas">Todas</option>
+                <option value="generica">Solo genéricas</option>
+                <option value="especifica">⭐ Solo específicas</option>
               </select>
             </div>
             {proveedoresDisp.length > 0 && (
@@ -404,6 +417,15 @@ export default function InteligenciaPreciosPage() {
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Cotizaciones desde</label>
               <input type="date" value={filtFecha2} onChange={e => setFiltFecha2(e.target.value)}
                 className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]"/>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Tipo cotización</label>
+              <select value={filtTipo} onChange={e => setFiltTipo(e.target.value as any)}
+                className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
+                <option value="todas">Todas</option>
+                <option value="generica">Solo genéricas</option>
+                <option value="especifica">⭐ Solo específicas</option>
+              </select>
             </div>
             <div className="ml-auto text-right">
               <div className="text-[10px] text-gray-400">{ultimasPorProv.length} proveedores</div>
