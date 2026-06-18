@@ -857,7 +857,28 @@ function agregarGastoChileDesdeSistema(cotId:string){
   setS(p=>({...p,gastosChile:[...p.gastosChile,...nuevos]}))
 }
 
-async function seleccionarDespachante(d:any){
+// Carga una cotización de despachante del sistema (patrón estándar, igual que transporte)
+function cargarDespachanteDesdeSistema(cotId:string){
+  const cot=cotsArgDisponibles.find((c:any)=>c.id===cotId)
+  if(!cot) return
+  const items=(cot.items||[]) as any[]
+  const it=items[0] as any
+  if(it){
+    setS(p=>({...p,
+      honTipo:(it.tipo_calculo==='pct_cif'?'pct_cif':it.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,
+      honValor:it.valor||0,honPiso:it.piso_usd||0,honTecho:it.techo_usd||0,
+      gastosDesp:items.slice(1).map((x:any)=>({id:uid2(),desc:x.descripcion,tipoCalc:(x.tipo_calculo==='pct_cif'?'pct_cif':x.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,moneda:'USD' as const,valor:x.valor||0,pisoUsd:x.piso_usd||0,techoUsd:x.techo_usd||0,usd:0,ars:0})),
+    }))
+  }
+  // Vincular despachante (tercero) y datos de la cotización para mostrar
+  if(cot.tercero_id) setDespachanteSelId(cot.tercero_id)
+  u('despachante',cot.proveedor_nombre||'')
+  setProvUsado(pv=>({...pv,4:cot.id}))
+  setCotDesp({id:cot.id,referencia:cot.referencia||'',fecha:cot.fecha||'',tipo:(cot.tipo==='especifica'?'especifica':'generica')})
+}
+
+// (Legacy) Selección de despachante por tercero — ya no se usa en la UI, se mantiene por compatibilidad
+async function seleccionarDespachanteLegacy(d:any){
   setDespachanteSelId(d.id)
   u('despachante',d.razon_social)
   setBuscarDespachante('')
@@ -944,14 +965,20 @@ async function duplicarCotizacion(cotId:string){
   const tcClp=(tcData as any)?.clp
   const snap=(orig as any).estado_cotizador
   if(snap && typeof snap==='object'){
+    // Extraer campos extra que no son parte de CotState (van fuera de s)
+    const {_despachanteSelId, _cotDesp, _provUsado, ...snapState}=snap
     // Duplicación completa: cargamos el estado entero y solo pisamos TC actualizado + limpiamos notas
     setS(p=>({
       ...p,           // base por si el snapshot viejo no tiene algún campo nuevo
-      ...snap,
-      tcTrib: tcArs || snap.tcTrib || p.tcTrib,
-      tcClp:  tcClp || snap.tcClp  || p.tcClp,
+      ...snapState,
+      tcTrib: tcArs || snapState.tcTrib || p.tcTrib,
+      tcClp:  tcClp || snapState.tcClp  || p.tcClp,
       notas:'',
     }))
+    // Restaurar despachante elegido y cotización de proveedor usada
+    if(_despachanteSelId) setDespachanteSelId(_despachanteSelId)
+    if(_cotDesp) setCotDesp(_cotDesp)
+    if(_provUsado) setProvUsado(_provUsado)
   } else {
     // Cotización vieja sin snapshot: copiamos lo básico que está persistido (fallback)
     setS(p=>({...p,
@@ -1031,7 +1058,7 @@ async function guardar(){
       total_landed:totalLanded,precio_arg_equiv:s.precioArgEquiv||null,
       regimen:s.regimen,tc_ars:s.tcTrib,derechos_pct:s.derPct,
       opcion_transporte:s.optTransp,validez:s.validez,estado:'borrador',
-      estado_cotizador:s,
+      estado_cotizador:{...s, _despachanteSelId:despachanteSelId, _cotDesp:cotDesp, _provUsado:provUsado},
       ejecutivo_id:uid,creado_por:uid,modificado_por:uid,presupuesto,
     })
     if(error){alert('Error al guardar: '+error.message);setSaving(false);return}
@@ -2539,53 +2566,52 @@ const clientesFiltrados=terceros.filter(t=>
             <div className="px-5 py-4">
               {/* Seccion A — Despachante de aduana */}
               <div className="mb-5">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#6b21a8]/20 text-[#6b21a8] text-[10px] font-bold border border-[#6b21a8]/30">A</span>
                     <span className="text-xs font-semibold text-gray-700">Despachante de aduana</span>
                   </div>
-                  <button onClick={()=>u('gastosDesp',[...s.gastosDesp,{id:uid2(),desc:'',tipoCalc:'fijo_usd',moneda:'USD',valor:0,pisoUsd:0,techoUsd:0,usd:0,ars:0}])}
-                    className="text-[10px] text-[#6b21a8] hover:underline">+ Agregar gasto</button>
-                </div>
-                {/* Buscador despachante + selector cotización del sistema */}
-                <div className="flex gap-2 mb-3">
-                  <div className="relative flex-1">
-                    <input
-                      value={despachanteSelId ? despachantes.find((d:any)=>d.id===despachanteSelId)?.razon_social||'' : buscarDespachante}
-                      onChange={e=>{setBuscarDespachante(e.target.value);setShowDespachanteDropdown(e.target.value.length>0);if(!e.target.value){setDespachanteSelId(null);u('despachante','')}}}
-                      onFocus={()=>setShowDespachanteDropdown(true)}
-                      onClick={e=>e.stopPropagation()}
-                      className={inp} placeholder="Buscar despachante de aduana..."/>
-                    {showDespachanteDropdown&&despachantes.filter((d:any)=>!buscarDespachante||d.razon_social?.toLowerCase().includes(buscarDespachante.toLowerCase())).length>0&&(
-                      <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-40 overflow-y-auto mt-1" onClick={e=>e.stopPropagation()}>
-                        {despachantes.filter((d:any)=>!buscarDespachante||d.razon_social?.toLowerCase().includes(buscarDespachante.toLowerCase())).map((d:any)=>(
-                          <button key={d.id} onMouseDown={()=>seleccionarDespachante(d)} className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
-                            <div className="font-semibold text-gray-900">{d.razon_social}</div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {despachantes.length===0&&<div className="mt-1 text-[9px] text-amber-600">Sin despachantes. Agregalos en Clientes y Proveedores con rubro Despachante de aduana.</div>}
+                  <div className="flex items-center gap-2">
+                    <select onChange={e=>{if(e.target.value){cargarDespachanteDesdeSistema(e.target.value);e.target.value=''}}}
+                      className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#6b21a8]" defaultValue="">
+                      <option value="">+ Cargar del sistema</option>
+                      {(()=>{
+                        const desp=cotsArg.filter(c=>c.rubro==='gastos_argentina')
+                        const esp=desp.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                        const gen=desp.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                        return(<>
+                          {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}</option>)})}</optgroup>)}
+                          <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
+                        </>)
+                      })()}
+                    </select>
+                    <button onClick={()=>{
+                      window.open(`/cotizaciones-proveedores?nuevo=1&bloque=4&rubro=gastos_argentina&cliente_id=${clienteSelId||''}&cliente_nombre=${encodeURIComponent(s.cliente||'')}`, '_blank')
+                    }} className="px-3 py-1 bg-[#6b21a8] text-white rounded-lg text-[10px] font-bold hover:bg-[#581c87] whitespace-nowrap">+ Manual</button>
+                    <button onClick={()=>u('gastosDesp',[...s.gastosDesp,{id:uid2(),desc:'',tipoCalc:'fijo_usd',moneda:'USD',valor:0,pisoUsd:0,techoUsd:0,usd:0,ars:0}])}
+                      className="text-[10px] text-[#6b21a8] hover:underline whitespace-nowrap">+ Agregar gasto</button>
                   </div>
-
                 </div>
-                {loadingDesp&&<div className="text-[10px] text-gray-400 mb-2">Cargando condiciones del despachante...</div>}
-                {despachanteSelId&&(
+                {despachanteSelId||cotDesp?(
                   <div className="mb-3 flex items-center gap-2 flex-wrap">
-                    <span className="text-[9px] text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded-full">
-                      ✓ {despachantes.find((d:any)=>d.id===despachanteSelId)?.razon_social}
-                    </span>
-                    {cotDesp ? (
+                    {s.despachante&&(
+                      <span className="text-[9px] text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded-full">
+                        ✓ {s.despachante}
+                      </span>
+                    )}
+                    {cotDesp && (
                       <span className={`text-[9px] font-medium px-2 py-0.5 rounded-full ${cotDesp.tipo==='especifica'?'bg-amber-50 text-amber-700 border border-amber-200':'bg-gray-100 text-gray-500'}`}>
                         {cotDesp.tipo==='especifica'?'⭐ Cotizacion especifica':'Cotizacion generica'}
                         {cotDesp.referencia?' — '+cotDesp.referencia:''}
                         {cotDesp.fecha?' ('+cotDesp.fecha.slice(0,10).split('-').reverse().join('/')+')':''}
                       </span>
-                    ) : (
-                      <span className="text-[9px] text-gray-400 italic">Sin cotizacion del sistema — valores manuales</span>
                     )}
-                    <button onClick={()=>{setDespachanteSelId(null);u('despachante','');setBuscarDespachante('');setCotDesp(null);setS(p=>({...p,honTipo:'fijo_usd',honValor:0,honPiso:0,honTecho:0,gastosDesp:[]}))}}
-                      className="text-[9px] text-gray-400 hover:text-red-500">Cambiar</button>
+                    <button onClick={()=>{setDespachanteSelId(null);u('despachante','');setCotDesp(null);setProvUsado(pv=>({...pv,4:null}));setS(p=>({...p,honTipo:'fijo_usd',honValor:0,honPiso:0,honTecho:0,gastosDesp:[]}))}}
+                      className="text-[9px] text-gray-400 hover:text-red-500">Quitar</button>
+                  </div>
+                ):(
+                  <div className="mb-3 text-[10px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+                    Cargá una cotización de despachante del sistema, creá una con <strong className="text-[#6b21a8]">+ Manual</strong>, o completá los honorarios a mano abajo.
                   </div>
                 )}
                 {/* Honorario — fijo, siempre visible. Fila 1: tipo+valor. Fila 2 (solo si %): piso+techo */}
