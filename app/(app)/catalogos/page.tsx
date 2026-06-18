@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 
-type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm' | 'empresa'
+type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm' | 'empresa' | 'condiciones_cotizacion'
 
 const TABS = [
   { key: 'categorias',    label: 'Categorías de precio', icon: '🏷' },
@@ -15,6 +15,7 @@ const TABS = [
   { key: 'fondos',        label: 'Fondos en custodia',   icon: '🏦' },
   { key: 'bloques_cotizacion', label: 'Bloques cotización',   icon: '📋' },
   { key: 'rubros_proveedor',   label: 'Rubros de proveedor',  icon: '🏷️' },
+  { key: 'condiciones_cotizacion', label: 'Condiciones cotización', icon: '📜' },
   { key: 'gastos_categorias',  label: 'Cat. gastos fijos',    icon: '💸' },
   { key: 'cuentas_abm',        label: 'Cuentas (caja y bancos)', icon: '🏦' },
   { key: 'empresa',             label: 'Datos de la empresa',    icon: '🏢' },
@@ -587,6 +588,9 @@ export default function CatalogosPage() {
 
       {/* ── RUBROS DE PROVEEDOR ── */}
       {tab === 'rubros_proveedor' && <RubrosProveedorABM />}
+
+      {/* ── CONDICIONES DE COTIZACIÓN ── */}
+      {tab === 'condiciones_cotizacion' && <CondicionesCotizacionABM />}
     </div>
   )
 }
@@ -1978,6 +1982,155 @@ function EmpresaABM() {
               className="px-6 py-2.5 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
               {saving ? 'Guardando...' : 'Guardar datos'}
             </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── ABM de condiciones generales de cotización ───────────────────────
+function CondicionesCotizacionABM() {
+  const supabase = useMemo(() => createClient(), [])
+  const [condiciones, setCondiciones] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [modal, setModal] = useState<{ type: 'nuevo' | 'editar'; cond?: any } | null>(null)
+  const [form, setForm] = useState({ texto: '', orden: 0 })
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase.from('condiciones_generales').select('*').order('orden')
+    if (data) setCondiciones(data)
+    setLoading(false)
+  }
+
+  function abrirNuevo() {
+    setForm({ texto: '', orden: condiciones.length + 1 })
+    setModal({ type: 'nuevo' })
+  }
+  function abrirEditar(c: any) {
+    setForm({ texto: c.texto, orden: c.orden })
+    setModal({ type: 'editar', cond: c })
+  }
+  async function guardar() {
+    if (!form.texto.trim()) return
+    setSaving(true)
+    if (modal?.type === 'nuevo') {
+      await (supabase.from('condiciones_generales') as any).insert({ texto: form.texto.trim(), orden: form.orden, activo: true })
+    } else if (modal?.cond) {
+      await (supabase.from('condiciones_generales') as any).update({ texto: form.texto.trim(), orden: form.orden }).eq('id', modal.cond.id)
+    }
+    await load()
+    setModal(null)
+    setSaving(false)
+  }
+  async function toggleActivo(c: any) {
+    await (supabase.from('condiciones_generales') as any).update({ activo: !c.activo }).eq('id', c.id)
+    setCondiciones(prev => prev.map(x => x.id === c.id ? { ...x, activo: !x.activo } : x))
+  }
+  async function eliminar(id: string) {
+    if (!confirm('¿Eliminar esta condición? Dejará de aparecer en las cotizaciones.')) return
+    await supabase.from('condiciones_generales').delete().eq('id', id)
+    setCondiciones(prev => prev.filter(c => c.id !== id))
+  }
+  async function mover(c: any, dir: 'arriba' | 'abajo') {
+    const ord = [...condiciones].sort((a, b) => a.orden - b.orden)
+    const idx = ord.findIndex(x => x.id === c.id)
+    const swapIdx = dir === 'arriba' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= ord.length) return
+    const vecino = ord[swapIdx]
+    const ordenC = c.orden, ordenV = vecino.orden
+    setCondiciones(prev => prev.map(x =>
+      x.id === c.id ? { ...x, orden: ordenV } : x.id === vecino.id ? { ...x, orden: ordenC } : x
+    ).sort((a, b) => a.orden - b.orden))
+    await (supabase.from('condiciones_generales') as any).update({ orden: ordenV }).eq('id', c.id)
+    await (supabase.from('condiciones_generales') as any).update({ orden: ordenC }).eq('id', vecino.id)
+  }
+
+  const ordenadas = [...condiciones].sort((a, b) => a.orden - b.orden)
+  const activas = condiciones.filter(c => c.activo).length
+  const inp2 = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="text-sm font-bold text-gray-900">Condiciones generales de cotización</div>
+          <div className="text-[11px] text-gray-400 mt-0.5">
+            Aparecen al pie de toda cotización. Las condiciones particulares de cada operación se cargan en el generador. — {activas} activas
+          </div>
+        </div>
+        <button onClick={abrirNuevo} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] shadow-sm">
+          + Nueva condición
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="p-12 text-center text-gray-400">Cargando...</div>
+      ) : ordenadas.length === 0 ? (
+        <div className="p-12 text-center text-gray-400 text-sm bg-white border border-gray-100 rounded-2xl">
+          Sin condiciones cargadas. Hacé click en <strong>+ Nueva condición</strong> para agregar la primera.
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+          {ordenadas.map((c, i) => (
+            <div key={c.id} className={`flex items-start gap-3 px-5 py-3.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors ${!c.activo ? 'opacity-50' : ''}`}>
+              <div className="flex flex-col gap-0.5 pt-0.5">
+                <button onClick={() => mover(c, 'arriba')} disabled={i === 0}
+                  className="text-gray-300 hover:text-[#1168F8] disabled:opacity-30 text-xs leading-none">▲</button>
+                <button onClick={() => mover(c, 'abajo')} disabled={i === ordenadas.length - 1}
+                  className="text-gray-300 hover:text-[#1168F8] disabled:opacity-30 text-xs leading-none">▼</button>
+              </div>
+              <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[11px] font-bold text-gray-500 flex-shrink-0 mt-0.5">
+                {i + 1}
+              </div>
+              <div className="flex-1 text-xs text-gray-700 leading-relaxed pt-0.5">{c.texto}</div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button onClick={() => toggleActivo(c)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${c.activo ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                  {c.activo ? 'Activa' : 'Inactiva'}
+                </button>
+                <button onClick={() => abrirEditar(c)}
+                  className="px-2.5 py-1 border border-gray-200 rounded-lg text-[10px] font-semibold text-gray-600 hover:bg-gray-100">Editar</button>
+                <button onClick={() => eliminar(c.id)}
+                  className="px-2.5 py-1 border border-red-100 rounded-lg text-[10px] font-semibold text-red-500 hover:bg-red-50">Eliminar</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => !saving && setModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-gray-100 bg-gray-50">
+              <span className="font-semibold text-sm text-gray-900">
+                {modal.type === 'nuevo' ? 'Nueva condición general' : 'Editar condición'}
+              </span>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Texto de la condición *</label>
+                <textarea value={form.texto} onChange={e => setForm(f => ({ ...f, texto: e.target.value }))}
+                  className={inp2 + ' min-h-24 resize-y'} placeholder="Ej: Los valores en USD se convertirán según el tipo de cambio vigente..." autoFocus />
+                <div className="text-[10px] text-gray-400 mt-1">Aparecerá tal cual en la sección de condiciones generales de la cotización impresa.</div>
+              </div>
+              <div className="w-32">
+                <label className="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Orden</label>
+                <input type="number" value={form.orden} onChange={e => setForm(f => ({ ...f, orden: parseInt(e.target.value) || 0 }))} className={inp2} />
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={() => setModal(null)} disabled={saving}
+                className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+              <button onClick={guardar} disabled={saving || !form.texto.trim()}
+                className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
+                {saving ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
           </div>
         </div>
       )}
