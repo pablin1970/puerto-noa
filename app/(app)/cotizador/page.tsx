@@ -2730,12 +2730,31 @@ const clientesFiltrados=terceros.filter(t=>
               </div>
             </div>
           )}
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              {label:'FOB China',value:`USD ${fmt(totalFOB,0)}`,sub:'Precio mercaderia + puesta a FOB',bg:'bg-[#EBF2FF] border-[#93B8FC]',tl:'text-[#052698]',tv:'text-[#1168F8]',ts:'text-[#1168F8]'},
-              {label:'Flete + Seguro (ForWarder)',value:`USD ${fmt(subFW+totalSeg,0)}`,sub:'Cotizacion ForWarder elegida',bg:'bg-[#EBF2FF] border-[#93B8FC]',tl:'text-[#052698]',tv:'text-[#1168F8]',ts:'text-[#1168F8]'},
-              {label:'Valor CIF Jama — base imponible',value:`USD ${fmt(cif,0)}`,sub:`ARS ${Math.round(cifARS).toLocaleString('es-AR')}`,bg:'bg-[#052698] border-[#052698]',tl:'text-blue-200',tv:'text-white',ts:'text-blue-300'},
-            ].map(b=><div key={b.label} className={`${b.bg} border rounded-xl p-4`}><div className={`text-[10px] mb-1 ${b.tl}`}>{b.label}</div><div className={`text-xl font-semibold ${b.tv}`}>{b.value}</div><div className={`text-[10px] mt-1 ${b.ts}`}>{b.sub}</div></div>)}
+          {/* Fórmula del CIF — tira compacta horizontal */}
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-5 py-2.5 border-b border-gray-50 flex items-center gap-2">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Base imponible</span>
+              <span className="text-[10px] text-gray-300">· cómo se llega al valor CIF</span>
+            </div>
+            <div className="flex items-stretch divide-x divide-gray-100">
+              <div className="flex-1 px-5 py-3.5">
+                <div className="text-[10px] text-gray-400 mb-0.5">FOB origen</div>
+                <div className="text-lg font-bold font-mono text-gray-800">USD {fmt(totalFOB,0)}</div>
+                <div className="text-[9px] text-gray-400 mt-0.5">Mercadería + puesta a FOB</div>
+              </div>
+              <div className="flex items-center justify-center px-2 text-gray-300 text-lg font-light">+</div>
+              <div className="flex-1 px-5 py-3.5">
+                <div className="text-[10px] text-gray-400 mb-0.5">Flete + seguro</div>
+                <div className="text-lg font-bold font-mono text-gray-800">USD {fmt(subFW+totalSeg,0)}</div>
+                <div className="text-[9px] text-gray-400 mt-0.5">ForWarder elegido</div>
+              </div>
+              <div className="flex items-center justify-center px-2 text-gray-300 text-lg font-light">=</div>
+              <div className="flex-1 px-5 py-3.5" style={{background:'#052698'}}>
+                <div className="text-[10px] text-blue-200 mb-0.5">Valor CIF Jama</div>
+                <div className="text-lg font-bold font-mono text-white">USD {fmt(cif,0)}</div>
+                <div className="text-[9px] text-blue-300 mt-0.5 font-mono">ARS {Math.round(cifARS).toLocaleString('es-AR')}</div>
+              </div>
+            </div>
           </div>
           <Card title="Liquidacion ARCA — Aduana Jujuy">
             <div className="grid grid-cols-4 gap-3 mb-4">
@@ -2747,19 +2766,37 @@ const clientesFiltrados=terceros.filter(t=>
             {tribCfg.length===0?(
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700">No hay tributos configurados para el Regimen {s.regimen}.</div>
             ):(
-              <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
-                <div className="text-[10px] font-semibold text-gray-500 mb-3 uppercase tracking-wider">REGIMEN {s.regimen} — SIM Aduana Jujuy</div>
-                {tributos.map((t:any)=>(
-                  <div key={t.codigo} className="grid grid-cols-5 gap-2 text-xs py-1.5 border-b border-gray-100">
-                    <div className="font-mono text-[10px] text-gray-400">{t.codigo}</div>
-                    <div className="col-span-2 text-gray-700">{t.concepto}</div>
-                    <div className="text-right text-gray-500">{t.tipo==='pct'?(t.codigo==='010'?`${s.derPct}%`:`${t.valor}%`):'Fijo'}</div>
-                    <div className="text-right font-mono font-medium text-gray-800">ARS {Math.round(t.imp).toLocaleString('es-AR')}</div>
-                  </div>
-                ))}
-                <div className="flex justify-between pt-2 mt-1 border-t border-gray-200 font-semibold text-sm">
-                  <span>TOTAL PAGADO ADUANA</span>
-                  <span className="font-mono text-[#052698]">ARS {Math.round(totalTribARS).toLocaleString('es-AR')}</span>
+              <div className="border border-gray-100 rounded-xl overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr style={{background:'#052698'}}>
+                      <th className="text-left px-3 py-2.5 text-[9px] font-bold text-blue-200 uppercase tracking-wider w-16">Código</th>
+                      <th className="text-left px-3 py-2.5 text-[9px] font-bold text-blue-100 uppercase tracking-wider">Concepto</th>
+                      <th className="text-right px-3 py-2.5 text-[9px] font-bold text-blue-200 uppercase tracking-wider w-20">Alícuota</th>
+                      <th className="text-right px-4 py-2.5 text-[9px] font-bold text-blue-100 uppercase tracking-wider w-32">Importe ARS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tributos.map((t:any)=>(
+                      <tr key={t.codigo} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60">
+                        <td className="px-3 py-2.5">
+                          <span className="inline-block font-mono text-[10px] text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">{t.codigo}</span>
+                        </td>
+                        <td className="px-3 py-2.5 text-gray-700">{t.concepto}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-gray-400 text-[11px]">{t.tipo==='pct'?(t.codigo==='010'?`${s.derPct}%`:`${t.valor}%`):'Fijo'}</td>
+                        <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-800">{Math.round(t.imp).toLocaleString('es-AR')}</td>
+                      </tr>
+                    ))}
+                    <tr style={{background:'#EBF2FF'}} className="border-t-2 border-[#1168F8]">
+                      <td colSpan={2} className="px-3 py-3 font-bold text-sm text-[#052698]">Total pagado a aduana</td>
+                      <td className="px-3 py-3 text-right text-[10px] text-[#1168F8]/60 font-mono">Régimen {s.regimen}</td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-base text-[#052698]">{Math.round(totalTribARS).toLocaleString('es-AR')}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                  <span className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">SIM Aduana Jujuy · Régimen {s.regimen}</span>
+                  <span className="text-[10px] text-gray-500 font-mono">≈ USD {fmt(totalTribUSD,0)} <span className="text-gray-300">@ {fmt(s.tcTrib,0)}</span></span>
                 </div>
               </div>
             )}
