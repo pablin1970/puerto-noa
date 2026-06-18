@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import Image from 'next/image'
 import type { Usuario } from '@/types'
+import { TODOS_LOS_MODULOS } from '@/lib/modulos'
 
 interface NavItem {
   href?: string
@@ -75,6 +76,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Usuario | null>(null)
   const [tc, setTc] = useState<TCWidget>({ ARS: null, CLP: null, CNY: null, fecha: '', hora: '', fuente: '' })
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})  // modulo → acciones permitidas
+  const [esSuper, setEsSuper] = useState(false)
+  const [modulosNuevosCount, setModulosNuevosCount] = useState(0)
   const [collapsed, setCollapsed] = useState(false)
   const supabase = useMemo(() => createClient(), [])
 
@@ -102,6 +105,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             map[p.modulo].push(p.accion)
           }
           setPermisos(map)
+        }
+        // ¿El rol es Super Administrador? Solo entonces detectamos módulos nuevos sin configurar
+        const { data: rol } = await supabase
+          .from('roles')
+          .select('es_super_admin')
+          .eq('id', rolId)
+          .single()
+        if ((rol as any)?.es_super_admin) {
+          setEsSuper(true)
+          const { data: todosPerms } = await supabase
+            .from('rol_permisos')
+            .select('modulo')
+          const modulosConfigurados = new Set((todosPerms || []).map((p: any) => p.modulo))
+          const nuevos = TODOS_LOS_MODULOS.filter(m => !modulosConfigurados.has(m))
+          setModulosNuevosCount(nuevos.length)
         }
       }
     })
@@ -166,6 +184,33 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {collapsed ? '›' : '‹'}
           </button>
         </div>
+
+        {/* ⚠ Alerta de módulos nuevos sin configurar — SOLO Super Administrador */}
+        {esSuper && modulosNuevosCount > 0 && !collapsed && (
+          <Link href="/usuarios"
+            className="mx-3 mt-3 block rounded-xl overflow-hidden hover:brightness-105 transition-all"
+            style={{ background: '#f59e0b', border: '1px solid #fbbf24' }}>
+            <div className="px-3 py-2.5">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className="text-sm">⚠️</span>
+                <span className="text-[11px] font-bold text-amber-950">
+                  {modulosNuevosCount} módulo(s) nuevo(s)
+                </span>
+              </div>
+              <div className="text-[9px] text-amber-900 leading-tight">
+                Sin permisos configurados. Tocá para revisarlos en Usuarios →
+              </div>
+            </div>
+          </Link>
+        )}
+        {/* Versión colapsada: solo el ícono de alerta */}
+        {esSuper && modulosNuevosCount > 0 && collapsed && (
+          <Link href="/usuarios" title={`${modulosNuevosCount} módulos nuevos sin configurar`}
+            className="mx-2 mt-3 flex items-center justify-center py-2 rounded-lg hover:brightness-105"
+            style={{ background: '#f59e0b' }}>
+            <span className="text-sm">⚠️</span>
+          </Link>
+        )}
 
         {/* Fecha + TC Widget */}
         {!collapsed && (
