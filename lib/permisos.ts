@@ -1,3 +1,5 @@
+import { createClient } from '@/lib/supabase'
+
 // Cache de permisos para no consultar la DB en cada render
 let permisosCache: Record<string, string[]> | null = null
 let cacheUserId: string | null = null
