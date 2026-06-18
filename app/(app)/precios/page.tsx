@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 
 const CATEGORIAS: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+  mercaderia:            { label: 'Mercadería',             color: '#052698', bg: '#E8EEFF', icon: '📦' },
   flete_maritimo:        { label: 'Flete marítimo',        color: '#1168F8', bg: '#EBF2FF', icon: '🚢' },
   thc_destino:           { label: 'THC destino',            color: '#0891b2', bg: '#E0F2FE', icon: '⚓' },
   bl_fee:                { label: 'BL Fee',                 color: '#6b21a8', bg: '#F3E8FF', icon: '📄' },
