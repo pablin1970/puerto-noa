@@ -206,6 +206,7 @@ const [tiposCamion,setTiposCamion]=useState<any[]>([])
 const [cotsFWDisponibles,setCotsFWDisponibles]=useState<any[]>([])
 const [cotsTranspDisponibles,setCotsTranspDisponibles]=useState<any[]>([])
 const [cotsMercDisponibles,setCotsMercDisponibles]=useState<any[]>([])
+const [condicionesGenerales,setCondicionesGenerales]=useState<any[]>([])
 const [cotsArgDisponibles,setCotsArgDisponibles]=useState<any[]>([])
 const [cotsChileDisponibles,setCotsChileDisponibles]=useState<any[]>([])
 // Cotizaciones de operaciones usadas (para detectar "ya usada en X")
@@ -260,6 +261,9 @@ useEffect(()=>{
     .eq('activo','true')
     .filter('tipo', 'cs', '{"cliente"}')
     .then(({data})=>{if(data) setTerceros(data)})
+  // Cargar condiciones generales (catálogo) — activas, ordenadas
+  supabase.from('condiciones_generales').select('texto,orden,activo').eq('activo',true).order('orden')
+    .then(({data})=>{if(data) setCondicionesGenerales(data)})
   // Cargar despachantes (proveedores con rubro despachante de aduana)
   supabase.from('tercero_rubros')
     .select('tercero_id, rubro:proveedor_rubros!inner(nombre), tercero:terceros!inner(id,razon_social,activo)')
@@ -1095,7 +1099,12 @@ const clientesFiltrados=terceros.filter(t=>
     const pagosHTML = pagosARS.map(p=>'<tr><td style="font-weight:600">'+p.concepto+'</td><td style="color:#888;font-size:10px">'+p.quien+'</td><td class="td-r">'+p.monto+'</td><td style="text-align:right"><span class="pill-ars">'+p.moneda+'</span></td></tr>').join('')
 
     const obsHTML = s.observaciones.filter((o:string)=>o.trim()).length>0
-      ? '<div class="sec-t" style="margin-top:10px">Observaciones</div><ol class="obs-list">'+s.observaciones.filter((o:string)=>o.trim()).map((o:string)=>'<li>'+o+'</li>').join('')+'</ol>'
+      ? '<div class="sec-t" style="margin-top:10px">Condiciones particulares de esta cotización</div><ol class="obs-list">'+s.observaciones.filter((o:string)=>o.trim()).map((o:string)=>'<li>'+o+'</li>').join('')+'</ol>'
+      : ''
+
+    // Condiciones generales del catálogo (activas, ordenadas)
+    const condGenHTML = condicionesGenerales.length>0
+      ? '<div class="sec-t" style="margin-top:14px">Condiciones generales</div><ol class="obs-list">'+condicionesGenerales.map((c:any)=>'<li>'+c.texto+'</li>').join('')+'</ol>'
       : ''
 
     const html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><title>Cotización '+(cotNumActual||'')+'</title><style>'+css+'</style></head><body>'
@@ -1116,7 +1125,7 @@ const clientesFiltrados=terceros.filter(t=>
       +'</tbody></table>'
       +'</div>'
       // PÁGINA 2
-      +(pagosARS.length>0||obsHTML?'<div class="page page-break">'
+      +(pagosARS.length>0||obsHTML||condGenHTML?'<div class="page page-break">'
         +'<div class="hdr"><div><img src="'+window.location.origin+'/logo.png" alt="Puerto NOA" style="height:36px;object-fit:contain;"/></div><div class="hdr-right"><div class="num">'+(cotNumActual||'BORRADOR')+'</div><div class="fecha">'+fecha+' · Página 2</div></div></div>'
         +(pagosARS.length>0?
           '<div class="ars-box"><div class="ars-hdr">Pagos estimados en pesos argentinos</div>'
@@ -1128,6 +1137,7 @@ const clientesFiltrados=terceros.filter(t=>
           +'</div>'
         :'')
         +obsHTML
+        +condGenHTML
         +'</div>':'')
       +'<div class="footer"><div>'+(s.validez?'Oferta válida por <strong>'+s.validez+'</strong> desde la fecha de emisión<br/>':'')+'<div class="tc-box" style="margin-top:4px">'+(s.tcTrib?'<span>ARS/USD <span class="tc-val">'+fmt(s.tcTrib,0)+'</span></span>':'')+(s.tcClp?'<span>CLP/USD <span class="tc-val">'+fmt(s.tcClp,0)+'</span></span>':'')+'</div></div><div class="footer-r">Developed by Pablin</div></div>'
       +'<script>window.onload=function(){window.print();}</script></body></html>'
@@ -1761,24 +1771,30 @@ const clientesFiltrados=terceros.filter(t=>
             </div>
           </div>
           )}
-          {/* ── OBSERVACIONES ── */}
-          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-              <span className="font-semibold text-sm text-gray-900">Observaciones</span>
+          {/* ── CONDICIONES PARTICULARES DE ESTA COTIZACIÓN ── */}
+          <div className="bg-white border-2 border-[#1168F8]/20 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between" style={{background:'#EBF2FF'}}>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📝</span>
+                <div>
+                  <span className="font-bold text-sm text-[#052698]">Condiciones particulares de esta cotización</span>
+                  <div className="text-[10px] text-gray-500">Notas propias de esta operación. Las condiciones generales se cargan en Catálogos y salen automáticamente.</div>
+                </div>
+              </div>
               <button onClick={()=>u('observaciones',[...s.observaciones,''])}
-                className="text-[10px] text-[#1168F8] hover:underline font-semibold">+ Agregar línea</button>
+                className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-[11px] font-bold hover:bg-[#0a4fc4] whitespace-nowrap shadow-sm">+ Agregar condición</button>
             </div>
             <div className="px-5 py-4 space-y-2">
               {s.observaciones.length === 0 ? (
-                <div className="text-xs text-gray-400 text-center py-3">
-                  Sin observaciones. Hacé click en <strong>+ Agregar línea</strong> para agregar notas visibles en la cotización.
+                <div className="text-xs text-gray-400 text-center py-4 bg-gray-50 rounded-xl">
+                  Sin condiciones particulares. Hacé click en <strong className="text-[#1168F8]">+ Agregar condición</strong> para sumar notas específicas de esta cotización (visibles en la impresión).
                 </div>
               ) : s.observaciones.map((obs:string, i:number) => (
                 <div key={i} className="flex items-center gap-2">
                   <span className="text-[10px] text-gray-400 font-mono w-4 flex-shrink-0">{i+1}.</span>
                   <input value={obs}
                     onChange={e=>{const n=[...s.observaciones];n[i]=e.target.value;u('observaciones',n)}}
-                    className={inp+' flex-1'} placeholder={`Observación ${i+1}...`}/>
+                    className={inp+' flex-1'} placeholder={`Condición particular ${i+1}...`}/>
                   <button onClick={()=>u('observaciones',s.observaciones.filter((_:string,j:number)=>j!==i))}
                     className="text-gray-300 hover:text-red-500 text-xs flex-shrink-0">✕</button>
                 </div>
@@ -3031,15 +3047,30 @@ const clientesFiltrados=terceros.filter(t=>
             </div>
           </div>
 
-          {/* Observaciones */}
+          {/* Condiciones particulares */}
           {s.observaciones.filter((o:string)=>o.trim()).length>0&&(
             <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-              <div className="font-semibold text-sm text-gray-900 mb-3">Observaciones</div>
+              <div className="font-semibold text-sm text-gray-900 mb-3">Condiciones particulares de esta cotización</div>
               <ol className="space-y-1.5 list-none">
                 {s.observaciones.filter((o:string)=>o.trim()).map((obs:string,i:number)=>(
                   <li key={i} className="flex gap-2 text-xs text-gray-700">
                     <span className="text-gray-400 font-mono flex-shrink-0">{i+1}.</span>
                     <span>{obs}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+          {/* Condiciones generales (catálogo) */}
+          {condicionesGenerales.length>0&&(
+            <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+              <div className="font-semibold text-sm text-gray-900 mb-1">Condiciones generales</div>
+              <div className="text-[10px] text-gray-400 mb-3">Fijas del sistema · se gestionan en Catálogos</div>
+              <ol className="space-y-1.5 list-none">
+                {condicionesGenerales.map((c:any,i:number)=>(
+                  <li key={i} className="flex gap-2 text-xs text-gray-600">
+                    <span className="text-gray-400 font-mono flex-shrink-0">{i+1}.</span>
+                    <span>{c.texto}</span>
                   </li>
                 ))}
               </ol>
