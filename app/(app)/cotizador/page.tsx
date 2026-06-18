@@ -922,17 +922,47 @@ async function duplicarCotizacion(cotId:string){
   const {data:orig}=await supabase.from('cotizaciones').select('*').eq('id',cotId).single()
   if(!orig) return
   const {data:tcData}=await supabase.from('tipos_cambio_eventos').select('ars,clp').order('created_at',{ascending:false}).limit(1).single()
-  setS(p=>({...p,
-    cliente:(orig as any).cliente,cuit:(orig as any).cuit||'',
-    productos:(orig as any).productos||p.productos,
-    contenedores:(orig as any).tipo_contenedores||p.contenedores,
-    origen:(orig as any).origen||p.origen,ptoChile:(orig as any).puerto_chile||p.ptoChile,
-    destinoNoa:(orig as any).destino_noa||p.destinoNoa,incoterm:(orig as any).incoterm||p.incoterm,
-    transito:(orig as any).transito||p.transito,
-    tcTrib:(tcData as any)?.ars||p.tcTrib,tcClp:(tcData as any)?.clp||p.tcClp,notas:'',
-  }))
+  const tcArs=(tcData as any)?.ars
+  const tcClp=(tcData as any)?.clp
+  const snap=(orig as any).estado_cotizador
+  if(snap && typeof snap==='object'){
+    // Duplicación completa: cargamos el estado entero y solo pisamos TC actualizado + limpiamos notas
+    setS(p=>({
+      ...p,           // base por si el snapshot viejo no tiene algún campo nuevo
+      ...snap,
+      tcTrib: tcArs || snap.tcTrib || p.tcTrib,
+      tcClp:  tcClp || snap.tcClp  || p.tcClp,
+      notas:'',
+    }))
+  } else {
+    // Cotización vieja sin snapshot: copiamos lo básico que está persistido (fallback)
+    setS(p=>({...p,
+      cliente:(orig as any).cliente,cuit:(orig as any).cuit||'',
+      productos:(orig as any).productos||p.productos,
+      contenedores:(orig as any).tipo_contenedores||p.contenedores,
+      origen:(orig as any).origen||p.origen,ptoChile:(orig as any).puerto_chile||p.ptoChile,
+      destinoNoa:(orig as any).destino_noa||p.destinoNoa,incoterm:(orig as any).incoterm||p.incoterm,
+      transito:(orig as any).transito||p.transito,
+      puertoChiId:(orig as any).puerto_china_id||p.puertoChiId,
+      puertoChileId:(orig as any).puerto_chile_id||p.puertoChileId,
+      pasoId:(orig as any).paso_id||p.pasoId,
+      ciudadDestinoId:(orig as any).ciudad_destino_id||p.ciudadDestinoId,
+      regimen:(orig as any).regimen||p.regimen,derPct:(orig as any).derechos_pct||p.derPct,
+      optTransp:(orig as any).opcion_transporte||p.optTransp,validez:(orig as any).validez||p.validez,
+      observaciones:Array.isArray((orig as any).condiciones_particulares)?(orig as any).condiciones_particulares:p.observaciones,
+      tcTrib:tcArs||p.tcTrib,tcClp:tcClp||p.tcClp,notas:'',
+    }))
+  }
+  // Re-vincular el cliente (preselección + historial)
+  if((orig as any).tercero_id){
+    setClienteSelId((orig as any).tercero_id)
+    setBuscarCliente((orig as any).cliente||'')
+    const {data:hist}=await supabase.from('cotizaciones').select('id,num,estado,total_landed,created_at').eq('tercero_id',(orig as any).tercero_id).order('created_at',{ascending:false}).limit(5)
+    if(hist) setHistCliente(hist)
+  }
+  setCotNumActual('')  // será una cotización nueva
   cambiarTab('embarque')
-  alert('Cotizacion duplicada. Revisa los valores y guarda cuando este lista.')
+  alert('Cotización duplicada con la fecha y el tipo de cambio actualizados. Revisá los valores, ajustá lo que necesites y guardá.')
 }
 
 // Filtra cotizaciones por bloque: especificas del cliente primero, luego genericas
@@ -983,6 +1013,7 @@ async function guardar(){
       total_landed:totalLanded,precio_arg_equiv:s.precioArgEquiv||null,
       regimen:s.regimen,tc_ars:s.tcTrib,derechos_pct:s.derPct,
       opcion_transporte:s.optTransp,validez:s.validez,estado:'borrador',
+      estado_cotizador:s,
       ejecutivo_id:uid,creado_por:uid,modificado_por:uid,presupuesto,
     })
     if(error){alert('Error al guardar: '+error.message);setSaving(false);return}
