@@ -28,6 +28,7 @@ interface Role {
   descripcion: string
   color: string
   activo: boolean
+  es_super_admin?: boolean
 }
 
 interface Permiso {
@@ -62,169 +63,84 @@ interface ModuloItem {
 
 interface ModuloSeccion {
   section: string
+  icono?: string
   items: ModuloItem[]
 }
 
 const MODULOS_PERMISOS: ModuloSeccion[] = [
   {
-    section: 'General',
+    section: 'General', icono: '📊',
     items: [
-      { modulo: 'dashboard',            label: 'Dashboard logístico',  acciones: ['ver'], soloVer: true },
-      { modulo: 'dashboard_financiero', label: 'Dashboard financiero', acciones: ['ver'], soloVer: true },
+      { modulo: 'dashboard',            label: 'Dashboard logístico',   acciones: ['ver'], soloVer: true },
+      { modulo: 'dashboard_financiero', label: 'Dashboard financiero',  acciones: ['ver'], soloVer: true },
       { modulo: 'ayuda',                label: 'Ayuda / Documentación', acciones: ['ver','descargar'] },
     ]
   },
   {
-    section: 'Ventas',
+    section: 'Comercial — Cotizaciones y Clientes', icono: '💼',
     items: [
-      { modulo: 'cotizaciones',        label: 'Cotizaciones',       acciones: ['ver','crear','editar','eliminar','descargar'] },
-      { modulo: 'cotizaciones_estado', label: '→ Cambiar estado',   acciones: ['ver','editar'], subitem: true },
-      { modulo: 'clientes',            label: 'Clientes',           acciones: ['ver','crear','editar','eliminar','descargar'] },
+      { modulo: 'cotizaciones',          label: 'Cotizaciones',            acciones: ['ver','crear','editar','eliminar','descargar'] },
+      { modulo: 'cotizaciones_estado',   label: '→ Cambiar estado',        acciones: ['ver','editar'], subitem: true },
+      { modulo: 'cotizaciones_duplicar', label: '→ Duplicar cotización',   acciones: ['ver','crear'], subitem: true },
+      { modulo: 'clientes',              label: 'Clientes',                acciones: ['ver','crear','editar','eliminar','descargar'] },
+      { modulo: 'clientes_documentos',   label: '→ Documentos de clientes', acciones: ['ver','crear','eliminar','descargar'], subitem: true },
     ]
   },
   {
-    section: 'Operaciones',
+    section: 'Operaciones', icono: '🚢',
     items: [
-      { modulo: 'operaciones',              label: 'Operaciones activas',      acciones: ['ver','crear','editar','eliminar','descargar'] },
-      { modulo: 'cierre',                   label: 'Liquidación y cierre',     acciones: ['ver','editar'] },
-      { modulo: 'cotizaciones_proveedores', label: 'Cotiz. proveedores',       acciones: ['ver','crear','editar','eliminar','descargar'] },
-      { modulo: 'precios',                  label: 'Inteligencia de precios',  acciones: ['ver'], soloVer: true },
-      { modulo: 'proveedores',              label: 'Proveedores',              acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'operaciones',              label: 'Operaciones activas',       acciones: ['ver','crear','editar','eliminar','descargar'] },
+      { modulo: 'operaciones_documentos',   label: '→ Documentos de operación', acciones: ['ver','crear','eliminar','descargar'], subitem: true },
+      { modulo: 'cierre',                   label: 'Liquidación y cierre',      acciones: ['ver','editar'] },
+      { modulo: 'cotizaciones_proveedores', label: 'Cotiz. proveedores',        acciones: ['ver','crear','editar','eliminar','descargar'] },
+      { modulo: 'precios',                  label: 'Inteligencia de precios',   acciones: ['ver'], soloVer: true },
+      { modulo: 'proveedores',              label: 'Proveedores',               acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'proveedores_documentos',   label: '→ Documentos de proveedores', acciones: ['ver','crear','eliminar','descargar'], subitem: true },
     ]
   },
   {
-    section: 'Finanzas clientes',
+    section: 'Finanzas — Clientes y Proveedores', icono: '🧾',
     items: [
       { modulo: 'facturas_emitidas',        label: 'Facturas emitidas',       acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'facturas_emitidas_anular', label: '→ Anular factura',        acciones: ['ver','editar'], subitem: true },
       { modulo: 'facturas_recibidas',       label: 'Facturas recibidas',      acciones: ['ver','crear','editar','eliminar','descargar'] },
-      { modulo: 'cte_clientes',             label: 'Cta. cte. clientes',      acciones: ['ver','crear','editar'] },
-      { modulo: 'cte_proveedores',          label: 'Cta. cte. proveedores',   acciones: ['ver','crear','editar'] },
+      { modulo: 'cte_clientes',             label: 'Cta. cte. clientes',      acciones: ['ver','crear','editar','descargar'] },
+      { modulo: 'cte_clientes_cobro',       label: '→ Registrar cobro',       acciones: ['ver','crear'], subitem: true },
+      { modulo: 'cte_proveedores',          label: 'Cta. cte. proveedores',   acciones: ['ver','crear','editar','descargar'] },
+      { modulo: 'cte_proveedores_pago',     label: '→ Registrar pago',        acciones: ['ver','crear'], subitem: true },
       { modulo: 'fondos_custodia',          label: 'Fondos en custodia',      acciones: ['ver','crear','editar','eliminar','descargar'] },
     ]
   },
   {
-    section: 'Tesorería',
+    section: 'Tesorería', icono: '🏦',
     items: [
-      { modulo: 'flujo_cuentas', label: 'Flujo cuentas ARG↔CHL', acciones: ['ver','crear','editar','descargar'] },
-      { modulo: 'tipos_cambio',  label: 'Tipos de cambio',        acciones: ['ver','editar'] },
+      { modulo: 'flujo_cuentas', label: 'Flujo cuentas ARG↔CHL',     acciones: ['ver','crear','editar','descargar'] },
+      { modulo: 'cuentas_abm',   label: '→ Cuentas (caja y bancos)', acciones: ['ver','crear','editar','eliminar'], subitem: true },
+      { modulo: 'tipos_cambio',  label: 'Tipos de cambio',           acciones: ['ver','editar'] },
     ]
   },
   {
-    section: 'Contabilidad',
+    section: 'Contabilidad', icono: '📚',
     items: [
       { modulo: 'iva',          label: 'Libro IVA',        acciones: ['ver','editar','descargar'] },
-      { modulo: 'gastos_fijos', label: 'Gastos fijos PN',  acciones: ['ver','crear','editar','eliminar','descargar'] },
-      { modulo: 'resultados',   label: 'Resultados',       acciones: ['ver'], soloVer: true },
+      { modulo: 'gastos_fijos', label: 'Gastos y costos',  acciones: ['ver','crear','editar','eliminar','descargar'] },
+      { modulo: 'resultados',   label: 'Resultados',       acciones: ['ver','descargar'] },
     ]
   },
   {
-    section: 'Configuración',
+    section: 'Configuración', icono: '⚙️',
     items: [
-      { modulo: 'catalogos',    label: 'Catálogos',          acciones: ['ver','crear','editar','eliminar'] },
-      { modulo: 'cuentas_abm',  label: '→ Cuentas (caja y bancos)', acciones: ['ver','crear','editar','eliminar'], subitem: true },
-      { modulo: 'tributos',     label: 'Tributos ARCA',      acciones: ['ver','editar'] },
-      { modulo: 'usuarios',     label: 'Usuarios',           acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'catalogos',             label: 'Catálogos',            acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'condiciones_generales', label: 'Condiciones generales', acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'tributos',              label: 'Tributos ARCA',        acciones: ['ver','editar'] },
+      { modulo: 'usuarios',              label: 'Usuarios',             acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'roles',                 label: 'Roles y permisos',     acciones: ['ver','crear','editar','eliminar'] },
     ]
   },
 ]
 
-// Permisos por defecto para cada rol (rol_nombre → modulo → acciones)
-const DEFAULTS: Record<string, Record<string, Accion[]>> = {
-
-  // ── SUPER ADMINISTRADOR: acceso total a todo ───────────────────
-  'Super Administrador': {
-    dashboard: ['ver'], dashboard_financiero: ['ver'],
-    ayuda: ['ver','descargar'],
-    cotizaciones: ['ver','crear','editar','eliminar','descargar'], cotizaciones_estado: ['ver','editar'],
-    clientes: ['ver','crear','editar','eliminar','descargar'],
-    operaciones: ['ver','crear','editar','eliminar','descargar'], cierre: ['ver','editar'],
-    cotizaciones_proveedores: ['ver','crear','editar','eliminar','descargar'],
-    precios: ['ver'],
-    proveedores: ['ver','crear','editar','eliminar'],
-    facturas_emitidas: ['ver','crear','editar','eliminar','descargar'], facturas_emitidas_anular: ['ver','editar'],
-    facturas_recibidas: ['ver','crear','editar','eliminar','descargar'],
-    cte_clientes: ['ver','crear','editar'], cte_proveedores: ['ver','crear','editar'],
-    fondos_custodia: ['ver','crear','editar','eliminar','descargar'],
-    flujo_cuentas: ['ver','crear','editar','descargar'], tipos_cambio: ['ver','editar'],
-    iva: ['ver','editar','descargar'], gastos_fijos: ['ver','crear','editar','eliminar','descargar'], resultados: ['ver'],
-    catalogos: ['ver','crear','editar','eliminar'], cuentas_abm: ['ver','crear','editar','eliminar'],
-    tributos: ['ver','editar'], usuarios: ['ver','crear','editar','eliminar'],
-  },
-
-  // ── ADMINISTRADOR: todo excepto eliminar usuarios y tributos ───
-  'Administrador': {
-    dashboard: ['ver'], dashboard_financiero: ['ver'],
-    ayuda: ['ver','descargar'],
-    cotizaciones: ['ver','crear','editar','eliminar','descargar'], cotizaciones_estado: ['ver','editar'],
-    clientes: ['ver','crear','editar','descargar'],
-    operaciones: ['ver','crear','editar','descargar'], cierre: ['ver','editar'],
-    cotizaciones_proveedores: ['ver','crear','editar','descargar'],
-    precios: ['ver'],
-    proveedores: ['ver','crear','editar'],
-    facturas_emitidas: ['ver','crear','editar','descargar'], facturas_emitidas_anular: ['ver','editar'],
-    facturas_recibidas: ['ver','crear','editar','descargar'],
-    cte_clientes: ['ver','crear','editar'], cte_proveedores: ['ver','crear','editar'],
-    fondos_custodia: ['ver','crear','editar','descargar'],
-    flujo_cuentas: ['ver','crear','editar','descargar'], tipos_cambio: ['ver','editar'],
-    iva: ['ver','editar','descargar'], gastos_fijos: ['ver','crear','editar','descargar'], resultados: ['ver'],
-    catalogos: ['ver','crear','editar','eliminar'], cuentas_abm: ['ver','crear','editar','eliminar'],
-    tributos: ['ver'], usuarios: ['ver','crear','editar'],
-  },
-
-  // ── EJECUTIVO COMERCIAL: foco en ventas y seguimiento ─────────
-  'Ejecutivo comercial': {
-    dashboard: ['ver'],
-    ayuda: ['ver','descargar'],
-    cotizaciones: ['ver','crear','editar','descargar'], cotizaciones_estado: ['ver','editar'],
-    clientes: ['ver','crear','editar','descargar'],
-    operaciones: ['ver','descargar'], cierre: ['ver'],
-    cotizaciones_proveedores: ['ver','crear','editar','descargar'],
-    precios: ['ver'],
-    proveedores: ['ver'],
-    tipos_cambio: ['ver'],
-  },
-
-  // ── OPERACIONES: foco logístico, sin acceso financiero ────────
-  'Operaciones': {
-    dashboard: ['ver'],
-    ayuda: ['ver','descargar'],
-    cotizaciones: ['ver'],
-    clientes: ['ver'],
-    operaciones: ['ver','crear','editar','descargar'], cierre: ['ver','editar'],
-    cotizaciones_proveedores: ['ver','crear','editar','descargar'],
-    precios: ['ver'],
-    proveedores: ['ver','crear','editar'],
-    fondos_custodia: ['ver','descargar'],
-    tipos_cambio: ['ver'],
-  },
-
-  // ── CONTABILIDAD: foco financiero y contable ──────────────────
-  'Contabilidad': {
-    dashboard: ['ver'], dashboard_financiero: ['ver'],
-    ayuda: ['ver','descargar'],
-    cotizaciones: ['ver'], operaciones: ['ver','descargar'], cierre: ['ver'],
-    facturas_emitidas: ['ver','crear','editar','descargar'], facturas_emitidas_anular: ['ver','editar'],
-    facturas_recibidas: ['ver','crear','editar','descargar'],
-    cte_clientes: ['ver','crear','editar'], cte_proveedores: ['ver','crear','editar'],
-    fondos_custodia: ['ver','crear','editar','descargar'],
-    flujo_cuentas: ['ver','crear','editar','descargar'], tipos_cambio: ['ver'],
-    iva: ['ver','editar','descargar'], gastos_fijos: ['ver','crear','editar','descargar'], resultados: ['ver'],
-  },
-
-  // ── GERENCIA: visión total solo lectura + resultados ──────────
-  'Gerencia': {
-    dashboard: ['ver'], dashboard_financiero: ['ver'],
-    ayuda: ['ver','descargar'],
-    cotizaciones: ['ver','descargar'], cotizaciones_estado: ['ver'],
-    clientes: ['ver','descargar'], operaciones: ['ver','descargar'], cierre: ['ver'],
-    cotizaciones_proveedores: ['ver','descargar'], precios: ['ver'], proveedores: ['ver'],
-    facturas_emitidas: ['ver','descargar'], facturas_recibidas: ['ver','descargar'],
-    cte_clientes: ['ver'], cte_proveedores: ['ver'],
-    fondos_custodia: ['ver','descargar'], flujo_cuentas: ['ver','descargar'], tipos_cambio: ['ver'],
-    iva: ['ver','descargar'], gastos_fijos: ['ver','descargar'], resultados: ['ver'],
-  },
-}
+// Lista plana de todos los módulos definidos (única fuente de verdad para la matriz)
+const TODOS_LOS_MODULOS: string[] = MODULOS_PERMISOS.flatMap(s => s.items.map(it => it.modulo))
 
 const COLORES_ROL = ['#1168F8', '#052698', '#0a9e6e', '#b45309', '#6b21a8', '#dc2626', '#0891b2']
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -290,10 +206,30 @@ export default function UsuariosPage() {
       supabase.from('rol_permisos').select('*'),
     ])
     if (uRes.data) setUsuarios(uRes.data as Usuario[])
-    if (rRes.data) setRoles(rRes.data as Role[])
+    if (rRes.data) {
+      // Super Administrador primero (jerarquía visual), luego el resto por nombre
+      const ordenados = (rRes.data as Role[]).sort((a, b) => {
+        if (a.es_super_admin && !b.es_super_admin) return -1
+        if (!a.es_super_admin && b.es_super_admin) return 1
+        return a.nombre.localeCompare(b.nombre)
+      })
+      setRoles(ordenados)
+    }
     if (pRes.data) setPermisos(pRes.data as Permiso[])
     setLoading(false)
   }
+
+  // ── Detección de módulos nuevos sin configurar ────────────────────
+  // Un módulo está "configurado" si tiene al menos un registro en rol_permisos.
+  // Los que existen en el código (MODULOS_PERMISOS) pero nunca se guardaron = nuevos.
+  const modulosNuevos = useMemo(() => {
+    const modulosConRegistro = new Set(permisos.map(p => p.modulo))
+    const faltantes = TODOS_LOS_MODULOS.filter(m => !modulosConRegistro.has(m))
+    return MODULOS_PERMISOS
+      .flatMap(s => s.items)
+      .filter(it => faltantes.includes(it.modulo))
+      .map(it => ({ modulo: it.modulo, label: it.label.replace(/^→\s*/, ''), acciones: it.acciones }))
+  }, [permisos])
 
   function isPermitido(rolId: string, modulo: string, accion: string): boolean {
     return permisos.some(p => p.rol_id === rolId && p.modulo === modulo && p.accion === accion && p.permitido)
@@ -601,6 +537,29 @@ export default function UsuariosPage() {
                 </div>
               )}
             </div>
+
+            {/* ⚠ AVISO: módulos nuevos detectados sin configurar */}
+            {modulosNuevos.length > 0 && (
+              <div className="mx-4 mt-4 mb-1 border-2 border-amber-400 bg-amber-50 rounded-xl overflow-hidden">
+                <div className="bg-amber-400 px-4 py-2 flex items-center gap-2">
+                  <span className="text-lg">⚠️</span>
+                  <span className="font-bold text-sm text-amber-900">
+                    {modulosNuevos.length} módulo(s) nuevo(s) detectado(s) sin configurar
+                  </span>
+                </div>
+                <div className="px-4 py-3">
+                  <p className="text-xs text-amber-900 mb-2">
+                    Estos módulos existen en el sistema pero todavía no tienen permisos cargados para ningún rol.
+                    Por seguridad están <strong>bloqueados para todos</strong> (excepto Super Administrador, que siempre tiene acceso).
+                    Configurá sus permisos en la matriz de abajo, o si necesitás ayuda, copiá este detalle y pasáselo a tu desarrollador:
+                  </p>
+                  <div className="bg-white border border-amber-200 rounded-lg p-3 font-mono text-[10px] text-gray-700 whitespace-pre-wrap select-all">
+                    {`MÓDULOS NUEVOS SIN CONFIGURAR (${modulosNuevos.length}):\n` +
+                      modulosNuevos.map(m => `• ${m.modulo} — "${m.label}" — acciones: [${m.acciones.join(', ')}]`).join('\n')}
+                  </div>
+                </div>
+              </div>
+            )}
             <div
               ref={matrizScrollRef}
               tabIndex={0}
@@ -617,7 +576,14 @@ export default function UsuariosPage() {
                       <th key={r.id} colSpan={ACCIONES.length}
                         className="sticky top-0 z-20 text-center py-2.5 px-2 text-[11px] font-bold whitespace-nowrap"
                         style={{ color: r.color, background: HEAD_BG, borderBottom: `3px solid ${r.color}`, borderLeft: `2px solid ${r.color}33` }}>
-                        {r.nombre}
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span>{r.nombre}</span>
+                          {r.es_super_admin && (
+                            <span className="text-[8px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full border border-green-300 normal-case">
+                              ★ Acceso total
+                            </span>
+                          )}
+                        </div>
                       </th>
                     ))}
                   </tr>
@@ -634,10 +600,11 @@ export default function UsuariosPage() {
                           style={{ top: row1H, background: HEAD_BG, ...(ac === 'ver' ? { borderLeft: `2px solid ${r.color}33` } : {}) }}>
                           <div className="flex flex-col items-center gap-1">
                             <input type="checkbox"
-                              checked={columnaTodasActivas(r.id, ac)}
-                              onChange={() => toggleColumna(r.id, ac)}
-                              title={`Tildar/destildar "${accionLabel[ac]}" en todos los módulos`}
-                              className="w-3.5 h-3.5 cursor-pointer accent-[#1168F8]"/>
+                              checked={r.es_super_admin ? true : columnaTodasActivas(r.id, ac)}
+                              disabled={r.es_super_admin}
+                              onChange={() => { if (!r.es_super_admin) toggleColumna(r.id, ac) }}
+                              title={r.es_super_admin ? 'El Super Administrador siempre tiene acceso total' : `Tildar/destildar "${accionLabel[ac]}" en todos los módulos`}
+                              className={`w-3.5 h-3.5 ${r.es_super_admin ? 'cursor-not-allowed accent-green-600 opacity-70' : 'cursor-pointer accent-[#1168F8]'}`}/>
                             <span>{accionLabel[ac]}</span>
                           </div>
                         </th>
@@ -651,10 +618,11 @@ export default function UsuariosPage() {
                       {/* Encabezado de sección */}
                       <tr>
                         <td colSpan={1 + roles.length * ACCIONES.length}
-                          className="px-4 py-1.5 border-b border-gray-100"
-                          style={{ background: '#eef1f5' }}>
-                          <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest"
-                            style={{ position: 'sticky', left: '1rem', display: 'inline-block' }}>
+                          className="px-4 py-2 border-y-2 border-[#1168F8]/20"
+                          style={{ background: 'linear-gradient(90deg, #e8eeff 0%, #f0f4fa 100%)' }}>
+                          <span className="text-[11px] font-black text-[#052698] uppercase tracking-widest flex items-center gap-1.5"
+                            style={{ position: 'sticky', left: '1rem', display: 'inline-flex' }}>
+                            {seccion.icono && <span className="text-sm">{seccion.icono}</span>}
                             {seccion.section}
                           </span>
                         </td>
@@ -670,17 +638,20 @@ export default function UsuariosPage() {
                           {roles.map(r => (
                             ACCIONES.map(ac => {
                               const aplica = item.acciones.includes(ac)
-                              const activo = aplica ? isPermitidoEfectivo(r.id, item.modulo, ac) : false
+                              const esSA = !!r.es_super_admin
+                              // Super Administrador: siempre marcado y bloqueado (acceso total garantizado)
+                              const activo = esSA ? aplica : (aplica ? isPermitidoEfectivo(r.id, item.modulo, ac) : false)
                               const modificado = permisosModificados.hasOwnProperty(`${r.id}|${item.modulo}|${ac}`)
                               return (
                                 <td key={`${r.id}-${ac}`}
-                                  className={`text-center px-2 py-2 ${modificado ? 'bg-amber-100/70' : ''}`}
+                                  className={`text-center px-2 py-2 ${modificado ? 'bg-amber-100/70' : ''} ${esSA ? 'bg-green-50/40' : ''}`}
                                   style={ac === 'ver' ? { borderLeft: `2px solid ${r.color}33` } : undefined}>
                                   {aplica ? (
                                     <input type="checkbox"
                                       checked={activo}
-                                      onChange={() => togglePermiso(r.id, item.modulo, ac)}
-                                      className="w-3.5 h-3.5 cursor-pointer accent-[#1168F8]"/>
+                                      disabled={esSA}
+                                      onChange={() => { if (!esSA) togglePermiso(r.id, item.modulo, ac) }}
+                                      className={`w-3.5 h-3.5 ${esSA ? 'cursor-not-allowed accent-green-600 opacity-70' : 'cursor-pointer accent-[#1168F8]'}`}/>
                                   ) : (
                                     <span className="text-gray-200 text-[10px]">—</span>
                                   )}
