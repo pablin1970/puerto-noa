@@ -786,6 +786,27 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     // tipo de formulario del rubro elegido (maritimo/terrestre/almacenaje/despachante/seguro/generico)
     const tf = tipoFormulario(form.rubro)
 
+    // ── Capturar el TC del día (último evento) para sellar la cotización ──
+    // Snapshot flexible: todas las monedas disponibles como JSON {ARS, CLP, CNY, ...}
+    // Permite convertir/comparar a futuro aunque cambien las monedas o el TC del momento.
+    let tcSnapshot: Record<string, number> | null = null
+    let tcEventoId: string | null = null
+    try {
+      const { data: tcEv } = await supabase.from('tipos_cambio_eventos')
+        .select('id, ars, clp, cny')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      if (tcEv) {
+        tcEventoId = (tcEv as any).id || null
+        const snap: Record<string, number> = {}
+        if ((tcEv as any).ars != null) snap.ARS = Number((tcEv as any).ars)
+        if ((tcEv as any).clp != null) snap.CLP = Number((tcEv as any).clp)
+        if ((tcEv as any).cny != null) snap.CNY = Number((tcEv as any).cny)
+        tcSnapshot = Object.keys(snap).length > 0 ? snap : null
+      }
+    } catch (e) { /* sin TC disponible: se guarda null, no bloquea el guardado */ }
+
     const payload = {
       proveedor_nombre: form.proveedor_nombre, tercero_id: form.tercero_id||null,
       rubro: form.rubro, tipo: form.tipo, origen: form.origen||'recibida',
@@ -802,6 +823,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       puerto_china_id: form.puerto_china_id||null, puerto_chile_id: form.puerto_chile_id||null,
       paso_id: form.paso_id||null, ciudad_destino_id: form.ciudad_destino_id||null,
       tipo_contenedor: form.tipo_contenedor||null, tc_referencia: parseN(String(form.tc_referencia))||null,
+      tc_snapshot: tcSnapshot, tc_evento_id: tcEventoId,
     }
     const { data: cot, error } = await (supabase.from('cotizaciones_proveedor_v2') as any).insert(payload).select().single()
     if(error) { alert('Error: '+error.message); setSaving(false); return }
