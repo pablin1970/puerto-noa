@@ -972,6 +972,7 @@ async function guardar(){
       tercero_id:clienteSelId||null,
       origen:s.origen,puerto_chile:s.ptoChile,destino_noa:s.destinoNoa,incoterm:s.incoterm,
       transito:s.transito,notas:s.notas,
+      condiciones_particulares:s.observaciones.filter((o:string)=>o&&o.trim()),
       puerto_china_id:s.puertoChiId||null,
       puerto_chile_id:s.puertoChileId||null,
       paso_id:s.pasoId||null,
