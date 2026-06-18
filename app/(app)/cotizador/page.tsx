@@ -6,7 +6,7 @@ import type { ContenedorCot, ProductoCot } from '@/types'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
-type Tab = 'embarque' | 'logistica' | 'tributos' | 'resumen'
+type Tab = 'embarque' | 'mercaderia' | 'logistica' | 'tributos' | 'resumen'
 type OptTransp = 'A' | 'B1' | 'B2'
 
 interface ItemLog { id: string; desc: string; cant: number; unitario: number; ivaChile?: 'exento'|'gravado'; tipoCalc?: 'fijo'|'m3' }
@@ -1159,7 +1159,7 @@ const clientesFiltrados=terceros.filter(t=>
       </div>
 
       <div className="flex gap-2 mb-5 flex-wrap items-center">
-        {([{key:'embarque',label:'Embarque'},{key:'logistica',label:'Logistica'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as {key:string,label:string}[]).filter(t=>t.key!=='tributos'||arcaActivo).map(t=>(
+        {([{key:'embarque',label:'Embarque'},{key:'mercaderia',label:'Mercadería'},{key:'logistica',label:'Logistica'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as {key:string,label:string}[]).map(t=>(
           <button key={t.key} onClick={()=>{setTab(t.key as Tab);setTimeout(()=>{topRef.current?.scrollIntoView({behavior:'smooth',block:'start'})},50)}} className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm ${tab===t.key?'bg-[#1168F8] text-white shadow-md':'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{t.label}</button>
         ))}
         <div className="ml-auto">
@@ -1678,8 +1678,45 @@ const clientesFiltrados=terceros.filter(t=>
             </div>
           </div>
 
-          {/* ── BLOQUE 0: MERCADERÍA — proforma del proveedor (modelo tipo transporte) ── */}
-          {mercaderiaActiva() && (
+          {/* ── CONDICIONES PARTICULARES DE ESTA COTIZACIÓN ── */}
+          <div className="bg-white border-2 border-[#1168F8]/20 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between" style={{background:'#EBF2FF'}}>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📝</span>
+                <div>
+                  <span className="font-bold text-sm text-[#052698]">Condiciones particulares de esta cotización</span>
+                  <div className="text-[10px] text-gray-500">Notas propias de esta operación. Las condiciones generales se cargan en Catálogos y salen automáticamente.</div>
+                </div>
+              </div>
+              <button onClick={()=>u('observaciones',[...s.observaciones,''])}
+                className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-[11px] font-bold hover:bg-[#0a4fc4] whitespace-nowrap shadow-sm">+ Agregar condición</button>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              {s.observaciones.length === 0 ? (
+                <div className="text-xs text-gray-400 text-center py-4 bg-gray-50 rounded-xl">
+                  Sin condiciones particulares. Hacé click en <strong className="text-[#1168F8]">+ Agregar condición</strong> para sumar notas específicas de esta cotización (visibles en la impresión).
+                </div>
+              ) : s.observaciones.map((obs:string, i:number) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-400 font-mono w-4 flex-shrink-0">{i+1}.</span>
+                  <input value={obs}
+                    onChange={e=>{const n=[...s.observaciones];n[i]=e.target.value;u('observaciones',n)}}
+                    className={inp+' flex-1'} placeholder={`Condición particular ${i+1}...`}/>
+                  <button onClick={()=>u('observaciones',s.observaciones.filter((_:string,j:number)=>j!==i))}
+                    className="text-gray-300 hover:text-red-500 text-xs flex-shrink-0">✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end"><button onClick={()=>cambiarTab('mercaderia')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Mercadería →</button></div>
+        </div>
+      )}
+
+      {/* ── MERCADERÍA (bloque 0) ── */}
+      {tab==='mercaderia'&&(
+        <div className="space-y-4">
+          {mercaderiaActiva() ? (
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-white text-[11px] font-bold" style={{background:'#ca8a04'}}>📦</span>
@@ -1770,39 +1807,18 @@ const clientesFiltrados=terceros.filter(t=>
               FOB mercadería: <strong className="font-mono text-gray-800">USD {fmt(totalFOB)}</strong>
             </div>
           </div>
+          ) : (
+            <div className="bg-white border border-gray-100 rounded-2xl p-10 shadow-sm text-center">
+              <div className="text-4xl mb-3">📦</div>
+              <div className="font-semibold text-gray-700 mb-1">El bloque Mercadería está desactivado</div>
+              <div className="text-xs text-gray-400 mb-4">Activalo desde los pills de la pestaña Embarque para cargar la proforma del proveedor.</div>
+              <button onClick={()=>cambiarTab('embarque')} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">Ir a Embarque</button>
+            </div>
           )}
-          {/* ── CONDICIONES PARTICULARES DE ESTA COTIZACIÓN ── */}
-          <div className="bg-white border-2 border-[#1168F8]/20 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between" style={{background:'#EBF2FF'}}>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">📝</span>
-                <div>
-                  <span className="font-bold text-sm text-[#052698]">Condiciones particulares de esta cotización</span>
-                  <div className="text-[10px] text-gray-500">Notas propias de esta operación. Las condiciones generales se cargan en Catálogos y salen automáticamente.</div>
-                </div>
-              </div>
-              <button onClick={()=>u('observaciones',[...s.observaciones,''])}
-                className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-[11px] font-bold hover:bg-[#0a4fc4] whitespace-nowrap shadow-sm">+ Agregar condición</button>
-            </div>
-            <div className="px-5 py-4 space-y-2">
-              {s.observaciones.length === 0 ? (
-                <div className="text-xs text-gray-400 text-center py-4 bg-gray-50 rounded-xl">
-                  Sin condiciones particulares. Hacé click en <strong className="text-[#1168F8]">+ Agregar condición</strong> para sumar notas específicas de esta cotización (visibles en la impresión).
-                </div>
-              ) : s.observaciones.map((obs:string, i:number) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="text-[10px] text-gray-400 font-mono w-4 flex-shrink-0">{i+1}.</span>
-                  <input value={obs}
-                    onChange={e=>{const n=[...s.observaciones];n[i]=e.target.value;u('observaciones',n)}}
-                    className={inp+' flex-1'} placeholder={`Condición particular ${i+1}...`}/>
-                  <button onClick={()=>u('observaciones',s.observaciones.filter((_:string,j:number)=>j!==i))}
-                    className="text-gray-300 hover:text-red-500 text-xs flex-shrink-0">✕</button>
-                </div>
-              ))}
-            </div>
+          <div className="flex justify-between">
+            <button onClick={()=>cambiarTab('embarque')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
+            <button onClick={()=>cambiarTab('logistica')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Logística →</button>
           </div>
-
-          <div className="flex justify-end"><button onClick={()=>cambiarTab('logistica')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Logistica</button></div>
         </div>
       )}
 
@@ -2695,7 +2711,7 @@ const clientesFiltrados=terceros.filter(t=>
           </div>
 
           <div className="flex justify-between">
-            <button onClick={()=>cambiarTab('embarque')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
+            <button onClick={()=>cambiarTab('mercaderia')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
             <button onClick={()=>cambiarTab(arcaActivo?'tributos':'resumen')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">{arcaActivo?'Tributos ARCA':'Ver resumen'}</button>
           </div>
         </div>
@@ -2703,6 +2719,7 @@ const clientesFiltrados=terceros.filter(t=>
 
       {/* ── TRIBUTOS (igual que antes) ── */}
       {tab==='tributos'&&(
+        arcaActivo ? (
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-3">
             {[
@@ -2743,9 +2760,21 @@ const clientesFiltrados=terceros.filter(t=>
             <button onClick={()=>cambiarTab('resumen')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Ver resumen</button>
           </div>
         </div>
+        ) : (
+        <div className="space-y-4">
+          <div className="bg-white border border-gray-100 rounded-2xl p-10 shadow-sm text-center">
+            <div className="text-4xl mb-3">§</div>
+            <div className="font-semibold text-gray-700 mb-1">Los tributos ARCA están desactivados</div>
+            <div className="text-xs text-gray-400 mb-4">Activá el toggle "Tributos ARCA" desde la pestaña Embarque. Requiere tener el bloque Mercadería activo con valor FOB cargado.</div>
+            <button onClick={()=>cambiarTab('embarque')} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">Ir a Embarque</button>
+          </div>
+          <div className="flex justify-between">
+            <button onClick={()=>cambiarTab('logistica')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
+            <button onClick={()=>cambiarTab('resumen')} className="bg-[#1168F8] text-white px-5 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Ver resumen</button>
+          </div>
+        </div>
+        )
       )}
-
-      {/* ── RESUMEN ── */}
       {tab==='resumen'&&(
         <div className="space-y-4">
           <style>{`
