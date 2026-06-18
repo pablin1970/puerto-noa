@@ -5,6 +5,7 @@ import { fmt, calcCapacidad, CONT_CAPS, PUERTOS_L, nextCotNum } from '@/lib/util
 import type { ContenedorCot, ProductoCot } from '@/types'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import CotizacionDoc from '@/components/CotizacionDoc'
 
 type Tab = 'embarque' | 'mercaderia' | 'logistica' | 'tributos' | 'resumen'
 type OptTransp = 'A' | 'B1' | 'B2'
@@ -245,6 +246,11 @@ const [showHist,setShowHist]=useState(false)
 
 const [tribCfg,setTribCfg]=useState<TribCfg[]>([])
 const [saving,setSaving]=useState(false)
+// Preview de impresión (Etapa 2): muestra el documento lindo antes de guardar
+const [showPreview,setShowPreview]=useState(false)
+const [previewCot,setPreviewCot]=useState<any>(null)
+const [previewEjecutivo,setPreviewEjecutivo]=useState<any>(null)
+const [previewCondGen,setPreviewCondGen]=useState<string[]>([])
 const supabase=createClient()
 const router=useRouter()
 
@@ -1040,6 +1046,56 @@ const clientesFiltrados=terceros.filter(t=>
   (t.nro_doc||'').includes(buscarCliente||s.cliente)||
   (t.nombre_fantasia||'').toLowerCase().includes((buscarCliente||s.cliente).toLowerCase())
 ).slice(0,8)
+
+  // ── Etapa 2: arma el objeto cot (forma que espera CotizacionDoc) desde el estado actual y abre el preview ──
+  async function abrirPreview() {
+    if(!s.cliente){alert('Ingresá el nombre del cliente antes de previsualizar.');return}
+    const presupuesto=[
+      ...(subFW>0?[{etapa:'forwarder',tipo:'flete',concepto:`ForWarder: ${fwElegida?.proveedorNombre||'Manual'}`,usd:subFW}]:[]),
+      ...(totalSeg>0?[{etapa:'forwarder',tipo:'seguro',concepto:'Seguro mercaderia',usd:totalSeg}]:[]),
+      ...(subGastosChile>0?[{etapa:'chile',tipo:'servicios',concepto:'Gastos post-entrega Chile',usd:subGastosChile}]:[]),
+      ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidacion (Opcion ${s.optTransp})`,usd:subD}]:[]),
+      ...(subTransp>0?[{etapa:'terrestre',tipo:'flete',concepto:'Transporte terrestre',usd:subTransp}]:[]),
+      ...(subEstadias>0?[{etapa:'terrestre',tipo:'estadia',concepto:'Estadias por demora',usd:subEstadias}]:[]),
+      ...(segIndepCalc>0?[{etapa:'terrestre',tipo:'seguro',concepto:'Seguro terrestre',usd:segIndepCalc}]:[]),
+      ...(subE>0?[{etapa:'argentina',tipo:'servicios',concepto:'Gastos Argentina',usd:subE}]:[]),
+      ...(subGastosArg>0?[{etapa:'argentina',tipo:'gastos_arg',concepto:'Gastos Argentina (despachante)',usd:subGastosArg}]:[]),
+      ...(totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Regimen ${s.regimen}`,usd:totalTribUSD}]:[]),
+      ...(fee>0?[{etapa:'fee',tipo:'fee',concepto:'Fee Puerto NOA',usd:fee}]:[]),
+    ]
+    const cot={
+      num: cotNumActual||'BORRADOR',
+      cliente:s.cliente, cuit:s.cuit, email_cliente:s.email, telefono_cliente:s.telefono,
+      despachante:s.despachante,
+      origen:s.origen, puerto_chile:s.ptoChile, destino_noa:s.destinoNoa, incoterm:s.incoterm,
+      transito:s.transito, notas:s.notas, validez:s.validez, estado:'borrador',
+      condiciones_particulares:s.observaciones.filter((o:string)=>o&&o.trim()),
+      tipo_contenedores:s.contenedores, productos:s.productos,
+      total_fob:totalFOB, total_logistico:totalLog,
+      total_tributos_usd:totalTribUSD, total_tributos_ars:totalTribARS,
+      total_landed:totalLanded, precio_arg_equiv:s.precioArgEquiv||0,
+      regimen:s.regimen, tc_ars:s.tcTrib, derechos_pct:s.derPct,
+      opcion_transporte:s.optTransp, presupuesto,
+      created_at:new Date().toISOString(),
+    }
+    // Ejecutivo (firma) para el documento
+    try{
+      const {data:user}=await supabase.auth.getUser()
+      if(user.user){
+        const {data:uDB}=await supabase.from('usuarios').select('*').eq('auth_id',user.user.id).single()
+        if(uDB) setPreviewEjecutivo(uDB)
+      }
+    }catch(e){/* sin ejecutivo, el doc usa placeholder */}
+    setPreviewCondGen(condicionesGenerales.map((c:any)=>c.texto))
+    setPreviewCot(cot)
+    setShowPreview(true)
+  }
+
+  // Confirmar desde el preview: guarda y redirige a la página de registro (documento imprimible)
+  async function confirmarYGuardar() {
+    setShowPreview(false)
+    await guardar()
+  }
 
   function generarImpresion() {
     const esExpo = s.sentido==='exportacion'
@@ -2882,9 +2938,9 @@ const clientesFiltrados=terceros.filter(t=>
                 {arcaActivo&&<span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[9px] font-semibold">Tributos ARCA</span>}
               </div>
             </div>
-            <button onClick={generarImpresion}
+            <button onClick={abrirPreview}
               className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50 flex items-center gap-1.5">
-              🖨 Imprimir / PDF
+              👁 Vista previa
             </button>
           </div>
 
@@ -3189,9 +3245,9 @@ const clientesFiltrados=terceros.filter(t=>
             <button onClick={()=>cambiarTab(s.incluirArca?'tributos':'logistica')}
               className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
             <div className="flex gap-2">
-              <button onClick={generarImpresion}
+              <button onClick={abrirPreview}
                 className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50">
-                🖨 Imprimir / PDF
+                👁 Vista previa
               </button>
               <button onClick={guardar} disabled={saving}
                 className="bg-[#1168F8] text-white px-6 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] disabled:opacity-60">
@@ -3246,6 +3302,36 @@ const clientesFiltrados=terceros.filter(t=>
                 {altaCliSaving?'Creando...':'Crear y usar'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal preview de impresión (Etapa 2) */}
+      {showPreview && previewCot && (
+        <div className="fixed inset-0 z-[70] bg-gray-200 flex flex-col print:hidden">
+          {/* Barra superior fija con acciones */}
+          <div className="flex-shrink-0 bg-white border-b border-gray-200 px-5 py-3 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3">
+              <span className="text-lg">👁</span>
+              <div>
+                <div className="font-semibold text-sm text-gray-900">Vista previa de la cotización</div>
+                <div className="text-[11px] text-gray-400">Revisá que esté todo correcto. Nada se guardó todavía.</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={()=>setShowPreview(false)}
+                className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50">
+                ← Volver a editar
+              </button>
+              <button onClick={confirmarYGuardar} disabled={saving}
+                className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-60">
+                {saving?'Guardando...':'✓ Confirmar y guardar'}
+              </button>
+            </div>
+          </div>
+          {/* Documento con scroll */}
+          <div className="flex-1 overflow-y-auto">
+            <CotizacionDoc cot={previewCot} ejecutivo={previewEjecutivo} condGenerales={previewCondGen} />
           </div>
         </div>
       )}
