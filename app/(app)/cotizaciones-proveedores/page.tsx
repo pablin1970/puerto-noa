@@ -949,6 +949,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           tipo_calculo: 'por_contenedor',
           moneda: form.moneda,
           tipo_contenedor: t.tipo_contenedor||null,
+          tipo_camion_id: t.tipo_camion||null,
           categoria: 'flete_terrestre',
           origen_id: t.origen_id||null, origen_tipo: t.origen_tipo||null,
           destino_id: t.destino_id||null, destino_tipo: t.destino_tipo||null,
@@ -1198,7 +1199,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               <span className="text-[10px] text-gray-400 mb-1 block">Tipo de camión</span>
               <select value={t.tipo_camion} onChange={e=>fnSet(i,'tipo_camion',e.target.value)} className={sel}>
                 <option value="">— Sin especificar —</option>
-                {tiposCamion.map((cam:any)=><option key={cam.id} value={cam.nombre}>{cam.icono?cam.icono+' ':''}{cam.nombre}</option>)}
+                {tiposCamion.map((cam:any)=><option key={cam.id} value={cam.id}>{cam.icono?cam.icono+' ':''}{cam.nombre}</option>)}
               </select>
             </div>
             <div>
