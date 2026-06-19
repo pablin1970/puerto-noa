@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import ServiciosCatalogo from './ServiciosCatalogo'
 
-type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm' | 'empresa' | 'condiciones_cotizacion' | 'servicios_deposito'
+type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'ciudades_prestacion' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm' | 'empresa' | 'condiciones_cotizacion' | 'servicios_deposito'
 
 const TABS = [
   { key: 'categorias',    label: 'Categorías de precio', icon: '🏷' },
@@ -17,6 +17,7 @@ const TABS = [
   { key: 'bloques_cotizacion', label: 'Bloques cotización',   icon: '📋' },
   { key: 'rubros_proveedor',   label: 'Rubros de proveedor',  icon: '🏷️' },
   { key: 'servicios_deposito', label: 'Servicios depósito',   icon: '🏭' },
+  { key: 'ciudades_prestacion', label: 'Lugares de prestación', icon: '🏙' },
   { key: 'condiciones_cotizacion', label: 'Condiciones cotización', icon: '📜' },
   { key: 'gastos_categorias',  label: 'Cat. gastos fijos',    icon: '💸' },
   { key: 'cuentas_abm',        label: 'Cuentas (caja y bancos)', icon: '🏦' },
@@ -30,9 +31,10 @@ const btn = 'px-4 py-2 rounded-xl text-xs font-semibold transition-all'
 interface ColDef {
   key: string
   label: string
-  type?: 'text' | 'boolean' | 'number' | 'color' | 'emoji'
+  type?: 'text' | 'boolean' | 'number' | 'color' | 'emoji' | 'select'
   placeholder?: string
   width?: string
+  options?: { value: string; label: string }[]
 }
 
 const TIPOS_CALCULO_LABELS: Record<string,string> = {
@@ -316,6 +318,11 @@ function CatalogoABM({
                 ) : c.type === 'number' ? (
                   <input type="number" value={newRow[c.key] || ''} onChange={e => setNewRow((p: any) => ({ ...p, [c.key]: e.target.value }))}
                     className={inp} placeholder={c.placeholder}/>
+                ) : c.type === 'select' ? (
+                  <select value={newRow[c.key] || ''} onChange={e => setNewRow((p: any) => ({ ...p, [c.key]: e.target.value }))} className={inp}>
+                    <option value="">— Elegí —</option>
+                    {(c.options || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
                 ) : (
                   <input value={newRow[c.key] || ''} onChange={e => setNewRow((p: any) => ({ ...p, [c.key]: e.target.value }))}
                     className={inp} placeholder={c.placeholder || c.label}/>
@@ -381,6 +388,12 @@ function CatalogoABM({
                           ) : c.type === 'number' ? (
                             <input type="number" value={editData[c.key] || ''} onChange={e => setEditData((p: any) => ({ ...p, [c.key]: e.target.value }))}
                               className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white"/>
+                          ) : c.type === 'select' ? (
+                            <select value={editData[c.key] || ''} onChange={e => setEditData((p: any) => ({ ...p, [c.key]: e.target.value }))}
+                              className="px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+                              <option value="">— Elegí —</option>
+                              {(c.options || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
                           ) : (
                             <input value={editData[c.key] || ''} onChange={e => setEditData((p: any) => ({ ...p, [c.key]: e.target.value }))}
                               className="w-full px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white"/>
@@ -418,6 +431,8 @@ function CatalogoABM({
                             <span className="text-lg">{row[c.key]}</span>
                           ) : c.key === 'bg' ? (
                             <div className="w-6 h-6 rounded-md border border-gray-200" style={{ background: row[c.key] }}/>
+                          ) : c.type === 'select' ? (
+                            <span className="text-gray-800">{(c.options || []).find(o => o.value === row[c.key])?.label || row[c.key]}</span>
                           ) : (
                             <span className={`text-gray-800 ${c.key === 'codigo' ? 'font-mono text-[11px] text-[#052698]' : ''}`}>
                               {row[c.key]}
@@ -545,6 +560,26 @@ export default function CatalogosPage() {
             { key: 'orden',     label: 'Orden',     type: 'number', placeholder: '1' },
             { key: 'ciudad',    label: 'Ciudad',    placeholder: 'San Salvador de Jujuy' },
             { key: 'provincia', label: 'Provincia', placeholder: 'Jujuy' },
+          ]}
+        />
+      )}
+
+      {/* ── LUGARES DE PRESTACIÓN (ciudades CL/AR/CN donde el depósito presta servicios) ── */}
+      {tab === 'ciudades_prestacion' && (
+        <CatalogoABM
+          tabla="ciudades"
+          titulo="Lugares de prestación"
+          orden="orden"
+          extra={<p className="text-xs text-gray-400">Ciudades de Chile, Argentina y China donde los depósitos/operadores prestan servicios. Las activas aparecen al cargar una cotización de depósito.</p>}
+          cols={[
+            { key: 'orden',  label: 'Orden',  type: 'number', placeholder: '1' },
+            { key: 'pais',   label: 'País',   type: 'select', options: [
+              { value: 'CL', label: 'Chile' },
+              { value: 'AR', label: 'Argentina' },
+              { value: 'CN', label: 'China' },
+            ] },
+            { key: 'ciudad', label: 'Ciudad', placeholder: 'Iquique' },
+            { key: 'region', label: 'Región / Provincia', placeholder: 'Tarapacá' },
           ]}
         />
       )}
