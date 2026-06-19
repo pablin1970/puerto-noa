@@ -629,6 +629,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [pasos, setPasos] = useState<any[]>([])
   const [ciudades, setCiudades] = useState<any[]>([])
   const [tiposCont, setTiposCont] = useState<any[]>([])
+  const [tiposCamion, setTiposCamion] = useState<any[]>([])
   const [rubrosCatalogo, setRubrosCatalogo] = useState<any[]>([])
   // Catálogo de servicios de depósito (Fase 2) + servicios cargados en esta cotización
   const [depServiciosCat, setDepServiciosCat] = useState<any[]>([])
@@ -705,7 +706,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       supabase.from('servicios_metricas').select('*').eq('activo',true).order('orden'),
       supabase.from('servicios_metricas_habilitadas').select('servicio_id,metrica_id'),
       supabase.from('ciudades').select('id,pais,ciudad,region').eq('activo',true).order('pais').order('orden'),
-    ]).then(([bl,cat,ch,cl,ps,ci,tc,ru,dsv,dmt,dhb,ciu]) => {
+      supabase.from('tipos_camion').select('id,nombre,icono').eq('activo','true').order('orden'),
+    ]).then(([bl,cat,ch,cl,ps,ci,tc,ru,dsv,dmt,dhb,ciu,tcam]) => {
       if(bl.data) setBloques(bl.data)
       if(cat.data) setCategorias(cat.data)
       if(ch.data) setPuertosCh(ch.data)
@@ -717,6 +719,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       if(dmt.data) setDepMetricas(dmt.data)
       if(dhb.data) setDepHab(new Set((dhb.data as any[]).map(h=>h.servicio_id+'|'+h.metrica_id)))
       if(ciu.data) setCiudades_(ciu.data)
+      if(tcam.data) setTiposCamion(tcam.data)
       if(ru.data){
         // Normalizar: cada rubro con su código (fallback al nombre normalizado)
         const lista = (ru.data as any[]).map(r=>({
@@ -1193,7 +1196,10 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <span className="text-[10px] text-gray-400 mb-1 block">Tipo de camión</span>
-              <input value={t.tipo_camion} onChange={e=>fnSet(i,'tipo_camion',e.target.value)} className={inp} placeholder="ej. Chasis 40HC, Sider..."/>
+              <select value={t.tipo_camion} onChange={e=>fnSet(i,'tipo_camion',e.target.value)} className={sel}>
+                <option value="">— Sin especificar —</option>
+                {tiposCamion.map((cam:any)=><option key={cam.id} value={cam.nombre}>{cam.icono?cam.icono+' ':''}{cam.nombre}</option>)}
+              </select>
             </div>
             <div>
               <span className="text-[10px] text-gray-400 mb-1 block">Tipo de contenedor</span>
