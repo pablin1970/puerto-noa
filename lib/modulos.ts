@@ -94,4 +94,4 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
 ]
 
 // Lista plana de todos los módulos definidos (única fuente de verdad para la matriz)
-export const TODOS_LOS_MODULOS: string[] = M
+export const TODOS_LOS_MODULOS: string[] = MODULOS_PERMISOS.flatMap(s => s.items.map(it => it.modulo))
