@@ -31,6 +31,7 @@ interface ItemSelProv {
   cantCotizada: number
   cantUsar: number
   tipoContenedor: string
+  tipoCamionId?: string
   subtotal: number
   seleccionado: boolean
   origen_id?: string|null
@@ -690,6 +691,7 @@ function cotProvDesdeSistema(cot:any, contenedoresH1:{tipo:string;cantidad:numbe
       cantCotizada: cantSug,
       cantUsar: cantSug,
       tipoContenedor: it.tipo_contenedor||'',
+      tipoCamionId: it.tipo_camion_id||'',
       subtotal: valorUnit * cantSug,
       seleccionado: false,
       origen_id: it.origen_id||null,
