@@ -46,6 +46,7 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
       { modulo: 'operaciones_documentos',   label: '→ Documentos de operación', acciones: ['ver','crear','eliminar','descargar'], subitem: true },
       { modulo: 'cierre',                   label: 'Liquidación y cierre',      acciones: ['ver','editar'] },
       { modulo: 'cotizaciones_proveedores', label: 'Cotiz. proveedores',        acciones: ['ver','crear','editar','eliminar','descargar'] },
+      { modulo: 'cotizaciones_proveedores_duplicar', label: '→ Duplicar cotización', acciones: ['ver','crear'], subitem: true },
       { modulo: 'precios',                  label: 'Inteligencia de precios',   acciones: ['ver'], soloVer: true },
       { modulo: 'proveedores',              label: 'Proveedores',               acciones: ['ver','crear','editar','eliminar'] },
       { modulo: 'proveedores_documentos',   label: '→ Documentos de proveedores', acciones: ['ver','crear','eliminar','descargar'], subitem: true },
