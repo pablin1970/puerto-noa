@@ -16,7 +16,7 @@ const TABS = [
   { key: 'fondos',        label: 'Fondos en custodia',   icon: '🏦' },
   { key: 'bloques_cotizacion', label: 'Bloques cotización',   icon: '📋' },
   { key: 'rubros_proveedor',   label: 'Rubros de proveedor',  icon: '🏷️' },
-  { key: 'servicios_deposito', label: 'Servicios depósito',   icon: '🏭' },
+  { key: 'servicios_deposito', label: 'Catálogo de servicios',   icon: '📋' },
   { key: 'ciudades_prestacion', label: 'Lugares de prestación', icon: '🏙' },
   { key: 'condiciones_cotizacion', label: 'Condiciones cotización', icon: '📜' },
   { key: 'gastos_categorias',  label: 'Cat. gastos fijos',    icon: '💸' },
