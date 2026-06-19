@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
-import { cargarPermisos, esSuperAdmin } from '@/lib/permisos'
+import { cargarPermisos, esSuperAdmin, puede } from '@/lib/permisos'
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 const chipOn = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border-0 bg-[#1168F8] text-white shadow-sm cursor-pointer hover:bg-[#052698] transition-colors'
@@ -34,6 +34,9 @@ export default function ServiciosCatalogo() {
   const [usados, setUsados] = useState<Set<string>>(new Set())
   const [metricasUsadas, setMetricasUsadas] = useState<Set<string>>(new Set())
   const [superAdmin, setSuperAdmin] = useState(false)
+  const [puedeVer, setPuedeVer] = useState(true)
+  const [puedeCrear, setPuedeCrear] = useState(false)
+  const [puedeEditar, setPuedeEditar] = useState(false)
   const [loading, setLoading] = useState(true)
   const [nuevoNombre, setNuevoNombre] = useState('')
   const [nuevoGrupo, setNuevoGrupo] = useState('operativos')
@@ -51,8 +54,11 @@ export default function ServiciosCatalogo() {
 
   async function load() {
     setLoading(true)
-    await cargarPermisos()
+    const permisos = await cargarPermisos()
     setSuperAdmin(esSuperAdmin())
+    setPuedeVer(puede(permisos, 'servicios_deposito', 'ver'))
+    setPuedeCrear(puede(permisos, 'servicios_deposito', 'crear'))
+    setPuedeEditar(puede(permisos, 'servicios_deposito', 'editar'))
     const [sRes, mRes, hRes, iRes] = await Promise.all([
       supabase.from('servicios_catalogo').select('*').eq('rubro', 'deposito').order('orden', { ascending: true }),
       supabase.from('servicios_metricas').select('*').order('orden', { ascending: true }),
@@ -73,11 +79,13 @@ export default function ServiciosCatalogo() {
   }
 
   async function toggleActivo(s: any) {
+    if (!puedeEditar) return
     await (supabase.from('servicios_catalogo') as any).update({ activo: !s.activo }).eq('id', s.id)
     setServicios(prev => prev.map(x => x.id === s.id ? { ...x, activo: !x.activo } : x))
   }
 
   async function toggleMetrica(servicioId: string, metricaId: string) {
+    if (!puedeEditar) return
     const key = servicioId + '|' + metricaId
     const yaEsta = habSet.has(key)
     setHabSet(prev => {
@@ -93,6 +101,7 @@ export default function ServiciosCatalogo() {
   }
 
   async function addServicio() {
+    if (!puedeCrear) return
     const nombre = nuevoNombre.trim()
     if (!nombre) return
     const maxOrden = servicios.reduce((m, s) => Math.max(m, s.orden || 0), 0)
@@ -103,7 +112,7 @@ export default function ServiciosCatalogo() {
     setNuevoNombre('')
   }
 
-  function startEdit(s: any) { setEditId(s.id); setEditNombre(s.nombre) }
+  function startEdit(s: any) { if (!puedeEditar) return; setEditId(s.id); setEditNombre(s.nombre) }
 
   async function saveEdit() {
     if (!editId) return
@@ -127,6 +136,7 @@ export default function ServiciosCatalogo() {
 
   // ---- formas de cobro (métricas) ----
   async function addMetrica() {
+    if (!puedeCrear) return
     const nombre = nmNombre.trim()
     if (!nombre) return
     const codigo = nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') + '_' + Date.now().toString(36)
@@ -139,11 +149,12 @@ export default function ServiciosCatalogo() {
   }
 
   async function toggleMetricaActiva(m: any) {
+    if (!puedeEditar) return
     await (supabase.from('servicios_metricas') as any).update({ activo: !m.activo }).eq('id', m.id)
     setMetricas(prev => prev.map(x => x.id === m.id ? { ...x, activo: !x.activo } : x))
   }
 
-  function startEditMetrica(m: any) { setEditMetId(m.id); setEditMetNombre(m.nombre) }
+  function startEditMetrica(m: any) { if (!puedeEditar) return; setEditMetId(m.id); setEditMetNombre(m.nombre) }
 
   async function saveEditMetrica() {
     if (!editMetId) return
@@ -167,6 +178,12 @@ export default function ServiciosCatalogo() {
 
   if (loading) return <div className="p-8 text-center text-gray-400 text-sm">Cargando...</div>
 
+  if (!puedeVer) return (
+    <div className="p-8 text-center text-gray-400 text-sm">
+      No tenés permiso para ver el catálogo de servicios de depósito.
+    </div>
+  )
+
   const metricasActivas = metricas.filter(m => m.activo !== false)
 
   return (
@@ -180,6 +197,7 @@ export default function ServiciosCatalogo() {
       </div>
 
       {/* Alta de servicio */}
+      {puedeCrear && (
       <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-4 flex items-end gap-3 flex-wrap">
         <div className="flex-1 min-w-[200px]">
           <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Nuevo servicio</label>
@@ -194,6 +212,7 @@ export default function ServiciosCatalogo() {
         </div>
         <button onClick={addServicio} className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#1168F8] text-white hover:bg-[#052698] transition-all whitespace-nowrap">+ Agregar</button>
       </div>
+      )}
 
       {/* Tarjetas por grupo */}
       {GRUPOS.map(g => {
@@ -211,12 +230,20 @@ export default function ServiciosCatalogo() {
                     <div className="flex items-center gap-3 mb-2.5">
                       {editId === s.id ? (
                         <input value={editNombre} onChange={e => setEditNombre(e.target.value)} onBlur={saveEdit} onKeyDown={e => { if (e.key === 'Enter') saveEdit() }} autoFocus className={inp + ' flex-1'} />
-                      ) : (
+                      ) : puedeEditar ? (
                         <span className="text-sm font-semibold text-gray-800 flex-1 cursor-pointer hover:text-[#1168F8]" onClick={() => startEdit(s)} title="Click para editar el nombre">{s.nombre}</span>
+                      ) : (
+                        <span className="text-sm font-semibold text-gray-800 flex-1">{s.nombre}</span>
                       )}
-                      <button onClick={() => toggleActivo(s)} className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg transition-colors ${activo ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
-                        {activo ? 'Activo' : 'Inactivo'}
-                      </button>
+                      {puedeEditar ? (
+                        <button onClick={() => toggleActivo(s)} className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg transition-colors ${activo ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
+                          {activo ? 'Activo' : 'Inactivo'}
+                        </button>
+                      ) : (
+                        <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg ${activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                          {activo ? 'Activo' : 'Inactivo'}
+                        </span>
+                      )}
                       {superAdmin && !fueUsado ? (
                         <button onClick={() => delServicio(s)} className="text-gray-300 hover:text-red-500 text-sm transition-colors" title="Eliminar del catálogo">🗑</button>
                       ) : fueUsado ? (
@@ -228,7 +255,7 @@ export default function ServiciosCatalogo() {
                       {metricasActivas.map(m => {
                         const on = habSet.has(s.id + '|' + m.id)
                         return (
-                          <button key={m.id} onClick={() => toggleMetrica(s.id, m.id)} className={on ? chipOn : chipOff} title={COMPORTAMIENTO_LABEL[m.comportamiento] || ''}>
+                          <button key={m.id} onClick={() => toggleMetrica(s.id, m.id)} className={(on ? chipOn : chipOff) + (puedeEditar ? '' : ' pointer-events-none')} title={COMPORTAMIENTO_LABEL[m.comportamiento] || ''}>
                             {on ? '✓ ' : ''}{m.nombre}
                           </button>
                         )
@@ -255,6 +282,7 @@ export default function ServiciosCatalogo() {
             <p className="text-xs text-gray-400">Las formas de cobro son los chips que tildás en cada servicio. Agregá una nueva si un proveedor cobra de una manera que no está en la lista. El comportamiento define qué campos pide después al cotizar.</p>
 
             {/* Alta de métrica */}
+            {puedeCrear && (
             <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 flex items-end gap-3 flex-wrap">
               <div className="flex-1 min-w-[160px]">
                 <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Nueva forma de cobro</label>
@@ -272,6 +300,7 @@ export default function ServiciosCatalogo() {
               </div>
               <button onClick={addMetrica} className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#1168F8] text-white hover:bg-[#052698] transition-all whitespace-nowrap">+ Agregar</button>
             </div>
+            )}
 
             {/* Lista de métricas */}
             <div className="space-y-1.5">
@@ -282,13 +311,21 @@ export default function ServiciosCatalogo() {
                   <div key={m.id} className={`bg-white border border-gray-200 rounded-xl px-3 py-2 flex items-center gap-3 ${act ? '' : 'opacity-60'}`}>
                     {editMetId === m.id ? (
                       <input value={editMetNombre} onChange={e => setEditMetNombre(e.target.value)} onBlur={saveEditMetrica} onKeyDown={e => { if (e.key === 'Enter') saveEditMetrica() }} autoFocus className={inp + ' flex-1'} />
-                    ) : (
+                    ) : puedeEditar ? (
                       <span className="text-xs font-semibold text-gray-800 flex-1 cursor-pointer hover:text-[#1168F8]" onClick={() => startEditMetrica(m)} title="Click para editar el nombre">{m.nombre}</span>
+                    ) : (
+                      <span className="text-xs font-semibold text-gray-800 flex-1">{m.nombre}</span>
                     )}
                     <span className="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md whitespace-nowrap">{COMPORTAMIENTO_LABEL[m.comportamiento] || m.comportamiento}</span>
-                    <button onClick={() => toggleMetricaActiva(m)} className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg transition-colors ${act ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
-                      {act ? 'Activa' : 'Inactiva'}
-                    </button>
+                    {puedeEditar ? (
+                      <button onClick={() => toggleMetricaActiva(m)} className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg transition-colors ${act ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
+                        {act ? 'Activa' : 'Inactiva'}
+                      </button>
+                    ) : (
+                      <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg ${act ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                        {act ? 'Activa' : 'Inactiva'}
+                      </span>
+                    )}
                     {superAdmin && !usada ? (
                       <button onClick={() => delMetrica(m)} className="text-gray-300 hover:text-red-500 text-sm transition-colors" title="Eliminar forma de cobro">🗑</button>
                     ) : usada ? (
