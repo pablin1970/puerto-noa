@@ -50,7 +50,7 @@ interface LoginLog {
 }
 
 // ── Definición completa de módulos y permisos ──────────────────────
-import { ACCIONES, MODULOS_PERMISOS, TODOS_LOS_MODULOS } from '@/lib/modulos'
+import { ACCIONES, MODULOS_PERMISOS } from '@/lib/modulos'
 import type { Accion } from '@/lib/modulos'
 
 const COLORES_ROL = ['#1168F8', '#052698', '#0a9e6e', '#b45309', '#6b21a8', '#dc2626', '#0891b2']
@@ -75,6 +75,9 @@ export default function UsuariosPage() {
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null)
   const [permisosModificados, setPermisosModificados] = useState<Record<string, boolean>>({})
   const [savingPermisos, setSavingPermisos] = useState(false)
+  // Módulos ya confirmados con "Guardar" (tabla modulos_revisados) + los marcados en esta sesión sin guardar aún
+  const [modulosRevisados, setModulosRevisados] = useState<Set<string>>(new Set())
+  const [modulosRevisadosLocal, setModulosRevisadosLocal] = useState<Set<string>>(new Set())
 
   // Refs y medición para la matriz con cabecera/columna fijas
   const matrizScrollRef = useRef<HTMLDivElement | null>(null)
@@ -111,10 +114,11 @@ export default function UsuariosPage() {
   async function loadAll() {
     setLoading(true)
     const { data: authData } = await supabase.auth.getUser()
-    const [uRes, rRes, pRes] = await Promise.all([
+    const [uRes, rRes, pRes, mrRes] = await Promise.all([
       supabase.from('usuarios').select('*').order('nombre'),
       supabase.from('roles').select('*').order('nombre'),
       supabase.from('rol_permisos').select('*'),
+      supabase.from('modulos_revisados').select('modulo'),
     ])
     if (uRes.data) setUsuarios(uRes.data as Usuario[])
     if (rRes.data) {
@@ -127,20 +131,25 @@ export default function UsuariosPage() {
       setRoles(ordenados)
     }
     if (pRes.data) setPermisos(pRes.data as Permiso[])
+    if (mrRes.data) setModulosRevisados(new Set((mrRes.data as any[]).map(r => r.modulo)))
     setLoading(false)
   }
 
   // ── Detección de módulos nuevos sin configurar ────────────────────
-  // Un módulo está "configurado" si tiene al menos un registro en rol_permisos.
-  // Los que existen en el código (MODULOS_PERMISOS) pero nunca se guardaron = nuevos.
+  // Un módulo está "configurado" SOLO cuando se confirmó con Guardar (tabla modulos_revisados).
+  // Entrar a ver no lo confirma. Puede quedar sin permisos para nadie y aun así estar revisado.
   const modulosNuevos = useMemo(() => {
-    const modulosConRegistro = new Set(permisos.map(p => p.modulo))
-    const faltantes = TODOS_LOS_MODULOS.filter(m => !modulosConRegistro.has(m))
     return MODULOS_PERMISOS
       .flatMap(s => s.items)
-      .filter(it => faltantes.includes(it.modulo))
+      .filter(it => !modulosRevisados.has(it.modulo))
       .map(it => ({ modulo: it.modulo, label: it.label.replace(/^→\s*/, ''), acciones: it.acciones }))
-  }, [permisos])
+  }, [modulosRevisados])
+
+  // Set de módulos nuevos (sin confirmar) para resaltar su fila en verde
+  const modulosNuevosSet = useMemo(() => new Set(modulosNuevos.map(m => m.modulo)), [modulosNuevos])
+
+  // Total de cambios pendientes de guardar = permisos tocados + módulos confirmados en esta sesión
+  const totalCambios = Object.keys(permisosModificados).length + modulosRevisadosLocal.size
 
   function isPermitido(rolId: string, modulo: string, accion: string): boolean {
     return permisos.some(p => p.rol_id === rolId && p.modulo === modulo && p.accion === accion && p.permitido)
@@ -152,6 +161,19 @@ export default function UsuariosPage() {
       ? permisosModificados[key]
       : isPermitido(rolId, modulo, accion)
     setPermisosModificados(pm => ({ ...pm, [key]: !current }))
+    // Si es un módulo nuevo, tocarle un permiso ya lo cuenta como revisado (se confirma al guardar)
+    if (modulosNuevosSet.has(modulo)) {
+      setModulosRevisadosLocal(prev => prev.has(modulo) ? prev : new Set(prev).add(modulo))
+    }
+  }
+
+  // Marcar/desmarcar un módulo nuevo como "revisado" sin asignarle permisos (se confirma al guardar)
+  function toggleRevisadoLocal(modulo: string) {
+    setModulosRevisadosLocal(prev => {
+      const n = new Set(prev)
+      if (n.has(modulo)) n.delete(modulo); else n.add(modulo)
+      return n
+    })
   }
 
   function isPermitidoEfectivo(rolId: string, modulo: string, accion: string): boolean {
@@ -187,7 +209,13 @@ export default function UsuariosPage() {
         await (supabase.from('rol_permisos') as any).insert({ rol_id: rolId, modulo, accion, permitido: true })
       }
     }
+    // Confirmar como "revisados" los módulos nuevos marcados en esta sesión (aunque queden sin permisos)
+    if (modulosRevisadosLocal.size > 0) {
+      const filas = Array.from(modulosRevisadosLocal).map(m => ({ modulo: m }))
+      await (supabase.from('modulos_revisados') as any).upsert(filas, { onConflict: 'modulo' })
+    }
     setPermisosModificados({})
+    setModulosRevisadosLocal(new Set())
     await loadAll()
     setSavingPermisos(false)
   }
@@ -434,12 +462,12 @@ export default function UsuariosPage() {
                   El checkbox del encabezado activa/desactiva toda la columna · cabecera y primera columna fijas · clic en la grilla + flechas del teclado para desplazarte
                 </div>
               </div>
-              {Object.keys(permisosModificados).length > 0 && (
+              {totalCambios > 0 && (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-amber-700 font-medium bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
-                    {Object.keys(permisosModificados).length} cambio(s) sin guardar
+                    {totalCambios} cambio(s) sin guardar
                   </span>
-                  <button onClick={() => setPermisosModificados({})}
+                  <button onClick={() => { setPermisosModificados({}); setModulosRevisadosLocal(new Set()) }}
                     className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50">Descartar</button>
                   <button onClick={guardarPermisos} disabled={savingPermisos}
                     className="px-4 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs font-bold disabled:opacity-50">
@@ -539,12 +567,29 @@ export default function UsuariosPage() {
                         </td>
                       </tr>
                       {/* Filas de módulos */}
-                      {seccion.items.map(item => (
-                        <tr key={item.modulo} className="group border-b border-gray-50 hover:bg-blue-50/10 transition-colors">
-                          <td className={`sticky left-0 z-10 px-4 py-2.5 border-r border-gray-200 bg-white group-hover:bg-[#f4f8ff] ${item.subitem ? 'pl-8 text-gray-400 text-[11px]' : 'text-gray-800 font-medium text-xs'}`}
+                      {seccion.items.map(item => {
+                        const esNuevo = modulosNuevosSet.has(item.modulo)
+                        return (
+                        <tr key={item.modulo} className={`group border-b transition-colors ${esNuevo ? 'border-green-200 bg-green-50' : 'border-gray-50 hover:bg-blue-50/10'}`}>
+                          <td className={`sticky left-0 z-10 px-4 py-2.5 border-r border-gray-200 ${esNuevo ? 'bg-green-50 group-hover:bg-green-100' : 'bg-white group-hover:bg-[#f4f8ff]'} ${item.subitem ? 'pl-8 text-gray-400 text-[11px]' : 'text-gray-800 font-medium text-xs'}`}
                             style={{ minWidth: 184, boxShadow: '2px 0 5px -3px rgba(0,0,0,0.08)' }}>
                             {item.label}
                             {item.soloVer && <span className="ml-2 text-[9px] text-gray-300 font-normal">solo lectura</span>}
+                            {esNuevo && (
+                              <div className="mt-1 flex items-center gap-1.5">
+                                {modulosRevisadosLocal.has(item.modulo) ? (
+                                  <>
+                                    <span className="text-[9px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-full border border-blue-300 normal-case">✓ confirmado · guardar</span>
+                                    <button onClick={() => toggleRevisadoLocal(item.modulo)} className="text-[9px] text-gray-400 hover:text-gray-600 underline normal-case">deshacer</button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-[9px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full border border-green-300 normal-case">● sin asignar</span>
+                                    <button onClick={() => toggleRevisadoLocal(item.modulo)} className="text-[9px] text-green-700 hover:text-green-900 underline normal-case" title="Confirmar este módulo aunque no le asignes permisos a nadie">confirmar sin permisos</button>
+                                  </>
+                                )}
+                              </div>
+                            )}
                           </td>
                           {roles.map(r => (
                             ACCIONES.map(ac => {
@@ -571,7 +616,8 @@ export default function UsuariosPage() {
                             })
                           ))}
                         </tr>
-                      ))}
+                        )
+                      })}
                     </Fragment>
                   ))}
                 </tbody>
@@ -580,11 +626,11 @@ export default function UsuariosPage() {
           </div>
 
           {/* Botón guardar abajo también */}
-          {Object.keys(permisosModificados).length > 0 && (
+          {totalCambios > 0 && (
             <div className="flex items-center justify-between mt-4 px-5 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
-              <span className="text-xs text-amber-800 font-medium">{Object.keys(permisosModificados).length} cambio(s) sin guardar</span>
+              <span className="text-xs text-amber-800 font-medium">{totalCambios} cambio(s) sin guardar</span>
               <div className="flex gap-2">
-                <button onClick={() => setPermisosModificados({})}
+                <button onClick={() => { setPermisosModificados({}); setModulosRevisadosLocal(new Set()) }}
                   className="px-4 py-2 border border-amber-200 rounded-xl text-xs text-amber-700 hover:bg-amber-100">Descartar</button>
                 <button onClick={guardarPermisos} disabled={savingPermisos}
                   className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
