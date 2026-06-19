@@ -246,6 +246,8 @@ function CotizacionesProveedoresInner() {
   const [filtroEstado, setFiltroEstado] = useState('')
   const [buscar, setBuscar] = useState('')
   const [permisos, setPermisos] = useState<Record<string,string[]>>({})
+  // Snapshot de la cotización a duplicar (se restaura al abrir el formulario)
+  const [dupSnapshot, setDupSnapshot] = useState<any>(null)
 
   useEffect(() => {
     loadAll()
@@ -325,6 +327,26 @@ function CotizacionesProveedoresInner() {
     if (selId === id) setView('lista')
   }
 
+  // Duplicar una cotización: restaura el formulario completo desde el snapshot,
+  // pone la fecha de hoy y deja que el TC se recapture al guardar. Abre como nueva.
+  async function duplicarCotizacion(cotId: string) {
+    const { data: orig } = await supabase
+      .from('cotizaciones_proveedor_v2').select('estado_formulario').eq('id', cotId).single()
+    const snap = (orig as any)?.estado_formulario
+    if (!snap || typeof snap !== 'object' || !snap.form) {
+      alert('Esta cotización se cargó antes de que existiera la duplicación, así que no tiene los datos guardados para copiarla. Las que cargues de ahora en más sí se podrán duplicar.')
+      return
+    }
+    const hoy = new Date().toISOString().slice(0, 10)
+    const snapAjustado = {
+      ...snap,
+      form: { ...snap.form, fecha: hoy, fecha_vencimiento: '' },
+    }
+    setInitParams(null)
+    setDupSnapshot(snapAjustado)
+    setView('nueva')
+  }
+
   const stats = Object.keys(rubrosDB).map(r => ({
     rubro: r,
     total: cotizaciones.filter(c => c.rubro === r && c.estado === 'vigente').length,
@@ -344,7 +366,7 @@ function CotizacionesProveedoresInner() {
             <button onClick={() => setView('lista')} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-100">Volver</button>
           )}
           {view === 'lista' && (
-            <button onClick={() => setView('nueva')} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">+ Nueva cotizacion</button>
+            <button onClick={() => { setDupSnapshot(null); setInitParams(null); setView('nueva') }} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">+ Nueva cotizacion</button>
           )}
         </div>
       </div>
@@ -404,7 +426,7 @@ function CotizacionesProveedoresInner() {
               <div className="p-12 text-center">
                 <div className="text-gray-500 text-sm mb-3">{cotizaciones.length === 0 ? 'Sin cotizaciones cargadas aun' : 'Sin resultados'}</div>
                 {cotizaciones.length === 0 && (
-                  <button onClick={() => setView('nueva')} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold">+ Cargar primera cotizacion</button>
+                  <button onClick={() => { setDupSnapshot(null); setInitParams(null); setView('nueva') }} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold">+ Cargar primera cotizacion</button>
                 )}
               </div>
             ) : (
@@ -472,6 +494,10 @@ function CotizacionesProveedoresInner() {
                           <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                             <button onClick={e => { e.stopPropagation(); setSelId(c.id); setView('detalle') }}
                               className="p-1.5 border border-gray-200 rounded-lg hover:bg-[#EBF2FF] text-gray-500 hover:text-[#1168F8] transition-colors">E</button>
+                            {puede(permisos,'cotizaciones_proveedores','crear') && (
+                              <button onClick={e => { e.stopPropagation(); duplicarCotizacion(c.id) }} title="Duplicar"
+                                className="p-1.5 border border-gray-200 rounded-lg hover:bg-[#EBF2FF] text-gray-500 hover:text-[#1168F8] transition-colors">D</button>
+                            )}
                             <button onClick={e => { e.stopPropagation(); eliminar(c.id) }}
                               className="p-1.5 border border-red-100 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">X</button>
                           </div>
@@ -492,9 +518,10 @@ function CotizacionesProveedoresInner() {
           terceros={terceros}
           cotsSistema={cotsSistema}
           rubrosDisp={rubrosDB}
-          onSave={async () => { await loadAll(); setView('lista') }}
-          onCancel={() => setView('lista')}
+          onSave={async () => { setDupSnapshot(null); await loadAll(); setView('lista') }}
+          onCancel={() => { setDupSnapshot(null); setView('lista') }}
           initParams={initParams}
+          snapshotInicial={dupSnapshot}
         />
       )}
 
@@ -532,16 +559,16 @@ function CotizacionesProveedoresInner() {
   )
 }
 
-function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, onCancel, cotizacionInicial, initParams }: any) {
+function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, onCancel, cotizacionInicial, initParams, snapshotInicial }: any) {
   const rubros = rubrosDisp || RUBROS
-  const [sentido, setSentido] = useState<'importacion'|'exportacion'|'ambos'>('importacion')
+  const [sentido, setSentido] = useState<'importacion'|'exportacion'|'ambos'>(snapshotInicial?.sentido || 'importacion')
   // ── Multi-tramo terrestre (sentido simple) ──
   // Cada tramo = un ítem con ruta estructurada + tarifas. Permite cargar varias rutas en una cotización.
   const TRAMO_VACIO = { origen_id:'', origen_tipo:'', destino_id:'', destino_tipo:'', paso_id:'', tipo_camion:'', tipo_contenedor:'', flete_ida:'', flete_vuelta:'', flete_rt:'' }
   // tramosA: sentido simple (impo o expo) Y versión A del modo "ambos" (importación)
   // tramosB: versión B del modo "ambos" (exportación)
-  const [tramos, setTramos] = useState<any[]>([{ ...TRAMO_VACIO }])
-  const [tramosB, setTramosB] = useState<any[]>([{ ...TRAMO_VACIO }])
+  const [tramos, setTramos] = useState<any[]>(snapshotInicial?.tramos || [{ ...TRAMO_VACIO }])
+  const [tramosB, setTramosB] = useState<any[]>(snapshotInicial?.tramosB || [{ ...TRAMO_VACIO }])
   const setTramo = (i:number, k:string, v:any) => setTramos(prev => prev.map((t,idx)=> idx===i ? {...t,[k]:v} : t))
   const addTramo = () => setTramos(prev => [...prev, { ...TRAMO_VACIO }])
   const removeTramo = (i:number) => setTramos(prev => prev.length>1 ? prev.filter((_,idx)=>idx!==i) : prev)
@@ -549,7 +576,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const addTramoB = () => setTramosB(prev => [...prev, { ...TRAMO_VACIO }])
   const removeTramoB = (i:number) => setTramosB(prev => prev.length>1 ? prev.filter((_,idx)=>idx!==i) : prev)
   // Versión B (exportación) — solo se usa cuando sentido==='ambos'. Campos que cambian por sentido en terrestre.
-  const [formB, setFormB] = useState({
+  const [formB, setFormB] = useState(snapshotInicial?.formB || {
     puerto_chile_id: '', paso_id: '', ciudad_origen_id: '', ciudad_destino_id: '',
     tipo_camion: '', tipo_contenedor: '',
     flete_ida: '', flete_vuelta: '', flete_rt: '',
@@ -574,8 +601,9 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     almacen_bigbag_dia: '', almacen_bigbag_min: '',
     almacen_cont_dia: '', almacen_cont_min: '',
     ...cotizacionInicial,
+    ...(snapshotInicial?.form || {}),
   })
-  const [items, setItems] = useState<Item[]>(cotizacionInicial?.items || [{ ...ITEM_VACIO }])
+  const [items, setItems] = useState<Item[]>(snapshotInicial?.items || cotizacionInicial?.items || [{ ...ITEM_VACIO }])
   const [saving, setSaving] = useState(false)
   const [compFile, setCompFile] = useState<File|null>(null)
   const [previewModal, setPreviewModal] = useState<{url:string;nombre:string;tipo:string}|null>(null)
@@ -602,7 +630,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [depServiciosCat, setDepServiciosCat] = useState<any[]>([])
   const [depMetricas, setDepMetricas] = useState<any[]>([])
   const [depHab, setDepHab] = useState<Set<string>>(new Set())
-  const [depServicios, setDepServicios] = useState<any[]>([])
+  const [depServicios, setDepServicios] = useState<any[]>(snapshotInicial?.depServicios || [])
   const [depSelSvc, setDepSelSvc] = useState('')
   const [ciudades_, setCiudades_] = useState<any[]>([])
 
@@ -891,6 +919,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       tc_snapshot: tcSnapshot, tc_evento_id: tcEventoId,
       ciudad_prestacion_id: tf==='almacenaje' ? (form.ciudad_prestacion_id||null) : null,
       etiqueta_lugar: tf==='almacenaje' ? (form.etiqueta_lugar||null) : null,
+      // Snapshot completo del formulario para poder duplicar la cotización después
+      estado_formulario: { sentido, tramos, tramosB, formB, form, items, depServicios },
     }
     const { data: cot, error } = await (supabase.from('cotizaciones_proveedor_v2') as any).insert(payload).select().single()
     if(error) { alert('Error: '+error.message); setSaving(false); return }
