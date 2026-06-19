@@ -84,6 +84,7 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
     section: 'Configuración', icono: '⚙️',
     items: [
       { modulo: 'catalogos',             label: 'Catálogos',            acciones: ['ver','crear','editar','eliminar'] },
+      { modulo: 'servicios_deposito',    label: '→ Servicios de depósito', acciones: ['ver','crear','editar'], subitem: true },
       { modulo: 'condiciones_generales', label: 'Condiciones generales', acciones: ['ver','crear','editar','eliminar'] },
       { modulo: 'tributos',              label: 'Tributos ARCA',        acciones: ['ver','editar'] },
       { modulo: 'usuarios',              label: 'Usuarios',             acciones: ['ver','crear','editar','eliminar'] },
@@ -93,4 +94,4 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
 ]
 
 // Lista plana de todos los módulos definidos (única fuente de verdad para la matriz)
-export const TODOS_LOS_MODULOS: string[] = MODULOS_PERMISOS.flatMap(s => s.items.map(it => it.modulo))
+export const TODOS_LOS_MODULOS: string[] = M
