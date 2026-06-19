@@ -2023,6 +2023,7 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
 
   const r = rubros[cotizacion.rubro] || rubros.otro || RUBROS.otro
   const esMercaderia = tipoFormulario(cotizacion.rubro) === 'mercaderia'
+  const esAlmacenaje = tipoFormulario(cotizacion.rubro) === 'almacenaje'
   const totalUSD = items.reduce((t, it) => {
     if (esMercaderia) return t + (parseN(String(it.cantidad||0)))*(parseN(String(it.valor||0)))
     if (it.tipo_calculo === 'pct_cif') return t
@@ -2032,24 +2033,33 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
   async function saveItems() {
     setSaving(true)
     await supabase.from('cotizaciones_proveedor_v2_items').delete().eq('cotizacion_id', cotizacion.id)
-    const itemsValidos = items.filter(it => it.descripcion).map((it, i) => ({
-      cotizacion_id: cotizacion.id,
-      descripcion: it.descripcion,
-      tipo_calculo: esMercaderia ? 'producto' : it.tipo_calculo,
-      valor: parseN(String(it.valor)) || 0,
-      piso_usd: it.tipo_calculo === 'pct_cif' ? (parseN(String(it.piso_usd)) || 0) : null,
-      techo_usd: it.tipo_calculo === 'pct_cif' ? (parseN(String(it.techo_usd)) || 0) : null,
-      moneda: it.moneda || 'USD',
-      tipo_contenedor: it.tipo_contenedor || null,
-      categoria: esMercaderia ? 'mercaderia' : ((it as any).categoria || null),
-      // Campos de producto (solo mercadería)
-      ncm: esMercaderia ? (it.ncm||null) : null,
-      cantidad: esMercaderia ? (parseN(String(it.cantidad||0))||0) : null,
-      peso_unit: esMercaderia ? (parseN(String(it.peso_unit||0))||0) : null,
-      vol_unit: esMercaderia ? (parseN(String(it.vol_unit||0))||0) : null,
-      incoterm: esMercaderia ? (it.incoterm||'FOB') : null,
-      orden: i,
-    }))
+    const itemsValidos = items.filter(it => it.descripcion).map((it, i) => {
+      const esAlmacenaje = (it as any).categoria === 'almacenaje'
+      return {
+        cotizacion_id: cotizacion.id,
+        descripcion: it.descripcion,
+        tipo_calculo: esMercaderia ? 'producto' : it.tipo_calculo,
+        valor: parseN(String(it.valor)) || 0,
+        piso_usd: it.tipo_calculo === 'pct_cif'
+          ? (parseN(String(it.piso_usd)) || 0)
+          : (esAlmacenaje && (it as any).piso_usd != null ? parseN(String((it as any).piso_usd)) : null),
+        techo_usd: it.tipo_calculo === 'pct_cif' ? (parseN(String(it.techo_usd)) || 0) : null,
+        moneda: it.moneda || 'USD',
+        tipo_contenedor: it.tipo_contenedor || null,
+        categoria: esMercaderia ? 'mercaderia' : ((it as any).categoria || null),
+        // Preservar la vinculación al catálogo de servicios de depósito para no romper la cotización al editar
+        servicio_id: (it as any).servicio_id ?? null,
+        metrica_id: (it as any).metrica_id ?? null,
+        dias_libres: (it as any).dias_libres ?? null,
+        // Campos de producto (solo mercadería)
+        ncm: esMercaderia ? (it.ncm||null) : null,
+        cantidad: esMercaderia ? (parseN(String(it.cantidad||0))||0) : null,
+        peso_unit: esMercaderia ? (parseN(String(it.peso_unit||0))||0) : null,
+        vol_unit: esMercaderia ? (parseN(String(it.vol_unit||0))||0) : null,
+        incoterm: esMercaderia ? (it.incoterm||'FOB') : null,
+        orden: i,
+      }
+    })
     if (itemsValidos.length > 0) {
       await (supabase.from('cotizaciones_proveedor_v2_items') as any).insert(itemsValidos)
     }
@@ -2114,6 +2124,11 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
 
         {editando ? (
           <>
+            {esAlmacenaje && (
+              <div className="mb-3 rounded-xl border border-[#ef9f27]/40 bg-[#ef9f27]/10 px-4 py-3 text-[11px] text-[#92400e] leading-relaxed">
+                <strong>Cotización de depósito.</strong> Acá podés ajustar montos y descripciones de los renglones existentes. Para cambios estructurales (agregar/quitar servicios, cambiar días libres o mínimos) conviene usar <strong>Duplicar</strong> y editar en el formulario completo, que maneja el catálogo de servicios. Los datos del servicio (tipo de cálculo, días libres y mínimo) se conservan al guardar.
+              </div>
+            )}
             {esMercaderia ? (
               <div className="space-y-2">
                 {items.map((it, i) => (
