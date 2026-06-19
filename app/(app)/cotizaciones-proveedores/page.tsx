@@ -433,7 +433,7 @@ function CotizacionesProveedoresInner() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    {['Proveedor', 'Rubro', 'Tipo', 'Referencia', 'Fecha', 'Vence', 'Items', 'Estado', ''].map(h => (
+                    {['Proveedor', 'Rubro', 'Tipo', 'Referencia', 'Fecha', 'Vence', 'Items', 'Estado', 'Duplicar', ''].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
@@ -491,13 +491,17 @@ function CotizacionesProveedoresInner() {
                           </select>
                         </td>
                         <td className="px-4 py-3.5">
+                          {puede(permisos,'cotizaciones_proveedores_duplicar','crear') && (
+                            <button onClick={e => { e.stopPropagation(); duplicarCotizacion(c.id) }}
+                              className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-[11px] font-bold hover:bg-[#1168F8] hover:text-white transition-colors whitespace-nowrap">
+                              ⧉ Duplicar
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5">
                           <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                             <button onClick={e => { e.stopPropagation(); setSelId(c.id); setView('detalle') }}
                               className="p-1.5 border border-gray-200 rounded-lg hover:bg-[#EBF2FF] text-gray-500 hover:text-[#1168F8] transition-colors">E</button>
-                            {puede(permisos,'cotizaciones_proveedores','crear') && (
-                              <button onClick={e => { e.stopPropagation(); duplicarCotizacion(c.id) }} title="Duplicar"
-                                className="p-1.5 border border-gray-200 rounded-lg hover:bg-[#EBF2FF] text-gray-500 hover:text-[#1168F8] transition-colors">D</button>
-                            )}
                             <button onClick={e => { e.stopPropagation(); eliminar(c.id) }}
                               className="p-1.5 border border-red-100 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">X</button>
                           </div>
