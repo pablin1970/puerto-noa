@@ -4,8 +4,8 @@ import { createClient } from '@/lib/supabase'
 import { cargarPermisos, esSuperAdmin } from '@/lib/permisos'
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
-const chipOn = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border border-blue-200 bg-blue-50 text-blue-700 cursor-pointer hover:bg-blue-100 transition-colors'
-const chipOff = 'px-2.5 py-1 rounded-lg text-[11px] border border-gray-200 bg-white text-gray-400 cursor-pointer hover:border-gray-300 hover:text-gray-600 transition-colors'
+const chipOn = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border border-blue-300 bg-blue-50 text-blue-700 shadow-sm cursor-pointer hover:bg-blue-100 hover:border-blue-400 transition-colors'
+const chipOff = 'px-2.5 py-1 rounded-lg text-[11px] border border-gray-300 bg-gray-50 text-gray-500 shadow-sm cursor-pointer hover:border-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors'
 
 const COMPORTAMIENTO_LABEL: Record<string, string> = {
   cantidad_simple: 'Cantidad × precio',
