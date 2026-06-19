@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
+import ServiciosCatalogo from './ServiciosCatalogo'
 
-type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm' | 'empresa' | 'condiciones_cotizacion'
+type Tab = 'categorias' | 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm' | 'empresa' | 'condiciones_cotizacion' | 'servicios_deposito'
 
 const TABS = [
   { key: 'categorias',    label: 'Categorías de precio', icon: '🏷' },
@@ -15,6 +16,7 @@ const TABS = [
   { key: 'fondos',        label: 'Fondos en custodia',   icon: '🏦' },
   { key: 'bloques_cotizacion', label: 'Bloques cotización',   icon: '📋' },
   { key: 'rubros_proveedor',   label: 'Rubros de proveedor',  icon: '🏷️' },
+  { key: 'servicios_deposito', label: 'Servicios depósito',   icon: '🏭' },
   { key: 'condiciones_cotizacion', label: 'Condiciones cotización', icon: '📜' },
   { key: 'gastos_categorias',  label: 'Cat. gastos fijos',    icon: '💸' },
   { key: 'cuentas_abm',        label: 'Cuentas (caja y bancos)', icon: '🏦' },
@@ -484,6 +486,9 @@ export default function CatalogosPage() {
 
       {/* ── CATEGORÍAS DE PRECIO ── */}
       {tab === 'categorias' && <CategoriasPrecioABM />}
+
+      {/* ── SERVICIOS DEPÓSITO ── */}
+      {tab === 'servicios_deposito' && <ServiciosCatalogo />}
 
       {/* ── PUERTOS CHINA ── */}
       {tab === 'puertos_china' && (
