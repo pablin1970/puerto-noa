@@ -72,6 +72,8 @@ export default function InteligenciaPreciosPage() {
   const [items, setItems] = useState<any[]>([])
   const [cotizaciones, setCotizaciones] = useState<any[]>([])
   const [tcHistorico, setTcHistorico] = useState<any[]>([])
+  const [serviciosCat, setServiciosCat] = useState<any[]>([]) // catálogo de servicios de depósito
+  const [ciudadesCat, setCiudadesCat] = useState<any[]>([])   // ciudades de prestación
   const [loading, setLoading] = useState(true)
 
   // Filtros Tab 1
@@ -80,10 +82,15 @@ export default function InteligenciaPreciosPage() {
   const [filtMeses, setFiltMeses] = useState(12)
   // Filtro global por tipo de cotización (afecta Evolución y Comparativa)
   const [filtTipo, setFiltTipo] = useState<'todas'|'generica'|'especifica'>('todas')
+  // Filtros de depósito (solo aplican cuando la categoría es 'almacenaje')
+  const [filtServicio, setFiltServicio] = useState('')   // servicio_id del catálogo
+  const [filtCiudad, setFiltCiudad] = useState('')       // ciudad_prestacion_id
 
   // Filtros Tab 2
   const [filtCat2, setFiltCat2] = useState('flete_maritimo')
   const [filtFecha2, setFiltFecha2] = useState('')
+  const [filtServicio2, setFiltServicio2] = useState('')
+  const [filtCiudad2, setFiltCiudad2] = useState('')
 
   // Filtros Tab 3
   const [filtTC, setFiltTC] = useState<'ars'|'clp'|'cny'>('ars')
@@ -93,9 +100,9 @@ export default function InteligenciaPreciosPage() {
 
   async function loadAll() {
     setLoading(true)
-    const [itemsRes, cotsRes, tcRes] = await Promise.all([
+    const [itemsRes, cotsRes, tcRes, svcRes, ciuRes] = await Promise.all([
       supabase.from('cotizaciones_proveedor_v2_items')
-        .select('*, cotizacion:cotizaciones_proveedor_v2(id,proveedor_nombre,fecha,rubro,estado,referencia,tramo,tipo,cliente_id,puerto_china_id,puerto_chile_id,tc_snapshot)')
+        .select('*, cotizacion:cotizaciones_proveedor_v2(id,proveedor_nombre,fecha,rubro,estado,referencia,tramo,tipo,cliente_id,puerto_china_id,puerto_chile_id,tc_snapshot,ciudad_prestacion_id,etiqueta_lugar)')
         .order('cotizacion_id'),
       supabase.from('cotizaciones_proveedor_v2')
         .select('id,proveedor_nombre,fecha,rubro,estado,referencia,tramo')
@@ -104,12 +111,28 @@ export default function InteligenciaPreciosPage() {
         .select('ars,clp,cny,fecha,created_at')
         .order('created_at', { ascending: true })
         .limit(500),
+      supabase.from('servicios_catalogo')
+        .select('id,rubro,grupo,nombre,activo,orden')
+        .eq('rubro', 'deposito')
+        .order('orden', { ascending: true }),
+      supabase.from('ciudades')
+        .select('id,pais,ciudad,region,activo,orden')
+        .order('orden', { ascending: true }),
     ])
     if (itemsRes.data) setItems(itemsRes.data as any[])
     if (cotsRes.data) setCotizaciones(cotsRes.data)
     if (tcRes.data) setTcHistorico(tcRes.data)
+    if (svcRes.data) setServiciosCat(svcRes.data as any[])
+    if (ciuRes.data) setCiudadesCat(ciuRes.data as any[])
     setLoading(false)
   }
+
+  // Mapas de apoyo para mostrar nombres legibles
+  const nombreServicio = useCallback((id: string) => serviciosCat.find(s => s.id === id)?.nombre || '', [serviciosCat])
+  const nombreCiudad = useCallback((id: string) => {
+    const c = ciudadesCat.find(x => x.id === id)
+    return c ? c.ciudad : ''
+  }, [ciudadesCat])
 
   // ── Datos para Tab 1 ──────────────────────────────────────────────
   const itemsFiltrados1 = useMemo(() => {
@@ -123,9 +146,14 @@ export default function InteligenciaPreciosPage() {
       if (filtProvs.length > 0 && !filtProvs.includes(it.cotizacion?.proveedor_nombre)) return false
       if (it.tipo_calculo === 'pct_cif') return false // excluir % del gráfico de valores
       if (filtTipo !== 'todas' && (it.cotizacion?.tipo || 'generica') !== filtTipo) return false
+      // Filtros de depósito (solo cuando la categoría es 'almacenaje')
+      if (filtCat === 'almacenaje') {
+        if (filtServicio && it.servicio_id !== filtServicio) return false
+        if (filtCiudad && it.cotizacion?.ciudad_prestacion_id !== filtCiudad) return false
+      }
       return true
     })
-  }, [items, filtCat, filtProvs, filtMeses, filtTipo])
+  }, [items, filtCat, filtProvs, filtMeses, filtTipo, filtServicio, filtCiudad])
 
   const proveedoresDisp = useMemo(() => {
     const cats = items.filter(it => it.categoria === filtCat && it.tipo_calculo !== 'pct_cif')
@@ -176,25 +204,35 @@ export default function InteligenciaPreciosPage() {
       if (it.categoria !== filtCat2) return false
       if (it.tipo_calculo === 'pct_cif') return false
       if (filtTipo !== 'todas' && (it.cotizacion?.tipo || 'generica') !== filtTipo) return false
+      // Filtros de depósito (solo cuando la categoría es 'almacenaje')
+      if (filtCat2 === 'almacenaje') {
+        if (filtServicio2 && it.servicio_id !== filtServicio2) return false
+        if (filtCiudad2 && it.cotizacion?.ciudad_prestacion_id !== filtCiudad2) return false
+      }
       if (filtFecha2) {
         const fecha = it.cotizacion?.fecha || ''
         return fecha >= filtFecha2
       }
       return true
     })
-  }, [items, filtCat2, filtFecha2, filtTipo])
+  }, [items, filtCat2, filtFecha2, filtTipo, filtServicio2, filtCiudad2])
 
-  // Última cotización de cada proveedor para esa categoría
+  // Última cotización de cada proveedor para esa categoría.
+  // En depósito, la clave incluye servicio + métrica + ciudad para no mezclar servicios distintos.
   const ultimasPorProv = useMemo(() => {
+    const esDep = filtCat2 === 'almacenaje'
     const map: Record<string, any> = {}
     itemsComp.forEach(it => {
       const prov = it.cotizacion?.proveedor_nombre || ''
-      if (!map[prov] || it.cotizacion?.fecha > map[prov].cotizacion?.fecha) {
-        map[prov] = it
+      const clave = esDep
+        ? `${prov}|${it.servicio_id || ''}|${it.metrica_id || ''}|${it.cotizacion?.ciudad_prestacion_id || ''}`
+        : prov
+      if (!map[clave] || it.cotizacion?.fecha > map[clave].cotizacion?.fecha) {
+        map[clave] = it
       }
     })
     return Object.values(map).sort((a, b) => convertirUSD(a, tcHistorico) - convertirUSD(b, tcHistorico))
-  }, [itemsComp, tcHistorico])
+  }, [itemsComp, tcHistorico, filtCat2])
 
   const minComp = ultimasPorProv.length ? convertirUSD(ultimasPorProv[0], tcHistorico) : 0
 
@@ -272,13 +310,37 @@ export default function InteligenciaPreciosPage() {
           <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-wrap gap-4 items-end">
             <div>
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Categoría</label>
-              <select value={filtCat} onChange={e => { setFiltCat(e.target.value); setFiltProvs([]) }}
+              <select value={filtCat} onChange={e => { setFiltCat(e.target.value); setFiltProvs([]); setFiltServicio(''); setFiltCiudad('') }}
                 className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
                 {Object.entries(CATEGORIAS).map(([k, v]) => (
                   <option key={k} value={k}>{v.icon} {v.label}</option>
                 ))}
               </select>
             </div>
+            {filtCat === 'almacenaje' && (
+              <>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Servicio del depósito</label>
+                  <select value={filtServicio} onChange={e => setFiltServicio(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8] min-w-[200px]">
+                    <option value="">Todos los servicios</option>
+                    {serviciosCat.map(s => (
+                      <option key={s.id} value={s.id}>{s.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Ciudad de prestación</label>
+                  <select value={filtCiudad} onChange={e => setFiltCiudad(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
+                    <option value="">Todas las ciudades</option>
+                    {ciudadesCat.map(c => (
+                      <option key={c.id} value={c.id}>{c.ciudad}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
             <div>
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Período</label>
               <select value={filtMeses} onChange={e => setFiltMeses(Number(e.target.value))}
@@ -428,7 +490,10 @@ export default function InteligenciaPreciosPage() {
                     <tr key={i} className="border-b border-gray-50 hover:bg-blue-50/20">
                       <td className="px-4 py-2.5 font-mono text-[11px] text-gray-500">{fmtDate(it.cotizacion?.fecha)}</td>
                       <td className="px-4 py-2.5 font-semibold text-gray-800">{it.cotizacion?.proveedor_nombre}</td>
-                      <td className="px-4 py-2.5 text-gray-600">{it.descripcion}</td>
+                      <td className="px-4 py-2.5 text-gray-600">
+                        {it.descripcion}
+                        {it.cotizacion?.ciudad_prestacion_id && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[#E1F5EE] text-[#0a9e6e] align-middle">📍 {nombreCiudad(it.cotizacion.ciudad_prestacion_id)}</span>}
+                      </td>
                       <td className="px-4 py-2.5 text-gray-400">{it.tipo_contenedor || 'Todos'}</td>
                       <td className="px-4 py-2.5 font-mono font-bold text-[#052698]">
                         {fmtUSD(convertirUSD(it, tcHistorico))}
@@ -451,13 +516,37 @@ export default function InteligenciaPreciosPage() {
           <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-wrap gap-4 items-end">
             <div>
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Categoría</label>
-              <select value={filtCat2} onChange={e => setFiltCat2(e.target.value)}
+              <select value={filtCat2} onChange={e => { setFiltCat2(e.target.value); setFiltServicio2(''); setFiltCiudad2('') }}
                 className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
                 {Object.entries(CATEGORIAS).map(([k, v]) => (
                   <option key={k} value={k}>{v.icon} {v.label}</option>
                 ))}
               </select>
             </div>
+            {filtCat2 === 'almacenaje' && (
+              <>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Servicio del depósito</label>
+                  <select value={filtServicio2} onChange={e => setFiltServicio2(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8] min-w-[200px]">
+                    <option value="">Todos los servicios</option>
+                    {serviciosCat.map(s => (
+                      <option key={s.id} value={s.id}>{s.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Ciudad de prestación</label>
+                  <select value={filtCiudad2} onChange={e => setFiltCiudad2(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
+                    <option value="">Todas las ciudades</option>
+                    {ciudadesCat.map(c => (
+                      <option key={c.id} value={c.id}>{c.ciudad}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
             <div>
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Cotizaciones desde</label>
               <input type="date" value={filtFecha2} onChange={e => setFiltFecha2(e.target.value)}
@@ -518,7 +607,7 @@ export default function InteligenciaPreciosPage() {
                         </div>
                         <div className="flex justify-between mt-1">
                           <span className="text-[9px] text-gray-400">{it.descripcion}</span>
-                          <span className="text-[9px] text-gray-400">{it.tipo_contenedor || 'Todos los contenedores'}</span>
+                          <span className="text-[9px] text-gray-400">{it.cotizacion?.ciudad_prestacion_id ? `📍 ${nombreCiudad(it.cotizacion.ciudad_prestacion_id)}` : (it.tipo_contenedor || 'Todos los contenedores')}</span>
                         </div>
                       </div>
                     )
@@ -547,7 +636,10 @@ export default function InteligenciaPreciosPage() {
                         <tr key={i} className="border-b border-gray-50 hover:bg-blue-50/20">
                           <td className="px-4 py-2.5 font-semibold text-gray-800">{it.cotizacion?.proveedor_nombre}</td>
                           <td className="px-4 py-2.5 font-mono text-[11px] text-gray-500">{fmtDate(it.cotizacion?.fecha)}</td>
-                          <td className="px-4 py-2.5 text-gray-600">{it.descripcion}</td>
+                          <td className="px-4 py-2.5 text-gray-600">
+                            {it.descripcion}
+                            {it.cotizacion?.ciudad_prestacion_id && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[#E1F5EE] text-[#0a9e6e] align-middle">📍 {nombreCiudad(it.cotizacion.ciudad_prestacion_id)}</span>}
+                          </td>
                           <td className="px-4 py-2.5 font-mono font-bold text-[#052698]">
                             {fmtUSD(val)}
                             {monedaOrigen(it) && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-gray-100 text-gray-500 align-middle" title={`Convertido desde ${monedaOrigen(it)} con el TC del día de la cotización`}>de {monedaOrigen(it)}</span>}
