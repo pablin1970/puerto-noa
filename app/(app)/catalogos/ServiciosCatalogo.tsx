@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { cargarPermisos, esSuperAdmin, puede } from '@/lib/permisos'
 
@@ -21,13 +21,18 @@ const COMPORTAMIENTOS = [
   { value: 'fijo', label: 'Precio fijo' },
 ]
 
-const GRUPOS = [
-  { key: 'operativos', label: 'Servicios operativos (tarifa fija)' },
-  { key: 'variables', label: 'Servicios variables / por uso' },
-]
+// Label legible para los grupos. Los de depósito tienen nombre propio; el resto se muestra capitalizado.
+function grupoLabel(g: string): string {
+  if (g === 'operativos') return 'Servicios operativos (tarifa fija)'
+  if (g === 'variables') return 'Servicios variables / por uso'
+  if (g === 'general' || !g) return 'General'
+  return g.charAt(0).toUpperCase() + g.slice(1)
+}
 
 export default function ServiciosCatalogo() {
   const supabase = useMemo(() => createClient(), [])
+  const [rubros, setRubros] = useState<any[]>([])
+  const [rubro, setRubro] = useState('deposito')
   const [servicios, setServicios] = useState<any[]>([])
   const [metricas, setMetricas] = useState<any[]>([])
   const [habSet, setHabSet] = useState<Set<string>>(new Set())
@@ -39,7 +44,7 @@ export default function ServiciosCatalogo() {
   const [puedeEditar, setPuedeEditar] = useState(false)
   const [loading, setLoading] = useState(true)
   const [nuevoNombre, setNuevoNombre] = useState('')
-  const [nuevoGrupo, setNuevoGrupo] = useState('operativos')
+  const [nuevoGrupo, setNuevoGrupo] = useState('')
   const [editId, setEditId] = useState<string | null>(null)
   const [editNombre, setEditNombre] = useState('')
   // gestión de formas de cobro (métricas)
@@ -50,22 +55,22 @@ export default function ServiciosCatalogo() {
   const [editMetId, setEditMetId] = useState<string | null>(null)
   const [editMetNombre, setEditMetNombre] = useState('')
 
-  useEffect(() => { load() }, [])
-
-  async function load() {
+  // Carga base: permisos, rubros de proveedor, métricas globales, habilitadas, items usados.
+  // Los servicios NO se cargan acá: dependen del rubro y los carga loadServicios().
+  const loadBase = useCallback(async () => {
     setLoading(true)
     const permisos = await cargarPermisos()
     setSuperAdmin(esSuperAdmin())
     setPuedeVer(puede(permisos, 'servicios_deposito', 'ver'))
     setPuedeCrear(puede(permisos, 'servicios_deposito', 'crear'))
     setPuedeEditar(puede(permisos, 'servicios_deposito', 'editar'))
-    const [sRes, mRes, hRes, iRes] = await Promise.all([
-      supabase.from('servicios_catalogo').select('*').eq('rubro', 'deposito').order('orden', { ascending: true }),
+    const [rRes, mRes, hRes, iRes] = await Promise.all([
+      supabase.from('proveedor_rubros').select('codigo,nombre,color,icono,activo,orden').eq('activo', true).order('orden', { ascending: true }),
       supabase.from('servicios_metricas').select('*').order('orden', { ascending: true }),
       supabase.from('servicios_metricas_habilitadas').select('servicio_id,metrica_id'),
       supabase.from('cotizaciones_proveedor_v2_items').select('servicio_id,metrica_id'),
     ])
-    if (sRes.data) setServicios(sRes.data)
+    if (rRes.data) setRubros(rRes.data)
     if (mRes.data) setMetricas(mRes.data)
     const hData: any[] = hRes.data || []
     setHabSet(new Set(hData.map((h: any) => h.servicio_id + '|' + h.metrica_id)))
@@ -76,7 +81,33 @@ export default function ServiciosCatalogo() {
     iData.forEach((r: any) => { if (r.metrica_id) mU.add(r.metrica_id) })
     setMetricasUsadas(mU)
     setLoading(false)
-  }
+  }, [supabase])
+
+  // Carga los servicios del rubro seleccionado.
+  const loadServicios = useCallback(async () => {
+    const { data } = await supabase.from('servicios_catalogo').select('*').eq('rubro', rubro).order('orden', { ascending: true })
+    setServicios(data || [])
+  }, [supabase, rubro])
+
+  useEffect(() => { loadBase() }, [loadBase])
+  useEffect(() => { loadServicios() }, [loadServicios])
+
+  // Grupos presentes en los servicios del rubro actual (ordenados; operativos/variables primero, general al final).
+  const gruposPresentes = useMemo(() => {
+    const set = new Set<string>()
+    servicios.forEach(s => set.add(s.grupo || 'general'))
+    const prio = ['operativos', 'variables']
+    return Array.from(set).sort((a, b) => {
+      const ia = prio.indexOf(a), ib = prio.indexOf(b)
+      if (ia !== -1 || ib !== -1) return (ia === -1 ? 90 : ia) - (ib === -1 ? 90 : ib)
+      if (a === 'general') return 1
+      if (b === 'general') return -1
+      return a.localeCompare(b)
+    })
+  }, [servicios])
+
+  const rubroActual = rubros.find(r => r.codigo === rubro)
+  const nombreRubro = rubroActual?.nombre || rubro
 
   async function toggleActivo(s: any) {
     if (!puedeEditar) return
@@ -106,7 +137,7 @@ export default function ServiciosCatalogo() {
     if (!nombre) return
     const maxOrden = servicios.reduce((m, s) => Math.max(m, s.orden || 0), 0)
     const { data } = await (supabase.from('servicios_catalogo') as any)
-      .insert({ rubro: 'deposito', grupo: nuevoGrupo, nombre, orden: maxOrden + 10, activo: true })
+      .insert({ rubro, grupo: nuevoGrupo.trim() || null, nombre, orden: maxOrden + 10, activo: true })
       .select().single()
     if (data) setServicios(prev => [...prev, data])
     setNuevoNombre('')
@@ -180,16 +211,30 @@ export default function ServiciosCatalogo() {
 
   if (!puedeVer) return (
     <div className="p-8 text-center text-gray-400 text-sm">
-      No tenés permiso para ver el catálogo de servicios de depósito.
+      No tenés permiso para ver el catálogo de servicios.
     </div>
   )
 
   const metricasActivas = metricas.filter(m => m.activo !== false)
+  const sugerenciasGrupo = Array.from(new Set([...gruposPresentes.filter(g => g !== 'general'), 'operativos', 'variables']))
 
   return (
     <div className="space-y-4">
+      {/* Selector de rubro */}
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-4">
+        <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Rubro de proveedor</label>
+        <div className="flex items-center gap-3 flex-wrap">
+          <select value={rubro} onChange={e => { setRubro(e.target.value); setEditId(null); setNuevoGrupo('') }} className={inp + ' max-w-xs'}>
+            {rubros.map(r => (
+              <option key={r.codigo} value={r.codigo}>{r.icono ? r.icono + ' ' : ''}{r.nombre}</option>
+            ))}
+          </select>
+          <span className="text-[11px] text-gray-400">Elegí el rubro para gestionar sus servicios y formas de cobro.</span>
+        </div>
+      </div>
+
       <div className="mb-2">
-        <h2 className="font-bold text-base text-gray-900">Servicios de depósito fiscal</h2>
+        <h2 className="font-bold text-base text-gray-900">Servicios de {nombreRubro}</h2>
         <p className="text-xs text-gray-400 mt-0.5">Activá los servicios que se usan y tildá las formas de cobro que admite cada uno. El operador solo verá los activos.</p>
       </div>
       <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 text-[11px] text-blue-700">
@@ -204,23 +249,29 @@ export default function ServiciosCatalogo() {
           <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} className={inp} placeholder="ej. Reembalaje de carga" onKeyDown={e => { if (e.key === 'Enter') addServicio() }} />
         </div>
         <div className="w-64">
-          <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Grupo</label>
-          <select value={nuevoGrupo} onChange={e => setNuevoGrupo(e.target.value)} className={inp}>
-            <option value="operativos">Servicios operativos (tarifa fija)</option>
-            <option value="variables">Servicios variables / por uso</option>
-          </select>
+          <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Grupo (opcional)</label>
+          <input list="grupos-list" value={nuevoGrupo} onChange={e => setNuevoGrupo(e.target.value)} className={inp} placeholder="ej. operativos · variables · o dejalo vacío" />
+          <datalist id="grupos-list">
+            {sugerenciasGrupo.map(g => <option key={g} value={g} />)}
+          </datalist>
         </div>
         <button onClick={addServicio} className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#1168F8] text-white hover:bg-[#052698] transition-all whitespace-nowrap">+ Agregar</button>
       </div>
       )}
 
+      {servicios.length === 0 && (
+        <div className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-8 text-center text-gray-400 text-sm">
+          Todavía no hay servicios cargados para {nombreRubro}.{puedeCrear ? ' Agregá el primero arriba.' : ''}
+        </div>
+      )}
+
       {/* Tarjetas por grupo */}
-      {GRUPOS.map(g => {
-        const items = servicios.filter(s => s.grupo === g.key)
+      {gruposPresentes.map(g => {
+        const items = servicios.filter(s => (s.grupo || 'general') === g)
         if (items.length === 0) return null
         return (
-          <div key={g.key}>
-            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 mt-1">{g.label}</div>
+          <div key={g}>
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 mt-1">{grupoLabel(g)}</div>
             <div className="space-y-2">
               {items.map(s => {
                 const activo = s.activo !== false
@@ -279,7 +330,7 @@ export default function ServiciosCatalogo() {
 
         {showMetricas && (
           <div className="mt-3 space-y-3">
-            <p className="text-xs text-gray-400">Las formas de cobro son los chips que tildás en cada servicio. Agregá una nueva si un proveedor cobra de una manera que no está en la lista. El comportamiento define qué campos pide después al cotizar.</p>
+            <p className="text-xs text-gray-400">Las formas de cobro son los chips que tildás en cada servicio y son compartidas por todos los rubros. Agregá una nueva si un proveedor cobra de una manera que no está en la lista. El comportamiento define qué campos pide después al cotizar.</p>
 
             {/* Alta de métrica */}
             {puedeCrear && (
