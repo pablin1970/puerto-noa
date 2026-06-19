@@ -144,7 +144,7 @@ export default function ServiciosCatalogo() {
                 const activo = s.activo !== false
                 const fueUsado = usados.has(s.id)
                 return (
-                  <div key={s.id} className={`bg-white border border-gray-100 rounded-2xl shadow-sm px-4 py-3 ${activo ? '' : 'opacity-60'}`}>
+                  <div key={s.id} className={`bg-white border border-gray-300 rounded-2xl shadow-md px-4 py-3 ${activo ? '' : 'opacity-60'}`}>
                     <div className="flex items-center gap-3 mb-2.5">
                       {editId === s.id ? (
                         <input value={editNombre} onChange={e => setEditNombre(e.target.value)} onBlur={saveEdit} onKeyDown={e => { if (e.key === 'Enter') saveEdit() }} autoFocus className={inp + ' flex-1'} />
