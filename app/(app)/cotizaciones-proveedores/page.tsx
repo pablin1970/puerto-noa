@@ -597,10 +597,37 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [ciudades, setCiudades] = useState<any[]>([])
   const [tiposCont, setTiposCont] = useState<any[]>([])
   const [rubrosCatalogo, setRubrosCatalogo] = useState<any[]>([])
+  // Catálogo de servicios de depósito (Fase 2) + servicios cargados en esta cotización
+  const [depServiciosCat, setDepServiciosCat] = useState<any[]>([])
+  const [depMetricas, setDepMetricas] = useState<any[]>([])
+  const [depHab, setDepHab] = useState<Set<string>>(new Set())
+  const [depServicios, setDepServicios] = useState<any[]>([])
+  const [depSelSvc, setDepSelSvc] = useState('')
 
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
   const sel = inp
   const setF = (k: string, v: any) => setForm((p:any) => ({ ...p, [k]: v }))
+
+  // ── Servicios de depósito (Fase 2): agregar / quitar / editar valores ──
+  function depAgregarServicio() {
+    if(!depSelSvc) return
+    const svc = depServiciosCat.find(s=>s.id===depSelSvc)
+    if(!svc) return
+    const formas = depMetricas
+      .filter(m=>depHab.has(svc.id+'|'+m.id))
+      .map(m=>({ metrica_id:m.id, nombre:m.nombre, codigo:m.codigo, comportamiento:m.comportamiento, precio:'', moneda:form.moneda||'USD', minimo:'', dias_libres:'' }))
+    setDepServicios(prev=>[...prev, { servicio_id:svc.id, nombre:svc.nombre, grupo:svc.grupo, formas }])
+    setDepSelSvc('')
+  }
+  function depQuitarServicio(servicioId:string) {
+    setDepServicios(prev=>prev.filter(s=>s.servicio_id!==servicioId))
+  }
+  function depSetForma(servicioId:string, metricaId:string, campo:string, valor:string) {
+    setDepServicios(prev=>prev.map(s=>{
+      if(s.servicio_id!==servicioId) return s
+      return { ...s, formas: s.formas.map((f:any)=> f.metrica_id===metricaId ? { ...f, [campo]:valor } : f) }
+    }))
+  }
 
   useEffect(() => {
     Promise.all([
@@ -612,7 +639,10 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       supabase.from('ciudades_destino_arg').select('id,ciudad,provincia').eq('activo','true').order('orden'),
       supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo','true').order('orden'),
       supabase.from('proveedor_rubros').select('*').eq('activo',true).order('nombre'),
-    ]).then(([bl,cat,ch,cl,ps,ci,tc,ru]) => {
+      supabase.from('servicios_catalogo').select('*').eq('rubro','deposito').eq('activo',true).order('orden'),
+      supabase.from('servicios_metricas').select('*').eq('activo',true).order('orden'),
+      supabase.from('servicios_metricas_habilitadas').select('servicio_id,metrica_id'),
+    ]).then(([bl,cat,ch,cl,ps,ci,tc,ru,dsv,dmt,dhb]) => {
       if(bl.data) setBloques(bl.data)
       if(cat.data) setCategorias(cat.data)
       if(ch.data) setPuertosCh(ch.data)
@@ -620,6 +650,9 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       if(ps.data) setPasos(ps.data)
       if(ci.data) setCiudades(ci.data)
       if(tc.data) setTiposCont(tc.data)
+      if(dsv.data) setDepServiciosCat(dsv.data)
+      if(dmt.data) setDepMetricas(dmt.data)
+      if(dhb.data) setDepHab(new Set((dhb.data as any[]).map(h=>h.servicio_id+'|'+h.metrica_id)))
       if(ru.data){
         // Normalizar: cada rubro con su código (fallback al nombre normalizado)
         const lista = (ru.data as any[]).map(r=>({
@@ -906,14 +939,29 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         })
       } else if(tf==='almacenaje'){
         let ord=0
-        const add=(cond:boolean, descripcion:string, tipo_calculo:string, valKey:string)=>{
-          const v=parseN(String(f[valKey]||0))
-          if(v>0) out.push({ cotizacion_id:cotizId, descripcion, tipo_calculo, valor:v, moneda:form.moneda, categoria:'almacenaje', ...ruta, orden:ord++ })
-        }
-        add(true,'Almacenaje por m³/día','por_m3','almacen_m3_dia')
-        add(true,'Almacenaje por pallet/día','fijo_usd','almacen_pallet_dia')
-        add(true,'Almacenaje por big bag/día','por_bigbag','almacen_bigbag_dia')
-        add(true,'Almacenaje por contenedor/día','por_contenedor','almacen_cont_dia')
+        const diasDefault = parseN(String(form.almacen_dias_gratis||0))
+        depServicios.forEach((svc:any)=>{
+          svc.formas.forEach((fr:any)=>{
+            const v = parseN(String(fr.precio||0))
+            if(v<=0) return
+            const esTiempo = fr.comportamiento==='por_tiempo'
+            const min = parseN(String(fr.minimo||0))
+            const diasFr = fr.dias_libres!=='' ? parseN(String(fr.dias_libres)) : diasDefault
+            out.push({
+              cotizacion_id: cotizId,
+              descripcion: svc.nombre+' — '+fr.nombre,
+              tipo_calculo: fr.codigo||'catalogo',
+              servicio_id: svc.servicio_id,
+              metrica_id: fr.metrica_id,
+              valor: v,
+              moneda: fr.moneda||form.moneda||'USD',
+              piso_usd: min>0 ? min : null,
+              dias_libres: esTiempo ? diasFr : null,
+              categoria: 'almacenaje',
+              ...ruta, orden:ord++,
+            })
+          })
+        })
       } else {
         // marítimo, despachante, seguro, genérico → items[] genéricos
         items.filter(it=>it.descripcion).forEach((it,i)=>{
@@ -1511,7 +1559,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #0a9e6e'}}>
           <div className="px-5 py-3 border-b border-gray-100 bg-green-50 flex items-center gap-2">
             <span className="text-lg">🏭</span>
-            <span className="font-semibold text-sm text-green-900">Almacenaje — tarifas por unidad</span>
+            <span className="font-semibold text-sm text-green-900">Servicios de depósito</span>
             <span className="ml-auto text-[10px] text-green-700 font-medium">{sentido==='ambos'?'Ambos sentidos · A+B':sentido==='exportacion'?'Exportación':'Importación'}</span>
           </div>
           <div className="px-5 py-4 space-y-4">
@@ -1521,32 +1569,57 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 <input value={form.almacen_ubicacion} onChange={e=>setF('almacen_ubicacion',e.target.value)} className={inp} placeholder="ej. Iquique — Zona Franca"/>
               </div>
               <div>
-                {lbl('Período gratuito (días)')}
+                {lbl('Días libres por defecto')}
                 <input type="text" inputMode="decimal" value={form.almacen_dias_gratis} onChange={e=>setF('almacen_dias_gratis',e.target.value)} className={inp+' text-right font-mono'} placeholder="0"/>
               </div>
             </div>
 
-            {/* Tabla de tarifas */}
-            <div className="border border-gray-100 rounded-xl overflow-hidden">
-              <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100 grid text-[10px] font-semibold text-gray-400 uppercase tracking-wider" style={{gridTemplateColumns:'2fr 1fr 1fr'}}>
-                <span>Unidad de almacenaje</span><span className="text-right">Precio / día</span><span className="text-right">Mínimo USD/día</span>
+            {/* Selector para agregar servicio del catálogo */}
+            <div className="flex items-end gap-2 p-3 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
+              <div className="flex-1">
+                {lbl('Agregar servicio')}
+                <select value={depSelSvc} onChange={e=>setDepSelSvc(e.target.value)} className={sel}>
+                  <option value="">— Elegí un servicio del catálogo —</option>
+                  {depServiciosCat.filter(s=>!depServicios.some(d=>d.servicio_id===s.id)).map(s=>(
+                    <option key={s.id} value={s.id}>{s.nombre}</option>
+                  ))}
+                </select>
               </div>
-              {[
-                {key:'m3', label:'Por m³ / día', desc:'Carga suelta desconsolidada', pKey:'almacen_m3_dia', mKey:'almacen_m3_min'},
-                {key:'pallet', label:'Por pallet / día', desc:'Unitización en pallets', pKey:'almacen_pallet_dia', mKey:'almacen_pallet_min'},
-                {key:'bigbag', label:'Por big bag / día', desc:'Bolsones a granel', pKey:'almacen_bigbag_dia', mKey:'almacen_bigbag_min'},
-                {key:'cont', label:'Por contenedor / día', desc:'Contenedor completo en patio', pKey:'almacen_cont_dia', mKey:'almacen_cont_min'},
-              ].map(u=>(
-                <div key={u.key} className="px-4 py-3 border-t border-gray-50 grid gap-4 items-center" style={{gridTemplateColumns:'2fr 1fr 1fr'}}>
-                  <div>
-                    <div className="text-xs font-semibold text-gray-800">{u.label}</div>
-                    <div className="text-[10px] text-gray-400">{u.desc}</div>
-                  </div>
-                  <input type="text" inputMode="decimal" value={(form as any)[u.pKey]} onFocus={e=>e.target.select()} onChange={e=>setF(u.pKey,e.target.value)} className={inp+' text-right font-mono'} placeholder="0.00"/>
-                  <input type="text" inputMode="decimal" value={(form as any)[u.mKey]} onFocus={e=>e.target.select()} onChange={e=>setF(u.mKey,e.target.value)} className={inp+' text-right font-mono'} placeholder="0"/>
-                </div>
-              ))}
+              <button type="button" onClick={depAgregarServicio} className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#1168F8] text-white hover:bg-[#052698] transition-all whitespace-nowrap">+ Agregar</button>
             </div>
+
+            {/* Servicios agregados */}
+            {depServicios.length===0 ? (
+              <div className="text-center py-6 text-gray-400 text-xs">Todavía no agregaste servicios. Elegí uno de la lista de arriba.</div>
+            ) : depServicios.map(svc=>(
+              <div key={svc.servicio_id} className="border border-[#B9D0F6] bg-[#EFF4FE] rounded-2xl px-4 py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-semibold text-gray-800 flex-1">{svc.nombre}</span>
+                  <button type="button" onClick={()=>depQuitarServicio(svc.servicio_id)} className="text-gray-300 hover:text-red-500 text-sm" title="Quitar servicio">✕</button>
+                </div>
+                <div className="grid gap-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-[#dbe7fb] pb-1.5 mb-1.5" style={{gridTemplateColumns:'1.4fr 0.9fr 0.7fr 0.9fr 0.9fr'}}>
+                  <span>Forma de cobro</span><span className="text-right">Precio</span><span>Moneda</span><span className="text-right">Mínimo</span><span className="text-right">Días libres</span>
+                </div>
+                {svc.formas.map((f:any)=>{
+                  const esTiempo = f.comportamiento==='por_tiempo'
+                  return (
+                    <div key={f.metrica_id} className="grid gap-2 items-center py-1" style={{gridTemplateColumns:'1.4fr 0.9fr 0.7fr 0.9fr 0.9fr'}}>
+                      <span className="text-xs text-gray-700">{f.nombre}</span>
+                      <input type="text" inputMode="decimal" value={f.precio} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'precio',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder="0.00"/>
+                      <select value={f.moneda} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'moneda',e.target.value)} className="w-full px-1 py-1.5 border border-gray-200 rounded-lg text-[11px] bg-white font-semibold text-[#1168F8] focus:outline-none focus:border-[#1168F8]">
+                        <option>USD</option><option>ARS</option><option>CLP</option><option>CNY</option>
+                      </select>
+                      <input type="text" inputMode="decimal" value={f.minimo} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'minimo',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder="mín."/>
+                      {esTiempo ? (
+                        <input type="text" inputMode="decimal" value={f.dias_libres} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'dias_libres',e.target.value)} className="w-full px-2 py-1.5 border border-green-200 bg-green-50 rounded-lg text-[11px] text-right font-mono focus:outline-none focus:border-[#0a9e6e]" placeholder={form.almacen_dias_gratis||'0'}/>
+                      ) : (
+                        <span className="text-center text-gray-300 text-xs">—</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
           </div>
         </div>
       )}
