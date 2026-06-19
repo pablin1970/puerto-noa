@@ -631,6 +631,34 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     }))
   }
 
+  // ── Opción 2: autocompletar la etiqueta del lugar según proveedor + ciudad ──
+  // Busca la última etiqueta usada para esa dupla en cotizaciones anteriores y la sugiere,
+  // solo si el campo está vacío (no pisa lo que el usuario escribió).
+  useEffect(() => {
+    const rubroEsDeposito = tipoFormulario(form.rubro) === 'almacenaje'
+    if(!rubroEsDeposito) return
+    if(!form.ciudad_prestacion_id) return
+    if(!form.tercero_id && !form.proveedor_nombre) return
+    if(form.etiqueta_lugar && form.etiqueta_lugar.trim() !== '') return
+    let cancelado = false
+    ;(async () => {
+      let q = supabase.from('cotizaciones_proveedor_v2')
+        .select('etiqueta_lugar,fecha')
+        .eq('ciudad_prestacion_id', form.ciudad_prestacion_id)
+        .not('etiqueta_lugar', 'is', null)
+        .order('fecha', { ascending: false })
+        .limit(1)
+      q = form.tercero_id ? q.eq('tercero_id', form.tercero_id) : q.eq('proveedor_nombre', form.proveedor_nombre)
+      const { data } = await q
+      if(cancelado) return
+      const sugerida = (data && data[0] && (data[0] as any).etiqueta_lugar) || ''
+      if(sugerida) {
+        setForm((p:any) => (p.etiqueta_lugar && p.etiqueta_lugar.trim() !== '') ? p : { ...p, etiqueta_lugar: sugerida })
+      }
+    })()
+    return () => { cancelado = true }
+  }, [form.ciudad_prestacion_id, form.tercero_id, form.proveedor_nombre, form.rubro])
+
   useEffect(() => {
     Promise.all([
       supabase.from('cotizador_bloques').select('id,numero,nombre,descripcion').eq('activo',true).order('numero'),
