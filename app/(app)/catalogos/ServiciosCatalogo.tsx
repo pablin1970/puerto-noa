@@ -4,8 +4,8 @@ import { createClient } from '@/lib/supabase'
 import { cargarPermisos, esSuperAdmin } from '@/lib/permisos'
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
-const chipOn = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border border-blue-300 bg-blue-50 text-blue-700 shadow-sm cursor-pointer hover:bg-blue-100 hover:border-blue-400 transition-colors'
-const chipOff = 'px-2.5 py-1 rounded-lg text-[11px] border border-gray-300 bg-gray-50 text-gray-500 shadow-sm cursor-pointer hover:border-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors'
+const chipOn = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border-0 bg-[#1168F8] text-white shadow-sm cursor-pointer hover:bg-[#052698] transition-colors'
+const chipOff = 'px-2.5 py-1 rounded-lg text-[11px] border border-gray-300 bg-white text-gray-500 cursor-pointer hover:border-gray-400 hover:bg-gray-50 hover:text-gray-700 transition-colors'
 
 const COMPORTAMIENTO_LABEL: Record<string, string> = {
   cantidad_simple: 'Cantidad × precio',
@@ -144,7 +144,7 @@ export default function ServiciosCatalogo() {
                 const activo = s.activo !== false
                 const fueUsado = usados.has(s.id)
                 return (
-                  <div key={s.id} className={`bg-white border border-gray-300 rounded-2xl shadow-md px-4 py-3 ${activo ? '' : 'opacity-60'}`}>
+                  <div key={s.id} className={`bg-[#EFF4FE] border border-[#B9D0F6] rounded-2xl shadow-sm px-4 py-3 ${activo ? '' : 'opacity-60'}`}>
                     <div className="flex items-center gap-3 mb-2.5">
                       {editId === s.id ? (
                         <input value={editNombre} onChange={e => setEditNombre(e.target.value)} onBlur={saveEdit} onKeyDown={e => { if (e.key === 'Enter') saveEdit() }} autoFocus className={inp + ' flex-1'} />
