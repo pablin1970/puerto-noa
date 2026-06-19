@@ -20,6 +20,47 @@ const CATEGORIAS: Record<string, { label: string; color: string; bg: string; ico
 const fmtUSD = (n: number) => `USD ${n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 const fmtDate = (s: string) => s ? s.split('-').reverse().join('/') : ''
 
+// Convierte el valor de un ítem a USD usando el TC que quedó sellado en su cotización
+// (tc_snapshot). Si la cotización no tiene snapshot (cargada antes de sellar TC),
+// busca en el histórico el TC más cercano a su fecha. Si no hay nada, devuelve el valor
+// crudo (no rompe). Las claves del snapshot son ARS/CLP/CNY; el histórico usa ars/clp/cny.
+function convertirUSD(it: any, tcHistorico: any[]): number {
+  const v = parseFloat(it?.valor) || 0
+  if (!v) return 0
+  const moneda = String(it?.moneda || 'USD').toUpperCase()
+  if (moneda === 'USD') return v
+  // 1) TC sellado en la cotización (lo correcto)
+  const snap = it?.cotizacion?.tc_snapshot
+  if (snap && typeof snap === 'object') {
+    const tc = Number(snap[moneda])
+    if (tc > 0) return v / tc
+  }
+  // 2) Fallback: TC histórico más cercano (anterior o igual) a la fecha de la cotización
+  const fecha = it?.cotizacion?.fecha
+  const col = moneda.toLowerCase()
+  if (fecha && Array.isArray(tcHistorico) && tcHistorico.length) {
+    let mejor: any = null
+    for (const t of tcHistorico) {
+      if (t?.[col] == null) continue
+      const tf = t.fecha || String(t.created_at || '').slice(0, 10)
+      if (tf && tf <= fecha) mejor = t // tcHistorico viene ordenado ascendente: el último que cumple es el más reciente anterior
+    }
+    if (!mejor) mejor = tcHistorico.find(t => t?.[col] != null) || null // si no hay anterior, el más antiguo disponible
+    if (mejor) {
+      const tc = Number(mejor[col])
+      if (tc > 0) return v / tc
+    }
+  }
+  // 3) Sin TC disponible: devolver crudo
+  return v
+}
+
+// ¿El ítem está en una moneda distinta de USD? (para mostrar de qué moneda se convirtió)
+function monedaOrigen(it: any): string {
+  const m = String(it?.moneda || 'USD').toUpperCase()
+  return m === 'USD' ? '' : m
+}
+
 // Paleta de colores para líneas del gráfico por proveedor
 const COLORES_LINEA = ['#1168F8','#0a9e6e','#b45309','#6b21a8','#0891b2','#dc2626','#059669']
 
@@ -54,7 +95,7 @@ export default function InteligenciaPreciosPage() {
     setLoading(true)
     const [itemsRes, cotsRes, tcRes] = await Promise.all([
       supabase.from('cotizaciones_proveedor_v2_items')
-        .select('*, cotizacion:cotizaciones_proveedor_v2(id,proveedor_nombre,fecha,rubro,estado,referencia,tramo,tipo,cliente_id,puerto_china_id,puerto_chile_id)')
+        .select('*, cotizacion:cotizaciones_proveedor_v2(id,proveedor_nombre,fecha,rubro,estado,referencia,tramo,tipo,cliente_id,puerto_china_id,puerto_chile_id,tc_snapshot)')
         .order('cotizacion_id'),
       supabase.from('cotizaciones_proveedor_v2')
         .select('id,proveedor_nombre,fecha,rubro,estado,referencia,tramo')
@@ -99,17 +140,17 @@ export default function InteligenciaPreciosPage() {
       if (!provMap[prov]) provMap[prov] = []
       provMap[prov].push({
         fecha: it.cotizacion?.fecha || '',
-        valor: parseFloat(it.valor) || 0,
+        valor: convertirUSD(it, tcHistorico),
         ref: it.cotizacion?.referencia || '',
       })
     })
     // Ordenar cada serie por fecha
     Object.values(provMap).forEach(serie => serie.sort((a, b) => a.fecha.localeCompare(b.fecha)))
     return provMap
-  }, [itemsFiltrados1])
+  }, [itemsFiltrados1, tcHistorico])
 
   // Bounds para el SVG
-  const todosValores = itemsFiltrados1.map(it => parseFloat(it.valor) || 0).filter(v => v > 0)
+  const todosValores = itemsFiltrados1.map(it => convertirUSD(it, tcHistorico)).filter(v => v > 0)
   const minVal = todosValores.length ? Math.min(...todosValores) * 0.85 : 0
   const maxVal = todosValores.length ? Math.max(...todosValores) * 1.1 : 1000
 
@@ -152,10 +193,10 @@ export default function InteligenciaPreciosPage() {
         map[prov] = it
       }
     })
-    return Object.values(map).sort((a, b) => (parseFloat(a.valor) || 0) - (parseFloat(b.valor) || 0))
-  }, [itemsComp])
+    return Object.values(map).sort((a, b) => convertirUSD(a, tcHistorico) - convertirUSD(b, tcHistorico))
+  }, [itemsComp, tcHistorico])
 
-  const minComp = ultimasPorProv.length ? parseFloat(ultimasPorProv[0].valor) || 0 : 0
+  const minComp = ultimasPorProv.length ? convertirUSD(ultimasPorProv[0], tcHistorico) : 0
 
   // ── Datos para Tab 3 ──────────────────────────────────────────────
   const tcFiltrado = useMemo(() => {
@@ -389,7 +430,10 @@ export default function InteligenciaPreciosPage() {
                       <td className="px-4 py-2.5 font-semibold text-gray-800">{it.cotizacion?.proveedor_nombre}</td>
                       <td className="px-4 py-2.5 text-gray-600">{it.descripcion}</td>
                       <td className="px-4 py-2.5 text-gray-400">{it.tipo_contenedor || 'Todos'}</td>
-                      <td className="px-4 py-2.5 font-mono font-bold text-[#052698]">{fmtUSD(parseFloat(it.valor)||0)}</td>
+                      <td className="px-4 py-2.5 font-mono font-bold text-[#052698]">
+                        {fmtUSD(convertirUSD(it, tcHistorico))}
+                        {monedaOrigen(it) && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-gray-100 text-gray-500 align-middle" title={`Convertido desde ${monedaOrigen(it)} con el TC del día de la cotización`}>de {monedaOrigen(it)}</span>}
+                      </td>
                       <td className="px-4 py-2.5 text-gray-400 font-mono text-[10px]">{it.cotizacion?.referencia || '—'}</td>
                     </tr>
                   ))}
@@ -448,9 +492,9 @@ export default function InteligenciaPreciosPage() {
                 </div>
                 <div className="space-y-3">
                   {ultimasPorProv.map((it, i) => {
-                    const val = parseFloat(it.valor) || 0
+                    const val = convertirUSD(it, tcHistorico)
                     const pct = minComp > 0 ? (val / minComp - 1) * 100 : 0
-                    const barPct = maxVal > 0 ? (val / (Math.max(...ultimasPorProv.map(x => parseFloat(x.valor)||0)) * 1.1)) * 100 : 0
+                    const barPct = maxVal > 0 ? (val / (Math.max(...ultimasPorProv.map(x => convertirUSD(x, tcHistorico))) * 1.1)) * 100 : 0
                     const esMasBarat = i === 0
                     return (
                       <div key={i} className={`p-4 rounded-xl border-2 transition-all ${esMasBarat ? 'border-green-200 bg-green-50' : 'border-gray-100 bg-gray-50'}`}>
@@ -461,7 +505,10 @@ export default function InteligenciaPreciosPage() {
                             <span className="text-[10px] text-gray-400 font-mono">{fmtDate(it.cotizacion?.fecha)}</span>
                           </div>
                           <div className="text-right">
-                            <div className="font-mono font-bold text-lg text-[#052698]">{fmtUSD(val)}</div>
+                            <div className="font-mono font-bold text-lg text-[#052698]">
+                              {fmtUSD(val)}
+                              {monedaOrigen(it) && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-white text-gray-500 align-middle" title={`Convertido desde ${monedaOrigen(it)} con el TC del día de la cotización`}>de {monedaOrigen(it)}</span>}
+                            </div>
                             {pct > 0 && <div className="text-[10px] text-red-500 font-semibold">+{pct.toFixed(1)}% vs más económico</div>}
                           </div>
                         </div>
@@ -493,15 +540,18 @@ export default function InteligenciaPreciosPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {[...itemsComp].sort((a,b) => parseFloat(a.valor)-parseFloat(b.valor)).map((it, i) => {
-                      const val = parseFloat(it.valor) || 0
+                    {[...itemsComp].sort((a,b) => convertirUSD(a, tcHistorico)-convertirUSD(b, tcHistorico)).map((it, i) => {
+                      const val = convertirUSD(it, tcHistorico)
                       const delta = minComp > 0 ? ((val / minComp - 1) * 100) : 0
                       return (
                         <tr key={i} className="border-b border-gray-50 hover:bg-blue-50/20">
                           <td className="px-4 py-2.5 font-semibold text-gray-800">{it.cotizacion?.proveedor_nombre}</td>
                           <td className="px-4 py-2.5 font-mono text-[11px] text-gray-500">{fmtDate(it.cotizacion?.fecha)}</td>
                           <td className="px-4 py-2.5 text-gray-600">{it.descripcion}</td>
-                          <td className="px-4 py-2.5 font-mono font-bold text-[#052698]">{fmtUSD(val)}</td>
+                          <td className="px-4 py-2.5 font-mono font-bold text-[#052698]">
+                            {fmtUSD(val)}
+                            {monedaOrigen(it) && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-gray-100 text-gray-500 align-middle" title={`Convertido desde ${monedaOrigen(it)} con el TC del día de la cotización`}>de {monedaOrigen(it)}</span>}
+                          </td>
                           <td className="px-4 py-2.5">
                             {delta === 0
                               ? <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-[10px] font-bold">Base</span>
