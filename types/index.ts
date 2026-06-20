@@ -6,8 +6,6 @@ export type Database = {
       usuarios: { Row: Usuario; Insert: UsuarioInsert; Update: Partial<UsuarioInsert> }
       cotizaciones: { Row: Cotizacion; Insert: CotizacionInsert; Update: Partial<CotizacionInsert> }
       operaciones: { Row: Operacion; Insert: OperacionInsert; Update: Partial<OperacionInsert> }
-      gastos: { Row: Gasto; Insert: GastoInsert; Update: Partial<GastoInsert> }
-      movimientos_cc: { Row: MovimientoCC; Insert: MovimientoCCInsert; Update: Partial<MovimientoCCInsert> }
       minuta_items: { Row: MinutaItem; Insert: MinutaItemInsert; Update: Partial<MinutaItemInsert> }
       tarifas: { Row: Tarifa; Insert: TarifaInsert; Update: Partial<TarifaInsert> }
     }
@@ -19,9 +17,7 @@ export type Database = {
 export type Rol = 'admin' | 'ejecutivo' | 'operaciones' | 'gerencia'
 export type EstadoCotizacion = 'borrador' | 'enviada' | 'aceptada' | 'rechazada' | 'vencida'
 export type EstadoOp = 'activa' | 'cerrada'
-export type EstadoGasto = 'pendiente' | 'pagado' | 'parcial'
 export type Moneda = 'USD' | 'ARS' | 'CLP' | 'CNY'
-export type TipoMovCC = 'ingreso' | 'egreso'
 export type Regimen = 'A' | 'B' | 'C' | 'D'
 export type OpcionTransporte = 'desconsolidar' | 'contenedor' | 'A' | 'B1' | 'B2'
 export type TipoTarifa = 'maritima' | 'terrestre' | 'puerto' | 'argentina'
@@ -175,66 +171,6 @@ export interface OperacionInsert {
   pasos?: boolean[]
   fecha_cierre?: string | null
   hist_cierre?: { fecha: string; accion: string }[]
-}
-
-// ─── GASTOS ─────────────────────────────────────────────────────────────────
-
-export interface Gasto {
-  id: string
-  operacion_id: string
-  fecha: string
-  etapa: EtapaGasto
-  concepto: string
-  moneda: Moneda
-  monto: number
-  tc: number
-  usd: number
-  estado: EstadoGasto
-  ref: string
-  notas: string
-  created_at: string
-}
-
-export interface GastoInsert {
-  operacion_id: string
-  fecha: string
-  etapa: EtapaGasto
-  concepto: string
-  moneda: Moneda
-  monto: number
-  tc: number
-  usd: number
-  estado?: EstadoGasto
-  ref?: string
-  notas?: string
-}
-
-// ─── MOVIMIENTOS CC ─────────────────────────────────────────────────────────
-
-export interface MovimientoCC {
-  id: string
-  operacion_id: string
-  tipo: TipoMovCC
-  concepto: string
-  moneda: Moneda
-  monto: number
-  tc: number
-  usd: number
-  fecha: string
-  ref: string
-  created_at: string
-}
-
-export interface MovimientoCCInsert {
-  operacion_id: string
-  tipo: TipoMovCC
-  concepto: string
-  moneda: Moneda
-  monto: number
-  tc: number
-  usd: number
-  fecha: string
-  ref?: string
 }
 
 // ─── MINUTA ─────────────────────────────────────────────────────────────────
