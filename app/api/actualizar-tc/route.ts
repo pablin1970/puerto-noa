@@ -48,6 +48,41 @@ async function fetchTipoCambio(): Promise<{ ars: number | null; clp: number | nu
   return { ars, clp, cny, apiFuente }
 }
 
+// UTM (Unidad Tributaria Mensual) desde mindicador.cl — se reajusta por IPC, sirve como
+// referencia de inflación chilena (para el IVA y para inteligencia de precios).
+// Trae la serie del año en curso y hace upsert en valores_utm (clave anio,mes).
+// Correrla a diario mantiene fresco el mes vigente y completa meses faltantes.
+async function fetchYGuardarUtm(): Promise<{ ok: boolean; registros: number; ultima: { anio: number; mes: number; valor: number } | null }> {
+  try {
+    const r = await fetchWithTimeout('https://mindicador.cl/api/utm', 8000)
+    if (!r.ok) return { ok: false, registros: 0, ultima: null }
+    const d = await r.json()
+    const serie = Array.isArray(d?.serie) ? d.serie : []
+    const filas = serie
+      .filter((it: any) => it?.fecha && it?.valor != null)
+      .map((it: any) => {
+        const f = new Date(it.fecha)
+        return { anio: f.getUTCFullYear(), mes: f.getUTCMonth() + 1, valor_clp: Number(it.valor), fuente: 'mindicador.cl', updated_at: new Date().toISOString() }
+      })
+    if (!filas.length) return { ok: false, registros: 0, ultima: null }
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/valores_utm?on_conflict=anio,mes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Prefer': 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify(filas),
+    })
+    const ult = filas[0]
+    return { ok: res.ok, registros: filas.length, ultima: { anio: ult.anio, mes: ult.mes, valor: ult.valor_clp } }
+  } catch {
+    return { ok: false, registros: 0, ultima: null }
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const secret = searchParams.get('secret')
@@ -88,5 +123,9 @@ export async function GET(request: Request) {
   }
 
   const data = await res.json()
-  return NextResponse.json({ ok: true, data }, { status: 200 })
+
+  // UTM en la misma corrida (best-effort: si falla, el TC igual quedó guardado)
+  const utm = await fetchYGuardarUtm()
+
+  return NextResponse.json({ ok: true, data, utm }, { status: 200 })
 }
