@@ -1,6 +1,7 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { cargarPermisos, puede } from '@/lib/permisos'
 
@@ -61,20 +62,28 @@ const TIPO_DOC_POR_PAIS: Record<string, string[]> = {
 const CONDICION_IVA = ['Responsable Inscripto', 'Exento', 'Monotributo', 'No inscripto', 'Consumidor Final', 'No aplica']
 const MONEDAS = ['USD', 'ARS', 'CLP', 'CNY', 'EUR']
 
-// Esta pantalla maneja clientes y proveedores juntos (el menú la enlaza desde ambos).
-// Una acción se habilita si el rol la tiene en el módulo 'clientes' O en 'proveedores'.
-function puedeTercero(permisos: Record<string, string[]>, accion: string): boolean {
-  return puede(permisos, 'clientes', accion) || puede(permisos, 'proveedores', accion)
+// La pantalla de terceros es una sola, pero se comporta según el contexto de entrada:
+// /clientes => vista Clientes ; /clientes?ver=proveedores => vista Proveedores.
+// Los permisos (ver/crear/editar/eliminar) se evalúan contra el módulo del contexto,
+// de modo que un usuario de un área no ve ni toca los terceros del otro.
+export default function ClientesPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-gray-400">Cargando…</div>}>
+      <TercerosContent />
+    </Suspense>
+  )
 }
 
-export default function ClientesPage() {
+function TercerosContent() {
   const supabase = useMemo(() => createClient(), [])
+  const searchParams = useSearchParams()
+  const ctx = searchParams.get('ver') === 'proveedores' ? 'proveedores' : 'clientes'
+  const tipoCtx = ctx === 'proveedores' ? 'proveedor' : 'cliente'
   const [terceros, setTerceros] = useState<Tercero[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'lista' | 'nuevo' | 'detalle'>('lista')
   const [selId, setSelId] = useState<string | null>(null)
   const [buscar, setBuscar] = useState('')
-  const [filtroTipo, setFiltroTipo] = useState('')
   const [filtroPais, setFiltroPais] = useState('')
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
@@ -101,27 +110,24 @@ export default function ClientesPage() {
 
   const sel = terceros.find(t => t.id === selId)
   const filtrados = terceros.filter(t => {
+    // Universo del contexto: los marcados como "ambos" aparecen en las dos vistas
+    if (!t.tipo?.includes(tipoCtx)) return false
     const b = buscar.toLowerCase()
     const matchB = !b || t.razon_social.toLowerCase().includes(b) || (t.nombre_fantasia || '').toLowerCase().includes(b) || (t.nro_doc || '').includes(b)
-    const matchT = !filtroTipo
-      ? true
-      : filtroTipo === 'ambos'
-        ? t.tipo?.includes('cliente') && t.tipo?.includes('proveedor')
-        : t.tipo?.includes(filtroTipo)
     const matchP = !filtroPais || t.pais === filtroPais
-    return matchB && matchT && matchP
+    return matchB && matchP
   })
 
   const paises = Array.from(new Set(terceros.map(t => t.pais))).sort()
 
   // Gate de acceso: sin permiso de 'ver' no se muestra la sección
-  if (permListos && !puedeTercero(permisos, 'ver')) {
+  if (permListos && !puede(permisos, ctx, 'ver')) {
     return (
       <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
         <div className="text-center max-w-sm">
           <div className="text-5xl mb-3">🔒</div>
           <h2 className="text-lg font-bold text-gray-700">Sin acceso</h2>
-          <p className="text-sm text-gray-400 mt-1">No tenés permiso para ver Clientes y Proveedores. Si creés que es un error, contactá al administrador.</p>
+          <p className="text-sm text-gray-400 mt-1">No tenés permiso para ver esta sección. Si creés que es un error, contactá al administrador.</p>
         </div>
       </div>
     )
@@ -131,14 +137,14 @@ export default function ClientesPage() {
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Clientes y Proveedores</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Base de terceros - {terceros.filter(t=>t.activo).length} activos</p>
+          <h1 className="text-xl font-bold text-gray-900">{ctx === 'proveedores' ? 'Proveedores' : 'Clientes'}</h1>
+          <p className="text-xs text-gray-400 mt-0.5">{terceros.filter(t=>t.tipo?.includes(tipoCtx) && t.activo).length} activos · incluye los marcados como cliente y proveedor</p>
         </div>
         <div className="flex gap-2">
           {view !== 'lista' && (
             <button onClick={() => setView('lista')} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-100 transition-colors">Volver</button>
           )}
-          {view === 'lista' && puedeTercero(permisos, 'crear') && (
+          {view === 'lista' && puede(permisos, ctx, 'crear') && (
             <button onClick={() => setView('nuevo')} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] transition-colors shadow-sm">+ Nuevo</button>
           )}
         </div>
@@ -146,23 +152,6 @@ export default function ClientesPage() {
 
       {view === 'lista' && (
         <>
-          {/* Tabs de agrupación por tipo */}
-          <div className="flex gap-2 mb-5 flex-wrap">
-            {[
-              { val:'', label:'Todos', icon:'🏢', count:terceros.length, color:'bg-gray-900 text-white', inactive:'border-gray-200 text-gray-600' },
-              { val:'cliente', label:'Clientes', icon:'🤝', count:terceros.filter(t=>t.tipo?.includes('cliente')).length, color:'bg-[#1168F8] text-white', inactive:'border-[#1168F8] text-[#1168F8]' },
-              { val:'proveedor', label:'Proveedores', icon:'📦', count:terceros.filter(t=>t.tipo?.includes('proveedor')).length, color:'bg-green-700 text-white', inactive:'border-green-600 text-green-700' },
-              { val:'ambos', label:'Ambos', icon:'↔️', count:terceros.filter(t=>t.tipo?.includes('cliente')&&t.tipo?.includes('proveedor')).length, color:'bg-amber-600 text-white', inactive:'border-amber-500 text-amber-700' },
-            ].map(t => (
-              <button key={t.val}
-                onClick={()=>setFiltroTipo(t.val==='ambos'?'ambos':t.val)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-xs font-semibold transition-all ${filtroTipo===(t.val==='ambos'?'ambos':t.val)?t.color:'bg-white '+t.inactive}`}>
-                <span>{t.icon}</span>
-                <span>{t.label}</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filtroTipo===(t.val==='ambos'?'ambos':t.val)?'bg-white/20 text-white':'bg-gray-100 text-gray-500'}`}>{t.count}</span>
-              </button>
-            ))}
-          </div>
 
           <div className="flex gap-3 mb-4 flex-wrap items-center">
             <div className="relative flex-1 min-w-60">
@@ -175,8 +164,8 @@ export default function ClientesPage() {
               <option value="">Todos los paises</option>
               {paises.map(p => <option key={p}>{p}</option>)}
             </select>
-            {(buscar || filtroTipo || filtroPais) && (
-              <button onClick={() => { setBuscar(''); setFiltroTipo(''); setFiltroPais('') }}
+            {(buscar || filtroPais) && (
+              <button onClick={() => { setBuscar(''); setFiltroPais('') }}
                 className="px-3 py-2 border border-gray-200 rounded-xl text-xs text-gray-500 hover:bg-gray-50">✕ Limpiar</button>
             )}
             <span className="text-xs text-gray-400 ml-auto">{filtrados.length} registro(s)</span>
@@ -189,7 +178,7 @@ export default function ClientesPage() {
               <div className="p-12 text-center">
                 <div className="text-4xl mb-3">🏢</div>
                 <div className="text-gray-500 text-sm mb-1">{terceros.length === 0 ? 'Sin clientes ni proveedores aun' : 'Sin resultados'}</div>
-                {terceros.length === 0 && puedeTercero(permisos, 'crear') && (
+                {terceros.length === 0 && puede(permisos, ctx, 'crear') && (
                   <button onClick={() => setView('nuevo')} className="mt-3 px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold">+ Agregar primero</button>
                 )}
               </div>
@@ -256,7 +245,7 @@ export default function ClientesPage() {
 
       {view === 'nuevo' && (
         <FormTercero
-          supabase={supabase} currentUser={currentUser}
+          supabase={supabase} currentUser={currentUser} ctxTipo={tipoCtx}
           onSave={async () => { await loadData(); setView('lista') }}
           onCancel={() => setView('lista')}
         />
@@ -264,7 +253,7 @@ export default function ClientesPage() {
 
       {view === 'detalle' && sel && (
         <DetalleTercero
-          tercero={sel} supabase={supabase} currentUser={currentUser}
+          tercero={sel} supabase={supabase} currentUser={currentUser} ctx={ctx}
           onReload={async () => { await loadData() }}
           onBack={() => setView('lista')}
         />
@@ -273,14 +262,14 @@ export default function ClientesPage() {
   )
 }
 
-function FormTercero({ supabase, currentUser, onSave, onCancel }: any) {
+function FormTercero({ supabase, currentUser, onSave, onCancel, ctxTipo }: any) {
   const [form, setForm] = useState({
     razon_social: '', nombre_fantasia: '', pais: 'Argentina',
     tipo_doc: 'CUIT', nro_doc: '', condicion_iva: 'Responsable Inscripto',
     actividad: '', nro_importador: '',
     dir_fiscal_calle: '', dir_fiscal_ciudad: '', dir_fiscal_provincia: '', dir_fiscal_pais: 'Argentina', dir_fiscal_cp: '',
     notas: '', activo: true,
-    tipo: ['cliente'] as string[],
+    tipo: [ctxTipo || 'cliente'] as string[],
   })
   const [cuentas, setCuentas] = useState<any[]>([{ banco: '', cuenta: '', cbu_iban: '', swift: '', moneda: 'USD', principal: true, notas: '' }])
   const [saving, setSaving] = useState(false)
@@ -477,7 +466,7 @@ function FormTercero({ supabase, currentUser, onSave, onCancel }: any) {
   )
 }
 
-function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: any) {
+function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx }: any) {
   const [tab, setTab] = useState<'datos' | 'contactos' | 'bancario' | 'documentos' | 'operaciones' | 'rubros'>('datos')
   const [contactos, setContactos] = useState<Contacto[]>(tercero.contactos || [])
   const [cuentas, setCuentas] = useState<CuentaBancaria[]>([])
@@ -636,10 +625,10 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
 
   // Permisos de archivos: esta pantalla es la de terceros (ruta /clientes); el control de
   // Ver/Descargar de documentos va por el módulo `clientes`.
-  const puedeVerDoc = puedeTercero(permisos, 'ver')
-  const puedeDescargarDoc = puedeTercero(permisos, 'descargar')
-  const puedeEditar = puedeTercero(permisos, 'editar')
-  const puedeEliminar = puedeTercero(permisos, 'eliminar')
+  const puedeVerDoc = puede(permisos, ctx, 'ver')
+  const puedeDescargarDoc = puede(permisos, ctx, 'descargar')
+  const puedeEditar = puede(permisos, ctx, 'editar')
+  const puedeEliminar = puede(permisos, ctx, 'eliminar')
 
   return (
     <div>
