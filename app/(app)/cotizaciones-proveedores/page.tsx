@@ -1618,20 +1618,28 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               <span className="text-[10px] font-medium text-[#1168F8]">Dirección: {sentido==='exportacion'?'Puerto Chile → Puerto China':'Puerto China → Puerto Chile'}</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                {lbl(`Puerto China (${sentido==='exportacion'?'destino':'origen'})`)}
-                <select value={form.puerto_china_id} onChange={e=>setF('puerto_china_id',e.target.value)} className={sel}>
-                  <option value="">— Cualquier puerto —</option>
-                  {puertosCh.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
-                </select>
-              </div>
-              <div>
-                {lbl(`Puerto Chile (${sentido==='exportacion'?'origen':'destino'})`)}
-                <select value={form.puerto_chile_id} onChange={e=>setF('puerto_chile_id',e.target.value)} className={sel}>
-                  <option value="">— Cualquier puerto —</option>
-                  {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
-                </select>
-              </div>
+              {(()=>{
+                const exp = sentido==='exportacion'
+                const selChina = (
+                  <div key="china">
+                    {lbl(`Puerto China (${exp?'destino':'origen'})`)}
+                    <select value={form.puerto_china_id} onChange={e=>setF('puerto_china_id',e.target.value)} className={sel}>
+                      <option value="">— Cualquier puerto —</option>
+                      {puertosCh.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
+                    </select>
+                  </div>
+                )
+                const selChile = (
+                  <div key="chile">
+                    {lbl(`Puerto Chile (${exp?'origen':'destino'})`)}
+                    <select value={form.puerto_chile_id} onChange={e=>setF('puerto_chile_id',e.target.value)} className={sel}>
+                      <option value="">— Cualquier puerto —</option>
+                      {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
+                    </select>
+                  </div>
+                )
+                return exp ? [selChile, selChina] : [selChina, selChile]
+              })()}
               <div>
                 {lbl('Tipo de contenedor')}
                 <select value={form.tipo_contenedor} onChange={e=>setF('tipo_contenedor',e.target.value)} className={sel}>
@@ -1934,52 +1942,67 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             </div>
             {/* Tramo que cubre el seguro — definido por los puntos, igual que el flete */}
             <div className="pt-2 border-t border-gray-50">
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-2">
                 {lbl('Tramo que cubre')}
                 <span className="text-[10px] font-medium text-purple-700">Dirección: {(()=>{ const exp=sentido==='exportacion'; const al=form.seguro_alcance||'maritimo'; if(al==='terrestre') return exp?'NOA → Puerto Chile':'Puerto Chile → NOA'; if(al==='punta_a_punta') return exp?'NOA → Puerto China':'Puerto China → NOA'; return exp?'Puerto Chile → Puerto China':'Puerto China → Puerto Chile' })()}</span>
               </div>
-              <select value={form.seguro_alcance} onChange={e=>setF('seguro_alcance',e.target.value)} className={sel}>
-                <option value="maritimo">Marítimo (puerto China ↔ puerto Chile)</option>
-                <option value="terrestre">Terrestre (puerto Chile ↔ ciudad NOA)</option>
-                <option value="punta_a_punta">Punta a punta (puerto China ↔ ciudad NOA)</option>
-              </select>
-              <div className="grid grid-cols-2 gap-3 mt-2">
-                {(form.seguro_alcance==='maritimo'||form.seguro_alcance==='punta_a_punta') && (
-                  <div>
-                    {lbl(`Puerto China (${sentido==='exportacion'?'destino':'origen'})`)}
-                    <select value={form.puerto_china_id} onChange={e=>setF('puerto_china_id',e.target.value)} className={sel}>
-                      <option value="">— Cualquiera —</option>
-                      {puertosCh.map((p:any)=><option key={p.id} value={p.id}>{p.nombre||p.ciudad}</option>)}
-                    </select>
-                  </div>
-                )}
-                {(form.seguro_alcance==='maritimo'||form.seguro_alcance==='terrestre') && (
-                  <div>
-                    {lbl(`Puerto Chile (${form.seguro_alcance==='terrestre'?(sentido==='exportacion'?'destino':'origen'):(sentido==='exportacion'?'origen':'destino')})`)}
-                    <select value={form.puerto_chile_id} onChange={e=>setF('puerto_chile_id',e.target.value)} className={sel}>
-                      <option value="">— Cualquiera —</option>
-                      {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre||p.ciudad}</option>)}
-                    </select>
-                  </div>
-                )}
-                {(form.seguro_alcance==='terrestre'||form.seguro_alcance==='punta_a_punta') && (
-                  <div>
-                    {lbl('Paso fronterizo')}
-                    <select value={form.paso_id} onChange={e=>setF('paso_id',e.target.value)} className={sel}>
-                      <option value="">— Cualquiera —</option>
-                      {pasos.map((p:any)=><option key={p.id} value={p.id}>{p.nombre}</option>)}
-                    </select>
-                  </div>
-                )}
-                {(form.seguro_alcance==='terrestre'||form.seguro_alcance==='punta_a_punta') && (
-                  <div>
-                    {lbl(`Ciudad NOA (${sentido==='exportacion'?'origen':'destino'})`)}
-                    <select value={form.ciudad_destino_id} onChange={e=>setF('ciudad_destino_id',e.target.value)} className={sel}>
-                      <option value="">— Cualquiera —</option>
-                      {ciudades.map((cc:any)=><option key={cc.id} value={cc.id}>{cc.ciudad} ({cc.provincia})</option>)}
-                    </select>
-                  </div>
-                )}
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                {[
+                  {v:'maritimo', t:'Marítimo', s:'China ↔ Chile'},
+                  {v:'terrestre', t:'Terrestre', s:'Chile ↔ NOA'},
+                  {v:'punta_a_punta', t:'Punta a punta', s:'China ↔ NOA'},
+                ].map(op=>(
+                  <button key={op.v} type="button" onClick={()=>setF('seguro_alcance',op.v)}
+                    className={'rounded-xl border px-2 py-2 text-center transition-colors '+(form.seguro_alcance===op.v?'border-green-500 bg-green-50 text-green-800 ring-1 ring-green-500':'border-gray-200 bg-white text-gray-500 hover:border-gray-300')}>
+                    <div className="text-[11px] font-bold">{op.t}</div>
+                    <div className="text-[9px] opacity-70">{op.s}</div>
+                  </button>
+                ))}
+              </div>
+              <div className={'grid gap-3 '+(form.seguro_alcance==='maritimo'?'grid-cols-2':'grid-cols-3')}>
+                {(()=>{
+                  const exp = sentido==='exportacion'
+                  const al = form.seguro_alcance||'maritimo'
+                  const selChina = (
+                    <div key="china">
+                      {lbl(`Puerto China (${exp?'destino':'origen'})`)}
+                      <select value={form.puerto_china_id} onChange={e=>setF('puerto_china_id',e.target.value)} className={sel}>
+                        <option value="">— Cualquiera —</option>
+                        {puertosCh.map((p:any)=><option key={p.id} value={p.id}>{p.nombre||p.ciudad}</option>)}
+                      </select>
+                    </div>
+                  )
+                  const selChile = (
+                    <div key="chile">
+                      {lbl(`Puerto Chile (${al==='terrestre'?(exp?'destino':'origen'):(exp?'origen':'destino')})`)}
+                      <select value={form.puerto_chile_id} onChange={e=>setF('puerto_chile_id',e.target.value)} className={sel}>
+                        <option value="">— Cualquiera —</option>
+                        {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre||p.ciudad}</option>)}
+                      </select>
+                    </div>
+                  )
+                  const selNoa = (
+                    <div key="noa">
+                      {lbl(`Ciudad NOA (${exp?'origen':'destino'})`)}
+                      <select value={form.ciudad_destino_id} onChange={e=>setF('ciudad_destino_id',e.target.value)} className={sel}>
+                        <option value="">— Cualquiera —</option>
+                        {ciudades.map((cc:any)=><option key={cc.id} value={cc.id}>{cc.ciudad} ({cc.provincia})</option>)}
+                      </select>
+                    </div>
+                  )
+                  const selPaso = (
+                    <div key="paso">
+                      {lbl('Paso fronterizo')}
+                      <select value={form.paso_id} onChange={e=>setF('paso_id',e.target.value)} className={sel}>
+                        <option value="">— Cualquiera —</option>
+                        {pasos.map((p:any)=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                      </select>
+                    </div>
+                  )
+                  if(al==='maritimo') return exp ? [selChile, selChina] : [selChina, selChile]
+                  if(al==='terrestre') return exp ? [selNoa, selPaso, selChile] : [selChile, selPaso, selNoa]
+                  return exp ? [selNoa, selPaso, selChina] : [selChina, selPaso, selNoa]
+                })()}
               </div>
             </div>
             {/* Coberturas adicionales del catálogo de servicios */}
