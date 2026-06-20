@@ -987,10 +987,24 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         const china = f.puerto_china_id||null
         const chile = f.puerto_chile_id||null
         const ciudad = f.ciudad_destino_id||null
+        const paso = f.paso_id||null
         const al = f.seguro_alcance||'maritimo'
-        if(al==='terrestre') return { origen_id: chile, origen_tipo: chile?'puerto':null, destino_id: ciudad, destino_tipo: ciudad?'ciudad':null, paso_id: null }
-        if(al==='punta_a_punta') return { origen_id: china, origen_tipo: china?'puerto_china':null, destino_id: ciudad, destino_tipo: ciudad?'ciudad':null, paso_id: null }
-        return { origen_id: china, origen_tipo: china?'puerto_china':null, destino_id: chile, destino_tipo: chile?'puerto':null, paso_id: null }
+        if(al==='terrestre'){
+          // impo: Chile → NOA ; expo: NOA → Chile
+          return esExpoForm
+            ? { origen_id: ciudad, origen_tipo: ciudad?'ciudad':null, destino_id: chile, destino_tipo: chile?'puerto':null, paso_id: paso }
+            : { origen_id: chile, origen_tipo: chile?'puerto':null, destino_id: ciudad, destino_tipo: ciudad?'ciudad':null, paso_id: paso }
+        }
+        if(al==='punta_a_punta'){
+          // impo: China → NOA ; expo: NOA → China
+          return esExpoForm
+            ? { origen_id: ciudad, origen_tipo: ciudad?'ciudad':null, destino_id: china, destino_tipo: china?'puerto_china':null, paso_id: paso }
+            : { origen_id: china, origen_tipo: china?'puerto_china':null, destino_id: ciudad, destino_tipo: ciudad?'ciudad':null, paso_id: paso }
+        }
+        // marítimo: impo China → Chile ; expo Chile → China
+        return esExpoForm
+          ? { origen_id: chile, origen_tipo: chile?'puerto':null, destino_id: china, destino_tipo: china?'puerto_china':null, paso_id: null }
+          : { origen_id: china, origen_tipo: china?'puerto_china':null, destino_id: chile, destino_tipo: chile?'puerto':null, paso_id: null }
       }
       return { origen_id: null, origen_tipo: null, destino_id: null, destino_tipo: null, paso_id: null }
     }
@@ -1095,7 +1109,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         const itemsB = itemsDeTramos(tramosB, cotB.id)
         if(itemsB.length>0) await (supabase.from('cotizaciones_proveedor_v2_items') as any).insert(itemsB)
       }
-    } else if(esAmbos && (tf==='maritimo' || tf==='almacenaje' || tf==='despachante')) {
+    } else if(esAmbos && (tf==='maritimo' || tf==='almacenaje' || tf==='despachante' || tf==='seguro')) {
       // Rubros no multi-tramo con ruta: versión B hereda la misma cabecera, sentido exportación.
       // Mismos ítems con la ruta estructurada invertida (esExpoForm=true).
       const payloadB = { ...payload, sentido: 'exportacion', grupo_id: grupoId }
@@ -1599,16 +1613,20 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           </div>
           <div className="px-5 py-4 space-y-4">
             {/* Ruta */}
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Ruta marítima</span>
+              <span className="text-[10px] font-medium text-[#1168F8]">Dirección: {sentido==='exportacion'?'Puerto Chile → Puerto China':'Puerto China → Puerto Chile'}</span>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                {lbl(sentido==='exportacion'?'Puerto destino':'Puerto origen (China)')}
+                {lbl(`Puerto China (${sentido==='exportacion'?'destino':'origen'})`)}
                 <select value={form.puerto_china_id} onChange={e=>setF('puerto_china_id',e.target.value)} className={sel}>
                   <option value="">— Cualquier puerto —</option>
                   {puertosCh.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
                 </select>
               </div>
               <div>
-                {lbl(sentido==='exportacion'?'Puerto Chile (embarque)':'Puerto Chile (descarga)')}
+                {lbl(`Puerto Chile (${sentido==='exportacion'?'origen':'destino'})`)}
                 <select value={form.puerto_chile_id} onChange={e=>setF('puerto_chile_id',e.target.value)} className={sel}>
                   <option value="">— Cualquier puerto —</option>
                   {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre} ({p.locode})</option>)}
@@ -1916,16 +1934,19 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             </div>
             {/* Tramo que cubre el seguro — definido por los puntos, igual que el flete */}
             <div className="pt-2 border-t border-gray-50">
-              {lbl('Tramo que cubre')}
+              <div className="flex items-center justify-between mb-1">
+                {lbl('Tramo que cubre')}
+                <span className="text-[10px] font-medium text-purple-700">Dirección: {(()=>{ const exp=sentido==='exportacion'; const al=form.seguro_alcance||'maritimo'; if(al==='terrestre') return exp?'NOA → Puerto Chile':'Puerto Chile → NOA'; if(al==='punta_a_punta') return exp?'NOA → Puerto China':'Puerto China → NOA'; return exp?'Puerto Chile → Puerto China':'Puerto China → Puerto Chile' })()}</span>
+              </div>
               <select value={form.seguro_alcance} onChange={e=>setF('seguro_alcance',e.target.value)} className={sel}>
-                <option value="maritimo">Marítimo (puerto China → puerto Chile)</option>
-                <option value="terrestre">Terrestre (puerto Chile → ciudad NOA)</option>
-                <option value="punta_a_punta">Punta a punta (puerto China → ciudad NOA)</option>
+                <option value="maritimo">Marítimo (puerto China ↔ puerto Chile)</option>
+                <option value="terrestre">Terrestre (puerto Chile ↔ ciudad NOA)</option>
+                <option value="punta_a_punta">Punta a punta (puerto China ↔ ciudad NOA)</option>
               </select>
               <div className="grid grid-cols-2 gap-3 mt-2">
                 {(form.seguro_alcance==='maritimo'||form.seguro_alcance==='punta_a_punta') && (
                   <div>
-                    {lbl('Puerto China (origen)')}
+                    {lbl(`Puerto China (${sentido==='exportacion'?'destino':'origen'})`)}
                     <select value={form.puerto_china_id} onChange={e=>setF('puerto_china_id',e.target.value)} className={sel}>
                       <option value="">— Cualquiera —</option>
                       {puertosCh.map((p:any)=><option key={p.id} value={p.id}>{p.nombre||p.ciudad}</option>)}
@@ -1934,7 +1955,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 )}
                 {(form.seguro_alcance==='maritimo'||form.seguro_alcance==='terrestre') && (
                   <div>
-                    {lbl('Puerto Chile')}
+                    {lbl(`Puerto Chile (${form.seguro_alcance==='terrestre'?(sentido==='exportacion'?'destino':'origen'):(sentido==='exportacion'?'origen':'destino')})`)}
                     <select value={form.puerto_chile_id} onChange={e=>setF('puerto_chile_id',e.target.value)} className={sel}>
                       <option value="">— Cualquiera —</option>
                       {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre||p.ciudad}</option>)}
@@ -1943,7 +1964,16 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 )}
                 {(form.seguro_alcance==='terrestre'||form.seguro_alcance==='punta_a_punta') && (
                   <div>
-                    {lbl('Ciudad NOA (destino)')}
+                    {lbl('Paso fronterizo')}
+                    <select value={form.paso_id} onChange={e=>setF('paso_id',e.target.value)} className={sel}>
+                      <option value="">— Cualquiera —</option>
+                      {pasos.map((p:any)=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                    </select>
+                  </div>
+                )}
+                {(form.seguro_alcance==='terrestre'||form.seguro_alcance==='punta_a_punta') && (
+                  <div>
+                    {lbl(`Ciudad NOA (${sentido==='exportacion'?'origen':'destino'})`)}
                     <select value={form.ciudad_destino_id} onChange={e=>setF('ciudad_destino_id',e.target.value)} className={sel}>
                       <option value="">— Cualquiera —</option>
                       {ciudades.map((cc:any)=><option key={cc.id} value={cc.id}>{cc.ciudad} ({cc.provincia})</option>)}
