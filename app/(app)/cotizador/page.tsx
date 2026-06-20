@@ -90,6 +90,7 @@ interface CotState {
   proformas: Proforma[]
   // Bloque 1 - ForWarders (nuevo sistema item-a-item)
   cotsProvFW: CotProvSel[]
+  cotsProvSeg: CotProvSel[]   // Bloque 1 - Compañía aseguradora
   segModoIndep: 'pct'|'fijo'; segValIndep: number
   // Bloque 2 - Transporte Chile-NOA
   cotsProvChile: CotProvSel[]
@@ -134,6 +135,7 @@ const INIT: CotState = {
   productos:[{descripcion:'',ncm:'',cantidad:1,precio_unit:0,subtotal:0,peso_unit:0,vol_unit:0,incoterm:'FOB'}],
   exwTransp:0,exwAgente:0,exwOtros:0,precioArgEquiv:0,proformas:[],
   cotsProvFW:[],
+  cotsProvSeg:[],
   segModoIndep:'pct',segValIndep:0.5,
   cotsProvChile:[],
   gastosChile:[],
@@ -249,6 +251,7 @@ const [ciudadesArg,setCiudadesArg]=useState<any[]>([])
 const [tiposCont,setTiposCont]=useState<any[]>([])
 const [tiposCamion,setTiposCamion]=useState<any[]>([])
 const [cotsFWDisponibles,setCotsFWDisponibles]=useState<any[]>([])
+const [cotsSegDisponibles,setCotsSegDisponibles]=useState<any[]>([])
 const [cotsTranspDisponibles,setCotsTranspDisponibles]=useState<any[]>([])
 const [cotsMercDisponibles,setCotsMercDisponibles]=useState<any[]>([])
 const [condicionesGenerales,setCondicionesGenerales]=useState<any[]>([])
@@ -373,7 +376,9 @@ useEffect(()=>{
       const cots=cotRes.data as any[]
       const idPorNum:Record<number,string>={}
       for(const b of bloqRes.data as any[]) idPorNum[b.numero]=b.id
-      setCotsFWDisponibles(cots.filter(c=>c.bloque_id===idPorNum[1]))
+      const b1=cots.filter(c=>c.bloque_id===idPorNum[1])
+      setCotsFWDisponibles(b1.filter(c=>c.rubro!=='seguro'))
+      setCotsSegDisponibles(b1.filter(c=>c.rubro==='seguro'))
       setCotsChileDisponibles(cots.filter(c=>c.bloque_id===idPorNum[2]))
       setCotsTranspDisponibles(cots.filter(c=>c.bloque_id===idPorNum[3]))
       setCotsArgDisponibles(cots.filter(c=>c.bloque_id===idPorNum[4]))
@@ -460,7 +465,14 @@ const segFW = fwElegida?.segAlcance!=='no'
 const segIndepCalc = fwElegida?.segAlcance==='maritimo'
   ? (s.segModoIndep==='pct'?(totalFOB+subFW)*s.segValIndep/100:s.segValIndep)
   : 0
-const totalSeg = segFW
+// Seguro de la compañía aseguradora (Bloque 1, rubro seguro): ítems seleccionados.
+// % sobre FOB (confirmado por Pablo); fijo en USD. Se suma al seguro total → entra al CIF.
+const subSeg = s.cotsProvSeg.reduce((tot,c)=>{
+  if(c.esManual) return tot + (c.manualMonto||0)
+  return tot + c.items.filter(i=>i.seleccionado).reduce((t,i)=>
+    t + (i.tipo_calculo==='pct_cif' ? totalFOB*i.valorUnit/100 : i.subtotal), 0)
+},0)
+const totalSeg = segFW + subSeg
 // Bloque 2: Transporte Chile-NOA (cotizaciones del sistema)
 // Bloque 2: Transporte Chile-NOA (cotizaciones del sistema)
 const transpChileElegida = s.cotsProvChile.find(c=>c.elegida)
@@ -691,6 +703,31 @@ const sufijoCoincDesp = (c:any):string => {
   return ''
 }
 
+// Criterios para COMPAÑÍA ASEGURADORA: los dos extremos del tramo cubierto por la
+// cotización deben pertenecer a la ruta de la operación (China/Chile/NOA), + paso si aplica.
+// Sirve para tramo marítimo, terrestre o punta a punta sin distinguir: compara extremos.
+const criteriosSeguro = (it:any): CritCoincidencia[] => {
+  const puntosOp = [s.puertoChiId, s.puertoChileId, s.ciudadDestinoId].filter(Boolean)
+  const opPaso = s.pasoId
+  return [
+    { label:'Origen tramo',  aplica: !!it.origen_id,          ok: !!it.origen_id  && puntosOp.includes(it.origen_id) },
+    { label:'Destino tramo', aplica: !!it.destino_id,         ok: !!it.destino_id && puntosOp.includes(it.destino_id) },
+    { label:'Paso',          aplica: !!opPaso && !!it.paso_id, ok: !!opPaso && it.paso_id===opPaso },
+  ]
+}
+// Sufijo de coincidencia para el dropdown de aseguradoras (mejor ítem de la cotización).
+const sufijoCoincSeg = (c:any):string => {
+  const items = c.items || []
+  let best = { ok:0, total:0 }
+  for(const it of items){
+    const n = nivelCoincidencia(criteriosSeguro(it))
+    if(n.todo && n.total>0) return '  ✓ coincide'
+    if(n.ok > best.ok) best = { ok:n.ok, total:n.total }
+  }
+  if(best.ok>0) return `  ● parcial ${best.ok}/${best.total}`
+  return ''
+}
+
 // ── Forwarder (Bloque 1): coincidencia por puertos China ↔ Chile ──
 // Coincidencia de una cotización de forwarder con la ruta marítima de la operación.
 const coincidenciaRutaFW = (c:any): ''|'parcial'|'fuerte' => {
@@ -728,6 +765,7 @@ const itemCoincideRutaFW = (it:any): boolean => {
 
 // Listas filtradas por sentido — reaccionan al cambiar s.sentido
 const cotsFW = cotsFWDisponibles.filter(coincideSentido)
+const cotsSeg = cotsSegDisponibles.filter(coincideSentido)
 const cotsChile = cotsChileDisponibles.filter(coincideSentido)
 const cotsTransp = cotsTranspDisponibles.filter(coincideSentido)
 const cotsArg = cotsArgDisponibles.filter(coincideSentido)
@@ -849,11 +887,41 @@ function agregarFWManual(){
   setS(p=>({...p, cotsProvFW:[...p.cotsProvFW, nueva]}))
 }
 
-function elegirCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc', uid:string){
+// Compañía aseguradora desde sistema.
+// La PRIMA principal vive en la cabecera (seguro_monto/modo/alcance), no en items:
+// la inyectamos como ítem con el tramo derivado del alcance para que el medidor la evalúe.
+function agregarSegDesdeSistema(cotId:string){
+  const cot = cotsSegDisponibles.find(c=>c.id===cotId)
+  if(!cot) return
+  const usadas = cotsSistemaUsadas[cotId]||[]
+  const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
+  const primaMonto = parseNum(String((cot as any).seguro_monto||0))
+  if(primaMonto>0){
+    const esPct = ((cot as any).seguro_modo||'pct')==='pct'
+    const al = (cot as any).seguro_alcance||'maritimo'
+    const ch=(cot as any).puerto_china_id||null, cl=(cot as any).puerto_chile_id||null, ci=(cot as any).ciudad_destino_id||null
+    let oId:any=ch, dId:any=cl  // marítimo por defecto
+    if(al==='terrestre'){ oId=cl; dId=ci }
+    else if(al==='punta_a_punta'){ oId=ch; dId=ci }
+    const prima:any = {
+      itemId: uid2(),
+      descripcion: 'Prima de seguro'+(esPct?' (% FOB)':''),
+      tipo_calculo: esPct?'pct_cif':'fijo_usd',
+      valorUnit: primaMonto, cantCotizada:1, cantUsar:1,
+      tipoContenedor:'', subtotal: esPct?0:primaMonto, seleccionado:true,
+      origen_id:oId, destino_id:dId, paso_id:(al==='maritimo'?null:((cot as any).paso_id||null)), tipo_flete:'prima',
+    }
+    nueva.items = [prima, ...nueva.items]
+  }
+  nueva.elegida = true
+  setS(p=>({...p, cotsProvSeg:[...p.cotsProvSeg, nueva]}))
+}
+
+function elegirCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg', uid:string){
   setS(p=>({...p, [campo]:p[campo].map((c:CotProvSel)=>({...c,elegida:c.uid===uid}))}))
 }
 
-function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc', uid:string){
+function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg', uid:string){
   setS(p=>{
     const nuevas = (p[campo] as CotProvSel[]).filter(c=>c.uid!==uid)
     if(nuevas.length>0&&!nuevas.some(c=>c.elegida)) nuevas[0].elegida=true
@@ -861,7 +929,7 @@ function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'co
   })
 }
 
-function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc', cotUid:string, itemId:string){
+function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg', cotUid:string, itemId:string){
   setS(p=>({...p,[campo]:(p[campo] as CotProvSel[]).map(c=>{
     if(c.uid!==cotUid) return c
     return {...c,items:c.items.map(i=>{
@@ -872,7 +940,7 @@ function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'
   })}))
 }
 
-function setCantUsarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc', cotUid:string, itemId:string, cant:number){
+function setCantUsarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg', cotUid:string, itemId:string, cant:number){
   setS(p=>({...p,[campo]:(p[campo] as CotProvSel[]).map(c=>{
     if(c.uid!==cotUid) return c
     return {...c,items:c.items.map(i=>{
@@ -2283,6 +2351,96 @@ const clientesFiltrados=terceros.filter(t=>
             <div className="flex justify-between items-center px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
               <span>{fwElegida?`ForWarder elegido: ${fwElegida.proveedorNombre||'Manual'}`:s.cotsProvFW.length>0?'Ninguno elegido':'Sin cotizaciones'}</span>
               <span>Flete: <strong className="font-mono text-gray-800">USD {fmt(subFW)}</strong> + Seguro: <strong className="font-mono text-gray-800">USD {fmt(totalSeg)}</strong></span>
+            </div>
+          </div>
+
+          {/* ── COMPAÑÍA ASEGURADORA (Bloque 1, rubro seguro) ── */}
+          <div className={`bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm ${!bloqueActivo(0)?'hidden':''}`}>
+            <div className="px-5 py-3 border-b border-gray-100 bg-purple-50 flex items-center gap-2">
+              <span className="text-lg">🛡</span>
+              <span className="font-medium text-sm text-gray-900">Compañía aseguradora</span>
+              <span className="text-[10px] text-gray-400">opcional · complementa el seguro del forwarder</span>
+            </div>
+            <div className="px-5 py-4">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <span className="text-xs font-semibold text-gray-600">Cotizaciones de seguro</span>
+                <div className="flex items-center gap-2">
+                  <select onChange={e=>{if(e.target.value){agregarSegDesdeSistema(e.target.value);e.target.value=''}}}
+                    className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-purple-500" defaultValue="">
+                    <option value="">+ Cargar del sistema</option>
+                    {(()=>{
+                      const esp=cotsSeg.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                      const gen=cotsSeg.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                      return(<>
+                        {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre} — {c.referencia||c.fecha}{sufijoCoincSeg(c)}</option>))}</optgroup>)}
+                        <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}{sufijoCoincSeg(c)}</option>))}</optgroup>
+                      </>)
+                    })()}
+                  </select>
+                  <button onClick={()=>{ window.open(`/cotizaciones-proveedores?nuevo=1&bloque=1&rubro=seguro&cliente_id=${clienteSelId||''}&cliente_nombre=${encodeURIComponent(s.cliente||'')}`, '_blank') }}
+                    className="px-3 py-1 bg-purple-600 text-white rounded-lg text-[10px] font-bold hover:bg-purple-700 whitespace-nowrap">+ Manual</button>
+                </div>
+              </div>
+              {s.cotsProvSeg.length===0&&(
+                <div className="text-[10px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+                  Sin cotizaciones de aseguradora. Cargá una del sistema si el seguro lo provee una compañía aparte del forwarder.
+                </div>
+              )}
+              {s.cotsProvSeg.length>0&&(
+                <div className="space-y-3">
+                  {s.cotsProvSeg.map(sg=>{
+                    const totalSelSeg=sg.items.filter(i=>i.seleccionado).reduce((t,i)=>t+(i.tipo_calculo==='pct_cif'?totalFOB*i.valorUnit/100:i.subtotal),0)
+                    return (
+                      <div key={sg.uid} className="border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="flex items-center gap-2 px-4 py-2 bg-purple-50/50 border-b border-gray-100">
+                          <span className="font-semibold text-xs text-gray-800">{sg.proveedorNombre||'Aseguradora'}</span>
+                          {sg.referencia&&<span className="text-[10px] text-gray-400">{sg.referencia}</span>}
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${sg.tipo==='especifica'?'bg-amber-50 text-amber-700 border border-amber-200':'bg-gray-100 text-gray-500'}`}>{sg.tipo==='especifica'?'⭐ específica':'genérica'}</span>
+                          <button onClick={()=>eliminarCotProv('cotsProvSeg',sg.uid)} className="ml-auto text-gray-300 hover:text-red-500 text-xs">✕</button>
+                        </div>
+                        <table className="w-full text-xs">
+                          <thead><tr className="bg-gray-50 border-b border-gray-100">
+                            <th className="w-8 px-2 py-2"></th>
+                            <th className="text-left px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase">Ítem cotizado</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Precio</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Subtotal</th>
+                          </tr></thead>
+                          <tbody>
+                            {sg.items.map(it=>{
+                              const esPct=it.tipo_calculo==='pct_cif'
+                              const sub=esPct?totalFOB*it.valorUnit/100:it.subtotal
+                              return (
+                                <tr key={it.itemId} className={`border-b border-gray-50 ${claseFilaCoincidencia(criteriosSeguro(it),it.seleccionado)}`}>
+                                  <td className="px-2 py-2 text-center">
+                                    <button onClick={()=>toggleItemCotProv('cotsProvSeg',sg.uid,it.itemId)}>
+                                      <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${it.seleccionado?'bg-purple-600 border-purple-600':'border-gray-300 hover:border-purple-600'}`}>
+                                        {it.seleccionado&&<div className="w-2 h-1.5 border-l-2 border-b-2 border-white" style={{transform:'rotate(-45deg) translate(1px,-1px)'}}/>}
+                                      </div>
+                                    </button>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <div className="font-medium text-gray-800">{it.descripcion}</div>
+                                    <div className="flex gap-1.5 mt-0.5 flex-wrap"><MedidorCoincidencia criterios={criteriosSeguro(it)}/></div>
+                                  </td>
+                                  <td className="px-3 py-2 text-right font-mono text-gray-700">{esPct?`${fmt(it.valorUnit)}% FOB`:`USD ${fmt(it.valorUnit)}`}</td>
+                                  <td className="px-3 py-2 text-right">{it.seleccionado?<span className="font-mono font-semibold text-purple-700">USD {fmt(sub)}</span>:<span className="text-gray-300">—</span>}</td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                        <div className="flex justify-end px-4 py-2 border-t border-gray-100 bg-gray-50">
+                          <span className="font-mono font-bold text-purple-700 text-xs">Seguro seleccionado: USD {fmt(totalSelSeg)}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-between items-center px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
+              <span>Seguro de aseguradora</span>
+              <span>Subtotal: <strong className="font-mono text-gray-800">USD {fmt(subSeg)}</strong></span>
             </div>
           </div>
 
