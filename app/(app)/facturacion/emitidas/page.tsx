@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
-import { fmt } from '@/lib/utils'
+import { fmt, ETAPAS_L, ETAPAS_ORD } from '@/lib/utils'
 import Link from 'next/link'
 import { cargarPermisos, puede } from '@/lib/permisos'
 
@@ -188,7 +188,7 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, onSave, onC
     fecha_vencimiento: '', tercero_id: '', cliente_razon_social: '', cliente_rut: '',
     cliente_direccion: '', cliente_ciudad: '', cliente_pais: 'Chile', cliente_giro: '',
     operacion_id: '', cotizacion_num: '', moneda: 'CLP', tc_referencia: '',
-    afecta_iva: true, iva_pct: 19, tipo_cobro: 'servicio', discriminar_items: true, glosa: '', notas_internas: '',
+    afecta_iva: true, iva_pct: 19, tipo_cobro: 'servicio', discriminar_items: true, glosa: '', notas_internas: '', etapa: '',
   })
   const [items, setItems] = useState([{ descripcion: '', cantidad: 1, precio_unit: 0, descuento: 0, exento: false }])
   const [buscarTercero, setBuscarTercero] = useState('')
@@ -299,6 +299,11 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, onSave, onC
               <option value="recupero_gastos">Recupero de gastos</option>
               <option value="fee">Fee Puerto NOA</option>
               <option value="mixto">Mixto</option>
+            </select></div>
+          <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Etapa (imputación)</label>
+            <select value={form.etapa} onChange={e => setForm(f => ({ ...f, etapa: e.target.value }))} className={inp}>
+              <option value="">Sin imputar</option>
+              {ETAPAS_ORD.map(et => <option key={et} value={et}>{ETAPAS_L[et] || et}</option>)}
             </select></div>
         </div>
       </div>
