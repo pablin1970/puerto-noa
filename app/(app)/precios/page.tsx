@@ -88,6 +88,8 @@ export default function InteligenciaPreciosPage() {
   const [tcHistorico, setTcHistorico] = useState<any[]>([])
   const [serviciosCat, setServiciosCat] = useState<any[]>([]) // catálogo de servicios de depósito
   const [ciudadesCat, setCiudadesCat] = useState<any[]>([])   // ciudades de prestación
+  const [puertosChina, setPuertosChina] = useState<any[]>([])
+  const [puertosChile, setPuertosChile] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   // Filtros Tab 1 (por rubro)
@@ -100,6 +102,7 @@ export default function InteligenciaPreciosPage() {
   // Filtros finos para rubros del catálogo
   const [filtServicio, setFiltServicio] = useState('')   // servicio_id del catálogo
   const [filtCiudad, setFiltCiudad] = useState('')       // ciudad_prestacion_id
+  const [filtTramo, setFiltTramo] = useState('')         // tramo origen→destino (rubros de flete)
 
   // Filtros Tab 2 (por rubro)
   const [filtRubro2, setFiltRubro2] = useState('forwarder')
@@ -107,6 +110,7 @@ export default function InteligenciaPreciosPage() {
   const [filtFecha2, setFiltFecha2] = useState('')
   const [filtServicio2, setFiltServicio2] = useState('')
   const [filtCiudad2, setFiltCiudad2] = useState('')
+  const [filtTramo2, setFiltTramo2] = useState('')
 
   // Filtros Tab 3
   const [filtTC, setFiltTC] = useState<'ars'|'clp'|'cny'>('ars')
@@ -116,7 +120,7 @@ export default function InteligenciaPreciosPage() {
 
   async function loadAll() {
     setLoading(true)
-    const [itemsRes, cotsRes, tcRes, svcRes, ciuRes] = await Promise.all([
+    const [itemsRes, cotsRes, tcRes, svcRes, ciuRes, pchinaRes, pchileRes] = await Promise.all([
       supabase.from('cotizaciones_proveedor_v2_items')
         .select('*, cotizacion:cotizaciones_proveedor_v2(id,proveedor_nombre,fecha,rubro,estado,referencia,tramo,tipo,cliente_id,puerto_china_id,puerto_chile_id,tc_snapshot,ciudad_prestacion_id,etiqueta_lugar)')
         .order('cotizacion_id'),
@@ -134,12 +138,16 @@ export default function InteligenciaPreciosPage() {
       supabase.from('ciudades')
         .select('id,pais,ciudad,region,activo,orden')
         .order('orden', { ascending: true }),
+      supabase.from('puertos_china').select('id,nombre,ciudad,locode'),
+      supabase.from('puertos_chile').select('id,nombre,ciudad,locode'),
     ])
     if (itemsRes.data) setItems(itemsRes.data as any[])
     if (cotsRes.data) setCotizaciones(cotsRes.data)
     if (tcRes.data) setTcHistorico(tcRes.data)
     if (svcRes.data) setServiciosCat(svcRes.data as any[])
     if (ciuRes.data) setCiudadesCat(ciuRes.data as any[])
+    if (pchinaRes.data) setPuertosChina(pchinaRes.data as any[])
+    if (pchileRes.data) setPuertosChile(pchileRes.data as any[])
     setLoading(false)
   }
 
@@ -149,6 +157,26 @@ export default function InteligenciaPreciosPage() {
     const c = ciudadesCat.find(x => x.id === id)
     return c ? c.ciudad : ''
   }, [ciudadesCat])
+
+  // Rubros de flete: su precio depende del tramo origen→destino
+  const esRubroFlete = (r: string) => r === 'forwarder' || r === 'naviera' || r === 'transporte_terrestre'
+  // Resolver un punto (origen/destino) a nombre legible según su tipo
+  const nombrePunto = useCallback((id: string, tipo: string) => {
+    if (!id) return '—'
+    if (tipo === 'puerto_china') return puertosChina.find(p => p.id === id)?.nombre || 'Puerto China'
+    if (tipo === 'puerto') return puertosChile.find(p => p.id === id)?.nombre || 'Puerto Chile'
+    if (tipo === 'ciudad') return ciudadesCat.find(c => c.id === id)?.ciudad || 'Ciudad'
+    return '—'
+  }, [puertosChina, puertosChile, ciudadesCat])
+  // Clave estructural del tramo (para no mezclar tramos distintos al comparar)
+  const claveTramo = useCallback((it: any) => `${it.origen_id || ''}|${it.destino_id || ''}`, [])
+  // Etiqueta legible del tramo
+  const labelTramo = useCallback((it: any) => {
+    const o = nombrePunto(it.origen_id, it.origen_tipo)
+    const d = nombrePunto(it.destino_id, it.destino_tipo)
+    if (o === '—' && d === '—') return ''
+    return `${o} → ${d}`
+  }, [nombrePunto])
 
   // ── Datos para Tab 1 ──────────────────────────────────────────────
   const itemsFiltrados1 = useMemo(() => {
@@ -169,9 +197,10 @@ export default function InteligenciaPreciosPage() {
       } else {
         if (filtConcepto && it.categoria !== filtConcepto) return false
       }
+      if (esRubroFlete(filtRubro) && filtTramo && claveTramo(it) !== filtTramo) return false
       return true
     })
-  }, [items, filtRubro, filtConcepto, filtProvs, filtMeses, filtTipo, filtServicio, filtCiudad])
+  }, [items, filtRubro, filtConcepto, filtProvs, filtMeses, filtTipo, filtServicio, filtCiudad, filtTramo])
 
   const proveedoresDisp = useMemo(() => {
     const esCat = esRubroCat(filtRubro)
@@ -185,6 +214,25 @@ export default function InteligenciaPreciosPage() {
   const serviciosDeRubro2 = useMemo(() => serviciosCat.filter(sv => sv.rubro === filtRubro2), [serviciosCat, filtRubro2])
   const conceptosDeRubro = useMemo(() => Array.from(new Set(items.filter(it => it.cotizacion?.rubro === filtRubro).map(it => it.categoria).filter(Boolean))) as string[], [items, filtRubro])
   const conceptosDeRubro2 = useMemo(() => Array.from(new Set(items.filter(it => it.cotizacion?.rubro === filtRubro2).map(it => it.categoria).filter(Boolean))) as string[], [items, filtRubro2])
+  // Tramos presentes en las cotizaciones del rubro (rubros de flete) — dinámico, sin catálogo
+  const tramosDeRubro = useMemo(() => {
+    if (!esRubroFlete(filtRubro)) return [] as { clave: string; label: string }[]
+    const m = new Map<string, string>()
+    items.filter(it => it.cotizacion?.rubro === filtRubro).forEach(it => {
+      const c = claveTramo(it); const l = labelTramo(it)
+      if (c !== '|' && l) m.set(c, l)
+    })
+    return Array.from(m, ([clave, label]) => ({ clave, label }))
+  }, [items, filtRubro, claveTramo, labelTramo])
+  const tramosDeRubro2 = useMemo(() => {
+    if (!esRubroFlete(filtRubro2)) return [] as { clave: string; label: string }[]
+    const m = new Map<string, string>()
+    items.filter(it => it.cotizacion?.rubro === filtRubro2).forEach(it => {
+      const c = claveTramo(it); const l = labelTramo(it)
+      if (c !== '|' && l) m.set(c, l)
+    })
+    return Array.from(m, ([clave, label]) => ({ clave, label }))
+  }, [items, filtRubro2, claveTramo, labelTramo])
 
   // Agrupar por proveedor para líneas del gráfico
   const seriesGrafico = useMemo(() => {
@@ -237,13 +285,14 @@ export default function InteligenciaPreciosPage() {
       } else {
         if (filtConcepto2 && it.categoria !== filtConcepto2) return false
       }
+      if (esRubroFlete(filtRubro2) && filtTramo2 && claveTramo(it) !== filtTramo2) return false
       if (filtFecha2) {
         const fecha = it.cotizacion?.fecha || ''
         return fecha >= filtFecha2
       }
       return true
     })
-  }, [items, filtRubro2, filtConcepto2, filtFecha2, filtTipo, filtServicio2, filtCiudad2])
+  }, [items, filtRubro2, filtConcepto2, filtFecha2, filtTipo, filtServicio2, filtCiudad2, filtTramo2])
 
   // Última cotización de cada proveedor para esa categoría.
   // En depósito, la clave incluye servicio + métrica + ciudad para no mezclar servicios distintos.
@@ -252,9 +301,10 @@ export default function InteligenciaPreciosPage() {
     const map: Record<string, any> = {}
     itemsComp.forEach(it => {
       const prov = it.cotizacion?.proveedor_nombre || ''
-      const clave = esCat
+      const tr = esRubroFlete(filtRubro2) ? `|${claveTramo(it)}` : ''
+      const clave = (esCat
         ? `${prov}|${it.servicio_id || ''}|${it.metrica_id || ''}|${it.cotizacion?.ciudad_prestacion_id || ''}`
-        : `${prov}|${it.categoria || ''}`
+        : `${prov}|${it.categoria || ''}`) + tr
       if (!map[clave] || it.cotizacion?.fecha > map[clave].cotizacion?.fecha) {
         map[clave] = it
       }
@@ -373,6 +423,16 @@ export default function InteligenciaPreciosPage() {
                   className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8] min-w-[180px]">
                   <option value="">Todos los conceptos</option>
                   {conceptosDeRubro.map(c => (<option key={c} value={c}>{(CATEGORIAS[c]?.icon || '·')} {CATEGORIAS[c]?.label || c}</option>))}
+                </select>
+              </div>
+            )}
+            {esRubroFlete(filtRubro) && tramosDeRubro.length > 0 && (
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Tramo</label>
+                <select value={filtTramo} onChange={e => setFiltTramo(e.target.value)}
+                  className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8] min-w-[200px]">
+                  <option value="">Todos los tramos</option>
+                  {tramosDeRubro.map(t => (<option key={t.clave} value={t.clave}>{t.label}</option>))}
                 </select>
               </div>
             )}
@@ -589,6 +649,16 @@ export default function InteligenciaPreciosPage() {
                 </select>
               </div>
             )}
+            {esRubroFlete(filtRubro2) && tramosDeRubro2.length > 0 && (
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Tramo</label>
+                <select value={filtTramo2} onChange={e => setFiltTramo2(e.target.value)}
+                  className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8] min-w-[200px]">
+                  <option value="">Todos los tramos</option>
+                  {tramosDeRubro2.map(t => (<option key={t.clave} value={t.clave}>{t.label}</option>))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Cotizaciones desde</label>
               <input type="date" value={filtFecha2} onChange={e => setFiltFecha2(e.target.value)}
@@ -649,7 +719,7 @@ export default function InteligenciaPreciosPage() {
                         </div>
                         <div className="flex justify-between mt-1">
                           <span className="text-[9px] text-gray-400">{it.descripcion}</span>
-                          <span className="text-[9px] text-gray-400">{it.cotizacion?.ciudad_prestacion_id ? `📍 ${nombreCiudad(it.cotizacion.ciudad_prestacion_id)}` : (it.tipo_contenedor || 'Todos los contenedores')}</span>
+                          <span className="text-[9px] text-gray-400">{esRubroFlete(filtRubro2) && labelTramo(it) ? `🚩 ${labelTramo(it)}` : (it.cotizacion?.ciudad_prestacion_id ? `📍 ${nombreCiudad(it.cotizacion.ciudad_prestacion_id)}` : (it.tipo_contenedor || 'Todos los contenedores'))}</span>
                         </div>
                       </div>
                     )
