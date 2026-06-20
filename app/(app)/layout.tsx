@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, Suspense } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -34,7 +34,7 @@ const NAV: NavItem[] = [
   { href: '/cierre',                   label: 'Liquidacion y cierre',     icon: '✓', modulo: 'cierre' },
   { href: '/cotizaciones-proveedores', label: 'Cotizaciones proveedores', icon: '📋', modulo: 'cotizaciones_proveedores' },
   { href: '/precios',                  label: 'Inteligencia de precios',  icon: '📊', modulo: 'precios' },
-  { href: '/clientes',                 label: 'Proveedores',              icon: '📦', modulo: 'proveedores' },
+  { href: '/clientes?ver=proveedores', label: 'Proveedores',              icon: '📦', modulo: 'proveedores' },
 
   // ── FINANZAS CLIENTES ──────────────────────────────
   { label: 'FINANZAS CLIENTES', section: true },
@@ -71,7 +71,17 @@ interface TCWidget {
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={null}>
+      <AppLayoutInner>{children}</AppLayoutInner>
+    </Suspense>
+  )
+}
+
+function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const verActual = searchParams.get('ver') === 'proveedores' ? 'proveedores' : 'clientes'
   const router = useRouter()
   const [user, setUser] = useState<Usuario | null>(null)
   const [tc, setTc] = useState<TCWidget>({ ARS: null, CLP: null, CNY: null, fecha: '', hora: '', fuente: '' })
@@ -252,7 +262,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             )
             if (!item.href) return null
-            const active = pathname === item.href || pathname.startsWith(item.href + '/')
+            const [hrefPath, hrefQuery] = item.href.split('?')
+            let active = pathname === hrefPath || pathname.startsWith(hrefPath + '/')
+            // Clientes y Proveedores comparten /clientes: desambiguar por ?ver
+            if (active && hrefPath === '/clientes') {
+              const hrefVer = (hrefQuery || '').includes('ver=proveedores') ? 'proveedores' : 'clientes'
+              active = hrefVer === verActual
+            }
             if (item.adminOnly && user?.rol !== 'admin') return null
             // Filtrar por permisos del rol
             // Si el usuario tiene permisos cargados y el ítem tiene módulo → verificar
