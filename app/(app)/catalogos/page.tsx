@@ -491,18 +491,18 @@ export default function CatalogosPage() {
   const grupoActivo = GRUPOS.find(g => (g.keys as readonly string[]).includes(tab)) || GRUPOS[0]
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
+    <div className="p-6 bg-gray-50 min-h-screen lg:min-h-0 lg:h-full lg:flex lg:flex-col lg:overflow-hidden">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-6 lg:flex-shrink-0">
         <div className="text-[11px] font-bold text-[#1168F8]/60 uppercase tracking-widest mb-1">Configuración</div>
         <h1 className="text-2xl font-bold text-gray-900">Catálogos del sistema</h1>
         <p className="text-xs text-gray-400 mt-1">Administrá las listas de referencia usadas en todo el sistema</p>
       </div>
 
       {/* Layout en árbol: sidebar de categorías + panel de contenido */}
-      <div className="grid grid-cols-1 lg:grid-cols-[224px_1fr] gap-5 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[224px_1fr] gap-5 items-start lg:items-stretch lg:flex-1 lg:min-h-0">
         {/* Árbol de categorías */}
-        <aside className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto scrollbar-thin">
+        <aside className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm lg:h-full lg:overflow-y-auto scrollbar-thin">
           <div className="flex items-center gap-2 px-2 pb-3">
             <span className="text-base">📚</span>
             <span className="text-sm font-bold text-gray-800">Catálogos</span>
@@ -534,7 +534,7 @@ export default function CatalogosPage() {
         </aside>
 
         {/* Panel de contenido */}
-        <div className="min-w-0">
+        <div className="min-w-0 lg:h-full lg:overflow-y-auto lg:pr-1">
           {/* Encabezado con el color de la categoría activa */}
           <div className="rounded-xl px-4 py-2.5 mb-4 flex items-center gap-2 text-[12px] flex-wrap" style={{ background: grupoActivo.claro }}>
             <span className="font-semibold flex items-center gap-1.5" style={{ color: grupoActivo.texto }}><span>{grupoActivo.icon}</span>{grupoActivo.titulo}</span>
