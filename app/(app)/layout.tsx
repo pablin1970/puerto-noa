@@ -85,6 +85,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [user, setUser] = useState<Usuario | null>(null)
   const [tc, setTc] = useState<TCWidget>({ ARS: null, CLP: null, CNY: null, fecha: '', hora: '', fuente: '' })
+  const [utm, setUtm] = useState<{ valor: number; label: string } | null>(null)
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})  // modulo → acciones permitidas
   const [esSuper, setEsSuper] = useState(false)
   const [modulosNuevosCount, setModulosNuevosCount] = useState(0)
@@ -142,6 +143,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       }
     })
     loadTC()
+    loadUtm()
     return () => subscription.unsubscribe()
   }, [])
 
@@ -168,6 +170,23 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         if (latest.ARS !== null && latest.CLP !== null && latest.CNY !== null) break
       }
       setTc(latest)
+    } catch {}
+  }
+
+  async function loadUtm() {
+    try {
+      const { data } = await supabase
+        .from('valores_utm')
+        .select('anio, mes, valor_clp')
+        .order('anio', { ascending: false })
+        .order('mes', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const d = data as any
+      if (d?.valor_clp != null) {
+        const MESES_ABR = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+        setUtm({ valor: Number(d.valor_clp), label: `${MESES_ABR[d.mes - 1]} ${d.anio}` })
+      }
     } catch {}
   }
 
@@ -242,6 +261,12 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
                   </span>
                 </div>
               ))}
+              {utm !== null && (
+                <div className="flex items-center justify-between pt-1.5 mt-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                  <span className="text-[11px] text-white/70 font-medium">🇨🇱 UTM <span className="text-white/45">{utm.label}</span></span>
+                  <span className="font-mono font-bold text-white text-[12px]">$ {Math.round(utm.valor).toLocaleString('es-CL')}</span>
+                </div>
+              )}
               {tc.fecha && (
                 <div className="pt-1 mt-1 flex items-center justify-between" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                   <span className="text-[9px] text-white/50">{tc.fuente} {tc.fecha ? tc.fecha.split('-').reverse().join('/') : ''} {tc.hora}</span>
