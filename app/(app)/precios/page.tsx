@@ -17,6 +17,20 @@ const CATEGORIAS: Record<string, { label: string; color: string; bg: string; ico
   otro:                  { label: 'Otro',                   color: '#6b7280', bg: '#F3F4F6', icon: '·' },
 }
 
+// Inteligencia de precios organizada POR RUBRO (alineado con el catálogo de servicios).
+// cat:true → rubro del catálogo (filtros por servicio + ubicación). cat:false → geográfico (filtro por concepto/categoría).
+const RUBROS_PRECIO: Record<string, { label: string; color: string; bg: string; icon: string; cat: boolean }> = {
+  forwarder:            { label: 'Freight Forwarder',    color: '#1168F8', bg: '#EBF2FF', icon: '🚢', cat: false },
+  naviera:              { label: 'Naviera',              color: '#0891b2', bg: '#E0F2FE', icon: '⚓', cat: false },
+  transporte_terrestre: { label: 'Transporte terrestre', color: '#b45309', bg: '#FEF3C7', icon: '🚛', cat: false },
+  deposito:             { label: 'Depósito',             color: '#0a9e6e', bg: '#E1F5EE', icon: '🏭', cat: true },
+  gastos_argentina:     { label: 'Despachante',          color: '#6b21a8', bg: '#F3E8FF', icon: '📋', cat: true },
+  transporte_chile:     { label: 'Agente',               color: '#0891b2', bg: '#E0F2FE', icon: '🤝', cat: true },
+  seguro:               { label: 'Seguro',               color: '#052698', bg: '#EBF2FF', icon: '🛡', cat: true },
+  otro:                 { label: 'Otro',                 color: '#6b7280', bg: '#F3F4F6', icon: '·', cat: true },
+}
+const esRubroCat = (r: string) => !!RUBROS_PRECIO[r]?.cat
+
 const fmtUSD = (n: number) => `USD ${n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 const fmtDate = (s: string) => s ? s.split('-').reverse().join('/') : ''
 
@@ -76,18 +90,20 @@ export default function InteligenciaPreciosPage() {
   const [ciudadesCat, setCiudadesCat] = useState<any[]>([])   // ciudades de prestación
   const [loading, setLoading] = useState(true)
 
-  // Filtros Tab 1
-  const [filtCat, setFiltCat] = useState('flete_maritimo')
+  // Filtros Tab 1 (por rubro)
+  const [filtRubro, setFiltRubro] = useState('forwarder')
+  const [filtConcepto, setFiltConcepto] = useState('')   // concepto (categoría) para rubros geográficos
   const [filtProvs, setFiltProvs] = useState<string[]>([])
   const [filtMeses, setFiltMeses] = useState(12)
   // Filtro global por tipo de cotización (afecta Evolución y Comparativa)
   const [filtTipo, setFiltTipo] = useState<'todas'|'generica'|'especifica'>('todas')
-  // Filtros de depósito (solo aplican cuando la categoría es 'almacenaje')
+  // Filtros finos para rubros del catálogo
   const [filtServicio, setFiltServicio] = useState('')   // servicio_id del catálogo
   const [filtCiudad, setFiltCiudad] = useState('')       // ciudad_prestacion_id
 
-  // Filtros Tab 2
-  const [filtCat2, setFiltCat2] = useState('flete_maritimo')
+  // Filtros Tab 2 (por rubro)
+  const [filtRubro2, setFiltRubro2] = useState('forwarder')
+  const [filtConcepto2, setFiltConcepto2] = useState('')
   const [filtFecha2, setFiltFecha2] = useState('')
   const [filtServicio2, setFiltServicio2] = useState('')
   const [filtCiudad2, setFiltCiudad2] = useState('')
@@ -113,7 +129,7 @@ export default function InteligenciaPreciosPage() {
         .limit(500),
       supabase.from('servicios_catalogo')
         .select('id,rubro,grupo,nombre,activo,orden')
-        .eq('rubro', 'deposito')
+        .order('rubro', { ascending: true })
         .order('orden', { ascending: true }),
       supabase.from('ciudades')
         .select('id,pais,ciudad,region,activo,orden')
@@ -138,27 +154,37 @@ export default function InteligenciaPreciosPage() {
   const itemsFiltrados1 = useMemo(() => {
     const cutoff = new Date()
     cutoff.setMonth(cutoff.getMonth() - filtMeses)
+    const esCat = esRubroCat(filtRubro)
     return items.filter(it => {
       const fecha = it.cotizacion?.fecha
       if (!fecha) return false
       if (new Date(fecha) < cutoff) return false
-      if (it.categoria !== filtCat) return false
+      if (it.cotizacion?.rubro !== filtRubro) return false
       if (filtProvs.length > 0 && !filtProvs.includes(it.cotizacion?.proveedor_nombre)) return false
       if (it.tipo_calculo === 'pct_cif') return false // excluir % del gráfico de valores
       if (filtTipo !== 'todas' && (it.cotizacion?.tipo || 'generica') !== filtTipo) return false
-      // Filtros de depósito (solo cuando la categoría es 'almacenaje')
-      if (filtCat === 'almacenaje') {
+      if (esCat) {
         if (filtServicio && it.servicio_id !== filtServicio) return false
         if (filtCiudad && it.cotizacion?.ciudad_prestacion_id !== filtCiudad) return false
+      } else {
+        if (filtConcepto && it.categoria !== filtConcepto) return false
       }
       return true
     })
-  }, [items, filtCat, filtProvs, filtMeses, filtTipo, filtServicio, filtCiudad])
+  }, [items, filtRubro, filtConcepto, filtProvs, filtMeses, filtTipo, filtServicio, filtCiudad])
 
   const proveedoresDisp = useMemo(() => {
-    const cats = items.filter(it => it.categoria === filtCat && it.tipo_calculo !== 'pct_cif')
-    return Array.from(new Set(cats.map(it => it.cotizacion?.proveedor_nombre).filter(Boolean))) as string[]
-  }, [items, filtCat])
+    const esCat = esRubroCat(filtRubro)
+    const base = items.filter(it => it.cotizacion?.rubro === filtRubro && it.tipo_calculo !== 'pct_cif'
+      && (esCat ? (!filtServicio || it.servicio_id === filtServicio) : (!filtConcepto || it.categoria === filtConcepto)))
+    return Array.from(new Set(base.map(it => it.cotizacion?.proveedor_nombre).filter(Boolean))) as string[]
+  }, [items, filtRubro, filtConcepto, filtServicio])
+
+  // Servicios y conceptos disponibles según el rubro elegido
+  const serviciosDeRubro = useMemo(() => serviciosCat.filter(sv => sv.rubro === filtRubro), [serviciosCat, filtRubro])
+  const serviciosDeRubro2 = useMemo(() => serviciosCat.filter(sv => sv.rubro === filtRubro2), [serviciosCat, filtRubro2])
+  const conceptosDeRubro = useMemo(() => Array.from(new Set(items.filter(it => it.cotizacion?.rubro === filtRubro).map(it => it.categoria).filter(Boolean))) as string[], [items, filtRubro])
+  const conceptosDeRubro2 = useMemo(() => Array.from(new Set(items.filter(it => it.cotizacion?.rubro === filtRubro2).map(it => it.categoria).filter(Boolean))) as string[], [items, filtRubro2])
 
   // Agrupar por proveedor para líneas del gráfico
   const seriesGrafico = useMemo(() => {
@@ -200,14 +226,16 @@ export default function InteligenciaPreciosPage() {
 
   // ── Datos para Tab 2 ──────────────────────────────────────────────
   const itemsComp = useMemo(() => {
+    const esCat = esRubroCat(filtRubro2)
     return items.filter(it => {
-      if (it.categoria !== filtCat2) return false
+      if (it.cotizacion?.rubro !== filtRubro2) return false
       if (it.tipo_calculo === 'pct_cif') return false
       if (filtTipo !== 'todas' && (it.cotizacion?.tipo || 'generica') !== filtTipo) return false
-      // Filtros de depósito (solo cuando la categoría es 'almacenaje')
-      if (filtCat2 === 'almacenaje') {
+      if (esCat) {
         if (filtServicio2 && it.servicio_id !== filtServicio2) return false
         if (filtCiudad2 && it.cotizacion?.ciudad_prestacion_id !== filtCiudad2) return false
+      } else {
+        if (filtConcepto2 && it.categoria !== filtConcepto2) return false
       }
       if (filtFecha2) {
         const fecha = it.cotizacion?.fecha || ''
@@ -215,24 +243,24 @@ export default function InteligenciaPreciosPage() {
       }
       return true
     })
-  }, [items, filtCat2, filtFecha2, filtTipo, filtServicio2, filtCiudad2])
+  }, [items, filtRubro2, filtConcepto2, filtFecha2, filtTipo, filtServicio2, filtCiudad2])
 
   // Última cotización de cada proveedor para esa categoría.
   // En depósito, la clave incluye servicio + métrica + ciudad para no mezclar servicios distintos.
   const ultimasPorProv = useMemo(() => {
-    const esDep = filtCat2 === 'almacenaje'
+    const esCat = esRubroCat(filtRubro2)
     const map: Record<string, any> = {}
     itemsComp.forEach(it => {
       const prov = it.cotizacion?.proveedor_nombre || ''
-      const clave = esDep
+      const clave = esCat
         ? `${prov}|${it.servicio_id || ''}|${it.metrica_id || ''}|${it.cotizacion?.ciudad_prestacion_id || ''}`
-        : prov
+        : `${prov}|${it.categoria || ''}`
       if (!map[clave] || it.cotizacion?.fecha > map[clave].cotizacion?.fecha) {
         map[clave] = it
       }
     })
     return Object.values(map).sort((a, b) => convertirUSD(a, tcHistorico) - convertirUSD(b, tcHistorico))
-  }, [itemsComp, tcHistorico, filtCat2])
+  }, [itemsComp, tcHistorico, filtRubro2])
 
   const minComp = ultimasPorProv.length ? convertirUSD(ultimasPorProv[0], tcHistorico) : 0
 
@@ -274,8 +302,8 @@ export default function InteligenciaPreciosPage() {
     </div>
   )
 
-  const catActual = CATEGORIAS[filtCat] || CATEGORIAS.otro
-  const catActual2 = CATEGORIAS[filtCat2] || CATEGORIAS.otro
+  const rubroActual = RUBROS_PRECIO[filtRubro] || RUBROS_PRECIO.otro
+  const rubroActual2 = RUBROS_PRECIO[filtRubro2] || RUBROS_PRECIO.otro
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -309,37 +337,44 @@ export default function InteligenciaPreciosPage() {
           {/* Filtros */}
           <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-wrap gap-4 items-end">
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Categoría</label>
-              <select value={filtCat} onChange={e => { setFiltCat(e.target.value); setFiltProvs([]); setFiltServicio(''); setFiltCiudad('') }}
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Rubro</label>
+              <select value={filtRubro} onChange={e => { setFiltRubro(e.target.value); setFiltProvs([]); setFiltServicio(''); setFiltCiudad(''); setFiltConcepto('') }}
                 className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
-                {Object.entries(CATEGORIAS).map(([k, v]) => (
+                {Object.entries(RUBROS_PRECIO).map(([k, v]) => (
                   <option key={k} value={k}>{v.icon} {v.label}</option>
                 ))}
               </select>
             </div>
-            {filtCat === 'almacenaje' && (
+            {esRubroCat(filtRubro) ? (
               <>
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Servicio del depósito</label>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Servicio</label>
                   <select value={filtServicio} onChange={e => setFiltServicio(e.target.value)}
                     className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8] min-w-[200px]">
                     <option value="">Todos los servicios</option>
-                    {serviciosCat.map(s => (
-                      <option key={s.id} value={s.id}>{s.nombre}</option>
-                    ))}
+                    {serviciosDeRubro.map(sv => (<option key={sv.id} value={sv.id}>{sv.nombre}</option>))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Ciudad de prestación</label>
-                  <select value={filtCiudad} onChange={e => setFiltCiudad(e.target.value)}
-                    className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
-                    <option value="">Todas las ciudades</option>
-                    {ciudadesCat.map(c => (
-                      <option key={c.id} value={c.id}>{c.ciudad}</option>
-                    ))}
-                  </select>
-                </div>
+                {filtRubro === 'deposito' && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Ciudad de prestación</label>
+                    <select value={filtCiudad} onChange={e => setFiltCiudad(e.target.value)}
+                      className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
+                      <option value="">Todas las ciudades</option>
+                      {ciudadesCat.map(c => (<option key={c.id} value={c.id}>{c.ciudad}</option>))}
+                    </select>
+                  </div>
+                )}
               </>
+            ) : (
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Concepto</label>
+                <select value={filtConcepto} onChange={e => setFiltConcepto(e.target.value)}
+                  className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8] min-w-[180px]">
+                  <option value="">Todos los conceptos</option>
+                  {conceptosDeRubro.map(c => (<option key={c} value={c}>{(CATEGORIAS[c]?.icon || '·')} {CATEGORIAS[c]?.label || c}</option>))}
+                </select>
+              </div>
             )}
             <div>
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Período</label>
@@ -381,7 +416,7 @@ export default function InteligenciaPreciosPage() {
             )}
             <div className="ml-auto text-right">
               <div className="text-[10px] text-gray-400">{itemsFiltrados1.length} cotizaciones</div>
-              <div className="text-xs font-semibold" style={{ color: catActual.color }}>{catActual.icon} {catActual.label}</div>
+              <div className="text-xs font-semibold" style={{ color: rubroActual.color }}>{rubroActual.icon} {rubroActual.label}</div>
             </div>
           </div>
 
@@ -391,7 +426,7 @@ export default function InteligenciaPreciosPage() {
               <div className="h-64 flex flex-col items-center justify-center text-gray-300">
                 <div className="text-5xl mb-3">📭</div>
                 <div className="text-sm font-medium text-gray-400">Sin datos para esta categoría</div>
-                <div className="text-xs text-gray-300 mt-1">Cargá cotizaciones con la categoría "{catActual.label}" para ver la evolución</div>
+                <div className="text-xs text-gray-300 mt-1">Cargá cotizaciones del rubro "{rubroActual.label}" para ver la evolución</div>
               </div>
             ) : (
               <svg width="100%" height="320" className="overflow-visible"
@@ -515,37 +550,44 @@ export default function InteligenciaPreciosPage() {
           {/* Filtros */}
           <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-wrap gap-4 items-end">
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Categoría</label>
-              <select value={filtCat2} onChange={e => { setFiltCat2(e.target.value); setFiltServicio2(''); setFiltCiudad2('') }}
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Rubro</label>
+              <select value={filtRubro2} onChange={e => { setFiltRubro2(e.target.value); setFiltServicio2(''); setFiltCiudad2(''); setFiltConcepto2('') }}
                 className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
-                {Object.entries(CATEGORIAS).map(([k, v]) => (
+                {Object.entries(RUBROS_PRECIO).map(([k, v]) => (
                   <option key={k} value={k}>{v.icon} {v.label}</option>
                 ))}
               </select>
             </div>
-            {filtCat2 === 'almacenaje' && (
+            {esRubroCat(filtRubro2) ? (
               <>
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Servicio del depósito</label>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Servicio</label>
                   <select value={filtServicio2} onChange={e => setFiltServicio2(e.target.value)}
                     className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8] min-w-[200px]">
                     <option value="">Todos los servicios</option>
-                    {serviciosCat.map(s => (
-                      <option key={s.id} value={s.id}>{s.nombre}</option>
-                    ))}
+                    {serviciosDeRubro2.map(sv => (<option key={sv.id} value={sv.id}>{sv.nombre}</option>))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Ciudad de prestación</label>
-                  <select value={filtCiudad2} onChange={e => setFiltCiudad2(e.target.value)}
-                    className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
-                    <option value="">Todas las ciudades</option>
-                    {ciudadesCat.map(c => (
-                      <option key={c.id} value={c.id}>{c.ciudad}</option>
-                    ))}
-                  </select>
-                </div>
+                {filtRubro2 === 'deposito' && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Ciudad de prestación</label>
+                    <select value={filtCiudad2} onChange={e => setFiltCiudad2(e.target.value)}
+                      className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
+                      <option value="">Todas las ciudades</option>
+                      {ciudadesCat.map(c => (<option key={c.id} value={c.id}>{c.ciudad}</option>))}
+                    </select>
+                  </div>
+                )}
               </>
+            ) : (
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Concepto</label>
+                <select value={filtConcepto2} onChange={e => setFiltConcepto2(e.target.value)}
+                  className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8] min-w-[180px]">
+                  <option value="">Todos los conceptos</option>
+                  {conceptosDeRubro2.map(c => (<option key={c} value={c}>{(CATEGORIAS[c]?.icon || '·')} {CATEGORIAS[c]?.label || c}</option>))}
+                </select>
+              </div>
             )}
             <div>
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Cotizaciones desde</label>
@@ -563,7 +605,7 @@ export default function InteligenciaPreciosPage() {
             </div>
             <div className="ml-auto text-right">
               <div className="text-[10px] text-gray-400">{ultimasPorProv.length} proveedores</div>
-              <div className="text-xs font-semibold" style={{ color: catActual2.color }}>{catActual2.icon} {catActual2.label}</div>
+              <div className="text-xs font-semibold" style={{ color: rubroActual2.color }}>{rubroActual2.icon} {rubroActual2.label}</div>
             </div>
           </div>
 
@@ -577,7 +619,7 @@ export default function InteligenciaPreciosPage() {
               {/* Barras comparativas */}
               <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-4">
-                  Última cotización por proveedor · {catActual2.icon} {catActual2.label}
+                  Última cotización por proveedor · {rubroActual2.icon} {rubroActual2.label}
                 </div>
                 <div className="space-y-3">
                   {ultimasPorProv.map((it, i) => {
