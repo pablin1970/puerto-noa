@@ -1009,7 +1009,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             ...ruta, orden:i,
           })
         })
-      } else if(tf==='almacenaje'){
+      } else if(tf==='almacenaje'||tf==='despachante'){
         let ord=0
         const diasDefault = parseN(String(form.almacen_dias_gratis||0))
         depServicios.forEach((svc:any)=>{
@@ -1151,6 +1151,65 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   // tipo de formulario del rubro elegido — decide qué bloque de campos se muestra
   const tf = tipoFormulario(form.rubro)
   const rubroActual = rubrosCatalogo.find((r:any)=>r._codigo===form.rubro)
+
+  // Formulario de servicios del catálogo (reutilizable: depósito, agente, otros, despachante)
+  const renderServiciosCat = () => (
+    <>
+            {/* Selector para agregar servicio del catálogo */}
+            <div className="flex items-end gap-2 p-3 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
+              <div className="flex-1">
+                {lbl('Agregar servicio')}
+                <select value={depSelSvc} onChange={e=>setDepSelSvc(e.target.value)} className={sel}>
+                  <option value="">— Elegí un servicio del catálogo —</option>
+                  {depServiciosCat.filter(s=>s.rubro===form.rubro && !depServicios.some(d=>d.servicio_id===s.id)).map(s=>(
+                    <option key={s.id} value={s.id}>{s.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <button type="button" onClick={depAgregarServicio} className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#1168F8] text-white hover:bg-[#052698] transition-all whitespace-nowrap">+ Agregar</button>
+            </div>
+
+            {/* Servicios agregados */}
+            {depServicios.length===0 ? (
+              <div className="text-center py-6 text-gray-400 text-xs">Todavía no agregaste servicios. Elegí uno de la lista de arriba.</div>
+            ) : depServicios.map(svc=>(
+              <div key={svc.servicio_id} className="border border-[#B9D0F6] bg-[#EFF4FE] rounded-2xl px-4 py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-semibold text-gray-800 flex-1">{svc.nombre}</span>
+                  <button type="button" onClick={()=>depQuitarServicio(svc.servicio_id)} className="text-gray-300 hover:text-red-500 text-sm" title="Quitar servicio">✕</button>
+                </div>
+                <div className="grid gap-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-[#dbe7fb] pb-1.5 mb-1.5" style={{gridTemplateColumns:'1.4fr 0.9fr 0.7fr 0.9fr 0.9fr'}}>
+                  <span>Forma de cobro</span><span className="text-right">Precio</span><span>Moneda</span><span className="text-right">Mín./Piso</span><span className="text-right">Días/Techo</span>
+                </div>
+                {svc.formas.map((f:any)=>{
+                  const esTiempo = f.comportamiento==='por_tiempo'
+                  const esPorcentaje = f.comportamiento==='porcentaje'
+                  return (
+                    <div key={f.metrica_id} className="grid gap-2 items-center py-1" style={{gridTemplateColumns:'1.4fr 0.9fr 0.7fr 0.9fr 0.9fr'}}>
+                      <span className="text-xs text-gray-700">{f.nombre}</span>
+                      <input type="text" inputMode="decimal" value={f.precio} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'precio',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder={esPorcentaje?'%':'0.00'}/>
+                      {esPorcentaje ? (
+                        <span className="text-center text-[10px] font-semibold text-[#052698]">% CIF</span>
+                      ) : (
+                        <select value={f.moneda || form.moneda} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'moneda',e.target.value)} className="w-full px-1 py-1.5 border border-gray-200 rounded-lg text-[11px] bg-white font-semibold text-[#1168F8] focus:outline-none focus:border-[#1168F8]">
+                          <option>USD</option><option>ARS</option><option>CLP</option><option>CNY</option>
+                        </select>
+                      )}
+                      <input type="text" inputMode="decimal" value={f.minimo} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'minimo',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder={esPorcentaje?'piso':'mín.'}/>
+                      {esTiempo ? (
+                        <input type="text" inputMode="decimal" value={f.dias_libres} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'dias_libres',e.target.value)} className="w-full px-2 py-1.5 border border-green-200 bg-green-50 rounded-lg text-[11px] text-right font-mono focus:outline-none focus:border-[#0a9e6e]" placeholder={form.almacen_dias_gratis||'0'}/>
+                      ) : esPorcentaje ? (
+                        <input type="text" inputMode="decimal" value={f.techo||''} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'techo',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder="techo"/>
+                      ) : (
+                        <span className="text-center text-gray-300 text-xs">—</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+    </>
+  )
 
   // Render reutilizable de una lista de tramos (se usa en sentido simple y en versión A/B de "ambos")
   const renderTramos = (lista:any[], esExpoLista:boolean, fnSet:(i:number,k:string,v:any)=>void, fnAdd:()=>void, fnRemove:(i:number)=>void) => (
@@ -1674,61 +1733,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             <span className="font-semibold text-sm text-green-900">{form.rubro==='deposito'?'Servicios de depósito':('Servicios — '+(rubroActual?.nombre||'proveedor'))}</span>
             <span className="ml-auto text-[10px] text-green-700 font-medium">{sentido==='ambos'?'Ambos sentidos · A+B':sentido==='exportacion'?'Exportación':'Importación'}</span>
           </div>
-          <div className="px-5 py-4 space-y-4">
-            {/* Selector para agregar servicio del catálogo */}
-            <div className="flex items-end gap-2 p-3 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
-              <div className="flex-1">
-                {lbl('Agregar servicio')}
-                <select value={depSelSvc} onChange={e=>setDepSelSvc(e.target.value)} className={sel}>
-                  <option value="">— Elegí un servicio del catálogo —</option>
-                  {depServiciosCat.filter(s=>s.rubro===form.rubro && !depServicios.some(d=>d.servicio_id===s.id)).map(s=>(
-                    <option key={s.id} value={s.id}>{s.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              <button type="button" onClick={depAgregarServicio} className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#1168F8] text-white hover:bg-[#052698] transition-all whitespace-nowrap">+ Agregar</button>
-            </div>
-
-            {/* Servicios agregados */}
-            {depServicios.length===0 ? (
-              <div className="text-center py-6 text-gray-400 text-xs">Todavía no agregaste servicios. Elegí uno de la lista de arriba.</div>
-            ) : depServicios.map(svc=>(
-              <div key={svc.servicio_id} className="border border-[#B9D0F6] bg-[#EFF4FE] rounded-2xl px-4 py-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm font-semibold text-gray-800 flex-1">{svc.nombre}</span>
-                  <button type="button" onClick={()=>depQuitarServicio(svc.servicio_id)} className="text-gray-300 hover:text-red-500 text-sm" title="Quitar servicio">✕</button>
-                </div>
-                <div className="grid gap-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-[#dbe7fb] pb-1.5 mb-1.5" style={{gridTemplateColumns:'1.4fr 0.9fr 0.7fr 0.9fr 0.9fr'}}>
-                  <span>Forma de cobro</span><span className="text-right">Precio</span><span>Moneda</span><span className="text-right">Mín./Piso</span><span className="text-right">Días/Techo</span>
-                </div>
-                {svc.formas.map((f:any)=>{
-                  const esTiempo = f.comportamiento==='por_tiempo'
-                  const esPorcentaje = f.comportamiento==='porcentaje'
-                  return (
-                    <div key={f.metrica_id} className="grid gap-2 items-center py-1" style={{gridTemplateColumns:'1.4fr 0.9fr 0.7fr 0.9fr 0.9fr'}}>
-                      <span className="text-xs text-gray-700">{f.nombre}</span>
-                      <input type="text" inputMode="decimal" value={f.precio} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'precio',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder={esPorcentaje?'%':'0.00'}/>
-                      {esPorcentaje ? (
-                        <span className="text-center text-[10px] font-semibold text-[#052698]">% CIF</span>
-                      ) : (
-                        <select value={f.moneda || form.moneda} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'moneda',e.target.value)} className="w-full px-1 py-1.5 border border-gray-200 rounded-lg text-[11px] bg-white font-semibold text-[#1168F8] focus:outline-none focus:border-[#1168F8]">
-                          <option>USD</option><option>ARS</option><option>CLP</option><option>CNY</option>
-                        </select>
-                      )}
-                      <input type="text" inputMode="decimal" value={f.minimo} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'minimo',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder={esPorcentaje?'piso':'mín.'}/>
-                      {esTiempo ? (
-                        <input type="text" inputMode="decimal" value={f.dias_libres} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'dias_libres',e.target.value)} className="w-full px-2 py-1.5 border border-green-200 bg-green-50 rounded-lg text-[11px] text-right font-mono focus:outline-none focus:border-[#0a9e6e]" placeholder={form.almacen_dias_gratis||'0'}/>
-                      ) : esPorcentaje ? (
-                        <input type="text" inputMode="decimal" value={f.techo||''} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'techo',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder="techo"/>
-                      ) : (
-                        <span className="text-center text-gray-300 text-xs">—</span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
-          </div>
+          <div className="px-5 py-4 space-y-4">{renderServiciosCat()}</div>
         </div>
       )}
 
@@ -1757,17 +1762,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 </select>
               </div>
             </div>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                {lbl('Conceptos y honorarios')}
-                <button onClick={addItem} className="text-[10px] text-[#1168F8] hover:underline font-semibold">+ Agregar concepto</button>
-              </div>
-              <div className="border border-gray-100 rounded-xl overflow-hidden">
-                {items.map((it,i)=>(
-                  <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={categorias} onChange={updateItem} onRemove={removeItem} editMode={true}/>
-                ))}
-              </div>
-            </div>
+            <div className="space-y-4 pt-2 border-t border-gray-50">{renderServiciosCat()}</div>
           </div>
         </div>
       )}
