@@ -646,6 +646,20 @@ const criteriosTerrestre = (it:any): CritCoincidencia[] => {
   ]
 }
 
+// Criterios de coincidencia para MARÍTIMO (forwarder/naviera): puertos China y Chile + contenedor.
+// El par {origen,destino} se compara sin orden; el sentido impo/expo ya filtra qué cotizaciones se ven.
+const criteriosMaritimo = (it:any): CritCoincidencia[] => {
+  const china = s.puertoChiId
+  const chile = s.puertoChileId
+  const par = new Set([it.origen_id, it.destino_id])
+  const contsOp = s.contenedores.map((c:any)=>c.tipo).filter(Boolean)
+  return [
+    { label:'Puerto China', aplica: !!china, ok: !!china && par.has(china) },
+    { label:'Puerto Chile', aplica: !!chile, ok: !!chile && par.has(chile) },
+    { label:'Contenedor',   aplica: contsOp.length>0, ok: !!it.tipoContenedor && contsOp.includes(it.tipoContenedor) },
+  ]
+}
+
 // ── Forwarder (Bloque 1): coincidencia por puertos China ↔ Chile ──
 // Coincidencia de una cotización de forwarder con la ruta marítima de la operación.
 const coincidenciaRutaFW = (c:any): ''|'parcial'|'fuerte' => {
@@ -2150,10 +2164,9 @@ const clientesFiltrados=terceros.filter(t=>
                               </thead>
                               <tbody>
                                 {fw.items.map(it=>{
-                                  const coincide=s.contenedores.some(c=>c.tipo===it.tipoContenedor)
                                   const cantSug=s.contenedores.find(c=>c.tipo===it.tipoContenedor)?.cantidad
                                   return (
-                                    <tr key={it.itemId} className={`border-b border-gray-50 ${itemCoincideRutaFW(it)?'bg-green-50 border-l-4 border-l-green-500':it.seleccionado?'bg-[#EBF2FF]/60':'hover:bg-gray-50'}`}>
+                                    <tr key={it.itemId} className={`border-b border-gray-50 ${claseFilaCoincidencia(criteriosMaritimo(it),it.seleccionado)}`}>
                                       <td className="px-2 py-2.5 text-center">
                                         <button onClick={()=>toggleItemCotProv('cotsProvFW',fw.uid,it.itemId)}>
                                           <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${it.seleccionado?'bg-[#1168F8] border-[#1168F8]':'border-gray-300 hover:border-[#1168F8]'}`}>
@@ -2165,7 +2178,7 @@ const clientesFiltrados=terceros.filter(t=>
                                         <div className="font-medium text-gray-800">{it.descripcion}</div>
                                         <div className="flex gap-1.5 mt-0.5 flex-wrap">
                                           {it.tipoContenedor&&<span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{it.tipoContenedor}</span>}
-                                          {coincide&&<span className="text-[9px] bg-[#EBF2FF] text-[#052698] border border-[#93B8FC] px-1.5 py-0.5 rounded-full font-semibold">✓ coincide hoja 1</span>}
+                                          <MedidorCoincidencia criterios={criteriosMaritimo(it)}/>
                                         </div>
                                       </td>
                                       <td className="px-3 py-2.5 text-right font-mono text-gray-700">USD {fmt(it.valorUnit)}</td>
