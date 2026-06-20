@@ -29,7 +29,6 @@ interface FacturaRecibida {
   afecta_iva: boolean
   iva_pct: number
   credito_fiscal: number
-  tipo_gasto: string
   a_recuperar: boolean
   archivo_url: string | null
   archivo_nombre: string | null
@@ -255,7 +254,6 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
     tc_referencia: '',
     afecta_iva: true,
     iva_pct: 19,
-    tipo_gasto: 'operacional',
     a_recuperar: true,
     etapa: '',
     facturada_a: 'puerto_noa',
@@ -271,7 +269,10 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
   const fmtCLP = (n: number) => Math.round(n).toLocaleString('es-CL')
 
   function selectProveedor(t: any) {
-    setForm(f => ({ ...f, tercero_id: t.id, proveedor_razon_social: t.razon_social, proveedor_rut: t.nro_doc || '', proveedor_pais: t.pais || 'Chile' }))
+    setForm(f => {
+      const pais = t.pais || 'Chile'
+      return { ...f, tercero_id: t.id, proveedor_razon_social: t.razon_social, proveedor_rut: t.nro_doc || '', proveedor_pais: pais, afecta_iva: pais === 'Chile' && f.tipo_doc !== 'factura_exenta' }
+    })
     setBuscarProv(t.razon_social); setShowProvDD(false)
   }
 
@@ -329,7 +330,7 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
         <h3 className="font-bold text-sm text-gray-900 mb-4">Datos del documento recibido</h3>
         <div className="grid grid-cols-4 gap-3">
           <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
-            <select value={form.tipo_doc} onChange={e => setForm(f => ({ ...f, tipo_doc: e.target.value, afecta_iva: e.target.value !== 'factura_exenta' }))} className={inp}>
+            <select value={form.tipo_doc} onChange={e => setForm(f => ({ ...f, tipo_doc: e.target.value, afecta_iva: e.target.value !== 'factura_exenta' && f.proveedor_pais === 'Chile' }))} className={inp}>
               {Object.entries(TIPO_DOC_L).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
@@ -381,7 +382,7 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
             <input value={form.proveedor_rut} onChange={e => setForm(f => ({ ...f, proveedor_rut: e.target.value }))} className={inp} />
           </div>
           <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">País emisor</label>
-            <select value={form.proveedor_pais} onChange={e => setForm(f => ({ ...f, proveedor_pais: e.target.value }))} className={inp}>
+            <select value={form.proveedor_pais} onChange={e => setForm(f => ({ ...f, proveedor_pais: e.target.value, afecta_iva: e.target.value === 'Chile' && f.tipo_doc !== 'factura_exenta' }))} className={inp}>
               {['Chile', 'Argentina', 'China', 'Bolivia', 'Perú', 'Otro'].map(p => <option key={p}>{p}</option>)}
             </select>
           </div>
@@ -403,13 +404,6 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
               <option value="cliente">Cliente (directo, solo control)</option>
             </select>
           </div>
-          <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo de gasto</label>
-            <select value={form.tipo_gasto} onChange={e => setForm(f => ({ ...f, tipo_gasto: e.target.value }))} className={inp}>
-              <option value="operacional">Operacional (logística)</option>
-              <option value="recupero">Recupero al cliente</option>
-              <option value="administrativo">Administrativo</option>
-            </select>
-          </div>
           <div className="flex items-end">
             <label className="flex items-center gap-2 cursor-pointer pb-2">
               <input type="checkbox" checked={form.a_recuperar} onChange={e => setForm(f => ({ ...f, a_recuperar: e.target.checked }))} className="w-4 h-4 rounded" />
@@ -423,10 +417,15 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-sm text-gray-900">Detalle</h3>
           {form.tipo_doc !== 'factura_exenta' && (
-            <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-              <input type="checkbox" checked={form.afecta_iva} onChange={e => setForm(f => ({ ...f, afecta_iva: e.target.checked }))} />
-              Aplica IVA {form.iva_pct}% (crédito fiscal)
-            </label>
+            <div className="flex items-center gap-3">
+              {form.proveedor_pais !== 'Chile' && (
+                <span className="text-[10px] text-amber-600">Proveedor no chileno · normalmente sin IVA chileno</span>
+              )}
+              <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                <input type="checkbox" checked={form.afecta_iva} onChange={e => setForm(f => ({ ...f, afecta_iva: e.target.checked }))} />
+                Aplica IVA {form.iva_pct}% (crédito fiscal)
+              </label>
+            </div>
           )}
         </div>
         <table className="w-full text-xs mb-3">
