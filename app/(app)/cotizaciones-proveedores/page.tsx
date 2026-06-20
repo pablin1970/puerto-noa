@@ -568,7 +568,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [sentido, setSentido] = useState<'importacion'|'exportacion'|'ambos'>(snapshotInicial?.sentido || 'importacion')
   // ── Multi-tramo terrestre (sentido simple) ──
   // Cada tramo = un ítem con ruta estructurada + tarifas. Permite cargar varias rutas en una cotización.
-  const TRAMO_VACIO = { origen_id:'', origen_tipo:'', destino_id:'', destino_tipo:'', paso_id:'', tipo_camion:'', tipo_contenedor:'', flete_ida:'', flete_vuelta:'', flete_rt:'' }
+  const TRAMO_VACIO = { origen_id:'', origen_tipo:'', destino_id:'', destino_tipo:'', paso_id:'', tipo_camion:'', tipo_contenedor:'', flete_ida:'', flete_vuelta:'', flete_rt:'', seguro_modo:'pct', seguro_monto:'' }
   // tramosA: sentido simple (impo o expo) Y versión A del modo "ambos" (importación)
   // tramosB: versión B del modo "ambos" (exportación)
   const [tramos, setTramos] = useState<any[]>(snapshotInicial?.tramos || [{ ...TRAMO_VACIO }])
@@ -958,6 +958,21 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         if(ida>0) out.push({ ...base, descripcion: `Flete terrestre IDA: ${rutaDir}`, valor: ida, tipo_flete: 'ida', orden: ord++ })
         if(vue>0) out.push({ ...base, descripcion: `Flete terrestre VUELTA: ${rutaInv}`, valor: vue, tipo_flete: 'vuelta', orden: ord++ })
         if(rt>0)  out.push({ ...base, descripcion: `Flete terrestre ROUND TRIP: ${oNom} → ${dNom} → ${oNom}`, valor: rt, tipo_flete: 'round_trip', orden: ord++ })
+        // Seguro del tramo terrestre (opcional): hereda origen/destino/paso ya invertidos según el sentido
+        const segM = parseN(String(t.seguro_monto||0))
+        if(segM>0){
+          const esPctSeg = (t.seguro_modo||'pct')==='pct'
+          out.push({
+            ...base,
+            categoria: 'seguro',
+            tipo_calculo: esPctSeg ? 'pct_cif' : 'fijo_usd',
+            moneda: 'USD',
+            descripcion: `Seguro terrestre: ${rutaDir}${esPctSeg?' (% CIF)':''}`,
+            valor: segM,
+            tipo_flete: 'seguro',
+            orden: ord++,
+          })
+        }
       })
       return out
     }
@@ -1322,6 +1337,27 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 {ct.rt>0 && <span className="px-2 py-0.5 rounded-full bg-green-50 border border-green-200 text-green-700">Round trip USD {fmtN(ct.rt)}</span>}
               </div>
             )}
+          </div>
+          {/* Seguro de este tramo (opcional) — se usa si el forwarder cubre solo el marítimo */}
+          <div className="mt-3 rounded-xl border border-purple-100 bg-purple-50/40 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-semibold text-purple-700 uppercase tracking-wider">Seguro de este tramo (opcional)</span>
+              {parseN(String(t.seguro_monto||0))>0 && <span className="text-[10px] font-medium text-purple-600">Cubre {esExpoLista?'NOA → Chile':'Chile → NOA'}</span>}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <span className="text-[10px] text-gray-400 mb-1 block">Modo de cálculo</span>
+                <select value={t.seguro_modo||'pct'} onChange={e=>fnSet(i,'seguro_modo',e.target.value)} className={sel}>
+                  <option value="pct">% sobre CIF</option>
+                  <option value="fijo">Monto fijo USD</option>
+                </select>
+              </div>
+              <div>
+                <span className="text-[10px] text-gray-400 mb-1 block">{(t.seguro_modo||'pct')==='fijo'?'Monto (USD)':'Porcentaje (%)'}</span>
+                <input type="text" inputMode="decimal" value={t.seguro_monto||''} onFocus={e=>e.target.select()} onChange={e=>fnSet(i,'seguro_monto',e.target.value)} className={inp+' text-right font-mono'} placeholder={(t.seguro_modo||'pct')==='fijo'?'ej. 200':'ej. 0.3'}/>
+              </div>
+            </div>
+            <div className="text-[10px] text-gray-400 mt-1.5">Solo si el transportista asegura su tramo. La dirección sigue al sentido (impo/expo) como el flete.</div>
           </div>
         </div>
       )})}
