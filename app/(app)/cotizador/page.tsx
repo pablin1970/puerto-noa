@@ -194,6 +194,49 @@ function DesconRows({rows,onChange,totalM3}:{rows:ItemLog[];onChange:(r:ItemLog[
   </div>)
 }
 
+// ── Medidor de coincidencia proveedor↔operación (genérico para todos los rubros) ──
+// Cada criterio compara un dato de la tarifa con la operación. aplica = la operación tiene ese
+// dato cargado; ok = coincide. Los criterios que no aplican no penalizan: el "coincide en todo"
+// se mide solo sobre los aplicables. Reutilizable: cada rubro arma su propia lista de criterios.
+interface CritCoincidencia { label: string; aplica: boolean; ok: boolean }
+
+function nivelCoincidencia(criterios: CritCoincidencia[]){
+  const aplican = criterios.filter(c=>c.aplica)
+  const ok = aplican.filter(c=>c.ok).length
+  const total = aplican.length
+  return { ok, total, frac: total>0 ? ok/total : 0, todo: total>0 && ok===total }
+}
+
+// Clase de fondo de fila: verde si coincide en todo, ámbar graduado si es parcial.
+function claseFilaCoincidencia(criterios: CritCoincidencia[], seleccionado: boolean): string {
+  const { frac, todo, total } = nivelCoincidencia(criterios)
+  if(todo) return 'bg-green-50 border-l-4 border-l-green-500'
+  if(total>0 && frac>0){
+    if(frac>=0.66) return 'border-l-4 border-l-amber-500 bg-amber-100/70'
+    if(frac>=0.34) return 'border-l-4 border-l-amber-500 bg-amber-50'
+    return 'border-l-4 border-l-amber-300 bg-amber-50/40'
+  }
+  return seleccionado ? 'bg-amber-50/40' : 'hover:bg-gray-50'
+}
+
+// Medidor visual: una barrita por criterio (verde si coincide, gris si no) + score x/n.
+function MedidorCoincidencia({ criterios }: { criterios: CritCoincidencia[] }){
+  const { ok, total, todo } = nivelCoincidencia(criterios)
+  if(total===0) return null
+  const heights = ['h-1.5','h-2','h-2.5','h-3','h-3.5','h-4']
+  const title = criterios.map(c=>`${c.label}: ${!c.aplica?'—':c.ok?'✓':'✗'}`).join('  ·  ')
+  return (
+    <span className="inline-flex items-center gap-1.5 align-middle" title={title}>
+      <span className="inline-flex items-end gap-[2px]" style={{height:'16px'}}>
+        {criterios.map((c,idx)=>(
+          <span key={idx} className={`w-[5px] rounded-[1px] ${heights[Math.min(idx,heights.length-1)]} ${c.aplica&&c.ok?'bg-green-600':'bg-gray-300'}`}/>
+        ))}
+      </span>
+      <span className={`text-[10px] font-mono font-semibold ${todo?'text-green-700':'text-gray-500'}`}>{ok}/{total}</span>
+    </span>
+  )
+}
+
 export default function CotizadorPage(){
 const topRef=useRef<HTMLDivElement>(null)
 const [s,setS]=useState<CotState>(INIT)
@@ -584,6 +627,23 @@ const itemCoincideRuta = (it:any): boolean => {
   const coincidePar = par.has(ptoChile) && par.has(ciudadNoa)
   const coincidePaso = !opPaso || it.paso_id===opPaso
   return coincidePar && coincidePaso
+}
+
+// Criterios de coincidencia para TRANSPORTE TERRESTRE (origen/destino direccionales según sentido).
+const criteriosTerrestre = (it:any): CritCoincidencia[] => {
+  const esExpo = s.sentido==='exportacion'
+  const opOrigen  = esExpo ? s.ciudadDestinoId : s.puertoChileId
+  const opDestino = esExpo ? s.puertoChileId : s.ciudadDestinoId
+  const opPaso    = s.pasoId
+  const contsOp   = s.contenedores.map((c:any)=>c.tipo).filter(Boolean)
+  const camsOp    = s.contenedores.map((c:any)=>(c as any).tipoCamionId).filter(Boolean)
+  return [
+    { label:'Origen',     aplica: !!opOrigen,        ok: !!opOrigen  && it.origen_id===opOrigen },
+    { label:'Destino',    aplica: !!opDestino,       ok: !!opDestino && it.destino_id===opDestino },
+    { label:'Paso',       aplica: !!opPaso,          ok: !!opPaso    && it.paso_id===opPaso },
+    { label:'Contenedor', aplica: contsOp.length>0,  ok: !!it.tipoContenedor && contsOp.includes(it.tipoContenedor) },
+    { label:'Camión',     aplica: camsOp.length>0,   ok: !!it.tipoCamionId   && camsOp.includes(it.tipoCamionId) },
+  ]
 }
 
 // ── Forwarder (Bloque 1): coincidencia por puertos China ↔ Chile ──
@@ -2392,9 +2452,8 @@ const clientesFiltrados=terceros.filter(t=>
                             </tr></thead>
                             <tbody>
                               {ct.items.map(it=>{
-                                const coincide=s.contenedores.some(c=>c.tipo===it.tipoContenedor)
                                 return (
-                                  <tr key={it.itemId} className={`border-b border-gray-50 ${itemCoincideRuta(it)?'bg-green-50 border-l-4 border-l-green-500':it.seleccionado?'bg-amber-50/40':'hover:bg-gray-50'}`}>
+                                  <tr key={it.itemId} className={`border-b border-gray-50 ${claseFilaCoincidencia(criteriosTerrestre(it),it.seleccionado)}`}>
                                     <td className="px-2 py-2 text-center">
                                       <button onClick={()=>toggleItemCotProv('cotsProvTransp',ct.uid,it.itemId)}>
                                         <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${it.seleccionado?'bg-[#b45309] border-[#b45309]':'border-gray-300 hover:border-[#b45309]'}`}>
@@ -2404,8 +2463,8 @@ const clientesFiltrados=terceros.filter(t=>
                                     </td>
                                     <td className="px-3 py-2">
                                       <div className="font-medium text-gray-800">{it.descripcion}</div>
-                                      {coincide&&<span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full font-semibold">✓ coincide hoja 1</span>}
-                                      {itemCoincideRuta(it)&&<span className="text-[9px] bg-green-100 text-green-700 border border-green-300 px-1.5 py-0.5 rounded-full font-semibold ml-1">✓ tu ruta</span>}
+                                      
+                                      <MedidorCoincidencia criterios={criteriosTerrestre(it)}/>
                                     </td>
                                     <td className="px-3 py-2 text-right font-mono text-gray-700">USD {fmt(it.valorUnit)}</td>
                                     <td className="px-3 py-2 text-center text-gray-400 font-mono">{it.cantCotizada>0?it.cantCotizada:'—'}</td>
@@ -2498,9 +2557,8 @@ const clientesFiltrados=terceros.filter(t=>
                           </tr></thead>
                           <tbody>
                             {ct.items.map(it=>{
-                              const coincide=s.contenedores.some(c=>c.tipo===it.tipoContenedor)
                               return (
-                                <tr key={it.itemId} className={`border-b border-gray-50 ${itemCoincideRuta(it)?'bg-green-50 border-l-4 border-l-green-500':it.seleccionado?'bg-amber-50/40':'hover:bg-gray-50'}`}>
+                                <tr key={it.itemId} className={`border-b border-gray-50 ${claseFilaCoincidencia(criteriosTerrestre(it),it.seleccionado)}`}>
                                   <td className="px-2 py-2 text-center">
                                     <button onClick={()=>toggleItemCotProv('cotsProvTransp',ct.uid,it.itemId)}>
                                       <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${it.seleccionado?'bg-[#b45309] border-[#b45309]':'border-gray-300 hover:border-[#b45309]'}`}>
@@ -2510,8 +2568,8 @@ const clientesFiltrados=terceros.filter(t=>
                                   </td>
                                   <td className="px-3 py-2">
                                     <div className="font-medium text-gray-800">{it.descripcion}</div>
-                                    {coincide&&<span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full font-semibold">✓ coincide hoja 1</span>}
-                                      {itemCoincideRuta(it)&&<span className="text-[9px] bg-green-100 text-green-700 border border-green-300 px-1.5 py-0.5 rounded-full font-semibold ml-1">✓ tu ruta</span>}
+                                    
+                                      <MedidorCoincidencia criterios={criteriosTerrestre(it)}/>
                                   </td>
                                   <td className="px-3 py-2 text-right font-mono text-gray-700">USD {fmt(it.valorUnit)}</td>
                                   <td className="px-3 py-2 text-center text-gray-400 font-mono">{it.cantCotizada>0?it.cantCotizada:'—'}</td>
