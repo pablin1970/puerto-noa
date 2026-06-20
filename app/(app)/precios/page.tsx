@@ -86,6 +86,7 @@ export default function InteligenciaPreciosPage() {
   const [items, setItems] = useState<any[]>([])
   const [cotizaciones, setCotizaciones] = useState<any[]>([])
   const [tcHistorico, setTcHistorico] = useState<any[]>([])
+  const [utmHistorico, setUtmHistorico] = useState<any[]>([])
   const [serviciosCat, setServiciosCat] = useState<any[]>([]) // catálogo de servicios de depósito
   const [ciudadesCat, setCiudadesCat] = useState<any[]>([])   // ciudades de prestación
   const [puertosChina, setPuertosChina] = useState<any[]>([])
@@ -113,14 +114,14 @@ export default function InteligenciaPreciosPage() {
   const [filtTramo2, setFiltTramo2] = useState('')
 
   // Filtros Tab 3
-  const [filtTC, setFiltTC] = useState<'ars'|'clp'|'cny'>('ars')
+  const [filtTC, setFiltTC] = useState<'ars'|'clp'|'cny'|'utm'>('ars')
   const [filtMesesTC, setFiltMesesTC] = useState(12)
 
   useEffect(() => { loadAll() }, [])
 
   async function loadAll() {
     setLoading(true)
-    const [itemsRes, cotsRes, tcRes, svcRes, ciuRes, pchinaRes, pchileRes] = await Promise.all([
+    const [itemsRes, cotsRes, tcRes, svcRes, ciuRes, pchinaRes, pchileRes, utmRes] = await Promise.all([
       supabase.from('cotizaciones_proveedor_v2_items')
         .select('*, cotizacion:cotizaciones_proveedor_v2(id,proveedor_nombre,fecha,rubro,estado,referencia,tramo,tipo,cliente_id,puerto_china_id,puerto_chile_id,tc_snapshot,ciudad_prestacion_id,etiqueta_lugar)')
         .order('cotizacion_id'),
@@ -140,10 +141,18 @@ export default function InteligenciaPreciosPage() {
         .order('orden', { ascending: true }),
       supabase.from('puertos_china').select('id,nombre,ciudad,locode'),
       supabase.from('puertos_chile').select('id,nombre,ciudad,locode'),
+      supabase.from('valores_utm')
+        .select('anio,mes,valor_clp')
+        .order('anio', { ascending: true })
+        .order('mes', { ascending: true }),
     ])
     if (itemsRes.data) setItems(itemsRes.data as any[])
     if (cotsRes.data) setCotizaciones(cotsRes.data)
     if (tcRes.data) setTcHistorico(tcRes.data)
+    if (utmRes.data) setUtmHistorico((utmRes.data as any[]).map(u => {
+      const fecha = `${u.anio}-${String(u.mes).padStart(2, '0')}-01`
+      return { created_at: `${fecha}T12:00:00`, fecha, utm: u.valor_clp }
+    }))
     if (svcRes.data) setServiciosCat(svcRes.data as any[])
     if (ciuRes.data) setCiudadesCat(ciuRes.data as any[])
     if (pchinaRes.data) setPuertosChina(pchinaRes.data as any[])
@@ -318,8 +327,9 @@ export default function InteligenciaPreciosPage() {
   const tcFiltrado = useMemo(() => {
     const cutoff = new Date()
     cutoff.setMonth(cutoff.getMonth() - filtMesesTC)
-    return tcHistorico.filter(t => new Date(t.created_at) >= cutoff && t[filtTC] != null)
-  }, [tcHistorico, filtTC, filtMesesTC])
+    const fuente = filtTC === 'utm' ? utmHistorico : tcHistorico
+    return fuente.filter(t => new Date(t.created_at) >= cutoff && t[filtTC] != null)
+  }, [tcHistorico, utmHistorico, filtTC, filtMesesTC])
 
   const tcValores = tcFiltrado.map(t => t[filtTC] as number)
   const tcMin = tcValores.length ? Math.min(...tcValores) * 0.98 : 0
@@ -786,6 +796,7 @@ export default function InteligenciaPreciosPage() {
                   { key: 'ars', label: '🇦🇷 ARS/USD' },
                   { key: 'clp', label: '🇨🇱 CLP/USD' },
                   { key: 'cny', label: '🇨🇳 CNY/USD' },
+                  { key: 'utm', label: '🇨🇱 UTM' },
                 ] as const).map(m => (
                   <button key={m.key} onClick={() => setFiltTC(m.key)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
@@ -834,7 +845,7 @@ export default function InteligenciaPreciosPage() {
           {/* Gráfico TC */}
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
             <div className="text-sm font-semibold text-gray-900 mb-4">
-              {filtTC === 'ars' ? '🇦🇷 Peso argentino / USD' : filtTC === 'clp' ? '🇨🇱 Peso chileno / USD' : '🇨🇳 Yuan chino / USD'}
+              {filtTC === 'ars' ? '🇦🇷 Peso argentino / USD' : filtTC === 'clp' ? '🇨🇱 Peso chileno / USD' : filtTC === 'cny' ? '🇨🇳 Yuan chino / USD' : '🇨🇱 UTM · inflación chilena (CLP)'}
               <span className="text-xs font-normal text-gray-400 ml-2">· {tcFiltrado.length} registros</span>
             </div>
             {tcFiltrado.length === 0 ? (
