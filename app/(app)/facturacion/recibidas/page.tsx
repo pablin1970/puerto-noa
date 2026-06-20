@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
-import { fmt } from '@/lib/utils'
+import { fmt, ETAPAS_L, ETAPAS_ORD } from '@/lib/utils'
 import { cargarPermisos, puede } from '@/lib/permisos'
 
 interface FacturaRecibida {
@@ -257,6 +257,8 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
     iva_pct: 19,
     tipo_gasto: 'operacional',
     a_recuperar: true,
+    etapa: '',
+    facturada_a: 'puerto_noa',
   })
   const [items, setItems] = useState([{ descripcion: '', cantidad: 1, precio_unit: 0, exento: false }])
   const [buscarProv, setBuscarProv] = useState('')
@@ -387,6 +389,18 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
             <select value={form.operacion_id} onChange={e => setForm(f => ({ ...f, operacion_id: e.target.value }))} className={inp}>
               <option value="">Sin vincular</option>
               {operaciones.map((o: any) => <option key={o.id} value={o.id}>{o.cotizacion?.num} · {o.cotizacion?.cliente}</option>)}
+            </select>
+          </div>
+          <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Etapa (imputación)</label>
+            <select value={form.etapa} onChange={e => setForm(f => ({ ...f, etapa: e.target.value }))} className={inp}>
+              <option value="">Sin imputar</option>
+              {ETAPAS_ORD.map(e => <option key={e} value={e}>{ETAPAS_L[e] || e}</option>)}
+            </select>
+          </div>
+          <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Factura a nombre de</label>
+            <select value={form.facturada_a} onChange={e => setForm(f => ({ ...f, facturada_a: e.target.value }))} className={inp}>
+              <option value="puerto_noa">Puerto NOA (deuda de PN, se refactura)</option>
+              <option value="cliente">Cliente (directo, solo control)</option>
             </select>
           </div>
           <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo de gasto</label>
