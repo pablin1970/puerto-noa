@@ -1700,13 +1700,18 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 </div>
                 {svc.formas.map((f:any)=>{
                   const esTiempo = f.comportamiento==='por_tiempo'
+                  const esPorcentaje = f.comportamiento==='porcentaje'
                   return (
                     <div key={f.metrica_id} className="grid gap-2 items-center py-1" style={{gridTemplateColumns:'1.4fr 0.9fr 0.7fr 0.9fr 0.9fr'}}>
                       <span className="text-xs text-gray-700">{f.nombre}</span>
-                      <input type="text" inputMode="decimal" value={f.precio} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'precio',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder="0.00"/>
-                      <select value={f.moneda || form.moneda} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'moneda',e.target.value)} className="w-full px-1 py-1.5 border border-gray-200 rounded-lg text-[11px] bg-white font-semibold text-[#1168F8] focus:outline-none focus:border-[#1168F8]">
-                        <option>USD</option><option>ARS</option><option>CLP</option><option>CNY</option>
-                      </select>
+                      <input type="text" inputMode="decimal" value={f.precio} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'precio',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder={esPorcentaje?'%':'0.00'}/>
+                      {esPorcentaje ? (
+                        <span className="text-center text-[10px] font-semibold text-[#052698]">% CIF</span>
+                      ) : (
+                        <select value={f.moneda || form.moneda} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'moneda',e.target.value)} className="w-full px-1 py-1.5 border border-gray-200 rounded-lg text-[11px] bg-white font-semibold text-[#1168F8] focus:outline-none focus:border-[#1168F8]">
+                          <option>USD</option><option>ARS</option><option>CLP</option><option>CNY</option>
+                        </select>
+                      )}
                       <input type="text" inputMode="decimal" value={f.minimo} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'minimo',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder="mín."/>
                       {esTiempo ? (
                         <input type="text" inputMode="decimal" value={f.dias_libres} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'dias_libres',e.target.value)} className="w-full px-2 py-1.5 border border-green-200 bg-green-50 rounded-lg text-[11px] text-right font-mono focus:outline-none focus:border-[#0a9e6e]" placeholder={form.almacen_dias_gratis||'0'}/>
