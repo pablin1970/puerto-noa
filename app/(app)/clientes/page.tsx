@@ -61,6 +61,12 @@ const TIPO_DOC_POR_PAIS: Record<string, string[]> = {
 const CONDICION_IVA = ['Responsable Inscripto', 'Exento', 'Monotributo', 'No inscripto', 'Consumidor Final', 'No aplica']
 const MONEDAS = ['USD', 'ARS', 'CLP', 'CNY', 'EUR']
 
+// Esta pantalla maneja clientes y proveedores juntos (el menú la enlaza desde ambos).
+// Una acción se habilita si el rol la tiene en el módulo 'clientes' O en 'proveedores'.
+function puedeTercero(permisos: Record<string, string[]>, accion: string): boolean {
+  return puede(permisos, 'clientes', accion) || puede(permisos, 'proveedores', accion)
+}
+
 export default function ClientesPage() {
   const supabase = useMemo(() => createClient(), [])
   const [terceros, setTerceros] = useState<Tercero[]>([])
@@ -71,8 +77,10 @@ export default function ClientesPage() {
   const [filtroTipo, setFiltroTipo] = useState('')
   const [filtroPais, setFiltroPais] = useState('')
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  const [permListos, setPermListos] = useState(false)
 
-  useEffect(() => { loadUser(); loadData() }, [])
+  useEffect(() => { loadUser(); loadData(); cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
 
   async function loadUser() {
     const { data: auth } = await supabase.auth.getUser()
@@ -106,6 +114,19 @@ export default function ClientesPage() {
 
   const paises = Array.from(new Set(terceros.map(t => t.pais))).sort()
 
+  // Gate de acceso: sin permiso de 'ver' no se muestra la sección
+  if (permListos && !puedeTercero(permisos, 'ver')) {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-3">🔒</div>
+          <h2 className="text-lg font-bold text-gray-700">Sin acceso</h2>
+          <p className="text-sm text-gray-400 mt-1">No tenés permiso para ver Clientes y Proveedores. Si creés que es un error, contactá al administrador.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-6">
@@ -117,7 +138,7 @@ export default function ClientesPage() {
           {view !== 'lista' && (
             <button onClick={() => setView('lista')} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-100 transition-colors">Volver</button>
           )}
-          {view === 'lista' && (
+          {view === 'lista' && puedeTercero(permisos, 'crear') && (
             <button onClick={() => setView('nuevo')} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] transition-colors shadow-sm">+ Nuevo</button>
           )}
         </div>
@@ -168,7 +189,7 @@ export default function ClientesPage() {
               <div className="p-12 text-center">
                 <div className="text-4xl mb-3">🏢</div>
                 <div className="text-gray-500 text-sm mb-1">{terceros.length === 0 ? 'Sin clientes ni proveedores aun' : 'Sin resultados'}</div>
-                {terceros.length === 0 && (
+                {terceros.length === 0 && puedeTercero(permisos, 'crear') && (
                   <button onClick={() => setView('nuevo')} className="mt-3 px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold">+ Agregar primero</button>
                 )}
               </div>
@@ -615,8 +636,10 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
 
   // Permisos de archivos: esta pantalla es la de terceros (ruta /clientes); el control de
   // Ver/Descargar de documentos va por el módulo `clientes`.
-  const puedeVerDoc = puede(permisos, 'clientes', 'ver')
-  const puedeDescargarDoc = puede(permisos, 'clientes', 'descargar')
+  const puedeVerDoc = puedeTercero(permisos, 'ver')
+  const puedeDescargarDoc = puedeTercero(permisos, 'descargar')
+  const puedeEditar = puedeTercero(permisos, 'editar')
+  const puedeEliminar = puedeTercero(permisos, 'eliminar')
 
   return (
     <div>
@@ -652,10 +675,12 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
               )}
             </div>
           </div>
+          {puedeEditar && (
           <button onClick={() => { setForm({ ...tercero, tipo: Array.isArray(tercero.tipo) ? [...tercero.tipo] : [tercero.tipo].filter(Boolean) }); setEditando(!editando) }}
             className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-colors ${editando ? 'bg-gray-100 border-gray-200 text-gray-600' : 'border-[#1168F8] text-[#1168F8] hover:bg-[#EBF2FF]'}`}>
             {editando ? 'Cancelar' : 'Editar'}
           </button>
+          )}
         </div>
       </div>
 
@@ -868,7 +893,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                       <td className="px-4 py-3 text-[#1168F8]">{c.email || '-'}</td>
                       <td className="px-4 py-3 font-mono text-[10px]">{c.telefono || '-'}</td>
                       <td className="px-4 py-3 font-mono text-[10px] text-green-700">{c.whatsapp || '-'}</td>
-                      <td className="px-4 py-3"><button onClick={() => deleteContacto(c.id)} className="text-gray-400 hover:text-red-500">X</button></td>
+                      <td className="px-4 py-3">{puedeEliminar && <button onClick={() => deleteContacto(c.id)} className="text-gray-400 hover:text-red-500">X</button>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -922,7 +947,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack }: an
                       <td className="px-4 py-3 font-mono text-[11px]">{c.cuenta || '-'}</td>
                       <td className="px-4 py-3 font-mono text-[10px] text-gray-500">{c.cbu_iban || '-'}</td>
                       <td className="px-4 py-3 font-mono text-[10px] text-gray-500">{c.swift || '-'}</td>
-                      <td className="px-4 py-3"><button onClick={() => deleteCuenta(c.id)} className="text-gray-400 hover:text-red-500">X</button></td>
+                      <td className="px-4 py-3">{puedeEliminar && <button onClick={() => deleteCuenta(c.id)} className="text-gray-400 hover:text-red-500">X</button>}</td>
                     </tr>
                   ))}
                 </tbody>
