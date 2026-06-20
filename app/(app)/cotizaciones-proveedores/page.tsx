@@ -1047,7 +1047,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             ...ruta, orden:i,
           })
         })
-      } else if(tf==='almacenaje'||tf==='despachante'||tf==='seguro'){
+      } else if(tf==='almacenaje'||tf==='despachante'||tf==='seguro'||tf==='maritimo'){
         let ord=0
         const diasDefault = parseN(String(form.almacen_dias_gratis||0))
         depServicios.forEach((svc:any)=>{
@@ -1685,20 +1685,12 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               </div>
             </div>
 
-            {/* Ítems */}
+            {/* Ítems — catálogo de servicios (forwarder / naviera) */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 {lbl('Conceptos cotizados')}
-                <button onClick={addItem} className="text-[10px] text-[#1168F8] hover:underline font-semibold">+ Agregar concepto</button>
               </div>
-              <div className="border border-gray-100 rounded-xl overflow-hidden">
-                <div className="grid bg-gray-50 px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider" style={{gridTemplateColumns:'2fr 1fr 1fr 24px'}}>
-                  <span>Concepto</span><span className="text-right">Valor</span><span className="text-center">Tipo cont.</span><span/>
-                </div>
-                {items.map((it,i)=>(
-                  <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={categorias} onChange={updateItem} onRemove={removeItem} editMode={true}/>
-                ))}
-              </div>
+              {renderServiciosCat()}
             </div>
 
             {/* Seguro */}
