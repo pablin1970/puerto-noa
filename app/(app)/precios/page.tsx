@@ -20,8 +20,8 @@ const CATEGORIAS: Record<string, { label: string; color: string; bg: string; ico
 // Inteligencia de precios organizada POR RUBRO (alineado con el catálogo de servicios).
 // cat:true → rubro del catálogo (filtros por servicio + ubicación). cat:false → geográfico (filtro por concepto/categoría).
 const RUBROS_PRECIO: Record<string, { label: string; color: string; bg: string; icon: string; cat: boolean }> = {
-  forwarder:            { label: 'Freight Forwarder',    color: '#1168F8', bg: '#EBF2FF', icon: '🚢', cat: false },
-  naviera:              { label: 'Naviera',              color: '#0891b2', bg: '#E0F2FE', icon: '⚓', cat: false },
+  forwarder:            { label: 'Freight Forwarder',    color: '#1168F8', bg: '#EBF2FF', icon: '🚢', cat: true },
+  naviera:              { label: 'Naviera',              color: '#0891b2', bg: '#E0F2FE', icon: '⚓', cat: true },
   transporte_terrestre: { label: 'Transporte terrestre', color: '#b45309', bg: '#FEF3C7', icon: '🚛', cat: false },
   deposito:             { label: 'Depósito',             color: '#0a9e6e', bg: '#E1F5EE', icon: '🏭', cat: true },
   gastos_argentina:     { label: 'Despachante',          color: '#6b21a8', bg: '#F3E8FF', icon: '📋', cat: true },
