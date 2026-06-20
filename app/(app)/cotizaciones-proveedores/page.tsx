@@ -983,6 +983,15 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         const ciudad = f.ciudad_destino_id||null
         return { origen_id: null, origen_tipo: null, destino_id: ciudad, destino_tipo: ciudad?'ciudad':null, paso_id: f.paso_id||null }
       }
+      if(tfRubro==='seguro'){
+        const china = f.puerto_china_id||null
+        const chile = f.puerto_chile_id||null
+        const ciudad = f.ciudad_destino_id||null
+        const al = f.seguro_alcance||'maritimo'
+        if(al==='terrestre') return { origen_id: chile, origen_tipo: chile?'puerto':null, destino_id: ciudad, destino_tipo: ciudad?'ciudad':null, paso_id: null }
+        if(al==='punta_a_punta') return { origen_id: china, origen_tipo: china?'puerto_china':null, destino_id: ciudad, destino_tipo: ciudad?'ciudad':null, paso_id: null }
+        return { origen_id: china, origen_tipo: china?'puerto_china':null, destino_id: chile, destino_tipo: chile?'puerto':null, paso_id: null }
+      }
       return { origen_id: null, origen_tipo: null, destino_id: null, destino_tipo: null, paso_id: null }
     }
 
@@ -1009,7 +1018,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             ...ruta, orden:i,
           })
         })
-      } else if(tf==='almacenaje'||tf==='despachante'){
+      } else if(tf==='almacenaje'||tf==='despachante'||tf==='seguro'){
         let ord=0
         const diasDefault = parseN(String(form.almacen_dias_gratis||0))
         depServicios.forEach((svc:any)=>{
@@ -1905,22 +1914,46 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 <input type="text" inputMode="decimal" value={form.seguro_monto} onFocus={e=>e.target.select()} onChange={e=>{setF('seguro_monto',e.target.value);setF('seguro_incluido',true)}} className={inp+' text-right font-mono'} placeholder={form.seguro_modo==='fijo'?'ej. 350':'ej. 0.5'}/>
               </div>
             </div>
-            <div>
-              {lbl('Alcance del seguro')}
+            {/* Tramo que cubre el seguro — definido por los puntos, igual que el flete */}
+            <div className="pt-2 border-t border-gray-50">
+              {lbl('Tramo que cubre')}
               <select value={form.seguro_alcance} onChange={e=>setF('seguro_alcance',e.target.value)} className={sel}>
-                <option value="maritimo">Solo tramo marítimo</option>
-                <option value="puerta_puerta">Puerta a puerta (hasta destino final)</option>
+                <option value="maritimo">Marítimo (puerto China → puerto Chile)</option>
+                <option value="terrestre">Terrestre (puerto Chile → ciudad NOA)</option>
+                <option value="punta_a_punta">Punta a punta (puerto China → ciudad NOA)</option>
               </select>
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                {(form.seguro_alcance==='maritimo'||form.seguro_alcance==='punta_a_punta') && (
+                  <div>
+                    {lbl('Puerto China (origen)')}
+                    <select value={form.puerto_china_id} onChange={e=>setF('puerto_china_id',e.target.value)} className={sel}>
+                      <option value="">— Cualquiera —</option>
+                      {puertosCh.map((p:any)=><option key={p.id} value={p.id}>{p.nombre||p.ciudad}</option>)}
+                    </select>
+                  </div>
+                )}
+                {(form.seguro_alcance==='maritimo'||form.seguro_alcance==='terrestre') && (
+                  <div>
+                    {lbl('Puerto Chile')}
+                    <select value={form.puerto_chile_id} onChange={e=>setF('puerto_chile_id',e.target.value)} className={sel}>
+                      <option value="">— Cualquiera —</option>
+                      {puertosChile.map((p:any)=><option key={p.id} value={p.id}>{p.nombre||p.ciudad}</option>)}
+                    </select>
+                  </div>
+                )}
+                {(form.seguro_alcance==='terrestre'||form.seguro_alcance==='punta_a_punta') && (
+                  <div>
+                    {lbl('Ciudad NOA (destino)')}
+                    <select value={form.ciudad_destino_id} onChange={e=>setF('ciudad_destino_id',e.target.value)} className={sel}>
+                      <option value="">— Cualquiera —</option>
+                      {ciudades.map((cc:any)=><option key={cc.id} value={cc.id}>{cc.ciudad} ({cc.provincia})</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex items-center justify-between mb-2 pt-2 border-t border-gray-50">
-              {lbl('Conceptos adicionales (opcional)')}
-              <button onClick={addItem} className="text-[10px] text-[#1168F8] hover:underline font-semibold">+ Agregar concepto</button>
-            </div>
-            <div className="border border-gray-100 rounded-xl overflow-hidden">
-              {items.map((it,i)=>(
-                <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={categorias} onChange={updateItem} onRemove={removeItem} editMode={true}/>
-              ))}
-            </div>
+            {/* Coberturas adicionales del catálogo de servicios */}
+            <div className="space-y-4 pt-2 border-t border-gray-50">{renderServiciosCat()}</div>
           </div>
         </div>
       )}
