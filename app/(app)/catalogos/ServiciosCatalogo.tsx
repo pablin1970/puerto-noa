@@ -12,6 +12,7 @@ const COMPORTAMIENTO_LABEL: Record<string, string> = {
   por_tiempo: 'Por tiempo (usa días libres)',
   por_hora: 'Por hora (mín. horas)',
   fijo: 'Precio fijo',
+  porcentaje: '% sobre CIF',
 }
 
 const COMPORTAMIENTOS = [
@@ -19,6 +20,7 @@ const COMPORTAMIENTOS = [
   { value: 'por_tiempo', label: 'Por tiempo (usa días libres)' },
   { value: 'por_hora', label: 'Por hora (mínimo de horas)' },
   { value: 'fijo', label: 'Precio fijo' },
+  { value: 'porcentaje', label: '% sobre CIF' },
 ]
 
 // Label legible para los grupos. Los de depósito tienen nombre propio; el resto se muestra capitalizado.
