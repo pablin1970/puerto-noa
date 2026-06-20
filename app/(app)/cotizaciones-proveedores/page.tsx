@@ -62,8 +62,8 @@ const FORMULARIO_POR_RUBRO: Record<string, TipoFormulario> = {
   deposito: 'almacenaje',
   gastos_argentina: 'despachante',
   seguro: 'seguro',
-  transporte_chile: 'generico', // Agente
-  otro: 'generico',
+  transporte_chile: 'almacenaje', // Agente — usa catálogo de servicios
+  otro: 'almacenaje',             // Otro — usa catálogo de servicios
 }
 const tipoFormulario = (codigo: string): TipoFormulario => FORMULARIO_POR_RUBRO[codigo] || 'generico'
 
@@ -702,7 +702,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       supabase.from('ciudades_destino_arg').select('id,ciudad,provincia').eq('activo','true').order('orden'),
       supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo','true').order('orden'),
       supabase.from('proveedor_rubros').select('*').eq('activo',true).order('nombre'),
-      supabase.from('servicios_catalogo').select('*').eq('rubro','deposito').eq('activo',true).order('orden'),
+      supabase.from('servicios_catalogo').select('*').eq('activo',true).order('rubro').order('orden'),
       supabase.from('servicios_metricas').select('*').eq('activo',true).order('orden'),
       supabase.from('servicios_metricas_habilitadas').select('servicio_id,metrica_id'),
       supabase.from('ciudades').select('id,pais,ciudad,region').eq('activo',true).order('pais').order('orden'),
@@ -1029,7 +1029,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               moneda: fr.moneda||form.moneda||'USD',
               piso_usd: min>0 ? min : null,
               dias_libres: esTiempo ? diasFr : null,
-              categoria: 'almacenaje',
+              categoria: form.rubro==='deposito' ? 'almacenaje' : form.rubro,
               ...ruta, orden:ord++,
             })
           })
@@ -1147,6 +1147,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const lbl = (s:string) => <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{s}</label>
   // tipo de formulario del rubro elegido — decide qué bloque de campos se muestra
   const tf = tipoFormulario(form.rubro)
+  const rubroActual = rubrosCatalogo.find((r:any)=>r._codigo===form.rubro)
 
   // Render reutilizable de una lista de tramos (se usa en sentido simple y en versión A/B de "ambos")
   const renderTramos = (lista:any[], esExpoLista:boolean, fnSet:(i:number,k:string,v:any)=>void, fnAdd:()=>void, fnRemove:(i:number)=>void) => (
@@ -1313,6 +1314,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 return (
                 <button key={r.key} onClick={()=>{
                   setF('rubro',r.key)
+                  setDepServicios([]); setDepSelSvc('')
                   // Si el rubro es mercadería y el primer item está vacío, darle defaults de producto
                   if(tipoFormulario(r.key)==='mercaderia'){
                     setItems(prev=>prev.length>0 && !prev[0].descripcion && prev[0].tipo_calculo!=='producto'
@@ -1453,10 +1455,12 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 {lbl('Etiqueta del lugar (opcional)')}
                 <input value={form.etiqueta_lugar} onChange={e=>setF('etiqueta_lugar',e.target.value)} className={inp} placeholder="ej. Zona Franca — Bodega 3"/>
               </div>
+              {form.rubro==='deposito' && (
               <div>
                 {lbl('Días libres por defecto')}
                 <input type="text" inputMode="decimal" value={form.almacen_dias_gratis} onChange={e=>setF('almacen_dias_gratis',e.target.value)} className={inp+' text-right font-mono'} placeholder="0"/>
               </div>
+              )}
             </div>
           )}
 
@@ -1663,8 +1667,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       {tf==='almacenaje' && (
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #0a9e6e'}}>
           <div className="px-5 py-3 border-b border-gray-100 bg-green-50 flex items-center gap-2">
-            <span className="text-lg">🏭</span>
-            <span className="font-semibold text-sm text-green-900">Servicios de depósito</span>
+            <span className="text-lg">{form.rubro==='deposito'?'🏭':(rubroActual?.icono||'📋')}</span>
+            <span className="font-semibold text-sm text-green-900">{form.rubro==='deposito'?'Servicios de depósito':('Servicios — '+(rubroActual?.nombre||'proveedor'))}</span>
             <span className="ml-auto text-[10px] text-green-700 font-medium">{sentido==='ambos'?'Ambos sentidos · A+B':sentido==='exportacion'?'Exportación':'Importación'}</span>
           </div>
           <div className="px-5 py-4 space-y-4">
@@ -1674,7 +1678,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 {lbl('Agregar servicio')}
                 <select value={depSelSvc} onChange={e=>setDepSelSvc(e.target.value)} className={sel}>
                   <option value="">— Elegí un servicio del catálogo —</option>
-                  {depServiciosCat.filter(s=>!depServicios.some(d=>d.servicio_id===s.id)).map(s=>(
+                  {depServiciosCat.filter(s=>s.rubro===form.rubro && !depServicios.some(d=>d.servicio_id===s.id)).map(s=>(
                     <option key={s.id} value={s.id}>{s.nombre}</option>
                   ))}
                 </select>
