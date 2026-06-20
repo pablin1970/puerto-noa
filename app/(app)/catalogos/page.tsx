@@ -502,7 +502,7 @@ export default function CatalogosPage() {
       {/* Layout en árbol: sidebar de categorías + panel de contenido */}
       <div className="grid grid-cols-1 lg:grid-cols-[224px_1fr] gap-5 items-start">
         {/* Árbol de categorías */}
-        <aside className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm lg:sticky lg:top-6">
+        <aside className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto scrollbar-thin">
           <div className="flex items-center gap-2 px-2 pb-3">
             <span className="text-base">📚</span>
             <span className="text-sm font-bold text-gray-800">Catálogos</span>
