@@ -24,6 +24,17 @@ const TABS = [
   { key: 'empresa',             label: 'Datos de la empresa',    icon: '🏢' },
 ] as const
 
+// Agrupación en árbol por categoría superior, con color por grupo
+const GRUPOS = [
+  { titulo:'Catálogo de servicios', icon:'📋', color:'#1168F8', claro:'#E7F0FE', texto:'#0a3d8f', keys:['rubros_proveedor','servicios_deposito','ciudades_prestacion'] },
+  { titulo:'Cotizador',             icon:'🧾', color:'#7C3AED', claro:'#F1EBFD', texto:'#5B21B6', keys:['bloques_cotizacion','condiciones_cotizacion','categorias'] },
+  { titulo:'Geografía y rutas',     icon:'📍', color:'#0a9e6e', claro:'#E3F6EF', texto:'#07614A', keys:['puertos_china','puertos_chile','pasos','ciudades'] },
+  { titulo:'Logística',             icon:'🚛', color:'#ef9f27', claro:'#FDF3E2', texto:'#92610C', keys:['contenedores','camiones'] },
+  { titulo:'Finanzas',              icon:'💰', color:'#0d9488', claro:'#E0F5F2', texto:'#0A5F58', keys:['fondos','cuentas_abm','gastos_categorias'] },
+  { titulo:'Empresa',               icon:'🏢', color:'#64748b', claro:'#EEF1F5', texto:'#475569', keys:['empresa'] },
+] as const
+const labelDe = (k:string) => TABS.find(t=>t.key===k)?.label || k
+
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 const btn = 'px-4 py-2 rounded-xl text-xs font-semibold transition-all'
 
@@ -476,7 +487,8 @@ function CatalogoABM({
 
 // ── Página principal ────────────────────────────────────────────────
 export default function CatalogosPage() {
-  const [tab, setTab] = useState<Tab>('categorias')
+  const [tab, setTab] = useState<Tab>('servicios_deposito')
+  const grupoActivo = GRUPOS.find(g => (g.keys as readonly string[]).includes(tab)) || GRUPOS[0]
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -487,17 +499,48 @@ export default function CatalogosPage() {
         <p className="text-xs text-gray-400 mt-1">Administrá las listas de referencia usadas en todo el sistema</p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-white border border-gray-100 rounded-2xl p-1.5 shadow-sm overflow-x-auto">
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key as Tab)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap flex-shrink-0 ${
-              tab === t.key ? 'bg-[#1168F8] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-            }`}>
-            <span>{t.icon}</span>{t.label}
-          </button>
-        ))}
-      </div>
+      {/* Layout en árbol: sidebar de categorías + panel de contenido */}
+      <div className="grid grid-cols-1 lg:grid-cols-[224px_1fr] gap-5 items-start">
+        {/* Árbol de categorías */}
+        <aside className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm lg:sticky lg:top-6">
+          <div className="flex items-center gap-2 px-2 pb-3">
+            <span className="text-base">📚</span>
+            <span className="text-sm font-bold text-gray-800">Catálogos</span>
+          </div>
+          <nav className="flex flex-col gap-3">
+            {GRUPOS.map(g => (
+              <div key={g.titulo}>
+                <div className="flex items-center gap-1.5 px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider" style={{ color: g.texto }}>
+                  <span className="text-xs">{g.icon}</span>{g.titulo}
+                </div>
+                <div className="flex flex-col gap-0.5" style={{ borderLeft: `2px solid ${g.color}`, marginLeft: '7px', paddingLeft: '6px' }}>
+                  {g.keys.map(k => {
+                    const activo = tab === k
+                    return (
+                      <button key={k} onClick={() => setTab(k as Tab)}
+                        className="text-left py-1.5 text-[12px] font-medium transition-colors flex items-center gap-1.5"
+                        style={activo
+                          ? { background: g.claro, color: g.texto, borderLeft: `3px solid ${g.color}`, marginLeft: '-8px', paddingLeft: '9px', paddingRight: '8px', borderRadius: '0 8px 8px 0' }
+                          : { color: '#6b7280', paddingLeft: '9px', paddingRight: '8px' }}>
+                        <span>{labelDe(k)}</span>
+                        {k === 'categorias' && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: '#FDF3E2', color: '#92610C' }}>en desuso</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </nav>
+        </aside>
+
+        {/* Panel de contenido */}
+        <div className="min-w-0">
+          {/* Encabezado con el color de la categoría activa */}
+          <div className="rounded-xl px-4 py-2.5 mb-4 flex items-center gap-2 text-[12px] flex-wrap" style={{ background: grupoActivo.claro }}>
+            <span className="font-semibold flex items-center gap-1.5" style={{ color: grupoActivo.texto }}><span>{grupoActivo.icon}</span>{grupoActivo.titulo}</span>
+            <span style={{ color: grupoActivo.texto, opacity: 0.45 }}>›</span>
+            <span style={{ color: grupoActivo.texto, opacity: 0.85 }}>{labelDe(tab)}</span>
+          </div>
 
       {/* ── CATEGORÍAS DE PRECIO ── */}
       {tab === 'categorias' && <CategoriasPrecioABM />}
@@ -631,6 +674,8 @@ export default function CatalogosPage() {
 
       {/* ── CONDICIONES DE COTIZACIÓN ── */}
       {tab === 'condiciones_cotizacion' && <CondicionesCotizacionABM />}
+        </div>
+      </div>
     </div>
   )
 }
