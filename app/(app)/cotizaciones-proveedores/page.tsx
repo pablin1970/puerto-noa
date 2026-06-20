@@ -140,17 +140,13 @@ const CATEGORIAS_ITEM: Record<string, string> = {
 }
 
 // ── Fila de item con categorías dinámicas ────────────────────────────────────
-function ItemRow({ it, i, tiposCont, categorias, onChange, onRemove, editMode = true }: {
-  it: Item; i: number; tiposCont: any[]; categorias: any[]
+function ItemRow({ it, i, tiposCont, onChange, onRemove, editMode = true }: {
+  it: Item; i: number; tiposCont: any[]
   onChange: (i: number, f: string, v: any) => void; onRemove: (i: number) => void; editMode?: boolean
 }) {
   const esPct = it.tipo_calculo === 'pct_cif'
-  // Buscar la categoría seleccionada para saber qué campos mostrar
-  const catSel = categorias.find((c:any) => c.codigo === (it as any).categoria)
-  const tiposCalc: Record<string,string> = catSel?.tipos_calculo?.length
-    ? Object.fromEntries((catSel.tipos_calculo as string[]).map((t:string) => [t, TIPO_CALCULO[t]||t]))
-    : TIPO_CALCULO
-  const mostrarCont = catSel ? catSel.aplica_contenedor : true
+  const tiposCalc: Record<string,string> = TIPO_CALCULO
+  const mostrarCont = true
 
   if (!editMode) return (
     <tr className="border-b border-gray-50 hover:bg-gray-50">
@@ -170,18 +166,8 @@ function ItemRow({ it, i, tiposCont, categorias, onChange, onRemove, editMode = 
 
   return (
     <div className="mb-2.5 p-3 bg-gray-50 rounded-xl border border-gray-100">
-      {/* Fila 1: categoría + tipo cálculo + contenedor + valor + eliminar */}
-      <div className="grid gap-2 mb-2" style={{gridTemplateColumns:'1fr auto auto auto auto'}}>
-        <select value={(it as any).categoria||''} onChange={e=>{
-            onChange(i,'categoria',e.target.value)
-            const cat=categorias.find((c:any)=>c.codigo===e.target.value)
-            if(cat?.tipos_calculo?.length) onChange(i,'tipo_calculo',cat.tipos_calculo[0])
-          }} className={inp}>
-          <option value="">— Categoría —</option>
-          {categorias.map((c:any)=>(
-            <option key={c.codigo} value={c.codigo}>{c.icon||''} {c.label}</option>
-          ))}
-        </select>
+      {/* Fila 1: tipo cálculo + contenedor + valor + eliminar */}
+      <div className="grid gap-2 mb-2" style={{gridTemplateColumns:'1fr auto auto auto'}}>
         <select value={it.tipo_calculo} onChange={e=>onChange(i,'tipo_calculo',e.target.value)}
           className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white">
           {Object.entries(tiposCalc).map(([k,v])=><option key={k} value={k}>{v as string}</option>)}
@@ -623,7 +609,6 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [buscarCot, setBuscarCot] = useState('')
   const [showCotDropdown, setShowCotDropdown] = useState(false)
   const [bloques, setBloques] = useState<any[]>([])
-  const [categorias, setCategorias] = useState<any[]>([])
   const [puertosCh, setPuertosCh] = useState<any[]>([])
   const [puertosChile, setPuertosChile] = useState<any[]>([])
   const [pasos, setPasos] = useState<any[]>([])
@@ -695,7 +680,6 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   useEffect(() => {
     Promise.all([
       supabase.from('cotizador_bloques').select('id,numero,nombre,descripcion').eq('activo',true).order('numero'),
-      supabase.from('categorias_precio').select('id,label,codigo,icon,color,bg,tipos_calculo,aplica_contenedor').eq('activo',true).order('orden'),
       supabase.from('puertos_china').select('id,locode,nombre,ciudad').eq('activo','true').order('orden'),
       supabase.from('puertos_chile').select('id,locode,nombre,ciudad').eq('activo','true').order('orden'),
       supabase.from('pasos_fronterizos').select('id,nombre,provincia_argentina').eq('activo','true').order('orden'),
@@ -707,9 +691,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       supabase.from('servicios_metricas_habilitadas').select('servicio_id,metrica_id'),
       supabase.from('ciudades').select('id,pais,ciudad,region').eq('activo',true).order('pais').order('orden'),
       supabase.from('tipos_camion').select('id,nombre,icono').eq('activo','true').order('orden'),
-    ]).then(([bl,cat,ch,cl,ps,ci,tc,ru,dsv,dmt,dhb,ciu,tcam]) => {
+    ]).then(([bl,ch,cl,ps,ci,tc,ru,dsv,dmt,dhb,ciu,tcam]) => {
       if(bl.data) setBloques(bl.data)
-      if(cat.data) setCategorias(cat.data)
       if(ch.data) setPuertosCh(ch.data)
       if(cl.data) setPuertosChile(cl.data)
       if(ps.data) setPasos(ps.data)
@@ -1047,7 +1030,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             ...ruta, orden:i,
           })
         })
-      } else if(tf==='almacenaje'||tf==='despachante'||tf==='seguro'||tf==='maritimo'){
+      } else if(tf==='almacenaje'||tf==='despachante'||tf==='seguro'||tf==='maritimo'||tf==='generico'){
         let ord=0
         const diasDefault = parseN(String(form.almacen_dias_gratis||0))
         depServicios.forEach((svc:any)=>{
@@ -1928,19 +1911,9 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden" style={{borderLeft:'3px solid #6b7280'}}>
           <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
             <span className="text-lg">·</span>
-            <span className="font-semibold text-sm text-gray-700">Servicio — descripción libre</span>
+            <span className="font-semibold text-sm text-gray-700">Servicio — catálogo</span>
           </div>
-          <div className="px-5 py-4">
-            <div className="flex items-center justify-between mb-2">
-              {lbl('Ítems del servicio')}
-              <button onClick={addItem} className="text-[10px] text-[#1168F8] hover:underline font-semibold">+ Agregar ítem</button>
-            </div>
-            <div className="border border-gray-100 rounded-xl overflow-hidden">
-              {items.map((it,i)=>(
-                <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={categorias} onChange={updateItem} onRemove={removeItem} editMode={true}/>
-              ))}
-            </div>
-          </div>
+          <div className="px-5 py-4 space-y-4">{renderServiciosCat()}</div>
         </div>
       )}
 
@@ -2306,7 +2279,7 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
               </div>
             ) : (
               items.map((it, i) => (
-                <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={[]} onChange={updateItem} onRemove={removeItem} editMode={true} />
+                <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} onChange={updateItem} onRemove={removeItem} editMode={true} />
               ))
             )}
             <div className="flex justify-end mt-3">
@@ -2359,7 +2332,7 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
             </thead>
             <tbody>
               {items.map((it, i) => (
-                <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} categorias={[]} onChange={updateItem} onRemove={removeItem} editMode={false} />
+                <ItemRow key={i} it={it} i={i} tiposCont={tiposCont} onChange={updateItem} onRemove={removeItem} editMode={false} />
               ))}
               {totalUSD > 0 && (
                 <tr className="bg-[#EBF2FF] border-t-2 border-[#1168F8]">
