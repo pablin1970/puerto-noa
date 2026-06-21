@@ -37,13 +37,13 @@ export default function DashboardFinancieroPage() {
       supabase.from('tipos_cambio_eventos').select('clp,ars').order('created_at',{ascending:false}).limit(1),
       (supabase.from('libro_iva_ventas') as any).select('iva_clp').eq('anio',anio).eq('mes',mes),
       (supabase.from('libro_iva_compras') as any).select('credito_fiscal_clp').eq('anio',anio).eq('mes',mes),
-      supabase.from('facturas_emitidas').select('total,estado,moneda').gte('fecha',`${anio}-01-01`),
-      supabase.from('facturas_recibidas').select('total,estado,moneda').gte('fecha',`${anio}-01-01`),
+      supabase.from('facturas_emitidas').select('total,estado,moneda').gte('fecha_emision',`${anio}-01-01`),
+      supabase.from('facturas_recibidas').select('total,estado,moneda').gte('fecha_emision',`${anio}-01-01`),
       (supabase.from('gastos_fijos_pn') as any).select('monto_clp_equiv').eq('periodo_anio',anio).eq('periodo_mes',mes),
       (supabase.from('utilidad_operacion') as any).select('margen_bruto_usd').gte('fecha_cierre',`${anio}-01-01`),
       (supabase.from('cuentas_pn') as any).select('moneda,saldo_actual').eq('activo',true),
       (supabase.from('fondos_movimientos') as any).select('tipo,monto,moneda'),
-      supabase.from('cotizaciones').select('id').eq('estado','en_proceso'),
+      supabase.from('operaciones').select('id').eq('estado','activa'),
     ])
 
     const tcVal = (tcRes.data?.[0] as any) || { clp:908, ars:1450 }
