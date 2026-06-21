@@ -30,6 +30,8 @@ interface FacturaRecibida {
   iva_pct: number
   credito_fiscal: number
   a_recuperar: boolean
+  refactura_emitida_id: string | null
+  facturada_a: string | null
   archivo_url: string | null
   archivo_nombre: string | null
   creado_por: string | null
@@ -524,10 +526,61 @@ function DetalleFacturaRecibida({ factura, supabase, permisos, onReload, onBack 
   const fmtCLP = (n: number) => Math.round(n).toLocaleString('es-CL')
   const items = Array.isArray(factura.items) ? factura.items : []
   const [abriendo, setAbriendo] = useState(false)
+  const [refacturando, setRefacturando] = useState(false)
 
   async function cambiarEstado(estado: string) {
     await (supabase.from('facturas_recibidas') as any).update({ estado }).eq('id', factura.id)
     await onReload()
+  }
+
+  // Refactura al cliente: genera una factura emitida (borrador) de recupero y la vincula a esta recibida.
+  async function refacturar() {
+    if (refacturando) return
+    if (!puede(permisos, 'facturas_emitidas', 'crear')) { alert('No tenés permiso para crear facturas emitidas.'); return }
+    if (factura.refactura_emitida_id) { alert('Esta factura ya fue refacturada al cliente.'); return }
+    if (!factura.operacion_id) { alert('Asigná la factura a una operación antes de refacturar.'); return }
+    if (!confirm('Se creará una factura emitida al cliente (en BORRADOR) para recuperar este gasto. ¿Continuar?')) return
+    setRefacturando(true)
+    try {
+      const { data: op } = await supabase.from('operaciones')
+        .select('id, tercero_id, cotizacion:cotizaciones(num, tercero_id, cliente, cuit)')
+        .eq('id', factura.operacion_id).single()
+      const cot: any = (op as any)?.cotizacion
+      const clienteId = (op as any)?.tercero_id || cot?.tercero_id || null
+      let cliRazon = cot?.cliente || ''
+      let cliRut = cot?.cuit || ''
+      if (clienteId) {
+        const { data: cli } = await supabase.from('terceros').select('razon_social, nro_doc').eq('id', clienteId).single()
+        if (cli) { cliRazon = (cli as any).razon_social || cliRazon; cliRut = (cli as any).nro_doc || cliRut }
+      }
+      const moneda = factura.moneda
+      const payload: any = {
+        tipo_doc: 'factura', tipo_documento: 'factura', estado: 'borrador',
+        fecha_emision: new Date().toISOString().slice(0, 10),
+        tercero_id: clienteId,
+        cliente_razon_social: cliRazon || factura.proveedor_razon_social,
+        cliente_rut: cliRut, rut_cliente: cliRut,
+        operacion_id: factura.operacion_id, cotizacion_num: cot?.num || null,
+        moneda, tc_referencia: factura.tc_referencia,
+        items: Array.isArray(factura.items) ? factura.items : [],
+        neto: factura.neto, iva_monto: factura.iva_monto, exento: factura.exento,
+        total: factura.total, total_usd: factura.total_usd,
+        neto_clp: (factura as any).neto_clp ?? (moneda === 'CLP' ? factura.neto : null),
+        total_clp: (factura as any).total_clp ?? (moneda === 'CLP' ? factura.total : null),
+        neto_usd: (factura as any).neto_usd ?? null,
+        afecta_iva: factura.afecta_iva, iva_pct: factura.iva_pct ?? 19,
+        tipo_cobro: 'recupero_gastos',
+        ref_tipo: 'recupero_factura_recibida', ref_folio: factura.folio || null,
+        glosa: `Recupero de gastos · ${factura.proveedor_razon_social}${factura.folio ? ' #' + factura.folio : ''}`,
+      }
+      const { data: emi, error } = await (supabase.from('facturas_emitidas') as any).insert(payload).select('id').single()
+      if (error || !emi) { alert('Error al refacturar: ' + (error?.message || 'desconocido')); return }
+      await (supabase.from('facturas_recibidas') as any).update({ refactura_emitida_id: emi.id }).eq('id', factura.id)
+      alert('Factura de recupero creada en BORRADOR. Revisala y finalizala en Facturación › Emitidas.')
+      await onReload()
+    } catch (e: any) {
+      alert('Error inesperado: ' + (e?.message || e))
+    } finally { setRefacturando(false) }
   }
 
   // Bucket privado: la signed URL se genera al vuelo desde el PATH guardado en archivo_url.
@@ -551,6 +604,7 @@ function DetalleFacturaRecibida({ factura, supabase, permisos, onReload, onBack 
               <div className="text-xl font-black font-mono text-gray-900">{factura.folio ? `#${factura.folio}` : '—'}</div>
               <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${ESTADO_CLS[factura.estado]}`}>{ESTADO_L[factura.estado]}</span>
               {factura.a_recuperar && <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-full text-[10px] font-semibold border border-purple-200">A recuperar</span>}
+              {factura.refactura_emitida_id && <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-[10px] font-semibold border border-green-200">Refacturada</span>}
             </div>
             <div className="text-sm font-semibold text-gray-900">{factura.proveedor_razon_social}</div>
             <div className="text-xs text-gray-500 mt-1">{TIPO_DOC_L[factura.tipo_doc]} · {factura.fecha_emision} · {factura.proveedor_pais}</div>
@@ -572,6 +626,28 @@ function DetalleFacturaRecibida({ factura, supabase, permisos, onReload, onBack 
           ))}
         </div>
       </div>
+
+      {factura.a_recuperar && (
+        <div className="bg-white border border-purple-100 rounded-2xl p-4 shadow-sm flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-bold text-purple-800">Recupero al cliente</div>
+            <div className="text-[11px] text-gray-500 mt-0.5">
+              {factura.refactura_emitida_id
+                ? 'Ya refacturada. La factura emitida está en Facturación › Emitidas (borrador hasta que la finalices).'
+                : factura.operacion_id
+                  ? 'Generá la factura emitida al cliente para recuperar este gasto.'
+                  : 'Asigná esta factura a una operación para poder refacturar.'}
+            </div>
+          </div>
+          {factura.refactura_emitida_id
+            ? <span className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-semibold border border-green-200 whitespace-nowrap">✓ Refacturada</span>
+            : puede(permisos, 'facturas_emitidas', 'crear') && (
+              <button onClick={refacturar} disabled={refacturando || !factura.operacion_id}
+                className="px-4 py-2 bg-[#7C3AED] text-white rounded-lg text-xs font-bold hover:bg-[#6D28D9] disabled:opacity-40 whitespace-nowrap">
+                {refacturando ? 'Generando…' : 'Refacturar al cliente'}
+              </button>)}
+        </div>
+      )}
 
       <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
         <div className="px-5 py-3.5 border-b border-gray-100 font-semibold text-sm text-gray-900">Detalle</div>
