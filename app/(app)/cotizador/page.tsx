@@ -247,6 +247,8 @@ export default function CotizadorPage(){
 const [permisos,setPermisos]=useState<Record<string,string[]>>({})
 const [permListos,setPermListos]=useState(false)
 useEffect(()=>{ cargarPermisos().then(p=>{ setPermisos(p); setPermListos(true) }) },[])
+const puedeCrearCot = puede(permisos, 'cotizaciones', 'crear')
+const puedeCrearCli = puede(permisos, 'clientes', 'crear')
 const topRef=useRef<HTMLDivElement>(null)
 const [s,setS]=useState<CotState>(INIT)
 const [tab,setTab]=useState<Tab>('embarque')
@@ -3698,10 +3700,12 @@ const clientesFiltrados=terceros.filter(t=>
                 className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50">
                 👁 Vista previa
               </button>
+              {puedeCrearCot ? (
               <button onClick={guardar} disabled={saving}
                 className="bg-[#1168F8] text-white px-6 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] disabled:opacity-60">
                 {saving?'Guardando...':'Guardar cotización'}
               </button>
+              ) : <span className="text-xs text-gray-400 px-3 py-2">Sin permiso para guardar cotizaciones</span>}
             </div>
           </div>
         </div>
@@ -3746,10 +3750,10 @@ const clientesFiltrados=terceros.filter(t=>
             <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
               <button onClick={()=>setShowAltaCli(false)} disabled={altaCliSaving}
                 className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
-              <button onClick={crearClienteRapido} disabled={altaCliSaving}
+              {puedeCrearCli && <button onClick={crearClienteRapido} disabled={altaCliSaving}
                 className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
                 {altaCliSaving?'Creando...':'Crear y usar'}
-              </button>
+              </button>}
             </div>
           </div>
         </div>
@@ -3772,10 +3776,12 @@ const clientesFiltrados=terceros.filter(t=>
                 className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50">
                 ← Volver a editar
               </button>
+              {puedeCrearCot ? (
               <button onClick={confirmarYGuardar} disabled={saving}
                 className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-60">
                 {saving?'Guardando...':'✓ Confirmar y guardar'}
               </button>
+              ) : <span className="text-xs text-gray-400 px-3 py-2">Sin permiso para guardar cotizaciones</span>}
             </div>
           </div>
           {/* Documento con scroll */}
