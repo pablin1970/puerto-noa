@@ -125,10 +125,13 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           .single()
         if ((rol as any)?.es_super_admin) {
           setEsSuper(true)
-          const { data: todosPerms } = await supabase
-            .from('rol_permisos')
+          // Fuente de verdad ÚNICA: un módulo deja de ser "nuevo" cuando se confirmó
+          // con Guardar en la matriz (tabla modulos_revisados). Igual criterio que la
+          // pantalla de Usuarios, para que el aviso del sidebar y el cartel coincidan.
+          const { data: revisados } = await supabase
+            .from('modulos_revisados')
             .select('modulo')
-          const modulosConfigurados = new Set((todosPerms || []).map((p: any) => p.modulo))
+          const modulosConfigurados = new Set((revisados || []).map((p: any) => p.modulo))
           const nuevos = TODOS_LOS_MODULOS.filter(m => !modulosConfigurados.has(m))
           setModulosNuevosCount(nuevos.length)
         }
