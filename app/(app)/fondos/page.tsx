@@ -23,6 +23,8 @@ export default function FondosCustodiaPage() {
   const [cuentas, setCuentas] = useState<any[]>([])
   const [movimientos, setMovimientos] = useState<any[]>([])
   const [operaciones, setOperaciones] = useState<any[]>([])
+  const [facturasEmit, setFacturasEmit] = useState<any[]>([])
+  const [facturasReci, setFacturasReci] = useState<any[]>([])
   const [tcActual, setTcActual] = useState<{ ARS: number; CLP: number }>({ ARS: 1450, CLP: 910 })
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -37,15 +39,19 @@ export default function FondosCustodiaPage() {
       const { data: u } = await supabase.from('usuarios').select('nombre').eq('auth_id', authRes.data.user.id).single()
       if (u) setCurrentUser(u)
     }
-    const [cRes, mRes, oRes, tcRes] = await Promise.all([
+    const [cRes, mRes, oRes, tcRes, feRes, frRes] = await Promise.all([
       supabase.from('fondos_cuentas').select('*').eq('activo', true).order('orden'),
       supabase.from('fondos_movimientos').select('*, cuenta:fondos_cuentas!fondos_movimientos_cuenta_id_fkey(nombre,tipo,moneda,pais), cuenta_dest:fondos_cuentas!fondos_movimientos_cuenta_destino_id_fkey(nombre,tipo,moneda,pais), operacion:operaciones(id,cotizacion:cotizaciones(num,cliente))').order('fecha', { ascending: false }).order('created_at', { ascending: false }),
       supabase.from('operaciones').select('id, cotizacion:cotizaciones(num,cliente)').order('created_at', { ascending: false }),
       supabase.from('tipos_cambio_eventos').select('ars,clp').order('created_at', { ascending: false }).limit(1),
+      supabase.from('facturas_emitidas').select('id,folio,cliente_razon_social,total,total_usd,moneda,estado,operacion_id').not('operacion_id', 'is', null),
+      supabase.from('facturas_recibidas').select('id,folio,proveedor_razon_social,total,total_usd,moneda,estado,operacion_id').not('operacion_id', 'is', null),
     ])
     if (cRes.data) setCuentas(cRes.data)
     if (mRes.data) setMovimientos(mRes.data)
     if (oRes.data) setOperaciones(oRes.data)
+    if (feRes.data) setFacturasEmit(feRes.data)
+    if (frRes.data) setFacturasReci(frRes.data)
     if (tcRes.data && tcRes.data.length > 0) {
       const tc = tcRes.data[0] as any
       setTcActual({ ARS: tc.ars || 1450, CLP: tc.clp || 910 })
@@ -263,6 +269,8 @@ export default function FondosCustodiaPage() {
           cuentas={cuentas}
           movimientos={movimientos}
           operaciones={operaciones}
+          facturasEmit={facturasEmit}
+          facturasReci={facturasReci}
           tcActual={tcActual}
           currentUser={currentUser}
           permisos={permisos}
@@ -295,12 +303,14 @@ export default function FondosCustodiaPage() {
 }
 
 // ── MOVIMIENTOS TAB ────────────────────────────────────────────
-function MovimientosTab({ supabase, cuentas, movimientos, operaciones, tcActual, currentUser, permisos, reload }: any) {
+function MovimientosTab({ supabase, cuentas, movimientos, operaciones, facturasEmit, facturasReci, tcActual, currentUser, permisos, reload }: any) {
   const [form, setForm] = useState({
     fecha: nowDate(),
     tipo: 'ingreso_cliente',
     concepto: '',
     operacion_id: '',
+    factura_id: '',
+    marcar_pagada: true,
     cuenta_id: '',
     cuenta_destino_id: '',
     banco_origen: '',
@@ -318,6 +328,15 @@ function MovimientosTab({ supabase, cuentas, movimientos, operaciones, tcActual,
   const [filtroTipo, setFiltroTipo] = useState('')
   const [filtroCuenta, setFiltroCuenta] = useState('')
   const [previewModal, setPreviewModal] = useState<{ url: string; nombre: string; tipo: string } | null>(null)
+
+  // Facturas de la operación seleccionada, según el tipo de movimiento (pagos→recibidas, ingresos→emitidas).
+  const facturaEsRecibida = form.tipo === 'pago_proveedor'
+  const facturasDeOp = useMemo(() => {
+    if (!form.operacion_id) return [] as any[]
+    if (facturaEsRecibida) return (facturasReci || []).filter((f: any) => f.operacion_id === form.operacion_id && !['pagada', 'anulada'].includes(f.estado))
+    if (['ingreso_cliente', 'honorarios_puertonoa'].includes(form.tipo)) return (facturasEmit || []).filter((f: any) => f.operacion_id === form.operacion_id && !['pagada', 'anulada'].includes(f.estado))
+    return [] as any[]
+  }, [form.operacion_id, form.tipo, facturaEsRecibida, facturasReci, facturasEmit])
 
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 
@@ -367,7 +386,16 @@ function MovimientosTab({ supabase, cuentas, movimientos, operaciones, tcActual,
       // Guardamos el PATH (la signed URL expira a 1h). La firma se genera al vuelo en Ver/Descargar.
       await (supabase.from('fondos_movimientos') as any).update({ comprobante_url: path, comprobante_nombre: compFile.name }).eq('id', movData.id)
     }
-    setForm(f => ({ ...f, monto: '', concepto: '', nro_referencia: '', notas: '', banco_origen: '', cuenta_origen: '', banco_destino: '', cuenta_destino_texto: '' }))
+    // Vínculo con la factura: deja el movimiento ligado a la factura y, opcionalmente, la marca pagada.
+    if (movData && form.factura_id) {
+      const tabla = facturaEsRecibida ? 'facturas_recibidas' : 'facturas_emitidas'
+      const col = facturaEsRecibida ? 'factura_recibida_id' : 'factura_emitida_id'
+      await (supabase.from('fondos_movimientos') as any).update({ [col]: form.factura_id }).eq('id', movData.id)
+      if (form.marcar_pagada) {
+        await (supabase.from(tabla) as any).update({ estado: 'pagada', fecha_pago: form.fecha }).eq('id', form.factura_id)
+      }
+    }
+    setForm(f => ({ ...f, monto: '', concepto: '', nro_referencia: '', notas: '', banco_origen: '', cuenta_origen: '', banco_destino: '', cuenta_destino_texto: '', factura_id: '' }))
     setCompFile(null)
     setSaving(false)
     reload()
@@ -432,13 +460,30 @@ function MovimientosTab({ supabase, cuentas, movimientos, operaciones, tcActual,
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Operación vinculada</label>
-            <select value={form.operacion_id} onChange={e => setForm(f => ({ ...f, operacion_id: e.target.value }))} className={inp}>
+            <select value={form.operacion_id} onChange={e => setForm(f => ({ ...f, operacion_id: e.target.value, factura_id: '' }))} className={inp}>
               <option value="">— Sin vincular —</option>
               {operaciones.map((o: any) => (
                 <option key={o.id} value={o.id}>{o.cotizacion?.num} · {o.cotizacion?.cliente}</option>
               ))}
             </select>
           </div>
+          {form.operacion_id && facturasDeOp.length > 0 && (
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{facturaEsRecibida ? 'Factura proveedor a pagar' : 'Factura cliente a cobrar'} (opcional)</label>
+              <select value={form.factura_id} onChange={e => setForm(f => ({ ...f, factura_id: e.target.value }))} className={inp}>
+                <option value="">— Sin vincular factura —</option>
+                {facturasDeOp.map((f: any) => (
+                  <option key={f.id} value={f.id}>{(f.folio ? '#' + f.folio + ' · ' : '') + (facturaEsRecibida ? (f.proveedor_razon_social || 'Proveedor') : (f.cliente_razon_social || 'Cliente')) + ' · ' + f.moneda + ' ' + Math.round(f.total || 0).toLocaleString('es-CL')}</option>
+                ))}
+              </select>
+              {form.factura_id && (
+                <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                  <input type="checkbox" checked={form.marcar_pagada} onChange={e => setForm(f => ({ ...f, marcar_pagada: e.target.checked }))} className="w-4 h-4 rounded" />
+                  <span className="text-[11px] text-gray-600">Marcar la factura como pagada</span>
+                </label>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-4 gap-3 mb-3">
