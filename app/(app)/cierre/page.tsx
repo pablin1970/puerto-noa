@@ -12,6 +12,7 @@ type Tab4 = 'resultado' | 'comparativo' | 'rendicion' | 'interno' | 'cierre'
 interface FactRec {
   id: string; folio: string | null; fecha_emision: string; proveedor_razon_social: string
   etapa: string | null; moneda: string; total: number; total_usd: number | null; estado: string
+  a_recuperar?: boolean; credito_fiscal?: number; iva_monto?: number; tc_referencia?: number | null
 }
 interface FondoMov {
   id: string; fecha: string; tipo: string; concepto: string
@@ -42,6 +43,8 @@ export default function CierrePage() {
   const [ops, setOps] = useState<Array<Operacion & { cotizacion: Cotizacion }>>([])
   const [selId, setSelId] = useState('')
   const [facturas, setFacturas] = useState<FactRec[]>([])
+  const [emitidas, setEmitidas] = useState<any[]>([])
+  const [tcVal, setTcVal] = useState(910)
   const [movs, setMovs] = useState<FondoMov[]>([])
   const [tab, setTab] = useState<Tab4>('resultado')
   const [loading, setLoading] = useState(true)
@@ -61,16 +64,23 @@ export default function CierrePage() {
   }
 
   async function loadDetail() {
-    const [fr, mv] = await Promise.all([
+    const [fr, mv, fe, tc] = await Promise.all([
       supabase.from('facturas_recibidas')
-        .select('id,folio,fecha_emision,proveedor_razon_social,etapa,moneda,total,total_usd,estado')
+        .select('id,folio,fecha_emision,proveedor_razon_social,etapa,moneda,total,total_usd,estado,a_recuperar,credito_fiscal,iva_monto,tc_referencia')
         .eq('operacion_id', selId).order('fecha_emision'),
       supabase.from('fondos_movimientos')
         .select('id,fecha,tipo,concepto,moneda,monto,usd')
         .eq('operacion_id', selId).order('fecha'),
+      supabase.from('facturas_emitidas')
+        .select('id,total_usd,neto_usd,iva_monto,tc_referencia,a_recuperar,estado')
+        .eq('operacion_id', selId),
+      supabase.from('tipos_cambio_eventos').select('clp').order('created_at', { ascending: false }).limit(1),
     ])
     setFacturas((fr.data as any[])?.filter(f => f.estado !== 'anulada') || [])
     setMovs((mv.data as any[]) || [])
+    setEmitidas((fe.data as any[])?.filter(f => f.estado !== 'anulada') || [])
+    const tcv = (tc.data?.[0] as any)?.clp
+    if (tcv) setTcVal(tcv)
   }
 
   const op = ops.find(o => o.id === selId)
@@ -96,6 +106,17 @@ export default function CierrePage() {
 
   const realPorEtapa = (e: string) => e === 'fee' ? feeReal : facturas.filter(f => (f.etapa || 'otro') === e).reduce((s, f) => s + uDe(f), 0)
 
+  // ── Margen bruto canónico (misma definición que computarOpsData en Resultados) ──
+  const ingresosUSD = emitidas.reduce((t, f) => t + (f.total_usd || (f.neto_usd * 1.19) || 0), 0)
+  const costosProvUSD = facturas.reduce((t, f) => t + (f.total_usd || 0), 0)
+  const ivaDebito = emitidas.reduce((t, f) => t + (f.iva_monto || 0) / (f.tc_referencia || tcVal), 0)
+  const ivaCredito = facturas.filter(f => f.credito_fiscal).reduce((t, f) => t + ((f.iva_monto || 0) / (f.tc_referencia || tcVal)), 0)
+  const cobradoRecupero = emitidas.filter(f => f.a_recuperar).reduce((t, f) => t + (f.total_usd || 0), 0)
+  const pagadoRecupero = facturas.filter(f => f.a_recuperar).reduce((t, f) => t + (f.total_usd || 0), 0)
+  const markupUSD = cobradoRecupero - pagadoRecupero
+  const ivaNeto = Math.max(0, ivaDebito - ivaCredito)
+  const margenBrutoUSD = feePresup + markupUSD - ivaNeto
+
   async function togglePaso(i: number) {
     if (!op) return
     const newPasos = [...pasos]; newPasos[i] = !newPasos[i]
@@ -109,6 +130,23 @@ export default function CierrePage() {
     const snap = { fecha: nowStr(), accion: `Operación cerrada. Saldo caja a rendir: USD ${fmt(saldo)} · Fee PN: USD ${fmt(feeReal)}`, saldo_caja_usd: saldo, fee_usd: feeReal, gasto_real_usd: gastoReal }
     const histNuevo = [...(Array.isArray(op.hist_cierre) ? op.hist_cierre : []), snap]
     await (supabase.from('operaciones') as any).update({ estado: 'cerrada', fecha_cierre: nowDate(), hist_cierre: histNuevo, updated_at: new Date().toISOString() }).eq('id', op.id)
+    // Persistir el resultado de la operación: fuente única para el dashboard contable (margen) y antecedentes históricos.
+    await (supabase.from('utilidad_operacion') as any).delete().eq('operacion_id', op.id)
+    await (supabase.from('utilidad_operacion') as any).insert({
+      operacion_id: op.id,
+      cotizacion_num: cot?.num || null,
+      cliente_nombre: cot?.cliente || null,
+      fecha_apertura: (op as any).created_at ? String((op as any).created_at).slice(0, 10) : null,
+      fecha_cierre: nowDate(),
+      ingresos_usd: Math.round(ingresosUSD * 100) / 100,
+      costos_proveedor_usd: Math.round(costosProvUSD * 100) / 100,
+      fee_usd: Math.round(feePresup * 100) / 100,
+      margen_bruto_usd: Math.round(margenBrutoUSD * 100) / 100,
+      margen_pct: ingresosUSD > 0 ? Math.round((margenBrutoUSD / ingresosUSD) * 1000) / 10 : null,
+      resultado_neto_usd: Math.round(margenBrutoUSD * 100) / 100,
+      tipo_cambio_usd: tcVal,
+      estado: 'cerrada',
+    })
     loadOps()
   }
 
@@ -116,6 +154,7 @@ export default function CierrePage() {
     if (!op) return
     const histNuevo = [...(Array.isArray(op.hist_cierre) ? op.hist_cierre : []), { fecha: nowStr(), accion: 'Operación reabierta.' }]
     await (supabase.from('operaciones') as any).update({ estado: 'activa', fecha_cierre: null, hist_cierre: histNuevo, updated_at: new Date().toISOString() }).eq('id', op.id)
+    await (supabase.from('utilidad_operacion') as any).delete().eq('operacion_id', op.id)
     loadOps()
   }
 
