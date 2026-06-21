@@ -59,7 +59,15 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
     await (supabase.from('cotizaciones') as any).update({ estado, updated_at: new Date().toISOString() }).eq('id', id)
     if (estado === 'aceptada') {
       const { data: opExist } = await supabase.from('operaciones').select('id').eq('cotizacion_id', id).single()
-      if (!opExist) await (supabase.from('operaciones') as any).insert({ cotizacion_id: id })
+      if (!opExist) {
+        const { data: cotBase } = await supabase.from('cotizaciones').select('tercero_id, estado_cotizador').eq('id', id).single()
+        await (supabase.from('operaciones') as any).insert({
+          cotizacion_id: id,
+          tercero_id: (cotBase as any)?.tercero_id || null,
+          estado: 'activa',
+          sentido: (cotBase as any)?.estado_cotizador?.sentido || null,
+        })
+      }
     }
     setCot(c => c ? { ...c, estado } : c)
   }
