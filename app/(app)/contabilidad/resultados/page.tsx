@@ -44,6 +44,67 @@ interface OpData {
   mn_igualitario: number
 }
 
+function computarOpsData(opRows: any[], feRows: any[], frRows: any[], gfUSD: number, tcVal: number): OpData[] {
+  const feByOp: Record<string, any[]> = {}
+  for (const f of (feRows||[]) as any[]) {
+    if (!feByOp[f.operacion_id]) feByOp[f.operacion_id] = []
+    feByOp[f.operacion_id].push(f)
+  }
+  const frByOp: Record<string, any[]> = {}
+  for (const f of (frRows||[]) as any[]) {
+    if (!frByOp[f.operacion_id]) frByOp[f.operacion_id] = []
+    frByOp[f.operacion_id].push(f)
+  }
+  const opsData: OpData[] = ((opRows||[]) as any[]).map(op => {
+    const cot = op.cotizacion as any
+    const presupuesto = Array.isArray(cot?.presupuesto) ? cot.presupuesto : []
+    const feeItem = presupuesto.find((i: any) => i.etapa === 'fee')
+    const fee_usd = feeItem?.usd || 0
+    const conts = Array.isArray(cot?.tipo_contenedores) ? cot.tipo_contenedores : []
+    const contenedores = conts.reduce((t: number, c: any) => t + (c.cantidad || 1), 0) || 1
+    const fes = feByOp[op.id] || []
+    const ingresos_usd = fes.reduce((t, f) => t + (f.total_usd || (f.neto_usd * 1.19) || 0), 0)
+    const iva_debito = fes.reduce((t, f) => t + (f.iva_monto || 0) / (f.tc_referencia || tcVal), 0)
+    const frs = frByOp[op.id] || []
+    const costos_usd = frs.reduce((t, f) => t + (f.total_usd || 0), 0)
+    const iva_credito = frs.filter(f => f.credito_fiscal).reduce((t, f) => t + (f.iva_monto || 0) / (f.tc_referencia || tcVal), 0)
+    const cobrado_recupero = fes.filter(f => f.a_recuperar).reduce((t, f) => t + (f.total_usd || 0), 0)
+    const pagado_recupero = frs.filter(f => f.a_recuperar).reduce((t, f) => t + (f.total_usd || 0), 0)
+    const markup_usd = cobrado_recupero - pagado_recupero
+    const iva_neto = Math.max(0, iva_debito - iva_credito)
+    const margen_bruto = fee_usd + markup_usd - iva_neto
+    return {
+      id: op.id,
+      num: cot?.num || '—',
+      cliente: cot?.cliente || '—',
+      estado: op.estado || 'activa',
+      fecha_cierre: op.fecha_cierre || op.updated_at?.slice(0,10) || '',
+      ingresos_usd, costos_usd, fee_usd, markup_usd,
+      iva_debito, iva_credito, iva_neto,
+      margen_bruto, contenedores,
+      gf_por_ingresos: 0, gf_por_costos: 0,
+      gf_por_contenedores: 0, gf_igualitario: 0,
+      mn_ingresos: 0, mn_costos: 0,
+      mn_contenedores: 0, mn_igualitario: 0,
+    }
+  }).filter(o => o.ingresos_usd > 0 || o.fee_usd > 0)
+  const totIngresos = opsData.reduce((t, o) => t + o.ingresos_usd, 0)
+  const totCostos   = opsData.reduce((t, o) => t + o.costos_usd, 0)
+  const totConts    = opsData.reduce((t, o) => t + o.contenedores, 0)
+  const nOps        = opsData.length || 1
+  for (const o of opsData) {
+    o.gf_por_ingresos     = totIngresos > 0 ? gfUSD * (o.ingresos_usd / totIngresos) : 0
+    o.gf_por_costos       = totCostos > 0   ? gfUSD * (o.costos_usd / totCostos) : 0
+    o.gf_por_contenedores = totConts > 0    ? gfUSD * (o.contenedores / totConts) : 0
+    o.gf_igualitario      = gfUSD / nOps
+    o.mn_ingresos         = o.margen_bruto - o.gf_por_ingresos
+    o.mn_costos           = o.margen_bruto - o.gf_por_costos
+    o.mn_contenedores     = o.margen_bruto - o.gf_por_contenedores
+    o.mn_igualitario      = o.margen_bruto - o.gf_igualitario
+  }
+  return opsData
+}
+
 export default function UtilidadesPage() {
   const supabase = useMemo(() => createClient(), [])
   const [loading, setLoading] = useState(true)
@@ -61,6 +122,56 @@ export default function UtilidadesPage() {
   useEffect(() => { cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
 
   useEffect(() => { load() }, [anio, mes])
+
+  // ── Vista anual consolidada (suma automática de los 12 meses del ejercicio) ──
+  const [opsAnio, setOpsAnio] = useState<OpData[]>([])
+  const [gastosFijosAnio, setGastosFijosAnio] = useState(0)
+  const [desgloseMensual, setDesgloseMensual] = useState<{mes:number; ingresos:number; mb:number; gf:number; mn:number}[]>([])
+  const [loadingAnio, setLoadingAnio] = useState(false)
+  useEffect(() => { loadAnual() }, [anio])
+
+  async function loadAnual() {
+    setLoadingAnio(true)
+    const ini = `${anio}-01-01`, fin = `${anio}-12-31`
+    const [opRes, feRes, frRes, gfRes, tcRes] = await Promise.all([
+      supabase.from('operaciones').select('id, estado, fecha_cierre, cotizacion:cotizaciones(num, cliente, tipo_contenedores, presupuesto)').order('created_at', { ascending: false }),
+      supabase.from('facturas_emitidas').select('operacion_id, total_usd, neto_usd, iva_monto, moneda, tc_referencia, a_recuperar').not('operacion_id', 'is', null).gte('fecha_emision', ini).lte('fecha_emision', fin),
+      supabase.from('facturas_recibidas').select('operacion_id, total_usd, neto_usd, iva_monto, moneda, tc_referencia, a_recuperar, credito_fiscal').not('operacion_id', 'is', null).gte('fecha_emision', ini).lte('fecha_emision', fin),
+      (supabase.from('gastos_fijos_pn') as any).select('monto_clp_equiv, periodo_mes').eq('periodo_anio', anio),
+      supabase.from('tipos_cambio_eventos').select('clp').order('created_at', { ascending: false }).limit(1),
+    ])
+    const tcVal = (tcRes.data?.[0] as any)?.clp || 908
+    const gfRows = (gfRes.data||[]) as any[]
+    const gfAnioUSD = gfRows.reduce((t,g)=>t+(g.monto_clp_equiv||0),0) / tcVal
+    setGastosFijosAnio(gfAnioUSD)
+    const opRows = (opRes.data||[]) as any[]
+    const feAll = (feRes.data||[]) as any[]
+    const frAll = (frRes.data||[]) as any[]
+    // Total del ejercicio: todas las facturas del año
+    const opsYear = computarOpsData(opRows, feAll, frAll, gfAnioUSD, tcVal)
+    const cerradasYear = opsYear.filter(o => o.estado==='cerrada' && o.fecha_cierre>=ini && o.fecha_cierre<=fin)
+    setOpsAnio(cerradasYear)
+    // Desglose mes a mes: cada operación cerrada se imputa a su mes de cierre (suma exacta al total)
+    const mesNum = (d:string) => Number((d||'').slice(5,7))
+    const acc: Record<number,{ingresos:number; mb:number}> = {}
+    for(let m=1;m<=12;m++) acc[m]={ingresos:0,mb:0}
+    for(const o of cerradasYear){ const m=mesNum(o.fecha_cierre); if(m>=1&&m<=12){ acc[m].ingresos+=o.ingresos_usd; acc[m].mb+=o.margen_bruto } }
+    const desg = [] as {mes:number; ingresos:number; mb:number; gf:number; mn:number}[]
+    for(let m=1;m<=12;m++){
+      const gfM = gfRows.filter(g=>(g.periodo_mes||0)===m).reduce((t,g)=>t+(g.monto_clp_equiv||0),0) / tcVal
+      desg.push({ mes:m, ingresos:acc[m].ingresos, mb:acc[m].mb, gf:gfM, mn:acc[m].mb-gfM })
+    }
+    setDesgloseMensual(desg)
+    setLoadingAnio(false)
+  }
+
+  // Totales del ejercicio (el margen neto total = bruto − gastos fijos, independiente del criterio de prorrateo)
+  const totAnioIngresos = opsAnio.reduce((t,o)=>t+o.ingresos_usd,0)
+  const totAnioFee      = opsAnio.reduce((t,o)=>t+o.fee_usd,0)
+  const totAnioMarkup   = opsAnio.reduce((t,o)=>t+o.markup_usd,0)
+  const totAnioIVA      = opsAnio.reduce((t,o)=>t+o.iva_neto,0)
+  const totAnioMB       = opsAnio.reduce((t,o)=>t+o.margen_bruto,0)
+  const totAnioMN       = totAnioMB - gastosFijosAnio
 
   async function load() {
     setLoading(true)
@@ -82,84 +193,8 @@ export default function UtilidadesPage() {
     const gfUSD = gfTotal / tcVal
     setGastosFijosMes(gfUSD)
 
-    // Agrupar facturas por operacion_id
-    const feByOp: Record<string, any[]> = {}
-    for (const f of (feRes.data||[]) as any[]) {
-      if (!feByOp[f.operacion_id]) feByOp[f.operacion_id] = []
-      feByOp[f.operacion_id].push(f)
-    }
-    const frByOp: Record<string, any[]> = {}
-    for (const f of (frRes.data||[]) as any[]) {
-      if (!frByOp[f.operacion_id]) frByOp[f.operacion_id] = []
-      frByOp[f.operacion_id].push(f)
-    }
-
-    // Procesar operaciones
-    const opsData: OpData[] = ((opRes.data||[]) as any[]).map(op => {
-      const cot = op.cotizacion as any
-      const presupuesto = Array.isArray(cot?.presupuesto) ? cot.presupuesto : []
-
-      // Fee desde presupuesto (etapa: 'fee')
-      const feeItem = presupuesto.find((i: any) => i.etapa === 'fee')
-      const fee_usd = feeItem?.usd || 0
-
-      // Contenedores
-      const conts = Array.isArray(cot?.tipo_contenedores) ? cot.tipo_contenedores : []
-      const contenedores = conts.reduce((t: number, c: any) => t + (c.cantidad || 1), 0) || 1
-
-      // Facturas emitidas de esta operación
-      const fes = feByOp[op.id] || []
-      const ingresos_usd = fes.reduce((t, f) => t + (f.total_usd || (f.neto_usd * 1.19) || 0), 0)
-      const iva_debito = fes.reduce((t, f) => t + (f.iva_monto || 0) / (f.tc_referencia || tcVal), 0)
-
-      // Facturas recibidas de esta operación
-      const frs = frByOp[op.id] || []
-      const costos_usd = frs.reduce((t, f) => t + (f.total_usd || 0), 0)
-      const iva_credito = frs.filter(f => f.credito_fiscal).reduce((t, f) => t + (f.iva_monto || 0) / (f.tc_referencia || tcVal), 0)
-
-      // Markup: cobrado al cliente en recuperos − pagado a proveedores en recuperos
-      const cobrado_recupero = fes.filter(f => f.a_recuperar).reduce((t, f) => t + (f.total_usd || 0), 0)
-      const pagado_recupero = frs.filter(f => f.a_recuperar).reduce((t, f) => t + (f.total_usd || 0), 0)
-      const markup_usd = cobrado_recupero - pagado_recupero
-
-      // IVA neto: si débito > crédito → costo
-      const iva_neto = Math.max(0, iva_debito - iva_credito)
-
-      // Margen bruto
-      const margen_bruto = fee_usd + markup_usd - iva_neto
-
-      return {
-        id: op.id,
-        num: cot?.num || '—',
-        cliente: cot?.cliente || '—',
-        estado: op.estado || 'activa',
-        fecha_cierre: op.fecha_cierre || op.updated_at?.slice(0,10) || '',
-        ingresos_usd, costos_usd, fee_usd, markup_usd,
-        iva_debito, iva_credito, iva_neto,
-        margen_bruto, contenedores,
-        gf_por_ingresos: 0, gf_por_costos: 0,
-        gf_por_contenedores: 0, gf_igualitario: 0,
-        mn_ingresos: 0, mn_costos: 0,
-        mn_contenedores: 0, mn_igualitario: 0,
-      }
-    }).filter(o => o.ingresos_usd > 0 || o.fee_usd > 0)
-
-    // Calcular prorrateos de gastos fijos
-    const totIngresos = opsData.reduce((t, o) => t + o.ingresos_usd, 0)
-    const totCostos   = opsData.reduce((t, o) => t + o.costos_usd, 0)
-    const totConts    = opsData.reduce((t, o) => t + o.contenedores, 0)
-    const nOps        = opsData.length || 1
-
-    for (const o of opsData) {
-      o.gf_por_ingresos     = totIngresos > 0 ? gfUSD * (o.ingresos_usd / totIngresos) : 0
-      o.gf_por_costos       = totCostos > 0   ? gfUSD * (o.costos_usd / totCostos) : 0
-      o.gf_por_contenedores = totConts > 0    ? gfUSD * (o.contenedores / totConts) : 0
-      o.gf_igualitario      = gfUSD / nOps
-      o.mn_ingresos         = o.margen_bruto - o.gf_por_ingresos
-      o.mn_costos           = o.margen_bruto - o.gf_por_costos
-      o.mn_contenedores     = o.margen_bruto - o.gf_por_contenedores
-      o.mn_igualitario      = o.margen_bruto - o.gf_igualitario
-    }
+    // Procesar operaciones (lógica compartida con la vista anual)
+    const opsData = computarOpsData((opRes.data||[]) as any[], (feRes.data||[]) as any[], (frRes.data||[]) as any[], gfUSD, tcVal)
 
     // Separar: cerradas en el período vs en curso
     const opsCerradas = opsData.filter(o => {
@@ -437,20 +472,21 @@ export default function UtilidadesPage() {
         <div className="space-y-4">
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
             <h3 className="font-bold text-sm text-gray-900 mb-1">Resultado ejercicio fiscal {anio}</h3>
-            <p className="text-xs text-gray-400 mb-4">Operaciones cerradas · Enero — Diciembre {anio} · Normativa SII Chile</p>
-            <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-[11px] text-amber-700 mb-4">
-              ⚠ Este resumen incluye solo el período seleccionado ({MESES[mes]} {anio}). Para ver el ejercicio anual completo cambiá el selector de mes y sumá los períodos, o usá el resumen mensual de cada mes.
-              Próximamente: vista consolidada anual automática.
-            </div>
+            <p className="text-xs text-gray-400 mb-4">Operaciones cerradas · Enero — Diciembre {anio} · consolidado automático · Normativa SII Chile</p>
+            {loadingAnio ? (
+              <div className="text-xs text-gray-400 py-6 text-center">Consolidando el ejercicio…</div>
+            ) : opsAnio.length===0 ? (
+              <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-6 text-center text-xs text-gray-400">Sin operaciones cerradas en {anio}.</div>
+            ) : (
             <div className="space-y-2">
               {[
-                { label: 'Ingresos totales del ejercicio', val: ops.reduce((t,o)=>t+o.ingresos_usd,0), indent: false, bold: false },
-                { label: 'Fee Puerto NOA', val: totFee, indent: true, bold: false },
-                { label: 'Markup sobre costos', val: totMarkup, indent: true, bold: false },
-                { label: 'IVA neto pagado SII', val: -totIVA, indent: true, bold: false },
-                { label: 'RESULTADO BRUTO DE EXPLOTACIÓN', val: totMB, indent: false, bold: true },
-                { label: 'Gastos de administración y operación', val: -gastosFijosMes, indent: true, bold: false },
-                { label: `RESULTADO NETO DEL EJERCICIO`, val: totMN, indent: false, bold: true },
+                { label: 'Ingresos totales del ejercicio', val: totAnioIngresos, indent: false, bold: false },
+                { label: 'Fee Puerto NOA', val: totAnioFee, indent: true, bold: false },
+                { label: 'Markup sobre costos', val: totAnioMarkup, indent: true, bold: false },
+                { label: 'IVA neto pagado SII', val: -totAnioIVA, indent: true, bold: false },
+                { label: 'RESULTADO BRUTO DE EXPLOTACIÓN', val: totAnioMB, indent: false, bold: true },
+                { label: 'Gastos de administración y operación (12 meses)', val: -gastosFijosAnio, indent: true, bold: false },
+                { label: `RESULTADO NETO DEL EJERCICIO`, val: totAnioMN, indent: false, bold: true },
               ].map((r,i) => (
                 <div key={i} className={`flex justify-between py-2 border-b border-gray-50 ${r.bold?'border-t border-gray-200 mt-2 pt-3':''} ${r.indent?'pl-4':''}`}>
                   <span className={`text-xs ${r.bold?'font-bold text-gray-900':'text-gray-600'}`}>{r.label}</span>
@@ -460,7 +496,45 @@ export default function UtilidadesPage() {
                 </div>
               ))}
             </div>
+            )}
           </div>
+
+          {!loadingAnio && opsAnio.length>0 && (
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3">Composición del ejercicio — mes a mes</div>
+            <table className="w-full text-xs">
+              <thead><tr className="border-b border-gray-100 text-[10px] text-gray-400 uppercase">
+                <th className="text-left py-2">Mes</th>
+                <th className="text-right py-2">Ingresos</th>
+                <th className="text-right py-2">Margen bruto</th>
+                <th className="text-right py-2">Gastos fijos</th>
+                <th className="text-right py-2">Margen neto</th>
+              </tr></thead>
+              <tbody>
+                {desgloseMensual.filter(d=>d.ingresos!==0||d.mb!==0||d.gf!==0).map(d => (
+                  <tr key={d.mes} className="border-b border-gray-50">
+                    <td className="py-1.5 text-gray-700">{MESES[d.mes]}</td>
+                    <td className="py-1.5 text-right font-mono text-gray-600">{fmtN(d.ingresos)}</td>
+                    <td className="py-1.5 text-right font-mono text-gray-600">{fmtN(d.mb)}</td>
+                    <td className="py-1.5 text-right font-mono text-orange-600">{d.gf>0?`−${fmtN(d.gf)}`:'—'}</td>
+                    <td className={`py-1.5 text-right font-mono font-bold ${colorMN(d.mn)}`}>{d.mn<0?`−${fmtN(Math.abs(d.mn))}`:fmtN(d.mn)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-gray-200 font-bold">
+                  <td className="py-2 text-gray-900">Ejercicio {anio}</td>
+                  <td className="py-2 text-right font-mono text-gray-900">{fmtN(totAnioIngresos)}</td>
+                  <td className="py-2 text-right font-mono text-gray-900">{fmtN(totAnioMB)}</td>
+                  <td className="py-2 text-right font-mono text-orange-700">{gastosFijosAnio>0?`−${fmtN(gastosFijosAnio)}`:'—'}</td>
+                  <td className={`py-2 text-right font-mono ${colorMN(totAnioMN)}`}>{totAnioMN<0?`−${fmtN(Math.abs(totAnioMN))}`:fmtN(totAnioMN)}</td>
+                </tr>
+              </tfoot>
+            </table>
+            <div className="mt-3 text-[10px] text-gray-400">El margen neto total del ejercicio es independiente del criterio de prorrateo (bruto − gastos fijos). El criterio solo redistribuye los gastos fijos entre operaciones.</div>
+          </div>
+          )}
+
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
             <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3">Datos para declaración — Puerto NOA SpA</div>
             <div className="text-xs text-gray-500 space-y-1">
