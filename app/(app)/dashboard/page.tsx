@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 const fmtN = (n: number) => (n||0).toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtUSD = (n: number) => `USD ${fmtN(n)}`
@@ -18,6 +19,10 @@ export default function DashboardLogisticoPage() {
     alertas: [], provVencimientos: [],
     tcARS: null, tcCLP: null, tcFecha: '', tcOk: true,
   })
+
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  const [permListos, setPermListos] = useState(false)
+  useEffect(() => { cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
 
   useEffect(() => { load() }, [])
 
@@ -110,6 +115,18 @@ export default function DashboardLogisticoPage() {
   const saludo = hora < 12 ? 'Buenos días' : hora < 20 ? 'Buenas tardes' : 'Buenas noches'
 
   if (loading) return <div className="p-12 text-center text-gray-400">Cargando...</div>
+
+  if (permListos && !puede(permisos, 'dashboard', 'ver')) {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-3">🔒</div>
+          <h2 className="text-lg font-bold text-gray-700">Sin acceso</h2>
+          <p className="text-sm text-gray-400 mt-1">No tenés permiso para ver esta sección. Si creés que es un error, contactá al administrador.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
