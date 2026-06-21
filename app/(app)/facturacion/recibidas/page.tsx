@@ -68,7 +68,8 @@ export default function FacturasRecibidasPage() {
   const [operaciones, setOperaciones] = useState<any[]>([])
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
 
-  useEffect(() => { loadUser(); loadData(); cargarPermisos().then(setPermisos) }, [])
+  const [permListos, setPermListos] = useState(false)
+  useEffect(() => { loadUser(); loadData(); cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
 
   async function loadUser() {
     const { data: auth } = await supabase.auth.getUser()
@@ -110,6 +111,11 @@ export default function FacturasRecibidasPage() {
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
   const fmtCLP = (n: number) => Math.round(n).toLocaleString('es-CL')
 
+  if (permListos && !puede(permisos,'facturas_recibidas','ver')) {
+    return (<div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center"><div className="text-center max-w-sm"><div className="text-5xl mb-3">🔒</div><h2 className="text-lg font-bold text-gray-700">Sin acceso</h2><p className="text-sm text-gray-400 mt-1">No tenés permiso para ver esta sección. Si creés que es un error, contactá al administrador.</p></div></div>)
+  }
+  const puedeCrearFR = puede(permisos,'facturas_recibidas','crear')
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-6">
@@ -121,7 +127,7 @@ export default function FacturasRecibidasPage() {
           {view !== 'lista' && (
             <button onClick={() => { setView('lista'); setSelId(null) }} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-100">← Volver</button>
           )}
-          {view === 'lista' && (
+          {view === 'lista' && puedeCrearFR && (
             <button onClick={() => setView('nueva')} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">
               + Registrar factura
             </button>
@@ -168,7 +174,7 @@ export default function FacturasRecibidasPage() {
               <div className="p-12 text-center">
                 <div className="text-4xl mb-3">📥</div>
                 <div className="text-gray-500 text-sm mb-1">Sin facturas recibidas</div>
-                <button onClick={() => setView('nueva')} className="mt-3 px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold">+ Registrar primera</button>
+                {puedeCrearFR && <button onClick={() => setView('nueva')} className="mt-3 px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold">+ Registrar primera</button>}
               </div>
             ) : (
               <table className="w-full text-xs">
@@ -514,6 +520,7 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
 }
 
 function DetalleFacturaRecibida({ factura, supabase, permisos, onReload, onBack }: any) {
+  const puedeEditarFR = puede(permisos,'facturas_recibidas','editar')
   const fmtCLP = (n: number) => Math.round(n).toLocaleString('es-CL')
   const items = Array.isArray(factura.items) ? factura.items : []
   const [abriendo, setAbriendo] = useState(false)
@@ -556,8 +563,8 @@ function DetalleFacturaRecibida({ factura, supabase, permisos, onReload, onBack 
           </div>
         </div>
         <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100 flex-wrap">
-          <span className="text-[10px] text-gray-400 self-center">Estado:</span>
-          {(['recibida', 'contabilizada', 'pagada', 'anulada'] as string[]).filter(e => e !== factura.estado).map(e => (
+          {puedeEditarFR && <span className="text-[10px] text-gray-400 self-center">Estado:</span>}
+          {puedeEditarFR && (['recibida', 'contabilizada', 'pagada', 'anulada'] as string[]).filter(e => e !== factura.estado).map(e => (
             <button key={e} onClick={() => cambiarEstado(e)}
               className={`px-3 py-1 rounded-full text-[10px] font-semibold border ${ESTADO_CLS[e]} hover:opacity-80`}>
               {ESTADO_L[e]}
