@@ -232,12 +232,13 @@ function CotizacionesProveedoresInner() {
   const [filtroEstado, setFiltroEstado] = useState('')
   const [buscar, setBuscar] = useState('')
   const [permisos, setPermisos] = useState<Record<string,string[]>>({})
+  const [permListos, setPermListos] = useState(false)
   // Snapshot de la cotización a duplicar (se restaura al abrir el formulario)
   const [dupSnapshot, setDupSnapshot] = useState<any>(null)
 
   useEffect(() => {
     loadAll()
-    cargarPermisos().then(setPermisos)
+    cargarPermisos().then(p => { setPermisos(p); setPermListos(true) })
     // Detectar si viene del cotizador con params prellenados
     const esNuevo = searchParams.get('nuevo')
     if(esNuevo === '1') {
@@ -338,6 +339,22 @@ function CotizacionesProveedoresInner() {
     total: cotizaciones.filter(c => c.rubro === r && c.estado === 'vigente').length,
   })).filter(s => s.total > 0)
 
+  const puedeCrear = puede(permisos,'cotizaciones_proveedores','crear')
+  const puedeEditar = puede(permisos,'cotizaciones_proveedores','editar')
+  const puedeEliminar = puede(permisos,'cotizaciones_proveedores','eliminar')
+
+  if (permListos && !puede(permisos,'cotizaciones_proveedores','ver')) {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-3">🔒</div>
+          <h2 className="text-lg font-bold text-gray-700">Sin acceso</h2>
+          <p className="text-sm text-gray-400 mt-1">No tenés permiso para ver esta sección. Si creés que es un error, contactá al administrador.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-6">
@@ -351,7 +368,7 @@ function CotizacionesProveedoresInner() {
           {view !== 'lista' && (
             <button onClick={() => setView('lista')} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-100">Volver</button>
           )}
-          {view === 'lista' && (
+          {view === 'lista' && puedeCrear && (
             <button onClick={() => { setDupSnapshot(null); setInitParams(null); setView('nueva') }} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">+ Nueva cotizacion</button>
           )}
         </div>
@@ -411,7 +428,7 @@ function CotizacionesProveedoresInner() {
             ) : filtradas.length === 0 ? (
               <div className="p-12 text-center">
                 <div className="text-gray-500 text-sm mb-3">{cotizaciones.length === 0 ? 'Sin cotizaciones cargadas aun' : 'Sin resultados'}</div>
-                {cotizaciones.length === 0 && (
+                {cotizaciones.length === 0 && puedeCrear && (
                   <button onClick={() => { setDupSnapshot(null); setInitParams(null); setView('nueva') }} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold">+ Cargar primera cotizacion</button>
                 )}
               </div>
@@ -467,7 +484,8 @@ function CotizacionesProveedoresInner() {
                           <select value={c.estado}
                             onClick={e => e.stopPropagation()}
                             onChange={e => { e.stopPropagation(); cambiarEstado(c.id, e.target.value) }}
-                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border-0 cursor-pointer focus:outline-none ${
+                            disabled={!puedeEditar}
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border-0 ${puedeEditar?'cursor-pointer':'cursor-default opacity-80'} focus:outline-none ${
                               c.estado === 'vigente' ? 'bg-green-50 text-green-700' :
                               c.estado === 'vencida' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-500'
                             }`}>
@@ -488,8 +506,8 @@ function CotizacionesProveedoresInner() {
                           <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                             <button onClick={e => { e.stopPropagation(); setSelId(c.id); setView('detalle') }}
                               className="p-1.5 border border-gray-200 rounded-lg hover:bg-[#EBF2FF] text-gray-500 hover:text-[#1168F8] transition-colors">E</button>
-                            <button onClick={e => { e.stopPropagation(); eliminar(c.id) }}
-                              className="p-1.5 border border-red-100 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">X</button>
+                            {puedeEliminar && <button onClick={e => { e.stopPropagation(); eliminar(c.id) }}
+                              className="p-1.5 border border-red-100 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">X</button>}
                           </div>
                         </td>
                       </tr>
@@ -525,6 +543,7 @@ function CotizacionesProveedoresInner() {
           onReload={async () => { await loadAll() }}
           onBack={() => setView('lista')}
           onEliminar={() => eliminar(sel.id)}
+          permisos={permisos}
         />
       )}
       {previewModal && (
@@ -2113,8 +2132,10 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
 }
 
 
-function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubrosDisp, onReload, onBack, onEliminar }: any) {
+function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubrosDisp, onReload, onBack, onEliminar, permisos }: any) {
   const rubros = rubrosDisp || RUBROS
+  const puedeEditar = puede(permisos,'cotizaciones_proveedores','editar')
+  const puedeEliminar = puede(permisos,'cotizaciones_proveedores','eliminar')
   const [editando, setEditando] = useState(false)
   const [items, setItems] = useState<Item[]>(cotizacion.items || [])
   const [saving, setSaving] = useState(false)
@@ -2209,11 +2230,11 @@ function DetalleCotizacion({ cotizacion, supabase, terceros, cotsSistema, rubros
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setEditando(!editando)}
+            {puedeEditar && <button onClick={() => setEditando(!editando)}
               className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-colors ${editando ? 'bg-gray-100 border-gray-200 text-gray-600' : 'border-[#1168F8] text-[#1168F8] hover:bg-[#EBF2FF]'}`}>
               {editando ? 'Cancelar' : 'Editar items'}
-            </button>
-            <button onClick={onEliminar} className="px-4 py-2 rounded-xl text-xs font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-colors">Eliminar</button>
+            </button>}
+            {puedeEliminar && <button onClick={onEliminar} className="px-4 py-2 rounded-xl text-xs font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-colors">Eliminar</button>}
           </div>
         </div>
       </div>
