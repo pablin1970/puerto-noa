@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt } from '@/lib/utils'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 const TIPO_L: Record<string, string> = {
   factura: 'Factura', pago: 'Pago realizado',
@@ -31,6 +32,10 @@ export default function CteProveedoresPage() {
   const [saving, setSaving] = useState(false)
   const [uploadingComp, setUploadingComp] = useState(false)
   const [compUrl, setCompUrl] = useState('')
+
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  const [permListos, setPermListos] = useState(false)
+  useEffect(() => { cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
 
   useEffect(() => { loadUser(); loadData() }, [])
 
@@ -96,6 +101,18 @@ export default function CteProveedoresPage() {
   const totalSaldo = saldosPorProveedor.reduce((s, t) => s + t.saldo, 0)
   const fmtCLP = (n: number) => Math.round(n).toLocaleString('es-CL')
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+
+  if (permListos && !puede(permisos, 'cte_proveedores', 'ver')) {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-3">🔒</div>
+          <h2 className="text-lg font-bold text-gray-700">Sin acceso</h2>
+          <p className="text-sm text-gray-400 mt-1">No tenés permiso para ver esta sección. Si creés que es un error, contactá al administrador.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
