@@ -63,9 +63,9 @@ export default function ServiciosCatalogo() {
     setLoading(true)
     const permisos = await cargarPermisos()
     setSuperAdmin(esSuperAdmin())
-    setPuedeVer(puede(permisos, 'servicios_deposito', 'ver'))
-    setPuedeCrear(puede(permisos, 'servicios_deposito', 'crear'))
-    setPuedeEditar(puede(permisos, 'servicios_deposito', 'editar'))
+    setPuedeVer(puede(permisos, 'cat_servicios', 'ver'))
+    setPuedeCrear(puede(permisos, 'cat_servicios', 'crear'))
+    setPuedeEditar(puede(permisos, 'cat_servicios', 'editar'))
     const [rRes, mRes, hRes, iRes] = await Promise.all([
       supabase.from('proveedor_rubros').select('codigo,nombre,color,icono,activo,orden').eq('activo', true).order('orden', { ascending: true }),
       supabase.from('servicios_metricas').select('*').order('orden', { ascending: true }),
