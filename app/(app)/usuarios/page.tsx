@@ -334,6 +334,12 @@ export default function UsuariosPage() {
     )
   }
 
+  const puedeCrearU = puedeAccion(permUser,'usuarios','crear')
+  const puedeEditarU = puedeAccion(permUser,'usuarios','editar')
+  const puedeCrearR = puedeAccion(permUser,'roles','crear')
+  const puedeEditarR = puedeAccion(permUser,'roles','editar')
+  const puedeEliminarR = puedeAccion(permUser,'roles','eliminar')
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-6">
@@ -342,13 +348,13 @@ export default function UsuariosPage() {
           <p className="text-xs text-gray-400 mt-0.5">{usuarios.filter(u => u.activo).length} activos · {roles.length} roles</p>
         </div>
         <div className="flex gap-2">
-          {tab === 'usuarios' && (
+          {tab === 'usuarios' && puedeCrearU && (
             <button onClick={() => { setFormU({ nombre: '', email: '', iniciales: '', roles_ids: [], activo: true }); setGeneratedPassword(''); setModalUsuario({ type: 'nuevo' }) }}
               className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">
               + Nuevo usuario
             </button>
           )}
-          {tab === 'roles' && (
+          {tab === 'roles' && puedeCrearR && (
             <button onClick={() => { setFormR({ nombre: '', descripcion: '', color: '#1168F8' }); setModalRol({ type: 'nuevo' }) }}
               className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">
               + Nuevo rol
@@ -422,19 +428,21 @@ export default function UsuariosPage() {
                         {u.last_login_ciudad ? <div className="text-xs text-gray-600">{u.last_login_ciudad}, {u.last_login_pais}</div> : <span className="text-gray-300">—</span>}
                       </td>
                       <td className="px-4 py-3.5">
+                        {puedeEditarU ? (
                         <button onClick={() => toggleActivo(u)}
                           className={`inline-flex px-3 py-1 rounded-full text-[10px] font-bold border transition-colors ${u.activo ? 'bg-green-50 text-green-700 border-green-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200' : 'bg-red-50 text-red-700 border-red-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
                           {u.activo ? 'Activo' : 'Pausado'}
                         </button>
+                        ) : <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-bold border ${u.activo ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{u.activo ? 'Activo' : 'Pausado'}</span>}
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex gap-1.5">
-                          <button onClick={() => { setFormU({ nombre: u.nombre, email: u.email, iniciales: u.iniciales, roles_ids: u.roles_ids || [], activo: u.activo }); setGeneratedPassword(''); setModalUsuario({ type: 'editar', usuario: u }) }}
-                            className="p-1.5 border border-gray-200 rounded-lg hover:bg-[#EBF2FF] hover:border-[#93B8FC] text-gray-500 hover:text-[#1168F8] transition-colors" title="Editar">✏</button>
+                          {puedeEditarU && <button onClick={() => { setFormU({ nombre: u.nombre, email: u.email, iniciales: u.iniciales, roles_ids: u.roles_ids || [], activo: u.activo }); setGeneratedPassword(''); setModalUsuario({ type: 'editar', usuario: u }) }}
+                            className="p-1.5 border border-gray-200 rounded-lg hover:bg-[#EBF2FF] hover:border-[#93B8FC] text-gray-500 hover:text-[#1168F8] transition-colors" title="Editar">✏</button>}
                           <button onClick={() => verHistorial(u)}
                             className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors" title="Historial">📋</button>
-                          <button onClick={() => { setGeneratedPassword(''); setModalUsuario({ type: 'password', usuario: u }) }}
-                            className="p-1.5 border border-amber-200 rounded-lg hover:bg-amber-50 text-amber-700 transition-colors" title="Reset contraseña">🔑</button>
+                          {puedeEditarU && <button onClick={() => { setGeneratedPassword(''); setModalUsuario({ type: 'password', usuario: u }) }}
+                            className="p-1.5 border border-amber-200 rounded-lg hover:bg-amber-50 text-amber-700 transition-colors" title="Reset contraseña">🔑</button>}
                         </div>
                       </td>
                     </tr>
@@ -462,9 +470,9 @@ export default function UsuariosPage() {
                   <div className="text-[9px] text-gray-400">{usuarios.filter(u => (u.roles_ids || []).includes(r.id)).length} usuario(s)</div>
                 </div>
                 <div className="flex gap-0.5 ml-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => { setFormR({ nombre: r.nombre, descripcion: r.descripcion, color: r.color }); setModalRol({ type: 'editar', rol: r }) }}
-                    className="text-gray-400 hover:text-[#1168F8] text-[11px] p-1">✏</button>
-                  <button onClick={() => eliminarRol(r.id)} className="text-gray-400 hover:text-red-500 text-[11px] p-1">🗑</button>
+                  {puedeEditarR && <button onClick={() => { setFormR({ nombre: r.nombre, descripcion: r.descripcion, color: r.color }); setModalRol({ type: 'editar', rol: r }) }}
+                    className="text-gray-400 hover:text-[#1168F8] text-[11px] p-1">✏</button>}
+                  {puedeEliminarR && <button onClick={() => eliminarRol(r.id)} className="text-gray-400 hover:text-red-500 text-[11px] p-1">🗑</button>}
                 </div>
               </div>
             ))}
@@ -486,10 +494,10 @@ export default function UsuariosPage() {
                   </span>
                   <button onClick={() => { setPermisosModificados({}); setModulosRevisadosLocal(new Set()) }}
                     className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50">Descartar</button>
-                  <button onClick={guardarPermisos} disabled={savingPermisos}
+                  {puedeEditarR && <button onClick={guardarPermisos} disabled={savingPermisos}
                     className="px-4 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs font-bold disabled:opacity-50">
                     {savingPermisos ? 'Guardando...' : 'Guardar permisos'}
-                  </button>
+                  </button>}
                 </div>
               )}
             </div>
@@ -602,7 +610,7 @@ export default function UsuariosPage() {
                                 ) : (
                                   <>
                                     <span className="text-[9px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full border border-green-300 normal-case">● sin asignar</span>
-                                    <button onClick={() => toggleRevisadoLocal(item.modulo)} className="text-[9px] text-green-700 hover:text-green-900 underline normal-case" title="Confirmar este módulo aunque no le asignes permisos a nadie">confirmar sin permisos</button>
+                                    {puedeEditarR && <button onClick={() => toggleRevisadoLocal(item.modulo)} className="text-[9px] text-green-700 hover:text-green-900 underline normal-case" title="Confirmar este módulo aunque no le asignes permisos a nadie">confirmar sin permisos</button>}
                                   </>
                                 )}
                               </div>
@@ -649,10 +657,10 @@ export default function UsuariosPage() {
               <div className="flex gap-2">
                 <button onClick={() => { setPermisosModificados({}); setModulosRevisadosLocal(new Set()) }}
                   className="px-4 py-2 border border-amber-200 rounded-xl text-xs text-amber-700 hover:bg-amber-100">Descartar</button>
-                <button onClick={guardarPermisos} disabled={savingPermisos}
+                {puedeEditarR && <button onClick={guardarPermisos} disabled={savingPermisos}
                   className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
                   {savingPermisos ? 'Guardando...' : 'Guardar permisos'}
-                </button>
+                </button>}
               </div>
             </div>
           )}
