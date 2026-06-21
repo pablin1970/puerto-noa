@@ -278,8 +278,8 @@ function OperacionDetail({ op, cot, tab, setTab, reload, permisos }: {
           {tab === 'facturas' && <FacturasTab facturas={facturas} cot={cot} tipoOp={tipoOp} permisos={permisos} reload={loadDetail} />}
           {tab === 'comparativo' && <ComparativoTab presup={presup} facturas={facturas} />}
           {tab === 'caja' && <CajaRendirTab opId={op.id} cotNum={cot.num || ''} movs={movs} saldo={saldoCaja} permisos={permisos} />}
-          {tab === 'cierre' && <CierreTab op={op} saldoCaja={saldoCaja} totalPresup={totalPresup} facturadoGasto={facturadoGasto} saldadoUsd={saldadoUsd} pendienteUsd={pendienteUsd} reload={reload} />}
-          {tab === 'minuta' && <MinutaTab opId={op.id} cotNum={cot.num || ''} cliente={cot.cliente} minuta={minuta} reload={loadDetail} />}
+          {tab === 'cierre' && <CierreTab op={op} saldoCaja={saldoCaja} totalPresup={totalPresup} facturadoGasto={facturadoGasto} saldadoUsd={saldadoUsd} pendienteUsd={pendienteUsd} reload={reload} permisos={permisos} />}
+          {tab === 'minuta' && <MinutaTab opId={op.id} cotNum={cot.num || ''} cliente={cot.cliente} minuta={minuta} reload={loadDetail} permisos={permisos} />}
           {tab === 'documentos' && <DocumentosTab opId={op.id} docs={docs} reload={loadDetail} permisos={permisos} />}
         </>
       )}
@@ -584,11 +584,13 @@ function CajaRendirTab({ opId, cotNum, movs, saldo, permisos }: {
 }
 
 // ── CIERRE TAB (valida caja en cero, congela liquidación, cierra) ──
-function CierreTab({ op, saldoCaja, totalPresup, facturadoGasto, saldadoUsd, pendienteUsd, reload }: {
+function CierreTab({ op, saldoCaja, totalPresup, facturadoGasto, saldadoUsd, pendienteUsd, reload, permisos }: {
   op: Operacion & { cotizacion: Cotizacion }
   saldoCaja: number; totalPresup: number; facturadoGasto: number; saldadoUsd: number; pendienteUsd: number; reload: () => void
+  permisos: Record<string, string[]>
 }) {
   const supabase = createClient()
+  const puedeEditar = puede(permisos, 'operaciones', 'editar')
   const [cerrando, setCerrando] = useState(false)
   const cerrada = op.estado === 'cerrada'
   const enCero = Math.abs(saldoCaja) < 0.01
@@ -639,10 +641,12 @@ function CierreTab({ op, saldoCaja, totalPresup, facturadoGasto, saldadoUsd, pen
         <div className="bg-green-50 border border-green-200 rounded-xl p-5">
           <div className="text-sm font-semibold text-green-800 mb-1">✓ La caja a rendir está en cero</div>
           <div className="text-xs text-green-700 mb-4">Se puede cerrar la operación. {hayPendientes ? 'Atención: hay facturas pendientes de pago.' : 'Todas las facturas están saldadas.'}</div>
+          {puedeEditar ? (
           <button onClick={cerrar} disabled={cerrando}
             className="px-5 py-2.5 bg-[#1168F8] text-white rounded-lg text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
             {cerrando ? 'Cerrando...' : '🔒 Cerrar operación y congelar liquidación'}
           </button>
+          ) : <div className="text-xs text-gray-400">No tenés permiso para cerrar la operación.</div>}
         </div>
       ) : (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
@@ -661,7 +665,8 @@ function CierreTab({ op, saldoCaja, totalPresup, facturadoGasto, saldadoUsd, pen
 }
 
 // ── MINUTA TAB ─────────────────────────────────────────────────
-function MinutaTab({ opId, cotNum, cliente, minuta, reload }: { opId: string; cotNum: string; cliente: string; minuta: MinutaItem[]; reload: () => void }) {
+function MinutaTab({ opId, cotNum, cliente, minuta, reload, permisos }: { opId: string; cotNum: string; cliente: string; minuta: MinutaItem[]; reload: () => void; permisos: Record<string, string[]> }) {
+  const puedeEditar = puede(permisos, 'operaciones', 'editar')
   const [form, setForm] = useState({ prov: '', concepto: '', moneda: 'USD', monto: '', fecha: nowDate(), banco: '', cuenta: '', swift: '', notas: '' })
   const supabase = createClient()
   const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -699,7 +704,7 @@ function MinutaTab({ opId, cotNum, cliente, minuta, reload }: { opId: string; co
           <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Swift / alias</label><input value={form.swift} onChange={e => setForm(f => ({ ...f, swift: e.target.value }))} className={inp} /></div>
         </div>
         <div className="mb-4"><label className="block text-[10px] text-gray-500 font-medium mb-1">Notas</label><input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} className={inp} placeholder="Referencia a incluir en la transferencia" /></div>
-        <div className="flex justify-end"><button onClick={agregar} className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">+ Agregar a minuta</button></div>
+        <div className="flex justify-end">{puedeEditar && <button onClick={agregar} className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">+ Agregar a minuta</button>}</div>
       </div>
       <div className="no-print flex items-center justify-between mb-3">
         <span className="text-xs text-gray-500">{minuta.length} ítem(s) · {totalUSD > 0 ? `USD ${fmt(totalUSD)}` : ''}{totalARS > 0 ? ` · ARS ${Math.round(totalARS).toLocaleString('es-AR')}` : ''}</span>
@@ -744,7 +749,7 @@ function MinutaTab({ opId, cotNum, cliente, minuta, reload }: { opId: string; co
                 </div>
               )}
               {it.notas && <div className="mt-2 text-[10px] text-amber-700 bg-amber-50 rounded px-3 py-1.5">📌 {it.notas}</div>}
-              <div className="no-print flex justify-end mt-2"><button onClick={() => eliminar(it.id)} className="text-gray-400 hover:text-red-500 text-xs">🗑 Quitar</button></div>
+              <div className="no-print flex justify-end mt-2">{puedeEditar && <button onClick={() => eliminar(it.id)} className="text-gray-400 hover:text-red-500 text-xs">🗑 Quitar</button>}</div>
             </div>
           ))}
           {!minuta.length && <div className="px-6 py-8 text-center text-gray-400 text-xs">Agregá ítems a la minuta para presentar al cliente.</div>}
@@ -796,7 +801,9 @@ function DocumentosTab({ opId, docs, reload, permisos }: { opId: string; docs: a
   const inp = 'w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]'
 
   const puedeVer = puede(permisos, 'operaciones', 'ver')
-  const puedeDescargar = puede(permisos, 'operaciones', 'descargar')
+  const puedeDescargar = puede(permisos, 'operaciones_documentos', 'descargar')
+  const puedeSubirDoc = puede(permisos, 'operaciones_documentos', 'crear')
+  const puedeEliminarDoc = puede(permisos, 'operaciones_documentos', 'eliminar')
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -861,6 +868,7 @@ function DocumentosTab({ opId, docs, reload, permisos }: { opId: string; docs: a
 
   return (
     <div className="space-y-4">
+      {puedeSubirDoc && (
       <div className="bg-white border border-gray-100 rounded-xl p-5">
         <h3 className="font-medium text-sm text-gray-900 mb-4">Agregar documento</h3>
         <div className="grid grid-cols-4 gap-3 mb-3">
@@ -881,6 +889,7 @@ function DocumentosTab({ opId, docs, reload, permisos }: { opId: string; docs: a
             onChange={e => { const f = e.target.files?.[0]; if (f) subirDocumento(f) }} />
         </label>
       </div>
+      )}
       {Object.keys(grouped).length === 0 ? (
         <div className="bg-white border border-gray-100 rounded-xl p-8 text-center text-gray-400 text-sm">Sin documentos cargados aún.</div>
       ) : (
@@ -910,7 +919,7 @@ function DocumentosTab({ opId, docs, reload, permisos }: { opId: string; docs: a
                       <button onClick={() => descargarDoc(doc)}
                         className="px-2.5 py-1.5 border border-gray-200 text-gray-600 rounded-lg text-[10px] font-medium hover:bg-gray-50">⬇ Descargar</button>
                     )}
-                    <button onClick={() => eliminar(doc.id)} className="p-1.5 border border-gray-200 rounded-lg text-gray-400 hover:text-red-500 text-[10px]">🗑</button>
+                    {puedeEliminarDoc && <button onClick={() => eliminar(doc.id)} className="p-1.5 border border-gray-200 rounded-lg text-gray-400 hover:text-red-500 text-[10px]">🗑</button>}
                   </div>
                 </div>
               ))}
