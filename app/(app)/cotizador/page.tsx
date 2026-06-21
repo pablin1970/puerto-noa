@@ -63,6 +63,7 @@ interface CotProvSel {
   seguroModo: 'pct'|'fijo'
   seguroMonto: number
   segAlcance: 'no'|'maritimo'|'punta_a_punta'
+  terceroId?: string|null
   esManual?: boolean
   manualMonto?: number
 }
@@ -713,36 +714,42 @@ const criteriosMaritimo = (it:any): CritCoincidencia[] => {
   ]
 }
 
-// Criterios para BLOQUE CHILE (depósito / agente): anclados al puerto Chile + contenedor.
-// El depósito y el agente guardan su ubicación como puerto Chile (origen del ítem).
-const criteriosChile = (it:any): CritCoincidencia[] => {
-  const chile = s.puertoChileId
-  const contsOp = s.contenedores.map((c:any)=>c.tipo).filter(Boolean)
+// ── COINCIDENCIA POR PAÍS DEL PROVEEDOR (engancha por rubro, no por ruta) ──
+const paisTercero = (terceroId:any):string => {
+  if(!terceroId) return ''
+  const t = terceros.find((x:any)=>x.id===terceroId)
+  return (t?.pais||'').toString()
+}
+const esPaisAR = (p:string):boolean => { const x=p.toLowerCase(); return x.includes('argentin')||x==='ar' }
+const esPaisCL = (p:string):boolean => { const x=p.toLowerCase(); return x.includes('chile')||x==='cl' }
+// CHILE (rubros transporte_chile=agente y deposito=depósito fiscal/extraportuario).
+// Chile puede ser origen, destino o tránsito → coincide si la operación toca Chile + proveedor chileno.
+const criteriosProvChile = (terceroId:any): CritCoincidencia[] => {
+  const pais = paisTercero(terceroId)
   return [
-    { label:'Puerto Chile', aplica: !!chile, ok: !!chile && (it.origen_id===chile || it.destino_id===chile) },
-    { label:'Contenedor',   aplica: contsOp.length>0, ok: !!it.tipoContenedor && contsOp.includes(it.tipoContenedor) },
+    { label:'Toca Chile',        aplica: true,   ok: !!s.puertoChileId },
+    { label:'Proveedor chileno', aplica: !!pais, ok: esPaisCL(pais) },
   ]
 }
-
-// Criterios para DESPACHANTE (gastos_argentina): paso fronterizo + ciudad NOA destino.
-// Se evalúa a nivel cotización (no hay tabla de ítems): basta que algún ítem coincida.
-const criteriosDespachanteCot = (c:any): CritCoincidencia[] => {
-  const ciudad = s.ciudadDestinoId
-  const opPaso = s.pasoId
-  const items = c.items || []
+// ARGENTINA (rubro gastos_argentina=despachante). Argentina nunca es tránsito → coincide si la
+// operación llega/sale de Argentina (hay ciudad NOA) + proveedor argentino.
+const criteriosProvArg = (terceroId:any): CritCoincidencia[] => {
+  const pais = paisTercero(terceroId)
   return [
-    { label:'Paso',       aplica: !!opPaso,  ok: !!opPaso  && items.some((it:any)=>it.paso_id===opPaso) },
-    { label:'Ciudad NOA', aplica: !!ciudad,  ok: !!ciudad  && items.some((it:any)=>it.destino_id===ciudad) },
+    { label:'Llega/sale de Argentina', aplica: true,   ok: !!s.ciudadDestinoId },
+    { label:'Proveedor argentino',     aplica: !!pais, ok: esPaisAR(pais) },
   ]
 }
-// Sufijo textual de coincidencia para las opciones del dropdown de despachante.
-const sufijoCoincDesp = (c:any):string => {
-  const { todo, ok, total } = nivelCoincidencia(criteriosDespachanteCot(c))
+const criteriosDespachanteCot = (c:any): CritCoincidencia[] => criteriosProvArg(c?.tercero_id || c?.terceroId || null)
+const sufijoCoincCrit = (crit: CritCoincidencia[]):string => {
+  const { todo, ok, total } = nivelCoincidencia(crit)
   if(total===0) return ''
   if(todo) return '  ✓ coincide'
   if(ok>0) return `  ● parcial ${ok}/${total}`
   return ''
 }
+const sufijoCoincChile = (c:any):string => sufijoCoincCrit(criteriosProvChile(c?.tercero_id || c?.terceroId || null))
+const sufijoCoincDesp  = (c:any):string => sufijoCoincCrit(criteriosProvArg(c?.tercero_id || c?.terceroId || null))
 
 // Criterios para COMPAÑÍA ASEGURADORA: los dos extremos del tramo cubierto por la
 // cotización deben pertenecer a la ruta de la operación (China/Chile/NOA), + paso si aplica.
@@ -847,6 +854,7 @@ function cotMercDesdeSistema(cot:any, usadas:string[]): CotProvSel {
     uid: uid2(),
     cotProvId: cot.id,
     proveedorNombre: cot.proveedor_nombre||'',
+    terceroId: cot.tercero_id||null,
     referencia: cot.referencia||'',
     fechaEmision: cot.fecha||'',
     fechaVencimiento: cot.fecha_vencimiento||'',
@@ -888,6 +896,7 @@ function cotProvDesdeSistema(cot:any, contenedoresH1:{tipo:string;cantidad:numbe
     uid: uid2(),
     cotProvId: cot.id,
     proveedorNombre: cot.proveedor_nombre||'',
+    terceroId: cot.tercero_id||null,
     referencia: cot.referencia||'',
     fechaEmision: cot.fecha||'',
     fechaVencimiento: cot.fecha_vencimiento||'',
@@ -2556,8 +2565,8 @@ const clientesFiltrados=terceros.filter(t=>
                         const esp=cotsChile.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
                         const gen=cotsChile.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
                         return(<>
-                          {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}{sufijoCoincDesp(c)}</option>)})}</optgroup>)}
-                          <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}{sufijoCoincDesp(c)}</option>))}</optgroup>
+                          {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}{sufijoCoincChile(c)}</option>)})}</optgroup>)}
+                          <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}{sufijoCoincChile(c)}</option>))}</optgroup>
                         </>)
                       })()}
                     </select>
@@ -2586,6 +2595,7 @@ const clientesFiltrados=terceros.filter(t=>
                           <div className="flex-1 px-3 py-2.5">
                             <div className="flex items-center gap-2 flex-wrap mb-0.5">
                               <span className="font-semibold text-sm text-gray-900">{ct.proveedorNombre}</span>
+                              <MedidorCoincidencia criterios={criteriosProvChile(ct.terceroId)}/>
                               {ct.tipo==='especifica'?<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEEDFE] text-[#3C3489]">⭐ Específica{ct.clienteId&&terceros.find(t=>t.id===ct.clienteId)?` · ${terceros.find(t=>t.id===ct.clienteId)!.razon_social}`:''}</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500">Genérica</span>}
                               {vigente?<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700">vigente</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700">vencida {fmtFecha(ct.fechaVencimiento)}</span>}
                               {ct.usadaEnCots.length>0&&<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">⚠ Usada en {ct.usadaEnCots.join(', ')}</span>}
@@ -2614,7 +2624,7 @@ const clientesFiltrados=terceros.filter(t=>
                           <tbody>
                             {ct.items.map(it=>{
                               return (
-                                <tr key={it.itemId} className={`border-b border-gray-50 ${claseFilaCoincidencia(criteriosChile(it),it.seleccionado)}`}>
+                                <tr key={it.itemId} className={`border-b border-gray-50 ${it.seleccionado?'bg-green-50/30':''}`}>
                                   <td className="px-2 py-2 text-center">
                                     <button onClick={()=>toggleItemCotProv('cotsProvChile',ct.uid,it.itemId)}>
                                       <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${it.seleccionado?'bg-[#0a9e6e] border-[#0a9e6e]':'border-gray-300 hover:border-[#0a9e6e]'}`}>
@@ -2626,7 +2636,6 @@ const clientesFiltrados=terceros.filter(t=>
                                     <div className="font-medium text-gray-800">{it.descripcion}</div>
                                     <div className="flex gap-1.5 mt-0.5 flex-wrap">
                                       {it.tipoContenedor&&<span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{it.tipoContenedor}</span>}
-                                      <MedidorCoincidencia criterios={criteriosChile(it)}/>
                                     </div>
                                   </td>
                                   <td className="px-3 py-2 text-right font-mono text-gray-700">USD {fmt(it.valorUnit)}</td>
@@ -3000,6 +3009,7 @@ const clientesFiltrados=terceros.filter(t=>
                         ✓ {s.despachante}
                       </span>
                     )}
+                    {despachanteSelId&&<MedidorCoincidencia criterios={criteriosProvArg(despachanteSelId)}/>}
                     {cotDesp && (
                       <span className={`text-[9px] font-medium px-2 py-0.5 rounded-full ${cotDesp.tipo==='especifica'?'bg-amber-50 text-amber-700 border border-amber-200':'bg-gray-100 text-gray-500'}`}>
                         {cotDesp.tipo==='especifica'?'⭐ Cotizacion especifica':'Cotizacion generica'}
