@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { createClient } from '@/lib/supabase'
 import { fmt, ETAPAS_L, ETAPAS_ORD, nowDate, nowStr } from '@/lib/utils'
 import type { Cotizacion, Operacion } from '@/types'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 type Tab4 = 'resultado' | 'comparativo' | 'rendicion' | 'interno' | 'cierre'
 
@@ -45,6 +46,10 @@ export default function CierrePage() {
   const [tab, setTab] = useState<Tab4>('resultado')
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
+
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  const [permListos, setPermListos] = useState(false)
+  useEffect(() => { cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
 
   useEffect(() => { loadOps() }, [])
   useEffect(() => { if (selId) loadDetail() }, [selId])
@@ -124,6 +129,18 @@ export default function CierrePage() {
     { key: 'interno', label: 'Liquidación interna' },
     { key: 'cierre', label: 'Cierre' },
   ]
+
+  if (permListos && !puede(permisos, 'cierre', 'ver')) {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-3">🔒</div>
+          <h2 className="text-lg font-bold text-gray-700">Sin acceso</h2>
+          <p className="text-sm text-gray-400 mt-1">No tenés permiso para ver esta sección. Si creés que es un error, contactá al administrador.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6">
