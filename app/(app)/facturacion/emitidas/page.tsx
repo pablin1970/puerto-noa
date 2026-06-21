@@ -48,7 +48,8 @@ export default function FacturasEmitidasPage() {
   const [operaciones, setOperaciones] = useState<any[]>([])
   const [permisos, setPermisos] = useState<Record<string,string[]>>({})
 
-  useEffect(() => { loadUser(); loadData(); cargarPermisos().then(setPermisos) }, [])
+  const [permListos, setPermListos] = useState(false)
+  useEffect(() => { loadUser(); loadData(); cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
 
   async function loadUser() {
     const { data: auth } = await supabase.auth.getUser()
@@ -84,6 +85,12 @@ export default function FacturasEmitidasPage() {
     totalUSD: facturas.filter(f => f.total_usd && f.estado !== 'anulada').reduce((s, f) => s + (f.total_usd || 0), 0),
   }
 
+  if (permListos && !puede(permisos,'facturas_emitidas','ver')) {
+    return (<div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center"><div className="text-center max-w-sm"><div className="text-5xl mb-3">🔒</div><h2 className="text-lg font-bold text-gray-700">Sin acceso</h2><p className="text-sm text-gray-400 mt-1">No tenés permiso para ver esta sección. Si creés que es un error, contactá al administrador.</p></div></div>)
+  }
+  const puedeCrearFE = puede(permisos,'facturas_emitidas','crear')
+  const puedeDescargarFE = puede(permisos,'facturas_emitidas','descargar')
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-6">
@@ -93,8 +100,8 @@ export default function FacturasEmitidasPage() {
         </div>
         <div className="flex gap-2">
           {view !== 'lista' && <button onClick={() => { setView('lista'); setSelId(null) }} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-100">← Volver</button>}
-          {view === 'lista' && <button onClick={() => setView('nueva')} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">+ Nueva factura</button>}
-          {view === 'detalle' && sel && <button onClick={() => setView('impresion')} className="px-4 py-2 bg-[#052698] text-white rounded-xl text-xs font-bold hover:bg-[#1168F8]">🖨 Imprimir / PDF</button>}
+          {view === 'lista' && puedeCrearFE && <button onClick={() => setView('nueva')} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">+ Nueva factura</button>}
+          {view === 'detalle' && sel && puedeDescargarFE && <button onClick={() => setView('impresion')} className="px-4 py-2 bg-[#052698] text-white rounded-xl text-xs font-bold hover:bg-[#1168F8]">🖨 Imprimir / PDF</button>}
         </div>
       </div>
 
@@ -133,7 +140,7 @@ export default function FacturasEmitidasPage() {
               <div className="p-12 text-center">
                 <div className="text-4xl mb-3">📄</div>
                 <div className="text-gray-500 text-sm mb-1">Sin facturas aún</div>
-                <button onClick={() => setView('nueva')} className="mt-3 px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold">+ Crear primera factura</button>
+                {puedeCrearFE && <button onClick={() => setView('nueva')} className="mt-3 px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold">+ Crear primera factura</button>}
               </div>
             ) : (
               <table className="w-full text-xs">
@@ -396,6 +403,8 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, onSave, onC
 }
 
 function DetalleFactura({ factura, supabase, permisos, onReload, onImprimir, onBack }: any) {
+  const puedeEditarFE = puede(permisos,'facturas_emitidas','editar')
+  const puedeAnular = puede(permisos,'facturas_emitidas_anular','editar')
   const [editandoFolio, setEditandoFolio] = useState(false)
   const [folio, setFolio] = useState(String(factura.folio || ''))
   const [saving, setSaving] = useState(false)
@@ -457,16 +466,16 @@ function DetalleFactura({ factura, supabase, permisos, onReload, onImprimir, onB
             ) : (
               <div className="flex items-center gap-2">
                 <span className="font-mono font-bold text-gray-900">{factura.folio || '—'}</span>
-                <button onClick={() => setEditandoFolio(true)} className="text-[10px] text-[#1168F8] hover:underline">{factura.folio ? '✏ Editar' : '+ Ingresar folio SII'}</button>
+                {puedeEditarFE && <button onClick={() => setEditandoFolio(true)} className="text-[10px] text-[#1168F8] hover:underline">{factura.folio ? '✏ Editar' : '+ Ingresar folio SII'}</button>}
               </div>
             )}
           </div>
           {!factura.folio && <div className="text-[10px] text-amber-600 mt-1.5">⚠ Ingresá el folio una vez que hayas emitido la factura en el portal SII</div>}
         </div>
         <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100 flex-wrap">
-          <span className="text-[10px] text-gray-400 self-center">Cambiar estado:</span>
+          {(puedeEditarFE || puedeAnular) && <span className="text-[10px] text-gray-400 self-center">Cambiar estado:</span>}
           {(['emitida','enviada_sii','aceptada_sii','pagada','anulada'] as string[]).filter(e => e !== factura.estado).map(e => (
-            <button key={e} onClick={() => cambiarEstado(e)} className={`px-3 py-1 rounded-full text-[10px] font-semibold border ${ESTADO_CLS[e]} hover:opacity-80`}>{ESTADO_L[e]}</button>
+            (e === 'anulada' ? puedeAnular : puedeEditarFE) ? <button key={e} onClick={() => cambiarEstado(e)} className={`px-3 py-1 rounded-full text-[10px] font-semibold border ${ESTADO_CLS[e]} hover:opacity-80`}>{ESTADO_L[e]}</button> : null
           ))}
         </div>
       </div>
