@@ -128,10 +128,10 @@ export default function InteligenciaPreciosPage() {
     setLoading(true)
     const [itemsRes, cotsRes, tcRes, svcRes, ciuRes, pchinaRes, pchileRes, utmRes] = await Promise.all([
       supabase.from('cotizaciones_proveedor_v2_items')
-        .select('*, cotizacion:cotizaciones_proveedor_v2(id,proveedor_nombre,fecha,rubro,estado,referencia,tramo,tipo,cliente_id,puerto_china_id,puerto_chile_id,tc_snapshot,ciudad_prestacion_id,etiqueta_lugar)')
+        .select('*, cotizacion:cotizaciones_proveedor_v2(id,proveedor_nombre,fecha,rubro,estado,referencia,tipo,cliente_id,puerto_china_id,puerto_chile_id,tc_snapshot,ciudad_prestacion_id,etiqueta_lugar)')
         .order('cotizacion_id'),
       supabase.from('cotizaciones_proveedor_v2')
-        .select('id,proveedor_nombre,fecha,rubro,estado,referencia,tramo')
+        .select('id,proveedor_nombre,fecha,rubro,estado,referencia')
         .order('fecha', { ascending: false }),
       supabase.from('tipos_cambio_eventos')
         .select('ars,clp,cny,fecha,created_at')
