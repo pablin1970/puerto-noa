@@ -93,6 +93,7 @@ interface CotState {
   cotsProvFW: CotProvSel[]
   cotsProvSeg: CotProvSel[]   // Bloque 1 - Compañía aseguradora
   segModoIndep: 'pct'|'fijo'; segValIndep: number
+  pctIntlTerr: number   // % internacional del tramo terrestre (hasta el paso) que entra al CIF
   // Bloque 2 - Transporte Chile-NOA
   cotsProvChile: CotProvSel[]
   gastosChile: GastoChile[]
@@ -138,6 +139,7 @@ const INIT: CotState = {
   cotsProvFW:[],
   cotsProvSeg:[],
   segModoIndep:'pct',segValIndep:0.5,
+  pctIntlTerr:60,
   cotsProvChile:[],
   gastosChile:[],
   cotsProvTransp:[],
@@ -461,22 +463,24 @@ const subFW = fwElegida
     ? (fwElegida.manualMonto||0)
     : fwElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
   : 0
+// Prima del forwarder (% sobre FOB o monto fijo USD). Cubre marítimo, o marítimo+terrestre si es punta a punta.
 const segFW = fwElegida?.segAlcance!=='no'
   ? (fwElegida?.seguroModo==='pct'
       ? totalFOB*(fwElegida?.seguroMonto||0)/100
       : (fwElegida?.seguroMonto||0))
   : 0
-const segIndepCalc = fwElegida?.segAlcance==='maritimo'
-  ? (s.segModoIndep==='pct'?(totalFOB+subFW)*s.segValIndep/100:s.segValIndep)
-  : 0
-// Seguro de la compañía aseguradora (Bloque 1, rubro seguro): ítems seleccionados.
-// % sobre FOB (confirmado por Pablo); fijo en USD. Se suma al seguro total → entra al CIF.
-const subSeg = s.cotsProvSeg.reduce((tot,c)=>{
-  if(c.esManual) return tot + (c.manualMonto||0)
-  return tot + c.items.filter(i=>i.seleccionado).reduce((t,i)=>
+// Clasifica un ítem de aseguradora por tramo: terrestre si cruza un paso o toca la ciudad NOA; si no, marítimo.
+const segItemEsTerrestre = (it:any):boolean =>
+  !!it.paso_id || (!!s.ciudadDestinoId && (it.origen_id===s.ciudadDestinoId || it.destino_id===s.ciudadDestinoId))
+// Seguro de la compañía aseguradora (Bloque 1, rubro seguro): ítems seleccionados, % sobre FOB o fijo USD.
+const sumaSegAseg = (soloTerr:boolean):number => s.cotsProvSeg.reduce((tot:number,c:any)=>{
+  if(c.esManual) return soloTerr ? tot : tot + (c.manualMonto||0)
+  return tot + c.items.filter((i:any)=>i.seleccionado && segItemEsTerrestre(i)===soloTerr).reduce((t:number,i:any)=>
     t + (i.tipo_calculo==='pct_cif' ? totalFOB*i.valorUnit/100 : i.subtotal), 0)
 },0)
-const totalSeg = segFW + subSeg
+const subSegMar  = sumaSegAseg(false)   // aseguradora — tramo marítimo
+const subSegTerr = sumaSegAseg(true)    // aseguradora — tramo terrestre
+const subSeg = subSegMar + subSegTerr
 // Bloque 2: Transporte Chile-NOA (cotizaciones del sistema)
 // Bloque 2: Transporte Chile-NOA (cotizaciones del sistema)
 const transpChileElegida = s.cotsProvChile.find(c=>c.elegida)
@@ -514,7 +518,39 @@ const subTransp=s.optTransp==='A'
 
 // Estadias
 const subEstadias=s.estadiaCargaVal*s.estadiaCargaDias+s.estadiaDescargaVal*s.estadiaDescargaDias
-// Seguro terrestre (solo si seguro FW es maritimo)
+// ── MOTOR DE COBERTURA DE SEGURO POR TRAMO (cascada con inversión impo/expo) ──
+// Marítimo: China↔Chile (no cruza paso → 100% internacional). Terrestre: Chile↔NOA vía paso (% internacional al CIF).
+const esExpoSeg = s.sentido==='exportacion'
+// % internacional del tramo terrestre (hasta el paso). Default 60. Solo afecta la base CIF; el costo se paga completo.
+const pctIntlTerr = (typeof s.pctIntlTerr==='number' && s.pctIntlTerr>=0 && s.pctIntlTerr<=100) ? s.pctIntlTerr : 60
+const fIntlTerr = pctIntlTerr/100
+// Seguro que cobra el transportista por el tramo terrestre (simétrico al forwarder; % sobre FOB).
+const segCamion = transpTerrElegida?.seguroIncluido
+  ? (transpTerrElegida.seguroModo==='pct' ? totalFOB*(transpTerrElegida.seguroMonto||0)/100 : (transpTerrElegida.seguroMonto||0))
+  : 0
+// Quién cubre cada tramo
+const fwCubreMar  = fwElegida?.segAlcance==='maritimo' || fwElegida?.segAlcance==='punta_a_punta'
+const fwCubreTerr = fwElegida?.segAlcance==='punta_a_punta'
+const camionCubreTerr = !!transpTerrElegida?.seguroIncluido
+const asegCubreMar  = subSegMar>0
+const asegCubreTerr = subSegTerr>0
+// Marítimo (impo y expo igual): forwarder → aseguradora
+const tramoMarPor: 'forwarder'|'aseguradora'|null =
+  fwCubreMar ? 'forwarder' : (asegCubreMar ? 'aseguradora' : null)
+// Terrestre con inversión: IMPO forwarder(p2p)→camión→aseguradora · EXPO camión→forwarder(p2p)→aseguradora
+const tramoTerrPor: 'forwarder'|'camion'|'aseguradora'|null = esExpoSeg
+  ? (camionCubreTerr ? 'camion' : (fwCubreTerr ? 'forwarder' : (asegCubreTerr ? 'aseguradora' : null)))
+  : (fwCubreTerr ? 'forwarder' : (camionCubreTerr ? 'camion' : (asegCubreTerr ? 'aseguradora' : null)))
+// Habilitación de fuentes para la UI (un tramo ya tomado se deshabilita en las demás)
+const segMarAsegHabilitado    = !fwCubreMar
+const segTerrCamionHabilitado = esExpoSeg ? true : !fwCubreTerr
+const segTerrAsegHabilitado   = !fwCubreTerr && !camionCubreTerr
+// Primas EFECTIVAS (solo cuenta la fuente que realmente tomó el tramo)
+const segMarEff  = tramoMarPor==='forwarder' ? segFW : (tramoMarPor==='aseguradora' ? subSegMar : 0)
+const segTerrEff = tramoTerrPor==='camion' ? segCamion : (tramoTerrPor==='aseguradora' ? subSegTerr : 0)
+// (si el forwarder es punta a punta, su prima segFW ya incluye el tramo terrestre)
+const totalSeg = segMarEff + segTerrEff            // costo total de seguro (se paga completo)
+const subTranspIntl = subTransp * fIntlTerr        // porción internacional del flete terrestre (al CIF)
 // Bloque 4: Gastos Argentina
 const calcGastoArg=(g:GastoArg,cifUsd:number,tcTrib:number):number=>{
   let usd=0
@@ -526,7 +562,8 @@ const calcGastoArg=(g:GastoArg,cifUsd:number,tcTrib:number):number=>{
   else {usd=g.valor/(tcTrib||1)}
   return usd
 }
-const cif=totalFOB+subFW+totalSeg
+// CIF (Cost, Insurance & Freight) hasta el paso: FOB + fletes·%intl + seguros·%intl. Base de tributos ARCA.
+const cif=totalFOB + subFW + subTranspIntl + segMarEff + segTerrEff*fIntlTerr
 const cifARS=cif*s.tcTrib
 // Honorario + gastos adicionales despachante (sección A)
 const subHon=calcGastoArg({id:'hon',desc:'',tipoCalc:s.honTipo,moneda:'USD',valor:s.honValor,pisoUsd:s.honPiso,techoUsd:s.honTecho,usd:0,ars:0},cif,s.tcTrib)
@@ -535,7 +572,7 @@ const subGastosArg=subHon+subGastosDesp
 // Otros gastos Argentina sección B
 const subE=s.rowsE.reduce((t,r)=>t+calcGastoArg(r,cif,s.tcTrib),0)
 // Base logística para el fee (sin FOB, sin ARCA, sin el propio fee)
-const baseLogFee=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+segIndepCalc+subE+subGastosArg
+const baseLogFee=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+subE+subGastosArg
 const fee=s.feeModo==='pct' ? baseLogFee*s.feePct/100 : s.feeCont*nc
 
 function calcTrib(cfg:TribCfg[],cifARS:number,derPct:number){
@@ -563,7 +600,7 @@ const mercaderiaActiva = (): boolean => {
 const hayMercaderia = mercaderiaActiva() && totalFOB > 0
 const arcaActivo = hayMercaderia && s.incluirArca
 const totalTribUSD = arcaActivo ? totalTribARS/s.tcTrib : 0
-const totalLog=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+segIndepCalc+subE+subGastosArg+fee
+const totalLog=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+subE+subGastosArg+fee
 const totalLanded=totalFOB+totalLog+totalTribUSD
 const productosParaCap = mercElegida
   ? mercItems.map(it=>({vol_unit:(it as any).volUnit||0, cantidad:it.cantUsar||0, peso_unit:(it as any).pesoUnit||0} as any))
@@ -957,6 +994,10 @@ function setCantUsarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|
 function updateSegAlcanceFW(cotUid:string, segAlcance:'no'|'maritimo'|'punta_a_punta'){
   setS(p=>({...p,cotsProvFW:p.cotsProvFW.map(c=>c.uid===cotUid?{...c,segAlcance}:c)}))
 }
+// Setea el seguro del transportista (camión) sobre la cotización terrestre elegida.
+function setSegCamion(campo:'seguroIncluido'|'seguroModo'|'seguroMonto', valor:any){
+  setS(p=>({...p,cotsProvTransp:p.cotsProvTransp.map(c=>c.elegida?{...c,[campo]:valor}:c)}))
+}
 
 // Transporte Chile desde sistema
 function agregarTranspChileDesdeSistema(cotId:string){
@@ -1209,12 +1250,12 @@ async function guardar(){
     const uid=(uDB as any)?.id||''
     const presupuesto=[
       ...(subFW>0?[{etapa:'forwarder',tipo:'flete',concepto:`ForWarder: ${fwElegida?.proveedorNombre||'Manual'}`,usd:subFW}]:[]),
-      ...(totalSeg>0?[{etapa:'forwarder',tipo:'seguro',concepto:'Seguro mercaderia',usd:totalSeg}]:[]),
+      ...(segMarEff>0?[{etapa:'forwarder',tipo:'seguro',concepto:'Seguro maritimo',usd:segMarEff}]:[]),
       ...(subGastosChile>0?[{etapa:'chile',tipo:'servicios',concepto:'Gastos post-entrega Chile',usd:subGastosChile}]:[]),
       ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidacion (Opcion ${s.optTransp})`,usd:subD}]:[]),
       ...(subTransp>0?[{etapa:'terrestre',tipo:'flete',concepto:'Transporte terrestre',usd:subTransp}]:[]),
       ...(subEstadias>0?[{etapa:'terrestre',tipo:'estadia',concepto:'Estadias por demora',usd:subEstadias}]:[]),
-      ...(segIndepCalc>0?[{etapa:'terrestre',tipo:'seguro',concepto:'Seguro terrestre',usd:segIndepCalc}]:[]),
+      ...(segTerrEff>0?[{etapa:'terrestre',tipo:'seguro',concepto:'Seguro terrestre',usd:segTerrEff}]:[]),
       ...(subE>0?[{etapa:'argentina',tipo:'servicios',concepto:'Gastos Argentina',usd:subE}]:[]),
       ...(subGastosArg>0?[{etapa:'argentina',tipo:'gastos_arg',concepto:'Gastos Argentina (despachante)',usd:subGastosArg}]:[]),
       ...(totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Regimen ${s.regimen}`,usd:totalTribUSD}]:[]),
@@ -1270,12 +1311,12 @@ const clientesFiltrados=terceros.filter(t=>
     if(!s.cliente){alert('Ingresá el nombre del cliente antes de previsualizar.');return}
     const presupuesto=[
       ...(subFW>0?[{etapa:'forwarder',tipo:'flete',concepto:`ForWarder: ${fwElegida?.proveedorNombre||'Manual'}`,usd:subFW}]:[]),
-      ...(totalSeg>0?[{etapa:'forwarder',tipo:'seguro',concepto:'Seguro mercaderia',usd:totalSeg}]:[]),
+      ...(segMarEff>0?[{etapa:'forwarder',tipo:'seguro',concepto:'Seguro maritimo',usd:segMarEff}]:[]),
       ...(subGastosChile>0?[{etapa:'chile',tipo:'servicios',concepto:'Gastos post-entrega Chile',usd:subGastosChile}]:[]),
       ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidacion (Opcion ${s.optTransp})`,usd:subD}]:[]),
       ...(subTransp>0?[{etapa:'terrestre',tipo:'flete',concepto:'Transporte terrestre',usd:subTransp}]:[]),
       ...(subEstadias>0?[{etapa:'terrestre',tipo:'estadia',concepto:'Estadias por demora',usd:subEstadias}]:[]),
-      ...(segIndepCalc>0?[{etapa:'terrestre',tipo:'seguro',concepto:'Seguro terrestre',usd:segIndepCalc}]:[]),
+      ...(segTerrEff>0?[{etapa:'terrestre',tipo:'seguro',concepto:'Seguro terrestre',usd:segTerrEff}]:[]),
       ...(subE>0?[{etapa:'argentina',tipo:'servicios',concepto:'Gastos Argentina',usd:subE}]:[]),
       ...(subGastosArg>0?[{etapa:'argentina',tipo:'gastos_arg',concepto:'Gastos Argentina (despachante)',usd:subGastosArg}]:[]),
       ...(totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Regimen ${s.regimen}`,usd:totalTribUSD}]:[]),
@@ -2425,21 +2466,27 @@ const clientesFiltrados=terceros.filter(t=>
                             {sg.items.map(it=>{
                               const esPct=it.tipo_calculo==='pct_cif'
                               const sub=esPct?totalFOB*it.valorUnit/100:it.subtotal
+                              const esTerr=segItemEsTerrestre(it)
+                              const bloqueado=esTerr?!segTerrAsegHabilitado:!segMarAsegHabilitado
                               return (
-                                <tr key={it.itemId} className={`border-b border-gray-50 ${claseFilaCoincidencia(criteriosSeguro(it),it.seleccionado)}`}>
+                                <tr key={it.itemId} className={`border-b border-gray-50 ${bloqueado?'opacity-40':claseFilaCoincidencia(criteriosSeguro(it),it.seleccionado)}`}>
                                   <td className="px-2 py-2 text-center">
-                                    <button onClick={()=>toggleItemCotProv('cotsProvSeg',sg.uid,it.itemId)}>
-                                      <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${it.seleccionado?'bg-purple-600 border-purple-600':'border-gray-300 hover:border-purple-600'}`}>
-                                        {it.seleccionado&&<div className="w-2 h-1.5 border-l-2 border-b-2 border-white" style={{transform:'rotate(-45deg) translate(1px,-1px)'}}/>}
+                                    <button disabled={bloqueado} onClick={()=>{if(!bloqueado)toggleItemCotProv('cotsProvSeg',sg.uid,it.itemId)}}>
+                                      <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${bloqueado?'border-gray-200 bg-gray-100':it.seleccionado?'bg-purple-600 border-purple-600':'border-gray-300 hover:border-purple-600'}`}>
+                                        {it.seleccionado&&!bloqueado&&<div className="w-2 h-1.5 border-l-2 border-b-2 border-white" style={{transform:'rotate(-45deg) translate(1px,-1px)'}}/>}
                                       </div>
                                     </button>
                                   </td>
                                   <td className="px-3 py-2">
-                                    <div className="font-medium text-gray-800">{it.descripcion}</div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-medium text-gray-800">{it.descripcion}</span>
+                                      <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-semibold ${esTerr?'bg-green-50 text-green-700':'bg-blue-50 text-blue-700'}`}>{esTerr?'terrestre':'marítimo'}</span>
+                                      {bloqueado&&<span className="text-[8px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">tramo ya cubierto</span>}
+                                    </div>
                                     <div className="flex gap-1.5 mt-0.5 flex-wrap"><MedidorCoincidencia criterios={criteriosSeguro(it)}/></div>
                                   </td>
                                   <td className="px-3 py-2 text-right font-mono text-gray-700">{esPct?`${fmt(it.valorUnit)}% FOB`:`USD ${fmt(it.valorUnit)}`}</td>
-                                  <td className="px-3 py-2 text-right">{it.seleccionado?<span className="font-mono font-semibold text-purple-700">USD {fmt(sub)}</span>:<span className="text-gray-300">—</span>}</td>
+                                  <td className="px-3 py-2 text-right">{it.seleccionado&&!bloqueado?<span className="font-mono font-semibold text-purple-700">USD {fmt(sub)}</span>:<span className="text-gray-300">—</span>}</td>
                                 </tr>
                               )
                             })}
@@ -2817,23 +2864,79 @@ const clientesFiltrados=terceros.filter(t=>
                 </div>
               )}
 
-              {/* Seguro terrestre — solo si FW elegido tiene alcance maritimo */}
-              {fwElegida?.segAlcance==='maritimo'&&(
-                <div className="pt-3 border-t border-gray-100">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Seguro terrestre</div>
-                    <span className="text-[9px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-medium">Requerido — seguro maritimo no cubre este tramo</span>
+              {/* ── % INTERNACIONAL Y SEGURO DEL TRAMO TERRESTRE ── */}
+              {(transpTerrElegida || subTransp>0) && (
+                <div className="pt-3 border-t border-gray-100 space-y-3">
+                  {/* % internacional del tramo (hasta el paso) → base CIF */}
+                  <div className="bg-amber-50/60 border border-amber-200 rounded-xl px-4 py-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="text-[10px] font-semibold text-amber-800 uppercase tracking-wider">% internacional del tramo (hasta el paso)</div>
+                      <input type="text" inputMode="decimal" value={s.pctIntlTerr} onFocus={e=>e.target.select()}
+                        onChange={e=>{const v=parseNum(e.target.value); u('pctIntlTerr', v>100?100:v<0?0:v)}}
+                        className="w-20 px-2 py-1 border border-amber-300 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#b45309]"/>
+                      <span className="text-[10px] text-amber-700">%</span>
+                      <span className="text-[9px] text-gray-500">Solo esta porción del flete y seguro terrestre entra al CIF (base de tributos). El resto es tramo nacional. Default 60%.</span>
+                    </div>
+                    {subTransp>0 && (
+                      <div className="mt-1.5 text-[10px] font-mono text-amber-800">
+                        Flete terrestre USD {fmt(subTransp)} → al CIF: USD {fmt(subTranspIntl)} ({fmt(pctIntlTerr,0)}%)
+                      </div>
+                    )}
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <Field label="Modalidad"><select value={s.segModoIndep} onChange={e=>u('segModoIndep',e.target.value as any)} className={sel}><option value="pct">% sobre CIF</option><option value="fijo">Monto fijo (USD)</option></select></Field>
-                    <Field label={s.segModoIndep==='pct'?'Tasa (%)':'Monto (USD)'}><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.segValIndep} onChange={e=>u('segValIndep',parseNum(e.target.value))} className={inp}/></Field>
-                    <Field label="Seguro calculado"><div className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right font-mono">USD {fmt(segIndepCalc)}</div></Field>
+
+                  {/* Seguro del tramo terrestre — cascada */}
+                  <div>
+                    <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Seguro del tramo terrestre</div>
+                    {fwCubreTerr ? (
+                      <div className="text-[11px] text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                        Cubierto por el forwarder (punta a punta). No se contrata seguro terrestre adicional.
+                      </div>
+                    ) : !transpTerrElegida ? (
+                      <div className="text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                        Elegí una cotización de transporte terrestre para que el transportista cobre el seguro de este tramo, o cargá una aseguradora en el Bloque 1.
+                      </div>
+                    ) : !segTerrCamionHabilitado ? (
+                      <div className="text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                        Tramo terrestre ya tomado por el forwarder (punta a punta). El transportista no puede cobrarlo.
+                      </div>
+                    ) : (
+                      <div className="border border-gray-200 rounded-xl px-4 py-3 bg-white">
+                        <label className="flex items-center gap-2 cursor-pointer mb-2">
+                          <input type="checkbox" checked={!!transpTerrElegida.seguroIncluido}
+                            onChange={e=>setSegCamion('seguroIncluido', e.target.checked)} className="w-4 h-4 accent-[#b45309]"/>
+                          <span className="text-xs font-medium text-gray-700">El transportista cobra el seguro de este tramo</span>
+                        </label>
+                        {transpTerrElegida.seguroIncluido && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <select value={transpTerrElegida.seguroModo} onChange={e=>setSegCamion('seguroModo', e.target.value)}
+                              className="px-2 py-1 border border-gray-200 rounded text-xs bg-white focus:outline-none">
+                              <option value="pct">% sobre FOB</option><option value="fijo">Monto fijo USD</option>
+                            </select>
+                            <input type="text" inputMode="decimal" value={transpTerrElegida.seguroMonto||''} onFocus={e=>e.target.select()}
+                              onChange={e=>setSegCamion('seguroMonto', parseNum(e.target.value))}
+                              className="w-24 px-2 py-1 border border-gray-200 rounded text-xs text-right font-mono bg-white focus:outline-none" placeholder="0.00"/>
+                            <span className="text-[10px] text-gray-400">{transpTerrElegida.seguroModo==='pct'?'%':'USD'}</span>
+                            {segCamion>0 && <span className="text-[10px] font-mono text-[#b45309] bg-amber-50 px-2 py-0.5 rounded">= USD {fmt(segCamion)} · al CIF USD {fmt(segCamion*fIntlTerr)}</span>}
+                          </div>
+                        )}
+                        {segTerrAsegHabilitado && (
+                          <div className="text-[9px] text-gray-400 mt-2">Si no lo toma el transportista, podés cubrirlo con una aseguradora en el Bloque 1.</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Badges de cobertura por tramo */}
+                  <div className="flex items-center gap-2 flex-wrap text-[10px]">
+                    <span className="text-gray-400 uppercase tracking-wider font-semibold">Cobertura:</span>
+                    <span className={`px-2 py-0.5 rounded-full font-medium ${tramoMarPor?'bg-blue-50 text-blue-700 border border-blue-200':'bg-gray-100 text-gray-400'}`}>Marítimo: {tramoMarPor==='forwarder'?'Forwarder':tramoMarPor==='aseguradora'?'Aseguradora':'sin cubrir'}</span>
+                    <span className={`px-2 py-0.5 rounded-full font-medium ${tramoTerrPor?'bg-green-50 text-green-700 border border-green-200':'bg-gray-100 text-gray-400'}`}>Terrestre: {tramoTerrPor==='forwarder'?'Forwarder':tramoTerrPor==='camion'?'Transportista':tramoTerrPor==='aseguradora'?'Aseguradora':'sin cubrir'}</span>
                   </div>
                 </div>
               )}
             </div>
             <div className="flex justify-end items-center gap-2 px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
-              Subtotal bloque 3: <strong className="font-mono text-gray-800">USD {fmt(subTransp+subEstadias+segIndepCalc)}</strong>
+              Subtotal bloque 3: <strong className="font-mono text-gray-800">USD {fmt(subTransp+subEstadias+(tramoTerrPor==='camion'?segCamion:0))}</strong>
             </div>
           </div>
 
@@ -3151,8 +3254,8 @@ const clientesFiltrados=terceros.filter(t=>
               <div className="flex items-center justify-center px-2 text-gray-300 text-lg font-light">+</div>
               <div className="flex-1 px-5 py-3.5">
                 <div className="text-[10px] text-gray-400 mb-0.5">Flete + seguro</div>
-                <div className="text-lg font-bold font-mono text-gray-800">USD {fmt(subFW+totalSeg,0)}</div>
-                <div className="text-[9px] text-gray-400 mt-0.5">ForWarder elegido</div>
+                <div className="text-lg font-bold font-mono text-gray-800">USD {fmt(cif-totalFOB,0)}</div>
+                <div className="text-[9px] text-gray-400 mt-0.5">Flete + seguro · porción internacional</div>
               </div>
               <div className="flex items-center justify-center px-2 text-gray-300 text-lg font-light">=</div>
               <div className="flex-1 px-5 py-3.5" style={{background:'#052698'}}>
