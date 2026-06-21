@@ -105,21 +105,21 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
               {mostrarComparativa ? '✓ Con comparativa' : '+ Agregar comparativa'}
             </button>
           )}
-          <span className="text-xs text-gray-400">Estado:</span>
-          {(['enviada','aceptada','rechazada','vencida'] as EstadoCotizacion[]).filter(e => e !== cot.estado).map(e => (
+          {puede(permisos,'cotizaciones_estado','editar') && <span className="text-xs text-gray-400">Estado:</span>}
+          {puede(permisos,'cotizaciones_estado','editar') && (['enviada','aceptada','rechazada','vencida'] as EstadoCotizacion[]).filter(e => e !== cot.estado).map(e => (
             <button key={e} onClick={() => cambiarEstado(e)} className={`px-3 py-1.5 rounded-full text-[10px] font-semibold border ${ESTADO_CLS[e]}`}>{ESTADOS_L[e]}</button>
           ))}
           {cot.estado === 'aceptada' && (
             <button onClick={() => router.push(`/operaciones?cot=${cot.id}`)} className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">🚢 Operación</button>
           )}
-          <button onClick={() => {
+          {puede(permisos,'cotizaciones','descargar') && <button onClick={() => {
             const t = document.title
             document.title = `Cotizacion_${cot.num}_${cot.cliente.replace(/\s+/g,'-')}`
             window.print()
             document.title = t
           }} className="px-4 py-2 bg-[#052698] text-white rounded-lg text-xs font-bold hover:bg-[#1168F8] transition-colors">
             🖨 Imprimir / PDF
-          </button>
+          </button>}
         </div>
       </div>
 
