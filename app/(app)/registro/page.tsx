@@ -56,7 +56,15 @@ export default function RegistroPage() {
       const { data: opExist } = await supabase.from('operaciones').select('id').eq('cotizacion_id', id).single()
       let opId = (opExist as any)?.id
       if (!opExist) {
-        const { data: newOp } = await (supabase.from('operaciones') as any).insert({ cotizacion_id: id }).select('id').single()
+        // La operación nace completa: copia cliente, estado inicial y sentido (Impo/Expo) desde la cotización.
+        const { data: cotBase } = await supabase.from('cotizaciones').select('tercero_id, estado_cotizador').eq('id', id).single()
+        const sentido = (cotBase as any)?.estado_cotizador?.sentido || null
+        const { data: newOp } = await (supabase.from('operaciones') as any).insert({
+          cotizacion_id: id,
+          tercero_id: (cotBase as any)?.tercero_id || null,
+          estado: 'activa',
+          sentido,
+        }).select('id').single()
         opId = newOp?.id
       }
       if (opId) {
