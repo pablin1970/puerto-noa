@@ -900,7 +900,12 @@ function cotProvDesdeSistema(cot:any, contenedoresH1:{tipo:string;cantidad:numbe
     seguroIncluido: cot.seguro_incluido||false,
     seguroModo: (cot.seguro_modo||'pct') as 'pct'|'fijo',
     seguroMonto: parseNum(String(cot.seguro_monto||0)),
-    segAlcance: (cot.seguro_incluido?'maritimo':'no') as any,
+    // Alcance real cotizado por el proveedor (el form lo guarda en el snapshot; 'puerta_puerta' del marítimo = punta a punta).
+    segAlcance: (()=>{
+      if(!cot.seguro_incluido) return 'no'
+      const al = cot?.estado_formulario?.form?.seguro_alcance || 'maritimo'
+      return (al==='puerta_puerta'||al==='punta_a_punta') ? 'punta_a_punta' : 'maritimo'
+    })() as any,
   }
 }
 
@@ -1016,6 +1021,19 @@ function agregarTranspTerrDesdeSistema(cotId:string){
   if(!cot) return
   const usadas = cotsSistemaUsadas[cotId]||[]
   const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
+  // Engancha el seguro que cotizó el transportista (ítems tipo_flete='seguro') al toggle del camión.
+  // El % va siempre sobre FOB (regla del cotizador); el ítem de seguro no es flete, así que se saca de la lista.
+  const segItems = nueva.items.filter(i=>i.tipo_flete==='seguro')
+  if(segItems.length>0){
+    const match = segItems.find(i=>{
+      const par = new Set([i.origen_id,i.destino_id])
+      return !!s.puertoChileId && !!s.ciudadDestinoId && par.has(s.puertoChileId) && par.has(s.ciudadDestinoId)
+    }) || segItems[0]
+    nueva.seguroIncluido = true
+    nueva.seguroModo = (match.tipo_calculo==='pct_cif' ? 'pct' : 'fijo')
+    nueva.seguroMonto = match.valorUnit
+    nueva.items = nueva.items.filter(i=>i.tipo_flete!=='seguro')
+  }
   nueva.elegida = s.cotsProvTransp.length===0
   setS(p=>({...p, cotsProvTransp:[...p.cotsProvTransp, nueva]}))
   setProvUsado(pv=>({...pv,3:cotId}))
