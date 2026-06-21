@@ -69,7 +69,6 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
     section: 'Tesorería', icono: '🏦',
     items: [
       { modulo: 'flujo_cuentas', label: 'Flujo cuentas ARG↔CHL',     acciones: ['ver','crear','editar','descargar'] },
-      { modulo: 'cuentas_abm',   label: '→ Cuentas, bancos y fondos', acciones: ['ver','crear','editar','eliminar'], subitem: true },
       { modulo: 'tipos_cambio',  label: 'Tipos de cambio',           acciones: ['ver','editar'] },
     ]
   },
@@ -78,7 +77,6 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
     items: [
       { modulo: 'iva',          label: 'Libro IVA',        acciones: ['ver','editar','descargar'] },
       { modulo: 'gastos_fijos',      label: 'Gastos y costos',        acciones: ['ver','crear','editar','eliminar','descargar'] },
-      { modulo: 'gastos_categorias', label: '→ Categorías de gastos', acciones: ['ver','crear','editar','eliminar'], subitem: true },
       { modulo: 'resultados',   label: 'Resultados',       acciones: ['ver','descargar'] },
     ]
   },
@@ -86,9 +84,12 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
     section: 'Configuración', icono: '⚙️',
     items: [
       { modulo: 'catalogos',             label: 'Catálogos',            acciones: ['ver','crear','editar','eliminar'] },
-      { modulo: 'servicios_deposito',    label: '→ Servicios del catálogo', acciones: ['ver','crear','editar'], subitem: true },
-      { modulo: 'condiciones_generales', label: '→ Condiciones de cotización', acciones: ['ver','crear','editar','eliminar'], subitem: true },
-      { modulo: 'empresa',               label: 'Datos de la empresa',  acciones: ['ver','editar'] },
+      { modulo: 'cat_servicios',  label: '→ Catálogo de servicios',  acciones: ['ver','crear','editar','eliminar'], subitem: true },
+      { modulo: 'cat_cotizador',  label: '→ Cotizador',              acciones: ['ver','crear','editar','eliminar'], subitem: true },
+      { modulo: 'cat_geografia',  label: '→ Geografía y rutas',      acciones: ['ver','crear','editar','eliminar'], subitem: true },
+      { modulo: 'cat_logistica',  label: '→ Logística',              acciones: ['ver','crear','editar','eliminar'], subitem: true },
+      { modulo: 'cat_finanzas',   label: '→ Finanzas',               acciones: ['ver','crear','editar','eliminar'], subitem: true },
+      { modulo: 'cat_empresa',    label: '→ Empresa',                acciones: ['ver','editar'], subitem: true },
       { modulo: 'tributos',              label: 'Tributos ARCA',        acciones: ['ver','editar'] },
       { modulo: 'usuarios',              label: 'Usuarios',             acciones: ['ver','crear','editar','eliminar'] },
       { modulo: 'roles',                 label: 'Roles y permisos',     acciones: ['ver','crear','editar','eliminar'] },
