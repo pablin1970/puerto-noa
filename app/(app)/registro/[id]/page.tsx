@@ -6,6 +6,7 @@ import { ESTADOS_L } from '@/lib/utils'
 import type { Cotizacion, EstadoCotizacion } from '@/types'
 import Link from 'next/link'
 import CotizacionDoc from '@/components/CotizacionDoc'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 const ESTADO_CLS: Record<string, string> = {
   borrador: 'bg-gray-100 text-gray-600',
@@ -25,6 +26,10 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
   const [mostrarComparativa, setMostrarComparativa] = useState(false)
   const supabase = createClient()
   const router = useRouter()
+
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  const [permListos, setPermListos] = useState(false)
+  useEffect(() => { cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
 
   useEffect(() => {
     let cotId = rawId || id
@@ -69,6 +74,18 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
   )
 
   const hayComparativa = ((cot as any).precio_arg_equiv || 0) > 0
+
+  if (permListos && !puede(permisos, 'cotizaciones', 'ver')) {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-3">🔒</div>
+          <h2 className="text-lg font-bold text-gray-700">Sin acceso</h2>
+          <p className="text-sm text-gray-400 mt-1">No tenés permiso para ver esta sección. Si creés que es un error, contactá al administrador.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>
