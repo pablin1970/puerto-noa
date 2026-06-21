@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 interface Mensaje { rol: 'user' | 'assistant'; texto: string }
 
@@ -65,6 +66,10 @@ export default function AyudaPage() {
   const [tab, setTab] = useState<'chat'|'docs'>('docs')
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  const [permListos, setPermListos] = useState(false)
+  useEffect(() => { cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [mensajes])
@@ -97,6 +102,18 @@ export default function AyudaPage() {
       setMensajes(prev => [...prev, { rol: 'assistant', texto: 'Error al conectar con el asistente. Intentá de nuevo.' }])
     }
     setLoading(false)
+  }
+
+  if (permListos && !puede(permisos, 'ayuda', 'ver')) {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-3">🔒</div>
+          <h2 className="text-lg font-bold text-gray-700">Sin acceso</h2>
+          <p className="text-sm text-gray-400 mt-1">No tenés permiso para ver esta sección. Si creés que es un error, contactá al administrador.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
