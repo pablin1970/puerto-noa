@@ -214,9 +214,16 @@ export default function UsuariosPage() {
         await (supabase.from('rol_permisos') as any).insert({ rol_id: rolId, modulo, accion, permitido: true })
       }
     }
-    // Confirmar como "revisados" los módulos nuevos marcados en esta sesión (aunque queden sin permisos)
-    if (modulosRevisadosLocal.size > 0) {
-      const filas = Array.from(modulosRevisadosLocal).map(m => ({ modulo: m }))
+    // Confirmar como "revisados": los marcados manualmente + TODO módulo nuevo cuyos
+    // permisos se tocaron en esta sesión (incluye el tilde de columna entera, que antes
+    // llenaba rol_permisos pero no confirmaba el módulo y dejaba el cartel pegado).
+    const aConfirmar = new Set<string>(modulosRevisadosLocal)
+    Object.keys(permisosModificados).forEach(key => {
+      const modulo = key.split('|')[1]
+      if (modulosNuevosSet.has(modulo)) aConfirmar.add(modulo)
+    })
+    if (aConfirmar.size > 0) {
+      const filas = Array.from(aConfirmar).map(m => ({ modulo: m }))
       await (supabase.from('modulos_revisados') as any).upsert(filas, { onConflict: 'modulo' })
     }
     setPermisosModificados({})
