@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 const fmtN = (n: number) => (n||0).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -19,6 +20,10 @@ export default function LibroIVAPage() {
   const [utmMes, setUtmMes] = useState<number | null>(null)
   const [utmInput, setUtmInput] = useState('')
   const [savingUtm, setSavingUtm] = useState(false)
+
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  const [permListos, setPermListos] = useState(false)
+  useEffect(() => { cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
 
   useEffect(() => { loadPeriodos(); load(); loadUtm() }, [anio, mes])
 
@@ -100,6 +105,18 @@ export default function LibroIVAPage() {
       remanente_periodo_utm: remanentePeriodoUtm,
     }, { onConflict: 'anio,mes' })
     loadPeriodos()
+  }
+
+  if (permListos && !puede(permisos, 'iva', 'ver')) {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-3">🔒</div>
+          <h2 className="text-lg font-bold text-gray-700">Sin acceso</h2>
+          <p className="text-sm text-gray-400 mt-1">No tenés permiso para ver esta sección. Si creés que es un error, contactá al administrador.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
