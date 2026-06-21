@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt } from '@/lib/utils'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 interface TCEvento {
   id: string
@@ -40,6 +41,10 @@ export default function TiposCambioPage() {
   const [filtroDesde, setFiltroDesde] = useState('')
   const [filtroHasta, setFiltroHasta] = useState('')
   const [filtroFuente, setFiltroFuente] = useState('')
+
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  const [permListos, setPermListos] = useState(false)
+  useEffect(() => { cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
 
   useEffect(() => {
     loadUser()
@@ -210,6 +215,18 @@ export default function TiposCambioPage() {
   }
 
   const hoy = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
+  if (permListos && !puede(permisos, 'tipos_cambio', 'ver')) {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-3">🔒</div>
+          <h2 className="text-lg font-bold text-gray-700">Sin acceso</h2>
+          <p className="text-sm text-gray-400 mt-1">No tenés permiso para ver esta sección. Si creés que es un error, contactá al administrador.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
