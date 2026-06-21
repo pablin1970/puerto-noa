@@ -57,13 +57,14 @@ const TIPOS_CALCULO_LABELS: Record<string,string> = {
 }
 
 function CatalogoABM({
-  tabla, titulo, cols, orden, extra
+  tabla, titulo, cols, orden, extra, modulo
 }: {
   tabla: string
   titulo: string
   cols: ColDef[]
   orden: string
   extra?: React.ReactNode
+  modulo: string
 }) {
   const supabase = useMemo(() => createClient(), [])
   const [rows, setRows] = useState<any[]>([])
@@ -77,6 +78,9 @@ function CatalogoABM({
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
   const [permListos, setPermListos] = useState(false)
   useEffect(() => { cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
+  const pCrear = puede(permisos, modulo, 'crear')
+  const pEditar = puede(permisos, modulo, 'editar')
+  const pEliminar = puede(permisos, modulo, 'eliminar')
 
   useEffect(() => { load() }, [tabla])
 
@@ -94,6 +98,7 @@ function CatalogoABM({
   }
 
   function startEdit(row: any) {
+    if (!pEditar) return
     setEditId(row.id)
     setEditData({ ...row })
   }
@@ -104,6 +109,7 @@ function CatalogoABM({
   }
 
   async function saveEdit() {
+    if (!pEditar) return
     setSaving(true)
     const payload: any = {}
     cols.forEach(c => { payload[c.key] = editData[c.key] })
@@ -115,17 +121,20 @@ function CatalogoABM({
   }
 
   async function toggleActivo(row: any) {
+    if (!pEditar) return
     await (supabase.from(tabla) as any).update({ activo: !row.activo }).eq('id', row.id)
     setRows(prev => prev.map(r => r.id === row.id ? { ...r, activo: !r.activo } : r))
   }
 
   async function eliminar(id: string) {
+    if (!pEliminar) return
     if (!confirm('¿Eliminar este registro?')) return
     await supabase.from(tabla).delete().eq('id', id)
     setRows(prev => prev.filter(r => r.id !== id))
   }
 
   async function guardarNuevo() {
+    if (!pCrear) return
     if (!newRow[cols[0].key]) { alert(`Ingresá ${cols[0].label}`); return }
     setSaving(true)
     const payload: any = { activo: true }
@@ -163,10 +172,12 @@ function CatalogoABM({
           <h2 className="font-bold text-base text-gray-900">{titulo}</h2>
           <p className="text-xs text-gray-400 mt-0.5">{rows.length} registro(s) · {rows.filter(r => r.activo !== false).length} activos</p>
         </div>
+        {pCrear && (
         <button onClick={() => { setShowNew(true); setNewRow({}) }}
           className={`${btn} bg-[#1168F8] text-white hover:bg-[#0a4fc4] shadow-sm`}>
           + Agregar
         </button>
+        )}
       </div>
 
       {extra}
@@ -409,6 +420,7 @@ export default function CatalogosPage() {
       {/* ── PUERTOS CHINA ── */}
       {tab === 'puertos_china' && (
         <CatalogoABM
+          modulo="cat_geografia"
           tabla="puertos_china"
           titulo="Puertos de China"
           orden="orden"
@@ -424,6 +436,7 @@ export default function CatalogosPage() {
       {/* ── PUERTOS CHILE ── */}
       {tab === 'puertos_chile' && (
         <CatalogoABM
+          modulo="cat_geografia"
           tabla="puertos_chile"
           titulo="Puertos de Chile"
           orden="orden"
@@ -439,6 +452,7 @@ export default function CatalogosPage() {
       {/* ── PASOS FRONTERIZOS ── */}
       {tab === 'pasos' && (
         <CatalogoABM
+          modulo="cat_geografia"
           tabla="pasos_fronterizos"
           titulo="Pasos fronterizos"
           orden="orden"
@@ -454,6 +468,7 @@ export default function CatalogosPage() {
       {/* ── CIUDADES ARGENTINA ── */}
       {tab === 'ciudades' && (
         <CatalogoABM
+          modulo="cat_geografia"
           tabla="ciudades_destino_arg"
           titulo="Ciudades destino Argentina"
           orden="orden"
@@ -468,6 +483,7 @@ export default function CatalogosPage() {
       {/* ── LUGARES DE PRESTACIÓN (ciudades CL/AR/CN donde el depósito presta servicios) ── */}
       {tab === 'ciudades_prestacion' && (
         <CatalogoABM
+          modulo="cat_servicios"
           tabla="ciudades"
           titulo="Lugares de prestación"
           orden="orden"
@@ -488,6 +504,7 @@ export default function CatalogosPage() {
       {/* ── TIPOS DE CONTENEDOR ── */}
       {tab === 'contenedores' && (
         <CatalogoABM
+          modulo="cat_logistica"
           tabla="tipos_contenedor"
           titulo="Tipos de contenedor"
           orden="orden"
@@ -507,6 +524,7 @@ export default function CatalogosPage() {
       {/* ── TIPOS DE CAMIÓN ── */}
       {tab === 'camiones' && (
         <CatalogoABM
+          modulo="cat_logistica"
           tabla="tipos_camion"
           titulo="Tipos de camión"
           orden="orden"
@@ -540,6 +558,11 @@ export default function CatalogosPage() {
 
 // ── ABM especializado para cuentas de fondos en custodia ───────
 function FondosCuentasABM() {
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  useEffect(() => { cargarPermisos().then(setPermisos) }, [])
+  const pCrear = puede(permisos, 'cat_finanzas', 'crear')
+  const pEditar = puede(permisos, 'cat_finanzas', 'editar')
+  const pEliminar = puede(permisos, 'cat_finanzas', 'eliminar')
   const supabase = useMemo(() => createClient(), [])
   const [cuentas, setCuentas] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -565,6 +588,7 @@ function FondosCuentasABM() {
   }
 
   function startEdit(c: any) {
+    if (!pEditar) return
     setEditId(c.id)
     setForm({ ...c })
     setShowNew(false)
@@ -573,6 +597,7 @@ function FondosCuentasABM() {
   function cancelEdit() { setEditId(null); setForm({ ...vacio }) }
 
   async function guardar() {
+    if (editId ? !pEditar : !pCrear) return
     if (!form.nombre) { alert('Ingresá el nombre'); return }
     setSaving(true)
     const payload = {
@@ -596,11 +621,13 @@ function FondosCuentasABM() {
   }
 
   async function toggleActivo(c: any) {
+    if (!pEditar) return
     await (supabase.from('fondos_cuentas') as any).update({ activo: !c.activo }).eq('id', c.id)
     setCuentas(prev => prev.map(x => x.id === c.id ? { ...x, activo: !x.activo } : x))
   }
 
   async function eliminar(id: string) {
+    if (!pEliminar) return
     if (!confirm('¿Eliminar esta cuenta? Solo si no tiene movimientos registrados.')) return
     await supabase.from('fondos_cuentas').delete().eq('id', id)
     setCuentas(prev => prev.filter(c => c.id !== id))
@@ -729,7 +756,7 @@ function FondosCuentasABM() {
           <h2 className="font-bold text-base text-gray-900">Cuentas y cajas — Fondos en custodia</h2>
           <p className="text-xs text-gray-400 mt-0.5">{cuentas.length} cuenta(s) · {cuentas.filter(c => c.activo).length} activas</p>
         </div>
-        {!showNew && !editId && (
+        {!showNew && !editId && pCrear && (
           <button onClick={() => { setShowNew(true); setForm({ ...vacio, orden: cuentas.length + 1 }) }}
             className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-semibold hover:bg-[#0a4fc4] shadow-sm">
             + Agregar cuenta
@@ -819,6 +846,11 @@ const BLOQUES_COTIZADOR = [
 
 // ── ABM Cuentas bancarias (propias PN + custodia terceros) ───────
 function CuentasABM() {
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  useEffect(() => { cargarPermisos().then(setPermisos) }, [])
+  const pCrear = puede(permisos, 'cat_finanzas', 'crear')
+  const pEditar = puede(permisos, 'cat_finanzas', 'editar')
+  const pEliminar = puede(permisos, 'cat_finanzas', 'eliminar')
   const supabase = useMemo(() => createClient(), [])
   const [propias, setPropias] = useState<any[]>([])
   const [custodia, setCustodia] = useState<any[]>([])
@@ -845,6 +877,7 @@ function CuentasABM() {
   }
 
   async function saveNew() {
+    if (!pCrear) return
     if (!newData.nombre || !newData.moneda) { alert('Nombre y moneda son obligatorios'); return }
     setSaving(true)
     if (tipoCuenta === 'propia') {
@@ -869,6 +902,7 @@ function CuentasABM() {
   }
 
   async function saveEdit() {
+    if (!pEditar) return
     setSaving(true)
     const tabla = editTipo === 'propia' ? 'cuentas_pn' : 'fondos_cuentas'
     await (supabase.from(tabla) as any).update({
@@ -883,12 +917,14 @@ function CuentasABM() {
   }
 
   async function toggleActivo(id: string, tipo: 'propia'|'custodia', activo: boolean) {
+    if (!pEditar) return
     const tabla = tipo === 'propia' ? 'cuentas_pn' : 'fondos_cuentas'
     await (supabase.from(tabla) as any).update({ activo: !activo }).eq('id', id)
     await load()
   }
 
   async function eliminar(id: string, tipo: 'propia'|'custodia') {
+    if (!pEliminar) return
     if (!confirm('¿Eliminar esta cuenta? Solo si no tiene movimientos asociados.')) return
     const tabla = tipo === 'propia' ? 'cuentas_pn' : 'fondos_cuentas'
     await (supabase.from(tabla) as any).delete().eq('id', id)
@@ -997,7 +1033,7 @@ function CuentasABM() {
           <h2 className="font-bold text-base text-gray-900">Cuentas (caja y bancos)</h2>
           <p className="text-xs text-gray-400 mt-0.5">Cuentas propias de Puerto NOA y cuentas de custodia de clientes</p>
         </div>
-        <button onClick={() => setShowNew(true)} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Nueva cuenta</button>
+        {pCrear && <button onClick={() => setShowNew(true)} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Nueva cuenta</button>}
       </div>
 
       {showNew && (
@@ -1065,6 +1101,11 @@ function CuentasABM() {
 }
 
 function GastosCatABM() {
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  useEffect(() => { cargarPermisos().then(setPermisos) }, [])
+  const pCrear = puede(permisos, 'cat_finanzas', 'crear')
+  const pEditar = puede(permisos, 'cat_finanzas', 'editar')
+  const pEliminar = puede(permisos, 'cat_finanzas', 'eliminar')
   const supabase = useMemo(() => createClient(), [])
   const [rows, setRows] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -1084,6 +1125,7 @@ function GastosCatABM() {
   }
 
   async function saveEdit() {
+    if (!pEditar) return
     setSaving(true)
     await (supabase.from('gastos_fijos_categorias') as any).update({
       nombre: editData.nombre,
@@ -1096,6 +1138,7 @@ function GastosCatABM() {
   }
 
   async function saveNew() {
+    if (!pCrear) return
     if (!newData.nombre || !newData.codigo) { alert('Nombre y código son obligatorios'); return }
     setSaving(true)
     await (supabase.from('gastos_fijos_categorias') as any).insert({
@@ -1111,11 +1154,13 @@ function GastosCatABM() {
   }
 
   async function toggleActivo(row: any) {
+    if (!pEditar) return
     await (supabase.from('gastos_fijos_categorias') as any).update({ activo: !row.activo }).eq('id', row.id)
     setRows(prev => prev.map(r => r.id === row.id ? { ...r, activo: !r.activo } : r))
   }
 
   async function eliminar(id: string) {
+    if (!pEliminar) return
     if (!confirm('¿Eliminar esta categoría? Solo si no tiene gastos asociados.')) return
     await (supabase.from('gastos_fijos_categorias') as any).delete().eq('id', id)
     setRows(prev => prev.filter(r => r.id !== id))
@@ -1130,7 +1175,7 @@ function GastosCatABM() {
           <h2 className="font-bold text-base text-gray-900">Categorías de gastos fijos</h2>
           <p className="text-xs text-gray-400 mt-0.5">Se usan en el módulo Gastos y costos de Puerto NOA</p>
         </div>
-        <button onClick={() => setShowNew(true)} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Nueva categoría</button>
+        {pCrear && <button onClick={() => setShowNew(true)} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Nueva categoría</button>}
       </div>
 
       {showNew && (
@@ -1218,6 +1263,11 @@ function GastosCatABM() {
 }
 
 function BloquesCotizacionABM() {
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  useEffect(() => { cargarPermisos().then(setPermisos) }, [])
+  const pCrear = puede(permisos, 'cat_cotizador', 'crear')
+  const pEditar = puede(permisos, 'cat_cotizador', 'editar')
+  const pEliminar = puede(permisos, 'cat_cotizador', 'eliminar')
   const supabase = createClient()
   const [bloques, setBloques] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -1237,6 +1287,7 @@ function BloquesCotizacionABM() {
   }
 
   async function guardar(id:string){
+    if (!pEditar) return
     setSaving(true)
     await (supabase.from('cotizador_bloques') as any).update({
       numero: parseInt(form.numero)||0,
@@ -1249,6 +1300,7 @@ function BloquesCotizacionABM() {
   }
 
   async function agregar(){
+    if (!pCrear) return
     if(!newForm.nombre.trim()||!newForm.numero) return
     setSaving(true)
     await (supabase.from('cotizador_bloques') as any).insert({
@@ -1264,11 +1316,13 @@ function BloquesCotizacionABM() {
   }
 
   async function toggleActivo(id:string, activo:boolean){
+    if (!pEditar) return
     await (supabase.from('cotizador_bloques') as any).update({activo:!activo}).eq('id',id)
     setBloques(prev=>prev.map(b=>b.id===id?{...b,activo:!activo}:b))
   }
 
   async function eliminar(id:string){
+    if (!pEliminar) return
     if(!confirm('¿Eliminar este bloque? Las cotizaciones vinculadas perderán su bloque asignado.')) return
     await supabase.from('cotizador_bloques').delete().eq('id',id)
     setBloques(prev=>prev.filter(b=>b.id!==id))
@@ -1283,10 +1337,12 @@ function BloquesCotizacionABM() {
           <div className="text-sm font-semibold text-gray-700">Bloques de cotización</div>
           <div className="text-[11px] text-gray-400 mt-0.5">Corresponden a los bloques de la hoja de logística. Se usan para clasificar cotizaciones de proveedores.</div>
         </div>
+        {pCrear && (
         <button onClick={()=>setShowNew(true)}
           className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">
           + Agregar bloque
         </button>
+        )}
       </div>
 
       {/* Formulario nuevo */}
@@ -1464,6 +1520,11 @@ const RUBROS_DEFAULT = [
 ]
 
 function RubrosProveedorABM() {
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  useEffect(() => { cargarPermisos().then(setPermisos) }, [])
+  const pCrear = puede(permisos, 'cat_servicios', 'crear')
+  const pEditar = puede(permisos, 'cat_servicios', 'editar')
+  const pEliminar = puede(permisos, 'cat_servicios', 'eliminar')
   const supabase = useMemo(() => createClient(), [])
   const [rubros, setRubros] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -1496,6 +1557,7 @@ function RubrosProveedorABM() {
   }
 
   function startEdit(r: any) {
+    if (!pEditar) return
     setEditId(r.id)
     setForm({ icono: r.icono || '', nombre: r.nombre || '', descripcion: r.descripcion || '', color: r.color || '#6b7280', activo: r.activo !== false })
     setShowNew(false)
@@ -1504,6 +1566,7 @@ function RubrosProveedorABM() {
   function cancelForm() { setEditId(null); setShowNew(false); setForm({ ...RUBRO_VACIO }) }
 
   async function guardar() {
+    if (editId ? !pEditar : !pCrear) return
     if (!form.nombre.trim()) { alert('Ingresá el nombre del rubro'); return }
     setSaving(true)
     const payload: any = {
@@ -1525,11 +1588,13 @@ function RubrosProveedorABM() {
   }
 
   async function toggleActivo(r: any) {
+    if (!pEditar) return
     await (supabase.from('proveedor_rubros') as any).update({ activo: !r.activo }).eq('id', r.id)
     setRubros(prev => prev.map(x => x.id === r.id ? { ...x, activo: !x.activo } : x))
   }
 
   async function eliminar(id: string) {
+    if (!pEliminar) return
     if (!confirm('¿Eliminar este rubro? Verificá que no esté asignado a proveedores o bloques del cotizador.')) return
     const { error } = await supabase.from('proveedor_rubros').delete().eq('id', id)
     if (error) { alert('No se puede eliminar: ' + error.message); return }
@@ -1553,7 +1618,7 @@ function RubrosProveedorABM() {
               {saving ? 'Cargando...' : '+ Cargar predeterminados'}
             </button>
           )}
-          {!showNew && !editId && (
+          {!showNew && !editId && pCrear && (
             <button onClick={() => { setShowNew(true); setForm({ ...RUBRO_VACIO }) }}
               className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-semibold hover:bg-[#0a4fc4] shadow-sm">
               + Nuevo rubro
@@ -1651,6 +1716,9 @@ function RubrosProveedorABM() {
 
 // ── Ficha empresa Puerto NOA SpA ──────────────────────────────
 function EmpresaABM() {
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  useEffect(() => { cargarPermisos().then(setPermisos) }, [])
+  const pEditar = puede(permisos, 'cat_empresa', 'editar')
   const supabase = useMemo(() => createClient(), [])
   const [data, setData] = useState<any>({})
   const [loading, setLoading] = useState(true)
@@ -1670,6 +1738,7 @@ function EmpresaABM() {
   }
 
   async function save() {
+    if (!pEditar) return
     setSaving(true)
     // Excluir campos de sistema del update
     const { id: _id, created_at: _ca, updated_at: _ua, ...payload } = form
@@ -1934,6 +2003,11 @@ function EmpresaABM() {
 
 // ── ABM de condiciones generales de cotización ───────────────────────
 function CondicionesCotizacionABM() {
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  useEffect(() => { cargarPermisos().then(setPermisos) }, [])
+  const pCrear = puede(permisos, 'cat_cotizador', 'crear')
+  const pEditar = puede(permisos, 'cat_cotizador', 'editar')
+  const pEliminar = puede(permisos, 'cat_cotizador', 'eliminar')
   const supabase = useMemo(() => createClient(), [])
   const [condiciones, setCondiciones] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -1959,6 +2033,7 @@ function CondicionesCotizacionABM() {
     setModal({ type: 'editar', cond: c })
   }
   async function guardar() {
+    if (modal?.type === 'nuevo' ? !pCrear : !pEditar) return
     if (!form.texto.trim()) return
     setSaving(true)
     if (modal?.type === 'nuevo') {
@@ -1971,10 +2046,12 @@ function CondicionesCotizacionABM() {
     setSaving(false)
   }
   async function toggleActivo(c: any) {
+    if (!pEditar) return
     await (supabase.from('condiciones_generales') as any).update({ activo: !c.activo }).eq('id', c.id)
     setCondiciones(prev => prev.map(x => x.id === c.id ? { ...x, activo: !x.activo } : x))
   }
   async function eliminar(id: string) {
+    if (!pEliminar) return
     if (!confirm('¿Eliminar esta condición? Dejará de aparecer en las cotizaciones.')) return
     await supabase.from('condiciones_generales').delete().eq('id', id)
     setCondiciones(prev => prev.filter(c => c.id !== id))
@@ -2006,9 +2083,11 @@ function CondicionesCotizacionABM() {
             Aparecen al pie de toda cotización. Las condiciones particulares de cada operación se cargan en el generador. — {activas} activas
           </div>
         </div>
+        {pCrear && (
         <button onClick={abrirNuevo} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] shadow-sm">
           + Nueva condición
         </button>
+        )}
       </div>
 
       {loading ? (
