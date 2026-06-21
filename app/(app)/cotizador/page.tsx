@@ -1307,6 +1307,7 @@ async function guardar(){
       total_landed:totalLanded,precio_arg_equiv:s.precioArgEquiv||null,
       regimen:s.regimen,tc_ars:s.tcTrib,derechos_pct:s.derPct,
       opcion_transporte:s.optTransp,validez:s.validez,estado:'borrador',
+      sentido:s.sentido,
       estado_cotizador:{...s, _despachanteSelId:despachanteSelId, _cotDesp:cotDesp, _provUsado:provUsado},
       ejecutivo_id:uid,creado_por:uid,modificado_por:uid,presupuesto,
     })
