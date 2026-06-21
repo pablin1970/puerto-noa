@@ -6,6 +6,7 @@ import type { ContenedorCot, ProductoCot } from '@/types'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import CotizacionDoc from '@/components/CotizacionDoc'
+import { cargarPermisos, puede } from '@/lib/permisos'
 
 type Tab = 'embarque' | 'mercaderia' | 'logistica' | 'tributos' | 'resumen'
 type OptTransp = 'A' | 'B1' | 'B2'
@@ -240,6 +241,9 @@ function MedidorCoincidencia({ criterios }: { criterios: CritCoincidencia[] }){
 }
 
 export default function CotizadorPage(){
+const [permisos,setPermisos]=useState<Record<string,string[]>>({})
+const [permListos,setPermListos]=useState(false)
+useEffect(()=>{ cargarPermisos().then(p=>{ setPermisos(p); setPermListos(true) }) },[])
 const topRef=useRef<HTMLDivElement>(null)
 const [s,setS]=useState<CotState>(INIT)
 const [tab,setTab]=useState<Tab>('embarque')
@@ -1446,6 +1450,18 @@ const clientesFiltrados=terceros.filter(t=>
 
     const win = window.open('','_blank','width=900,height=700')
     if(win){ win.document.write(html); win.document.close() }
+  }
+
+  if (permListos && !puede(permisos, 'cotizaciones', 'ver')) {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-3">🔒</div>
+          <h2 className="text-lg font-bold text-gray-700">Sin acceso</h2>
+          <p className="text-sm text-gray-400 mt-1">No tenés permiso para ver esta sección. Si creés que es un error, contactá al administrador.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
