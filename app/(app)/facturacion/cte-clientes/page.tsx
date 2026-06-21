@@ -144,8 +144,8 @@ export default function CteClientesPage() {
           <h1 className="text-xl font-bold text-gray-900">Cuenta corriente — Clientes</h1>
           <p className="text-xs text-gray-400 mt-0.5">Movimientos de clientes · Facturas emitidas y pagos recibidos</p>
         </div>
-        <button onClick={() => { setForm({ tercero_id: '', operacion_id: '', tipo: 'pago', fecha: new Date().toISOString().slice(0, 10), concepto: '', moneda: 'CLP', monto: '', tc_referencia: '', notas: '' }); setCompUrl(''); setShowModal(true) }}
-          className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">+ Registrar movimiento</button>
+        {puede(permisos,'cte_clientes_cobro','crear') && <button onClick={() => { setForm({ tercero_id: '', operacion_id: '', tipo: 'pago', fecha: new Date().toISOString().slice(0, 10), concepto: '', moneda: 'CLP', monto: '', tc_referencia: '', notas: '' }); setCompUrl(''); setShowModal(true) }}
+          className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">+ Registrar movimiento</button>}
       </div>
 
       {/* Resumen por cliente */}
@@ -306,9 +306,9 @@ export default function CteClientesPage() {
             </div>
             <div className="px-5 py-3 border-t border-gray-100 flex justify-between">
               <button onClick={() => setShowModal(false)} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cancelar</button>
-              <button onClick={guardarMovimiento} disabled={saving} className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
+              {puede(permisos,'cte_clientes_cobro','crear') && <button onClick={guardarMovimiento} disabled={saving} className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
                 {saving ? 'Guardando...' : '✓ Registrar'}
-              </button>
+              </button>}
             </div>
           </div>
         </div>
