@@ -226,25 +226,31 @@ export default function AyudaPage() {
                 icon: '📖', bg: 'bg-[#EBF2FF]', btnColor: 'bg-[#1168F8] hover:bg-[#052698]',
                 titulo: 'Manual de Usuario',
                 desc: 'Guía práctica paso a paso para operar cada módulo del sistema, con avisos, novedades y recomendaciones de uso.',
-                url: '/01_Manual_de_Usuario_Sistema_PuertoNOA.pdf', btnLabel: '📖 Ver manual',
+                url: '/01_Manual_de_Usuario_PuertoNOA_v3.pdf', btnLabel: '📖 Ver manual',
               },
               {
                 icon: '🗂', bg: 'bg-green-50', btnColor: 'bg-[#0a9e6e] hover:bg-[#087a54]',
                 titulo: 'Fichas de módulos',
                 desc: 'Una ficha por módulo con sus partes internas, acciones disponibles e integraciones con otros módulos del sistema.',
-                url: '/02_Fichas_de_Modulos_PuertoNOA.pdf', btnLabel: '🗂 Ver fichas',
+                url: '/02_Fichas_de_Modulos_PuertoNOA_v3.pdf', btnLabel: '🗂 Ver fichas',
               },
               {
                 icon: '📋', bg: 'bg-blue-50', btnColor: 'bg-[#052698] hover:bg-[#1168F8]',
                 titulo: 'Descripción del sistema',
                 desc: 'Visión general del sistema: qué hace, la ruta logística, las áreas funcionales, el flujo de trabajo, las integraciones automáticas y los roles.',
-                url: '/03_Descripcion_del_Sistema_PuertoNOA.pdf', btnLabel: '📋 Ver PDF',
+                url: '/03_Descripcion_del_Sistema_PuertoNOA_v3.pdf', btnLabel: '📋 Ver PDF',
               },
               {
                 icon: '🗺', bg: 'bg-purple-50', btnColor: 'bg-[#7C3AED] hover:bg-[#6D28D9]',
                 titulo: 'Diagrama de interacciones',
                 desc: 'Mapa esquemático de cómo se vinculan los módulos del sistema y sus integraciones automáticas entre ellos.',
-                url: '/04_Diagrama_de_Interacciones_PuertoNOA.pdf', btnLabel: '🗺 Ver diagrama',
+                url: '/04_Diagrama_de_Interacciones_PuertoNOA_v3.pdf', btnLabel: '🗺 Ver diagrama',
+              },
+              {
+                icon: '🎓', bg: 'bg-amber-50', btnColor: 'bg-[#ef9f27] hover:bg-[#d98917]',
+                titulo: 'Clase magistral del sistema',
+                desc: 'Recorrido completo por la arquitectura, el flujo de trabajo y la propuesta de valor del sistema, con doble lente: técnica (para programadores) y de negocio (para clientes potenciales).',
+                url: '/05_Clase_Magistral_PuertoNOA_v3.pdf', btnLabel: '🎓 Ver clase magistral',
               },
             ].map((doc, i) => (
               <div key={i} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
