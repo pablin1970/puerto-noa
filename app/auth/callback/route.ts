@@ -5,18 +5,35 @@ import type { NextRequest } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
-// Geolocaliza una IP (best-effort, no bloquea el login si falla)
+// Geolocaliza una IP con proveedor principal (ipwho.is, https) y respaldo (ip-api.com).
+// Best-effort: si todo falla, devuelve vacío y el login NO se traba.
 async function geolocalizar(ip: string): Promise<{ ciudad: string; pais: string; paisCodigo: string }> {
   const vacio = { ciudad: '', pais: '', paisCodigo: '' }
-  if (!ip || ip === 'unknown' || ip.startsWith('127.') || ip.startsWith('10.') || ip.startsWith('192.168')) return vacio
+  if (!ip || ip === 'desconocida' || ip.startsWith('127.') || ip.startsWith('10.') || ip.startsWith('192.168')) return vacio
+
+  // 1) ipwho.is — https, sin API key, confiable desde servidores
   try {
-    const r = await fetch(`https://ipapi.co/${ip}/json/`, { signal: AbortSignal.timeout(3000) })
-    if (!r.ok) return vacio
-    const g = await r.json()
-    return { ciudad: g.city || '', pais: g.country_name || '', paisCodigo: g.country_code || '' }
-  } catch {
-    return vacio
-  }
+    const r = await fetch(`https://ipwho.is/${ip}`, { signal: AbortSignal.timeout(3500) })
+    if (r.ok) {
+      const g = await r.json()
+      if (g && g.success !== false && (g.city || g.country)) {
+        return { ciudad: g.city || '', pais: g.country || '', paisCodigo: g.country_code || '' }
+      }
+    }
+  } catch {}
+
+  // 2) ip-api.com — respaldo
+  try {
+    const r = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,country,countryCode&lang=es`, { signal: AbortSignal.timeout(3500) })
+    if (r.ok) {
+      const g = await r.json()
+      if (g && g.status === 'success') {
+        return { ciudad: g.city || '', pais: g.country || '', paisCodigo: g.countryCode || '' }
+      }
+    }
+  } catch {}
+
+  return vacio
 }
 
 export async function GET(request: NextRequest) {
@@ -51,7 +68,8 @@ export async function GET(request: NextRequest) {
 
       try {
         await supabase.from('login_historial').insert({
-          usuario_id: (u as any).id, ip, ciudad, pais, pais_codigo: paisCodigo, user_agent: userAgent,
+          usuario_id: (u as any).id, ip, ciudad, pais, pais_codigo: paisCodigo,
+          user_agent: userAgent, metodo: 'google',
         })
       } catch {}
 
