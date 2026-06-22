@@ -15,7 +15,6 @@ interface Usuario {
   iniciales: string
   activo: boolean
   foto_url?: string
-  force_password_change?: boolean
   last_login_at?: string
   last_login_ip?: string
   last_login_ciudad?: string
@@ -66,12 +65,11 @@ export default function UsuariosPage() {
   const [permisos, setPermisos] = useState<Permiso[]>([])
   const [loading, setLoading] = useState(true)
 
-  const [modalUsuario, setModalUsuario] = useState<{ type: 'nuevo' | 'editar' | 'historial' | 'password'; usuario?: Usuario } | null>(null)
+  const [modalUsuario, setModalUsuario] = useState<{ type: 'nuevo' | 'editar' | 'historial'; usuario?: Usuario } | null>(null)
   const [modalRol, setModalRol] = useState<{ type: 'nuevo' | 'editar'; rol?: Role } | null>(null)
   const [historialLogs, setHistorialLogs] = useState<LoginLog[]>([])
   const [formU, setFormU] = useState({ nombre: '', email: '', iniciales: '', roles_ids: [] as string[], activo: true })
   const [formR, setFormR] = useState({ nombre: '', descripcion: '', color: '#1168F8' })
-  const [generatedPassword, setGeneratedPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null)
   const [permisosModificados, setPermisosModificados] = useState<Record<string, boolean>>({})
@@ -232,30 +230,21 @@ export default function UsuariosPage() {
     setSavingPermisos(false)
   }
 
-  function generarPassword(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$'
-    return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-  }
-
   async function guardarUsuario() {
     if (!formU.nombre || !formU.email) return
     setSaving(true)
     const iniciales = formU.iniciales || formU.nombre.split(' ').map((x: string) => x[0]).join('').slice(0, 3).toUpperCase()
     if (modalUsuario?.type === 'nuevo') {
-      const tempPwd = generarPassword()
-      const res = await fetch('/api/admin-usuarios', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'crear', email: formU.email, password: tempPwd }),
+      // Acceso solo con Google: la cuenta de autenticación se crea automáticamente la
+      // primera vez que el usuario entra con su cuenta @puertonoa.com. Acá solo
+      // registramos el usuario; el auth_id se vincula por email en /auth/callback.
+      const { error } = await (supabase.from('usuarios') as any).insert({
+        auth_id: null,
+        nombre: formU.nombre, email: formU.email.trim().toLowerCase(), iniciales,
+        rol: 'ejecutivo', roles_ids: formU.roles_ids, activo: formU.activo,
       })
-      const data = await res.json()
-      if (!res.ok) { alert('Error: ' + (data.error || 'Error desconocido')); setSaving(false); return }
-      await (supabase.from('usuarios') as any).insert({
-        auth_id: data.user?.id || null,
-        nombre: formU.nombre, email: formU.email, iniciales,
-        rol: 'ejecutivo', roles_ids: formU.roles_ids, activo: formU.activo, force_password_change: true,
-      })
-      setGeneratedPassword(tempPwd)
+      if (error) { alert('Error al crear el usuario: ' + error.message); setSaving(false); return }
+      setModalUsuario(null)
     } else if (modalUsuario?.usuario) {
       await (supabase.from('usuarios') as any).update({
         nombre: formU.nombre, email: formU.email, iniciales, roles_ids: formU.roles_ids, activo: formU.activo,
@@ -264,20 +253,6 @@ export default function UsuariosPage() {
     }
     await loadAll()
     setSaving(false)
-  }
-
-  async function resetPassword(usuario: Usuario) {
-    const newPwd = generarPassword()
-    const res = await fetch('/api/admin-usuarios', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'reset_password', auth_id: usuario.auth_id, password: newPwd }),
-    })
-    const data = await res.json()
-    if (!res.ok) { alert('Error: ' + (data.error || 'Error desconocido')); return }
-    await (supabase.from('usuarios') as any).update({ force_password_change: true }).eq('id', usuario.id)
-    setGeneratedPassword(newPwd)
-    await loadAll()
   }
 
   async function toggleActivo(u: Usuario) {
@@ -356,7 +331,7 @@ export default function UsuariosPage() {
         </div>
         <div className="flex gap-2">
           {tab === 'usuarios' && puedeCrearU && (
-            <button onClick={() => { setFormU({ nombre: '', email: '', iniciales: '', roles_ids: [], activo: true }); setGeneratedPassword(''); setModalUsuario({ type: 'nuevo' }) }}
+            <button onClick={() => { setFormU({ nombre: '', email: '', iniciales: '', roles_ids: [], activo: true }); setModalUsuario({ type: 'nuevo' }) }}
               className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">
               + Nuevo usuario
             </button>
@@ -414,7 +389,6 @@ export default function UsuariosPage() {
                           <div>
                             <div className="font-semibold text-gray-900 flex items-center gap-1.5">
                               {u.nombre}
-                              {u.force_password_change && <span className="text-[9px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full border border-amber-200">Debe cambiar pwd</span>}
                             </div>
                             <div className="text-[10px] text-gray-400">{u.email}</div>
                           </div>
@@ -444,12 +418,10 @@ export default function UsuariosPage() {
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex gap-1.5">
-                          {puedeEditarU && <button onClick={() => { setFormU({ nombre: u.nombre, email: u.email, iniciales: u.iniciales, roles_ids: u.roles_ids || [], activo: u.activo }); setGeneratedPassword(''); setModalUsuario({ type: 'editar', usuario: u }) }}
+                          {puedeEditarU && <button onClick={() => { setFormU({ nombre: u.nombre, email: u.email, iniciales: u.iniciales, roles_ids: u.roles_ids || [], activo: u.activo }); setModalUsuario({ type: 'editar', usuario: u }) }}
                             className="p-1.5 border border-gray-200 rounded-lg hover:bg-[#EBF2FF] hover:border-[#93B8FC] text-gray-500 hover:text-[#1168F8] transition-colors" title="Editar">✏</button>}
                           <button onClick={() => verHistorial(u)}
                             className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors" title="Historial">📋</button>
-                          {puedeEditarU && <button onClick={() => { setGeneratedPassword(''); setModalUsuario({ type: 'password', usuario: u }) }}
-                            className="p-1.5 border border-amber-200 rounded-lg hover:bg-amber-50 text-amber-700 transition-colors" title="Reset contraseña">🔑</button>}
                         </div>
                       </td>
                     </tr>
@@ -680,7 +652,7 @@ export default function UsuariosPage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <span className="font-bold text-sm text-gray-900">{modalUsuario.type === 'nuevo' ? 'Nuevo usuario' : 'Editar usuario'}</span>
-              <button onClick={() => { setModalUsuario(null); setGeneratedPassword('') }} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+              <button onClick={() => setModalUsuario(null)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
             </div>
             <div className="px-5 py-4 space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -720,61 +692,16 @@ export default function UsuariosPage() {
                   })}
                 </div>
               </div>
-              {generatedPassword && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                  <div className="text-[10px] font-bold text-amber-800 mb-1">Contraseña temporal generada:</div>
-                  <div className="font-mono text-lg font-black text-amber-900 tracking-widest">{generatedPassword}</div>
-                  <div className="text-[10px] text-amber-600 mt-1">Comunicala al usuario. Deberá cambiarla al primer ingreso.</div>
-                </div>
-              )}
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-[11px] text-blue-700">
+                El usuario ingresa con el botón <b>Continuar con Google</b> usando esta cuenta de correo. El sistema no maneja contraseñas.
+              </div>
             </div>
             <div className="px-5 py-3 border-t border-gray-100 flex justify-between">
-              <button onClick={() => { setModalUsuario(null); setGeneratedPassword('') }} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">
-                {generatedPassword ? 'Cerrar' : 'Cancelar'}
+              <button onClick={() => setModalUsuario(null)} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cancelar</button>
+              <button onClick={guardarUsuario} disabled={saving}
+                className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
+                {saving ? 'Guardando...' : 'Guardar'}
               </button>
-              {!generatedPassword && (
-                <button onClick={guardarUsuario} disabled={saving}
-                  className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
-                  {saving ? 'Guardando...' : 'Guardar'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── MODAL RESET PASSWORD ── */}
-      {modalUsuario?.type === 'password' && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <span className="font-bold text-sm text-gray-900">Resetear contraseña</span>
-              <button onClick={() => { setModalUsuario(null); setGeneratedPassword('') }} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
-            </div>
-            <div className="px-5 py-4">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ background: '#1168F8' }}>{modalUsuario.usuario?.iniciales}</div>
-                <div>
-                  <div className="font-semibold text-sm text-gray-900">{modalUsuario.usuario?.nombre}</div>
-                  <div className="text-xs text-gray-400">{modalUsuario.usuario?.email}</div>
-                </div>
-              </div>
-              {generatedPassword ? (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
-                  <div className="text-[10px] font-bold text-amber-800 mb-2">Nueva contraseña temporal:</div>
-                  <div className="font-mono text-2xl font-black text-amber-900 tracking-widest mb-2">{generatedPassword}</div>
-                  <div className="text-[10px] text-amber-600">Comunicala al usuario. Deberá cambiarla al próximo ingreso.</div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-xs text-gray-600">Se generará una contraseña temporal aleatoria. El usuario deberá cambiarla al próximo ingreso.</div>
-                  <button onClick={() => modalUsuario.usuario && resetPassword(modalUsuario.usuario)}
-                    className="w-full py-2.5 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700">Generar nueva contraseña</button>
-                </div>
-              )}
-            </div>
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-end">
-              <button onClick={() => { setModalUsuario(null); setGeneratedPassword('') }} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cerrar</button>
             </div>
           </div>
         </div>
