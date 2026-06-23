@@ -51,7 +51,7 @@ interface LoginLog {
 }
 
 // ── Definición completa de módulos y permisos ──────────────────────
-import { ACCIONES, MODULOS_PERMISOS } from '@/lib/modulos'
+import { ACCIONES, MODULOS_PERMISOS, modulosPendientesSet, ACCIONES_POR_MODULO } from '@/lib/modulos'
 import type { Accion } from '@/lib/modulos'
 
 const COLORES_ROL = ['#1168F8', '#052698', '#0a9e6e', '#b45309', '#6b21a8', '#dc2626', '#0891b2']
@@ -76,7 +76,7 @@ export default function UsuariosPage() {
   const [permisosModificados, setPermisosModificados] = useState<Record<string, boolean>>({})
   const [savingPermisos, setSavingPermisos] = useState(false)
   // Módulos ya confirmados con "Guardar" (tabla modulos_revisados) + los marcados en esta sesión sin guardar aún
-  const [modulosRevisados, setModulosRevisados] = useState<Set<string>>(new Set())
+  const [modulosRevisados, setModulosRevisados] = useState<Map<string, string[]>>(new Map())
   const [modulosRevisadosLocal, setModulosRevisadosLocal] = useState<Set<string>>(new Set())
 
   // Refs y medición para la matriz con cabecera/columna fijas
@@ -122,7 +122,7 @@ export default function UsuariosPage() {
       supabase.from('usuarios').select('*').order('nombre'),
       supabase.from('roles').select('*').order('nombre'),
       supabase.from('rol_permisos').select('*'),
-      supabase.from('modulos_revisados').select('modulo'),
+      supabase.from('modulos_revisados').select('modulo, acciones'),
     ])
     if (uRes.data) setUsuarios(uRes.data as Usuario[])
     if (rRes.data) {
@@ -135,17 +135,19 @@ export default function UsuariosPage() {
       setRoles(ordenados)
     }
     if (pRes.data) setPermisos(pRes.data as Permiso[])
-    if (mrRes.data) setModulosRevisados(new Set((mrRes.data as any[]).map(r => r.modulo)))
+    if (mrRes.data) setModulosRevisados(new Map((mrRes.data as any[]).map(r => [r.modulo, (r.acciones || []) as string[]])))
     setLoading(false)
   }
 
   // ── Detección de módulos nuevos sin configurar ────────────────────
   // Un módulo está "configurado" SOLO cuando se confirmó con Guardar (tabla modulos_revisados).
   // Entrar a ver no lo confirma. Puede quedar sin permisos para nadie y aun así estar revisado.
+  // Pendiente = módulo nuevo O módulo existente al que se le agregó una acción nueva.
   const modulosNuevos = useMemo(() => {
+    const pend = modulosPendientesSet(modulosRevisados)
     return MODULOS_PERMISOS
       .flatMap(s => s.items)
-      .filter(it => !modulosRevisados.has(it.modulo))
+      .filter(it => pend.has(it.modulo))
       .map(it => ({ modulo: it.modulo, label: it.label.replace(/^→\s*/, ''), acciones: it.acciones }))
   }, [modulosRevisados])
 
@@ -222,7 +224,7 @@ export default function UsuariosPage() {
       if (modulosNuevosSet.has(modulo)) aConfirmar.add(modulo)
     })
     if (aConfirmar.size > 0) {
-      const filas = Array.from(aConfirmar).map(m => ({ modulo: m }))
+      const filas = Array.from(aConfirmar).map(m => ({ modulo: m, acciones: ACCIONES_POR_MODULO[m] || [] }))
       await (supabase.from('modulos_revisados') as any).upsert(filas, { onConflict: 'modulo' })
     }
     setPermisosModificados({})
