@@ -2,9 +2,10 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import ServiciosCatalogo from './ServiciosCatalogo'
+import TributosConfig from './TributosConfig'
 import { cargarPermisos, puede } from '@/lib/permisos'
 
-type Tab = 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'ciudades_prestacion' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm' | 'empresa' | 'condiciones_cotizacion' | 'servicios_deposito'
+type Tab = 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'ciudades_prestacion' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm' | 'empresa' | 'condiciones_cotizacion' | 'servicios_deposito' | 'tributos'
 
 const TABS = [
   { key: 'puertos_china', label: 'Puertos China',        icon: '🇨🇳' },
@@ -22,6 +23,7 @@ const TABS = [
   { key: 'gastos_categorias',  label: 'Cat. gastos fijos',    icon: '💸' },
   { key: 'cuentas_abm',        label: 'Cuentas (caja y bancos)', icon: '🏦' },
   { key: 'empresa',             label: 'Datos de la empresa',    icon: '🏢' },
+  { key: 'tributos',            label: 'Tributos ARCA',          icon: '🏛️' },
 ] as const
 
 // Agrupación en árbol por categoría superior, con color por grupo
@@ -30,7 +32,7 @@ const GRUPOS = [
   { titulo:'Cotizador',             icon:'🧾', color:'#7C3AED', claro:'#F1EBFD', texto:'#5B21B6', keys:['bloques_cotizacion','condiciones_cotizacion'] },
   { titulo:'Geografía y rutas',     icon:'📍', color:'#0a9e6e', claro:'#E3F6EF', texto:'#07614A', keys:['puertos_china','puertos_chile','pasos','ciudades'] },
   { titulo:'Logística',             icon:'🚛', color:'#ef9f27', claro:'#FDF3E2', texto:'#92610C', keys:['contenedores','camiones'] },
-  { titulo:'Finanzas',              icon:'💰', color:'#0d9488', claro:'#E0F5F2', texto:'#0A5F58', keys:['fondos','cuentas_abm','gastos_categorias'] },
+  { titulo:'Finanzas',              icon:'💰', color:'#0d9488', claro:'#E0F5F2', texto:'#0A5F58', keys:['fondos','cuentas_abm','gastos_categorias','tributos'] },
   { titulo:'Empresa',               icon:'🏢', color:'#64748b', claro:'#EEF1F5', texto:'#475569', keys:['empresa'] },
 ] as const
 const labelDe = (k:string) => TABS.find(t=>t.key===k)?.label || k
@@ -360,6 +362,9 @@ function CatalogoABM({
 // ── Página principal ────────────────────────────────────────────────
 export default function CatalogosPage() {
   const [tab, setTab] = useState<Tab>('servicios_deposito')
+  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
+  useEffect(() => { cargarPermisos().then(setPermisos) }, [])
+  const verTributos = puede(permisos, 'tributos', 'ver')
   const grupoActivo = GRUPOS.find(g => (g.keys as readonly string[]).includes(tab)) || GRUPOS[0]
 
   return (
@@ -386,7 +391,7 @@ export default function CatalogosPage() {
                   <span className="text-xs">{g.icon}</span>{g.titulo}
                 </div>
                 <div className="flex flex-col gap-0.5" style={{ borderLeft: `2px solid ${g.color}`, marginLeft: '7px', paddingLeft: '6px' }}>
-                  {g.keys.map(k => {
+                  {g.keys.filter(k => k !== 'tributos' || verTributos).map(k => {
                     const activo = tab === k
                     return (
                       <button key={k} onClick={() => setTab(k as Tab)}
@@ -416,6 +421,9 @@ export default function CatalogosPage() {
 
       {/* ── SERVICIOS DEPÓSITO ── */}
       {tab === 'servicios_deposito' && <ServiciosCatalogo />}
+
+      {/* ── TRIBUTOS ARCA ── */}
+      {tab === 'tributos' && <TributosConfig />}
 
       {/* ── PUERTOS CHINA ── */}
       {tab === 'puertos_china' && (
