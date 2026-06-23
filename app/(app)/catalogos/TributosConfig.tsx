@@ -150,6 +150,9 @@ export default function TributosConfig() {
     )
   }
 
+  const pCrear = puede(permisos, 'tributos', 'crear')
+  const pEliminar = puede(permisos, 'tributos', 'eliminar')
+
   return (
     <div className="space-y-4">
       <div className="mb-6 flex items-center justify-between">
@@ -187,12 +190,14 @@ export default function TributosConfig() {
             </span>
             <span className="ml-3 text-xs text-gray-400">{totalAplicados} tributos activos de {rows.length}</span>
           </div>
+          {pCrear && (
           <button
             onClick={addRow}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs font-medium hover:bg-[#0a4fc4] transition-colors"
           >
             + Agregar tributo
           </button>
+          )}
         </div>
 
         {loading ? (
@@ -300,6 +305,7 @@ export default function TributosConfig() {
                         >
                           📋
                         </button>
+                        {pEliminar && (
                         <button
                           onClick={() => deleteRow(row.id)}
                           className="p-1.5 border border-gray-200 rounded-md hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors text-[10px]"
@@ -307,6 +313,7 @@ export default function TributosConfig() {
                         >
                           🗑
                         </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -316,7 +323,7 @@ export default function TributosConfig() {
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                       Sin tributos configurados para este régimen.
-                      <button onClick={addRow} className="ml-2 text-[#1168F8] hover:underline">Agregar uno →</button>
+                      {pCrear && <button onClick={addRow} className="ml-2 text-[#1168F8] hover:underline">Agregar uno →</button>}
                     </td>
                   </tr>
                 )}
