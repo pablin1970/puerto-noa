@@ -87,6 +87,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const [utm, setUtm] = useState<{ valor: number; label: string } | null>(null)
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})  // modulo → acciones permitidas
   const [esSuper, setEsSuper] = useState(false)
+  const [rolNombre, setRolNombre] = useState('')
   const [modulosNuevosCount, setModulosNuevosCount] = useState(0)
   const [collapsed, setCollapsed] = useState(false)
   const supabase = useMemo(() => createClient(), [])
@@ -119,9 +120,10 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         // ¿El rol es Super Administrador? Solo entonces detectamos módulos nuevos sin configurar
         const { data: rol } = await supabase
           .from('roles')
-          .select('es_super_admin')
+          .select('es_super_admin, nombre')
           .eq('id', rolId)
           .single()
+        setRolNombre((rol as any)?.nombre || '')
         if ((rol as any)?.es_super_admin) {
           setEsSuper(true)
           // Fuente de verdad ÚNICA: un módulo deja de ser "nuevo" cuando se confirmó
@@ -344,7 +346,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-white text-[11px] font-semibold truncate">{user.nombre.split(' ')[0]}</div>
-                <div className="text-white/50 text-[9px] capitalize">{user.rol}</div>
+                <div className="text-white/50 text-[9px]">{rolNombre.replace(/^\d+\s*-\s*/, '') || user.rol}</div>
               </div>
             </div>
           )}
