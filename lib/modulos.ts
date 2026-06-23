@@ -99,3 +99,25 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
 
 // Lista plana de todos los módulos definidos (única fuente de verdad para la matriz)
 export const TODOS_LOS_MODULOS: string[] = MODULOS_PERMISOS.flatMap(s => s.items.map(it => it.modulo))
+
+// Mapa módulo → acciones definidas hoy (fuente de verdad para detectar acciones nuevas)
+export const ACCIONES_POR_MODULO: Record<string, string[]> =
+  Object.fromEntries(MODULOS_PERMISOS.flatMap(s => s.items.map(it => [it.modulo, it.acciones])))
+
+/**
+ * Devuelve el conjunto de módulos "pendientes de configurar" comparando contra
+ * lo ya revisado. Un módulo está pendiente si:
+ *   - nunca fue revisado (módulo nuevo), o
+ *   - tiene al menos una acción que no estaba cuando se revisó (acción nueva).
+ * `revisados` mapea modulo → acciones que tenía al momento de revisarse.
+ */
+export function modulosPendientesSet(revisados: Map<string, string[]>): Set<string> {
+  const pend = new Set<string>()
+  for (const s of MODULOS_PERMISOS) {
+    for (const it of s.items) {
+      const rev = revisados.get(it.modulo)
+      if (!rev || it.acciones.some(a => !rev.includes(a))) pend.add(it.modulo)
+    }
+  }
+  return pend
+}
