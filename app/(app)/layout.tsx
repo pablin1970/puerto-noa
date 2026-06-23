@@ -58,7 +58,7 @@ const NAV: NavItem[] = [
   // ── CONFIGURACIÓN ──────────────────────────────────
   { label: 'CONFIGURACION', section: true },
   { href: '/catalogos',       label: 'Catálogos',    icon: '📚', modulo: 'catalogos' },
-  { href: '/usuarios',        label: 'Usuarios',      icon: '◎', adminOnly: true, modulo: 'usuarios' },
+  { href: '/usuarios',        label: 'Usuarios',      icon: '◎', modulo: 'usuarios' },
 ]
 interface TCWidget {
   ARS: number | null
@@ -296,7 +296,6 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
               const hrefVer = (hrefQuery || '').includes('ver=proveedores') ? 'proveedores' : 'clientes'
               active = hrefVer === verActual
             }
-            if (item.adminOnly && user?.rol !== 'admin') return null
             // Filtrar por permisos del rol
             // Si el usuario tiene permisos cargados y el ítem tiene módulo → verificar
             // Si el módulo no está en permisos → ocultar
@@ -322,7 +321,6 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
                     }`}>
                     <span className={`${collapsed ? 'text-base' : 'text-sm'} w-4 text-center flex-shrink-0`}>{item.icon}</span>
                     {!collapsed && <span className="truncate">{item.label}</span>}
-                    {!collapsed && item.adminOnly && <span className="ml-auto text-[7px] text-white/40 uppercase tracking-wide">Admin</span>}
                   </Link>
                 )}
                 {collapsed && (
