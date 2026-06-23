@@ -20,7 +20,12 @@ export default function LoginPage() {
     setError('')
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        // Forzar SIEMPRE el selector de cuentas de Google: así se puede elegir
+        // entre cuentas y no entra automáticamente con la sesión ya abierta.
+        queryParams: { prompt: 'select_account' },
+      },
     })
     if (error) {
       setError('Error al conectar con Google. Intentá de nuevo.')
