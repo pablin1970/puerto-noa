@@ -58,7 +58,6 @@ const NAV: NavItem[] = [
   // ── CONFIGURACIÓN ──────────────────────────────────
   { label: 'CONFIGURACION', section: true },
   { href: '/catalogos',       label: 'Catálogos',    icon: '📚', modulo: 'catalogos' },
-  { href: '/tributos-config', label: 'Tributos ARCA', icon: '§', adminOnly: true, modulo: 'tributos' },
   { href: '/usuarios',        label: 'Usuarios',      icon: '◎', adminOnly: true, modulo: 'usuarios' },
 ]
 interface TCWidget {
