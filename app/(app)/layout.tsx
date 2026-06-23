@@ -1,11 +1,12 @@
 'use client'
-import { useEffect, useState, useMemo, Suspense } from 'react'
+import { useEffect, useState, useMemo, useRef, Suspense } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import Image from 'next/image'
 import type { Usuario } from '@/types'
 import { modulosPendientesSet } from '@/lib/modulos'
+import { cargarPermisos, esSuperAdmin } from '@/lib/permisos'
 
 interface NavItem {
   href?: string
@@ -91,7 +92,9 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const [modulosNuevosCount, setModulosNuevosCount] = useState(0)
   const [collapsed, setCollapsed] = useState(false)
   const supabase = useMemo(() => createClient(), [])
+  const bannerTsRef = useRef(0)
 
+  // Carga inicial: solo lo que NO cambia al navegar (usuario, nombre del rol, TC, UTM, listeners).
   useEffect(() => {
     // El middleware ya protege las rutas — aquí solo cargamos los datos del usuario
     supabase.auth.getUser().then(async ({ data }) => {
@@ -99,43 +102,13 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       const { data: u } = await supabase.from('usuarios').select('*').eq('auth_id', data.user.id).single()
       if (!u) { router.push('/'); return }
       setUser(u as Usuario)
-      // Cargar permisos del rol — el rol está en roles_ids[0]
+      // Nombre del rol para la tarjeta inferior — el rol está en roles_ids[0]
       const rolId = Array.isArray((u as any).roles_ids) && (u as any).roles_ids.length > 0
         ? (u as any).roles_ids[0]
         : null
       if (rolId) {
-        const { data: perms } = await supabase
-          .from('rol_permisos')
-          .select('modulo, accion')
-          .eq('rol_id', rolId)
-          .eq('permitido', true)
-        if (perms) {
-          const map: Record<string, string[]> = {}
-          for (const p of perms as any[]) {
-            if (!map[p.modulo]) map[p.modulo] = []
-            map[p.modulo].push(p.accion)
-          }
-          setPermisos(map)
-        }
-        // ¿El rol es Super Administrador? Solo entonces detectamos módulos nuevos sin configurar
-        const { data: rol } = await supabase
-          .from('roles')
-          .select('es_super_admin, nombre')
-          .eq('id', rolId)
-          .single()
+        const { data: rol } = await supabase.from('roles').select('nombre').eq('id', rolId).single()
         setRolNombre((rol as any)?.nombre || '')
-        if ((rol as any)?.es_super_admin) {
-          setEsSuper(true)
-          // Fuente de verdad ÚNICA: un módulo deja de ser "nuevo" cuando se confirmó
-          // con Guardar en la matriz (tabla modulos_revisados). Igual criterio que la
-          // pantalla de Usuarios, para que el aviso del sidebar y el cartel coincidan.
-          const { data: revisados } = await supabase
-            .from('modulos_revisados')
-            .select('modulo, acciones')
-          const revMap = new Map((revisados || []).map((p: any) => [p.modulo, (p.acciones || []) as string[]]))
-          const nuevos = modulosPendientesSet(revMap)
-          setModulosNuevosCount(nuevos.size)
-        }
       }
     })
     // Escuchar cambios de sesión (logout, token refresh)
@@ -150,6 +123,37 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     loadUtm()
     return () => subscription.unsubscribe()
   }, [])
+
+  // Refresco de permisos del sidebar: corre al montar y CADA vez que se navega (cambia pathname).
+  // El layout es persistente (no se re-monta al cambiar de pantalla), por eso sin esto el menú
+  // quedaba congelado hasta un F5. Usa cargarPermisos() — el MISMO caché (TTL 60s) que usan las
+  // pantallas — así no consulta de más y el menú se sincroniza solo con los cambios de permisos.
+  useEffect(() => {
+    let cancelado = false
+    ;(async () => {
+      const map = await cargarPermisos()
+      if (cancelado) return
+      setPermisos(map)
+      const sa = esSuperAdmin()
+      setEsSuper(sa)
+      if (!sa) { setModulosNuevosCount(0); return }
+      // El aviso de "módulos sin configurar" solo aplica a super admin. Respetamos el mismo
+      // TTL de 60s para no consultar modulos_revisados en cada clic del menú.
+      const ahora = Date.now()
+      if (ahora - bannerTsRef.current < 60_000) return
+      bannerTsRef.current = ahora
+      // Fuente de verdad ÚNICA: un módulo deja de ser "nuevo" cuando se confirmó con Guardar
+      // en la matriz (tabla modulos_revisados). Igual criterio que la pantalla de Usuarios,
+      // para que el aviso del sidebar y el cartel coincidan.
+      const { data: revisados } = await supabase
+        .from('modulos_revisados')
+        .select('modulo, acciones')
+      if (cancelado) return
+      const revMap = new Map((revisados || []).map((p: any) => [p.modulo, (p.acciones || []) as string[]]))
+      setModulosNuevosCount(modulosPendientesSet(revMap).size)
+    })()
+    return () => { cancelado = true }
+  }, [pathname])
 
   async function loadTC() {
     try {
