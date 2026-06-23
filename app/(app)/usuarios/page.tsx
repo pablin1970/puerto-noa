@@ -324,6 +324,7 @@ export default function UsuariosPage() {
   const puedeCrearR = puedeAccion(permUser,'roles','crear')
   const puedeEditarR = puedeAccion(permUser,'roles','editar')
   const puedeEliminarR = puedeAccion(permUser,'roles','eliminar')
+  const puedeVerHistorial = puedeAccion(permUser,'usuarios_historial','ver')
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -423,8 +424,8 @@ export default function UsuariosPage() {
                         <div className="flex gap-1.5">
                           {puedeEditarU && <button onClick={() => { setFormU({ nombre: u.nombre, email: u.email, iniciales: u.iniciales, roles_ids: u.roles_ids || [], activo: u.activo }); setModalUsuario({ type: 'editar', usuario: u }) }}
                             className="p-1.5 border border-gray-200 rounded-lg hover:bg-[#EBF2FF] hover:border-[#93B8FC] text-gray-500 hover:text-[#1168F8] transition-colors" title="Editar">✏</button>}
-                          <button onClick={() => verHistorial(u)}
-                            className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors" title="Historial">📋</button>
+                          {puedeVerHistorial && <button onClick={() => verHistorial(u)}
+                            className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors" title="Historial">📋</button>}
                         </div>
                       </td>
                     </tr>
@@ -547,10 +548,10 @@ export default function UsuariosPage() {
                           <div className="flex flex-col items-center gap-1">
                             <input type="checkbox"
                               checked={r.es_super_admin ? true : columnaTodasActivas(r.id, ac)}
-                              disabled={r.es_super_admin}
-                              onChange={() => { if (!r.es_super_admin) toggleColumna(r.id, ac) }}
+                              disabled={r.es_super_admin || !puedeEditarR}
+                              onChange={() => { if (!r.es_super_admin && puedeEditarR) toggleColumna(r.id, ac) }}
                               title={r.es_super_admin ? 'El Super Administrador siempre tiene acceso total' : `Tildar/destildar "${accionLabel[ac]}" en todos los módulos`}
-                              className={`w-3.5 h-3.5 ${r.es_super_admin ? 'cursor-not-allowed accent-green-600 opacity-70' : 'cursor-pointer accent-[#1168F8]'}`}/>
+                              className={`w-3.5 h-3.5 ${r.es_super_admin ? 'cursor-not-allowed accent-green-600 opacity-70' : !puedeEditarR ? 'cursor-not-allowed accent-gray-400' : 'cursor-pointer accent-[#1168F8]'}`}/>
                             <span>{accionLabel[ac]}</span>
                           </div>
                         </th>
@@ -612,9 +613,9 @@ export default function UsuariosPage() {
                                   {aplica ? (
                                     <input type="checkbox"
                                       checked={activo}
-                                      disabled={esSA}
-                                      onChange={() => { if (!esSA) togglePermiso(r.id, item.modulo, ac) }}
-                                      className={`w-3.5 h-3.5 ${esSA ? 'cursor-not-allowed accent-green-600 opacity-70' : 'cursor-pointer accent-[#1168F8]'}`}/>
+                                      disabled={esSA || !puedeEditarR}
+                                      onChange={() => { if (!esSA && puedeEditarR) togglePermiso(r.id, item.modulo, ac) }}
+                                      className={`w-3.5 h-3.5 ${esSA ? 'cursor-not-allowed accent-green-600 opacity-70' : !puedeEditarR ? 'cursor-not-allowed accent-gray-400' : 'cursor-pointer accent-[#1168F8]'}`}/>
                                   ) : (
                                     <span className="text-gray-200 text-[10px]">—</span>
                                   )}
