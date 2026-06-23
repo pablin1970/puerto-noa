@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import Image from 'next/image'
 import type { Usuario } from '@/types'
-import { TODOS_LOS_MODULOS } from '@/lib/modulos'
+import { modulosPendientesSet } from '@/lib/modulos'
 
 interface NavItem {
   href?: string
@@ -129,10 +129,10 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           // pantalla de Usuarios, para que el aviso del sidebar y el cartel coincidan.
           const { data: revisados } = await supabase
             .from('modulos_revisados')
-            .select('modulo')
-          const modulosConfigurados = new Set((revisados || []).map((p: any) => p.modulo))
-          const nuevos = TODOS_LOS_MODULOS.filter(m => !modulosConfigurados.has(m))
-          setModulosNuevosCount(nuevos.length)
+            .select('modulo, acciones')
+          const revMap = new Map((revisados || []).map((p: any) => [p.modulo, (p.acciones || []) as string[]]))
+          const nuevos = modulosPendientesSet(revMap)
+          setModulosNuevosCount(nuevos.size)
         }
       }
     })
