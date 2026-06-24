@@ -468,6 +468,9 @@ function FormTercero({ supabase, currentUser, onSave, onCancel, ctxTipo }: any) 
 
 function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx }: any) {
   const [tab, setTab] = useState<'datos' | 'contactos' | 'bancario' | 'documentos' | 'operaciones' | 'rubros'>('datos')
+  const [guardadoMsg, setGuardadoMsg] = useState('')
+  const [guardadoErr, setGuardadoErr] = useState(false)
+  function flashGuardado(msg = 'Guardado ✓', esError = false) { setGuardadoMsg(msg); setGuardadoErr(esError); window.setTimeout(() => setGuardadoMsg(''), 1800) }
   const [contactos, setContactos] = useState<Contacto[]>(tercero.contactos || [])
   const [cuentas, setCuentas] = useState<CuentaBancaria[]>([])
   const [docs, setDocs] = useState<any[]>([])
@@ -528,10 +531,15 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
     const key = rubroId + '|' + lugarTipo + ':' + lugarId
     const ya = lugares.has(key)
     setLugares(prev => { const n = new Set(prev); if (ya) n.delete(key); else n.add(key); return n })
-    if (ya) {
-      await supabase.from('tercero_lugares_prestacion').delete().eq('tercero_id', tercero.id).eq('rubro_id', rubroId).eq('lugar_tipo', lugarTipo).eq('lugar_id', lugarId)
+    const { error } = ya
+      ? await supabase.from('tercero_lugares_prestacion').delete().eq('tercero_id', tercero.id).eq('rubro_id', rubroId).eq('lugar_tipo', lugarTipo).eq('lugar_id', lugarId)
+      : await (supabase.from('tercero_lugares_prestacion') as any).insert({ tercero_id: tercero.id, rubro_id: rubroId, lugar_tipo: lugarTipo, lugar_id: lugarId })
+    if (error) {
+      // Revertir el cambio optimista si la base lo rechazó
+      setLugares(prev => { const n = new Set(prev); if (ya) n.add(key); else n.delete(key); return n })
+      flashGuardado('No se pudo guardar', true)
     } else {
-      await (supabase.from('tercero_lugares_prestacion') as any).insert({ tercero_id: tercero.id, rubro_id: rubroId, lugar_tipo: lugarTipo, lugar_id: lugarId })
+      flashGuardado()
     }
   }
 
@@ -548,6 +556,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
       const nuevo = todosRubros.find(r => r.id === rubroId)
       if (nuevo) setRubros(prev => [...prev, nuevo])
     }
+    flashGuardado()
   }
 
   async function loadDocs() {
@@ -663,6 +672,11 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
 
   return (
     <div>
+      {guardadoMsg && (
+        <div className={`fixed bottom-6 right-6 z-50 text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg ${guardadoErr ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}>
+          {guardadoMsg}
+        </div>
+      )}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm mb-4">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
@@ -1089,6 +1103,10 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
 
       {tab === 'rubros' && (
         <div className="space-y-4">
+          <div className="flex items-center gap-2 text-[11px] text-green-700 bg-green-50 border border-green-100 rounded-xl px-3.5 py-2.5">
+            <span className="text-sm">✓</span>
+            <span>Los rubros y lugares se guardan <strong>automáticamente</strong> al marcarlos. No hace falta apretar "Guardar".</span>
+          </div>
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
             <div className="mb-4">
               <div className="text-sm font-bold text-gray-900 mb-1">Rubros asignados</div>
