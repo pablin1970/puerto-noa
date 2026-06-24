@@ -281,6 +281,7 @@ const [tercerosProv,setTercerosProv]=useState<any[]>([])
 // Cotizaciones de proveedores seleccionadas por bloque
 const [provUsado,setProvUsado]=useState<Record<number,string|null>>({0:null,1:null,2:null,3:null,4:null})
 const [terceros,setTerceros]=useState<any[]>([])
+const [lugaresProvMap,setLugaresProvMap]=useState<Map<string,Set<string>>>(new Map())  // terceroId → ciudades (normalizadas) donde presta
 const [despachantes,setDespachantes]=useState<any[]>([])
 const [despachanteSelId,setDespachanteSelId]=useState<string|null>(null)
 const [cotDesp,setCotDesp]=useState<{id:string;referencia:string;fecha:string;tipo:'generica'|'especifica'}|null>(null)
@@ -410,6 +411,19 @@ useEffect(()=>{
     if(tc.data) setTiposCont(tc.data)
     if(tca.data) setTiposCamion(tca.data)
   })
+  // Lugares de prestación de los proveedores (frente ①): terceroId → ciudades normalizadas
+  supabase.from('tercero_lugares_prestacion').select('tercero_id, ciudades(ciudad)')
+    .then(({data}:any)=>{
+      if(!data) return
+      const m = new Map<string,Set<string>>()
+      data.forEach((l:any)=>{
+        const nom = (l?.ciudades?.ciudad||'').toLowerCase().trim()
+        if(!l.tercero_id || !nom) return
+        if(!m.has(l.tercero_id)) m.set(l.tercero_id, new Set())
+        m.get(l.tercero_id)!.add(nom)
+      })
+      setLugaresProvMap(m)
+    })
 },[])
 useEffect(()=>{loadTrib()},[s.regimen])
 useEffect(()=>{
@@ -726,21 +740,34 @@ const esPaisAR = (p:string):boolean => { const x=p.toLowerCase(); return x.inclu
 const esPaisCL = (p:string):boolean => { const x=p.toLowerCase(); return x.includes('chile')||x==='cl' }
 // CHILE (rubros transporte_chile=agente y deposito=depósito fiscal/extraportuario).
 // Chile puede ser origen, destino o tránsito → coincide si la operación toca Chile + proveedor chileno.
+const norm = (x:string):string => (x||'').toLowerCase().trim()
+// Ciudad del lugar de la operación, para comparar contra los lugares de prestación del proveedor.
+const ciudadPuertoChileOp = ():string => { const p = puertosChile.find((x:any)=>x.id===s.puertoChileId); return p ? norm(p.ciudad) : '' }
+const ciudadDestinoArgOp  = ():string => { const c = ciudadesArg.find((x:any)=>x.id===s.ciudadDestinoId); return c ? norm(c.ciudad) : '' }
 const criteriosProvChile = (terceroId:any): CritCoincidencia[] => {
   const pais = paisTercero(terceroId)
-  return [
+  const out: CritCoincidencia[] = [
     { label:'Toca Chile',        aplica: true,   ok: !!s.puertoChileId },
     { label:'Proveedor chileno', aplica: !!pais, ok: esPaisCL(pais) },
   ]
+  // Lugar de prestación (frente ①): solo si el proveedor declaró dónde presta y la operación tiene puerto chileno.
+  const presta = lugaresProvMap.get(terceroId) || new Set<string>()
+  const ciudadOp = ciudadPuertoChileOp()
+  if(presta.size>0 && ciudadOp) out.push({ label:'Presta en '+ciudadOp, aplica:true, ok: presta.has(ciudadOp) })
+  return out
 }
 // ARGENTINA (rubro gastos_argentina=despachante). Argentina nunca es tránsito → coincide si la
 // operación llega/sale de Argentina (hay ciudad NOA) + proveedor argentino.
 const criteriosProvArg = (terceroId:any): CritCoincidencia[] => {
   const pais = paisTercero(terceroId)
-  return [
+  const out: CritCoincidencia[] = [
     { label:'Llega/sale de Argentina', aplica: true,   ok: !!s.ciudadDestinoId },
     { label:'Proveedor argentino',     aplica: !!pais, ok: esPaisAR(pais) },
   ]
+  const presta = lugaresProvMap.get(terceroId) || new Set<string>()
+  const ciudadOp = ciudadDestinoArgOp()
+  if(presta.size>0 && ciudadOp) out.push({ label:'Presta en '+ciudadOp, aplica:true, ok: presta.has(ciudadOp) })
+  return out
 }
 const criteriosDespachanteCot = (c:any): CritCoincidencia[] => criteriosProvArg(c?.tercero_id || c?.terceroId || null)
 const sufijoCoincCrit = (crit: CritCoincidencia[]):string => {
