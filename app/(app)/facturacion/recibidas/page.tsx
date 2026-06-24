@@ -107,7 +107,7 @@ export default function FacturasRecibidasPage() {
       supabase.from('tipos_comprobante').select('*').eq('activo', true)
         .in('ambito', ['recibido', 'ambos']).order('orden', { ascending: true }),
       supabase.from('gastos_fijos_categorias').select('id,nombre,codigo,orden').eq('activo', true).order('orden', { ascending: true }),
-      supabase.from('tipos_cambio_eventos').select('clp, ars').order('created_at', { ascending: false }).limit(1),
+      (supabase.from('tipos_cambio_eventos') as any).select('clp, ars').order('created_at', { ascending: false }).limit(1),
     ])
     if (fRes.data) setFacturas(fRes.data as FacturaRecibida[])
     if (tRes.data) setTerceros(tRes.data)
@@ -115,7 +115,7 @@ export default function FacturasRecibidasPage() {
     if (cRes.data) setCatalogo(cRes.data)
     if (tcRes.data) setTiposComp(tcRes.data)
     if (gcRes.data) setGastoCats(gcRes.data)
-    if (tceRes.data?.[0]) setTcGasto({ usd: tceRes.data[0].clp || 908, ars: tceRes.data[0].ars || 0 })
+    if (tceRes.data?.[0]) { const tce: any = tceRes.data[0]; setTcGasto({ usd: tce.clp || 908, ars: tce.ars || 0 }) }
     setLoading(false)
   }
 
