@@ -103,7 +103,7 @@ export default function InteligenciaPreciosPage() {
   const [filtTipo, setFiltTipo] = useState<'todas'|'generica'|'especifica'>('todas')
   // Filtros finos para rubros del catálogo
   const [filtServicio, setFiltServicio] = useState('')   // servicio_id del catálogo
-  const [filtCiudad, setFiltCiudad] = useState('')       // ciudad_prestacion_id
+  const [filtCiudad, setFiltCiudad] = useState('')       // lugar_prestacion_id
   const [filtTramo, setFiltTramo] = useState('')         // tramo origen→destino (rubros de flete)
 
   // Filtros Tab 2 (por rubro)
@@ -128,7 +128,7 @@ export default function InteligenciaPreciosPage() {
     setLoading(true)
     const [itemsRes, cotsRes, tcRes, svcRes, ciuRes, pchinaRes, pchileRes, utmRes] = await Promise.all([
       supabase.from('cotizaciones_proveedor_v2_items')
-        .select('*, cotizacion:cotizaciones_proveedor_v2(id,proveedor_nombre,fecha,rubro,estado,referencia,tipo,cliente_id,puerto_china_id,puerto_chile_id,tc_snapshot,ciudad_prestacion_id,etiqueta_lugar)')
+        .select('*, cotizacion:cotizaciones_proveedor_v2(id,proveedor_nombre,fecha,rubro,estado,referencia,tipo,cliente_id,puerto_china_id,puerto_chile_id,tc_snapshot,lugar_prestacion_id,etiqueta_lugar)')
         .order('cotizacion_id'),
       supabase.from('cotizaciones_proveedor_v2')
         .select('id,proveedor_nombre,fecha,rubro,estado,referencia')
@@ -141,8 +141,8 @@ export default function InteligenciaPreciosPage() {
         .select('id,rubro,grupo,nombre,activo,orden')
         .order('rubro', { ascending: true })
         .order('orden', { ascending: true }),
-      supabase.from('ciudades')
-        .select('id,pais,ciudad,region,activo,orden')
+      supabase.from('ciudades_destino_arg')
+        .select('id,ciudad,provincia,activo,orden')
         .order('orden', { ascending: true }),
       supabase.from('puertos_china').select('id,nombre,ciudad,locode'),
       supabase.from('puertos_chile').select('id,nombre,ciudad,locode'),
@@ -159,7 +159,12 @@ export default function InteligenciaPreciosPage() {
       return { created_at: `${fecha}T12:00:00`, fecha, utm: u.valor_clp }
     }))
     if (svcRes.data) setServiciosCat(svcRes.data as any[])
-    if (ciuRes.data) setCiudadesCat(ciuRes.data as any[])
+    // ciudadesCat = unión de las tablas estables (resuelve nombres de lugares de prestación CL/CN/AR)
+    setCiudadesCat([
+      ...(((pchileRes.data as any[]) || []).map(c => ({ lugar_tipo: 'puerto_chile', id: c.id, ciudad: c.ciudad, pais: 'CL' }))),
+      ...(((pchinaRes.data as any[]) || []).map(c => ({ lugar_tipo: 'puerto_china', id: c.id, ciudad: c.ciudad, pais: 'CN' }))),
+      ...(((ciuRes.data as any[]) || []).map(c => ({ lugar_tipo: 'ciudad_arg', id: c.id, ciudad: c.ciudad, pais: 'AR' }))),
+    ])
     if (pchinaRes.data) setPuertosChina(pchinaRes.data as any[])
     if (pchileRes.data) setPuertosChile(pchileRes.data as any[])
     setLoading(false)
@@ -207,7 +212,7 @@ export default function InteligenciaPreciosPage() {
       if (filtTipo !== 'todas' && (it.cotizacion?.tipo || 'generica') !== filtTipo) return false
       if (esCat) {
         if (filtServicio && it.servicio_id !== filtServicio) return false
-        if (filtCiudad && it.cotizacion?.ciudad_prestacion_id !== filtCiudad) return false
+        if (filtCiudad && it.cotizacion?.lugar_prestacion_id !== filtCiudad) return false
       } else {
         if (filtConcepto && it.categoria !== filtConcepto) return false
       }
@@ -295,7 +300,7 @@ export default function InteligenciaPreciosPage() {
       if (filtTipo !== 'todas' && (it.cotizacion?.tipo || 'generica') !== filtTipo) return false
       if (esCat) {
         if (filtServicio2 && it.servicio_id !== filtServicio2) return false
-        if (filtCiudad2 && it.cotizacion?.ciudad_prestacion_id !== filtCiudad2) return false
+        if (filtCiudad2 && it.cotizacion?.lugar_prestacion_id !== filtCiudad2) return false
       } else {
         if (filtConcepto2 && it.categoria !== filtConcepto2) return false
       }
@@ -317,7 +322,7 @@ export default function InteligenciaPreciosPage() {
       const prov = it.cotizacion?.proveedor_nombre || ''
       const tr = esRubroFlete(filtRubro2) ? `|${claveTramo(it)}` : ''
       const clave = (esCat
-        ? `${prov}|${it.servicio_id || ''}|${it.metrica_id || ''}|${it.cotizacion?.ciudad_prestacion_id || ''}`
+        ? `${prov}|${it.servicio_id || ''}|${it.metrica_id || ''}|${it.cotizacion?.lugar_prestacion_id || ''}`
         : `${prov}|${it.categoria || ''}`) + tr
       if (!map[clave] || it.cotizacion?.fecha > map[clave].cotizacion?.fecha) {
         map[clave] = it
@@ -614,7 +619,7 @@ export default function InteligenciaPreciosPage() {
                       <td className="px-4 py-2.5 font-semibold text-gray-800">{it.cotizacion?.proveedor_nombre}</td>
                       <td className="px-4 py-2.5 text-gray-600">
                         {it.descripcion}
-                        {it.cotizacion?.ciudad_prestacion_id && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[#E1F5EE] text-[#0a9e6e] align-middle">📍 {nombreCiudad(it.cotizacion.ciudad_prestacion_id)}</span>}
+                        {it.cotizacion?.lugar_prestacion_id && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[#E1F5EE] text-[#0a9e6e] align-middle">📍 {nombreCiudad(it.cotizacion.lugar_prestacion_id)}</span>}
                       </td>
                       <td className="px-4 py-2.5 text-gray-400">{it.tipo_contenedor || 'Todos'}</td>
                       <td className="px-4 py-2.5 font-mono font-bold text-[#052698]">
@@ -746,7 +751,7 @@ export default function InteligenciaPreciosPage() {
                         </div>
                         <div className="flex justify-between mt-1">
                           <span className="text-[9px] text-gray-400">{it.descripcion}</span>
-                          <span className="text-[9px] text-gray-400">{esRubroFlete(filtRubro2) && labelTramo(it) ? `🚩 ${labelTramo(it)}` : (it.cotizacion?.ciudad_prestacion_id ? `📍 ${nombreCiudad(it.cotizacion.ciudad_prestacion_id)}` : (it.tipo_contenedor || 'Todos los contenedores'))}</span>
+                          <span className="text-[9px] text-gray-400">{esRubroFlete(filtRubro2) && labelTramo(it) ? `🚩 ${labelTramo(it)}` : (it.cotizacion?.lugar_prestacion_id ? `📍 ${nombreCiudad(it.cotizacion.lugar_prestacion_id)}` : (it.tipo_contenedor || 'Todos los contenedores'))}</span>
                         </div>
                       </div>
                     )
@@ -777,7 +782,7 @@ export default function InteligenciaPreciosPage() {
                           <td className="px-4 py-2.5 font-mono text-[11px] text-gray-500">{fmtDate(it.cotizacion?.fecha)}</td>
                           <td className="px-4 py-2.5 text-gray-600">
                             {it.descripcion}
-                            {it.cotizacion?.ciudad_prestacion_id && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[#E1F5EE] text-[#0a9e6e] align-middle">📍 {nombreCiudad(it.cotizacion.ciudad_prestacion_id)}</span>}
+                            {it.cotizacion?.lugar_prestacion_id && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[#E1F5EE] text-[#0a9e6e] align-middle">📍 {nombreCiudad(it.cotizacion.lugar_prestacion_id)}</span>}
                           </td>
                           <td className="px-4 py-2.5 font-mono font-bold text-[#052698]">
                             {fmtUSD(val)}
