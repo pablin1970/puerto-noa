@@ -1661,7 +1661,7 @@ function RubrosProveedorABM() {
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {['', 'Rubro', 'Descripción', 'Color', 'Estado', ''].map((h, i) => (
+                {['', 'Rubro', 'Descripción', 'Color', 'Lugares', 'Estado', ''].map((h, i) => (
                   <th key={i} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -1682,6 +1682,11 @@ function RubrosProveedorABM() {
                       <div className="w-5 h-5 rounded-md border border-gray-200 flex-shrink-0" style={{ background: r.color || '#6b7280' }}/>
                       <span className="font-mono text-[10px] text-gray-400">{r.color || '—'}</span>
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {r.tiene_lugares_prestacion
+                      ? <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#EBF2FF] text-[#1168F8]" title="Maneja lugares de prestación">📍 Sí</span>
+                      : <span className="text-gray-300 text-[11px]">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     <button onClick={() => toggleActivo(r)}
