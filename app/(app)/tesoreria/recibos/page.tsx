@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { imprimirComprobante } from '@/lib/comprobantePrint'
 
 const AZUL = '#1168F8'
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -443,6 +444,23 @@ function DetalleRecibo({ recibo, supabase, onBack }: any) {
     setAbriendo(false)
   }
 
+  async function imprimir() {
+    let empresa: any = null
+    const { data: emp } = await (supabase.from('empresa_config') as any).select('*').not('rut', 'is', null).limit(1)
+    empresa = emp?.[0]
+    if (!empresa) { const { data: e2 } = await (supabase.from('empresa_config') as any).select('*').limit(1); empresa = e2?.[0] }
+    if (empresa?.logo_url && !/^https?:/i.test(empresa.logo_url)) empresa = { ...empresa, logo_url: null }
+    let nro_doc: any = null
+    if (recibo.tercero_id) { const { data: t } = await (supabase.from('terceros') as any).select('nro_doc').eq('id', recibo.tercero_id).limit(1); nro_doc = t?.[0]?.nro_doc || null }
+    imprimirComprobante({
+      empresa: empresa || {}, tipoDoc: 'RECIBO DE DINERO', numero: recibo.numero_formateado, fecha: recibo.fecha,
+      receptorLabel: 'Recibí de', receptor: { razon_social: recibo.tercero?.razon_social, nro_doc },
+      concepto: recibo.concepto, moneda: recibo.moneda, monto: recibo.monto, montoUsd: recibo.monto_usd,
+      imputaciones: imps.map((i: any) => ({ etiqueta: i.factura?.folio ? `Folio ${i.factura.folio}` : (i.factura?.cotizacion_num || 'Factura'), monto: Number(i.monto) || 0 })),
+      leyendaPie: recibo.contexto === 'rendir' ? 'Entrega de dinero a rendir — documento interno de control, no constituye DTE.' : 'Documento interno de control — no constituye documento tributario electrónico (DTE).',
+    })
+  }
+
   return (
     <div className="max-w-2xl space-y-4">
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
@@ -462,7 +480,10 @@ function DetalleRecibo({ recibo, supabase, onBack }: any) {
           <div><div className="text-[10px] text-gray-400 uppercase">Concepto</div><div className="text-gray-700">{recibo.concepto || '—'}</div></div>
           <div><div className="text-[10px] text-gray-400 uppercase">Equivalente USD</div><div className="font-mono text-gray-700">USD {fmt(recibo.monto_usd || 0)}</div></div>
         </div>
-        {recibo.archivo_url && <button onClick={abrir} disabled={abriendo} className="mt-4 px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC] disabled:opacity-50">📄 Ver comprobante</button>}
+        <div className="mt-4 flex gap-2">
+          <button onClick={imprimir} className="px-3 py-1.5 bg-[#1168F8] text-white rounded-lg text-xs font-semibold hover:bg-[#0a4fc4]">🖨 Imprimir recibo</button>
+          {recibo.archivo_url && <button onClick={abrir} disabled={abriendo} className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC] disabled:opacity-50">📄 Ver comprobante</button>}
+        </div>
       </div>
 
       {imps.length > 0 && (
