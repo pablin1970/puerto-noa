@@ -504,27 +504,35 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
   }
 
   async function loadRubros() {
-    const [rubrosTercero, todosRes, ciuRes, lugRes] = await Promise.all([
+    const [rubrosTercero, todosRes, pChileRes, pChinaRes, ciuArgRes, lugRes] = await Promise.all([
       supabase.from('tercero_rubros').select('rubro_id, rubro:proveedor_rubros(id,nombre,codigo,color,icono,descripcion)').eq('tercero_id', tercero.id),
       supabase.from('proveedor_rubros').select('*').eq('activo', true).order('orden'),
-      supabase.from('ciudades').select('id,pais,ciudad,region').eq('activo', true).order('pais').order('orden'),
-      supabase.from('tercero_lugares_prestacion').select('rubro_id,ciudad_id').eq('tercero_id', tercero.id),
+      supabase.from('puertos_chile').select('id,ciudad,region').eq('activo', true).order('orden'),
+      supabase.from('puertos_china').select('id,ciudad,region').eq('activo', true).order('orden'),
+      supabase.from('ciudades_destino_arg').select('id,ciudad,provincia').eq('activo', true).order('orden'),
+      supabase.from('tercero_lugares_prestacion').select('rubro_id,lugar_tipo,lugar_id').eq('tercero_id', tercero.id),
     ])
     if (rubrosTercero.data) setRubros((rubrosTercero.data as any[]).map(r => (r as any).rubro).filter(Boolean))
     if (todosRes.data) setTodosRubros(todosRes.data)
-    if (ciuRes.data) setCiudades(ciuRes.data)
-    if (lugRes.data) setLugares(new Set((lugRes.data as any[]).map(l => l.rubro_id + '|' + l.ciudad_id)))
+    // Lugares = unión de las tablas estables, con su tipo polimórfico. Una sola fuente de verdad.
+    const lugaresUnificados: any[] = [
+      ...((pChileRes.data as any[]) || []).map(c => ({ lugar_tipo: 'puerto_chile', id: c.id, ciudad: c.ciudad, pais: 'CL', region: c.region })),
+      ...((pChinaRes.data as any[]) || []).map(c => ({ lugar_tipo: 'puerto_china', id: c.id, ciudad: c.ciudad, pais: 'CN', region: c.region })),
+      ...((ciuArgRes.data as any[]) || []).map(c => ({ lugar_tipo: 'ciudad_arg', id: c.id, ciudad: c.ciudad, pais: 'AR', region: c.provincia })),
+    ]
+    setCiudades(lugaresUnificados)
+    if (lugRes.data) setLugares(new Set((lugRes.data as any[]).map(l => l.rubro_id + '|' + l.lugar_tipo + ':' + l.lugar_id)))
   }
 
-  // Togglea una ciudad como lugar de prestación de un rubro del proveedor.
-  async function toggleLugar(rubroId: string, ciudadId: string) {
-    const key = rubroId + '|' + ciudadId
+  // Togglea un lugar (puerto/ciudad estable) como lugar de prestación de un rubro del proveedor.
+  async function toggleLugar(rubroId: string, lugarTipo: string, lugarId: string) {
+    const key = rubroId + '|' + lugarTipo + ':' + lugarId
     const ya = lugares.has(key)
     setLugares(prev => { const n = new Set(prev); if (ya) n.delete(key); else n.add(key); return n })
     if (ya) {
-      await supabase.from('tercero_lugares_prestacion').delete().eq('tercero_id', tercero.id).eq('rubro_id', rubroId).eq('ciudad_id', ciudadId)
+      await supabase.from('tercero_lugares_prestacion').delete().eq('tercero_id', tercero.id).eq('rubro_id', rubroId).eq('lugar_tipo', lugarTipo).eq('lugar_id', lugarId)
     } else {
-      await (supabase.from('tercero_lugares_prestacion') as any).insert({ tercero_id: tercero.id, rubro_id: rubroId, ciudad_id: ciudadId })
+      await (supabase.from('tercero_lugares_prestacion') as any).insert({ tercero_id: tercero.id, rubro_id: rubroId, lugar_tipo: lugarTipo, lugar_id: lugarId })
     }
   }
 
@@ -1132,9 +1140,9 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
                           <div className="text-[10px] text-gray-400 mb-1">{p.label}</div>
                           <div className="flex flex-wrap gap-1.5">
                             {ciuPais.map((c: any) => {
-                              const on = lugares.has(r.id + '|' + c.id)
+                              const on = lugares.has(r.id + '|' + c.lugar_tipo + ':' + c.id)
                               return (
-                                <button key={c.id} onClick={() => toggleLugar(r.id, c.id)}
+                                <button key={c.lugar_tipo + c.id} onClick={() => toggleLugar(r.id, c.lugar_tipo, c.id)}
                                   className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${on ? 'bg-[#1168F8] text-white border-[#1168F8]' : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'}`}>
                                   {on ? '✓ ' : ''}{c.ciudad}
                                 </button>
