@@ -489,8 +489,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
   const [docForm, setDocForm] = useState({ tipo: 'estatuto', nombre_custom: '', referencia: '', fecha: '', notas: '' })
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
   // Rubros que prestan en una ciudad concreta (Chile o Argentina). Forwarder/terrestre/seguro no cargan lugar.
-  const RUBROS_CON_LUGAR = ['deposito', 'gastos_argentina', 'transporte_chile']
-  const PAISES_LUGAR = [{ code: 'AR', label: 'Argentina' }, { code: 'CL', label: 'Chile' }]
+  const PAISES_LUGAR = [{ code: 'AR', label: 'Argentina' }, { code: 'CL', label: 'Chile' }, { code: 'CN', label: 'China' }]
 
   useEffect(() => {
     loadDocs(); loadOps(); loadCuentas()
@@ -505,7 +504,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
 
   async function loadRubros() {
     const [rubrosTercero, todosRes, pChileRes, pChinaRes, ciuArgRes, lugRes] = await Promise.all([
-      supabase.from('tercero_rubros').select('rubro_id, rubro:proveedor_rubros(id,nombre,codigo,color,icono,descripcion)').eq('tercero_id', tercero.id),
+      supabase.from('tercero_rubros').select('rubro_id, rubro:proveedor_rubros(id,nombre,codigo,color,icono,descripcion,tiene_lugares_prestacion)').eq('tercero_id', tercero.id),
       supabase.from('proveedor_rubros').select('*').eq('activo', true).order('orden'),
       supabase.from('puertos_chile').select('id,ciudad,region').eq('activo', true).order('orden'),
       supabase.from('puertos_china').select('id,ciudad,region').eq('activo', true).order('orden'),
@@ -1119,31 +1118,44 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
           </div>
 
           {/* Lugares de prestación — solo para rubros asignados que prestan en una ciudad concreta */}
-          {rubros.some((r: any) => RUBROS_CON_LUGAR.includes(r.codigo)) && (
+          {rubros.some((r: any) => r.tiene_lugares_prestacion === true) && (
             <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
               <div className="mb-4">
                 <div className="text-sm font-bold text-gray-900 mb-1">Lugares de prestación</div>
                 <div className="text-[10px] text-gray-400">Ciudades donde este proveedor presta cada servicio. Al cotizar se marca si coinciden con la operación.</div>
               </div>
               <div className="space-y-4">
-                {rubros.filter((r: any) => RUBROS_CON_LUGAR.includes(r.codigo)).map((r: any) => (
+                {(() => {
+                  // El domicilio fiscal del proveedor define el orden y el destaque visual de los países.
+                  const mapPais: Record<string, string> = { argentina: 'AR', chile: 'CL', china: 'CN' }
+                  const paisFiscal = mapPais[String(tercero.dir_fiscal_pais || tercero.pais || '').trim().toLowerCase()] || ''
+                  const paisesOrden = [...PAISES_LUGAR].sort((a, b) => (a.code === paisFiscal ? -1 : b.code === paisFiscal ? 1 : 0))
+                  return rubros.filter((r: any) => r.tiene_lugares_prestacion === true).map((r: any) => (
                   <div key={r.id} className="border border-gray-100 rounded-xl p-3">
                     <div className="flex items-center gap-2 mb-2.5">
                       <span className="text-base flex-shrink-0">{r.icono}</span>
                       <span className="text-xs font-semibold" style={{ color: r.color }}>{r.nombre}</span>
                     </div>
-                    {PAISES_LUGAR.map(p => {
+                    {paisesOrden.map(p => {
                       const ciuPais = ciudades.filter((c: any) => c.pais === p.code)
                       if (ciuPais.length === 0) return null
+                      const esFiscal = p.code === paisFiscal
                       return (
                         <div key={p.code} className="mb-2 last:mb-0">
-                          <div className="text-[10px] text-gray-400 mb-1">{p.label}</div>
+                          <div className={`text-[10px] mb-1 font-semibold ${esFiscal ? 'text-[#1168F8]' : 'text-gray-400'}`}>
+                            {p.label}{esFiscal ? ' · domicilio fiscal' : ''}
+                          </div>
                           <div className="flex flex-wrap gap-1.5">
                             {ciuPais.map((c: any) => {
                               const on = lugares.has(r.id + '|' + c.lugar_tipo + ':' + c.id)
+                              const cls = on
+                                ? 'bg-[#1168F8] text-white border-[#1168F8]'
+                                : esFiscal
+                                  ? 'bg-[#EBF2FF] text-[#1168F8] border-[#BBD3FF] hover:border-[#1168F8]'
+                                  : 'bg-gray-50 text-gray-400 border-gray-200 hover:border-gray-300'
                               return (
                                 <button key={c.lugar_tipo + c.id} onClick={() => toggleLugar(r.id, c.lugar_tipo, c.id)}
-                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${on ? 'bg-[#1168F8] text-white border-[#1168F8]' : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'}`}>
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${cls}`}>
                                   {on ? '✓ ' : ''}{c.ciudad}
                                 </button>
                               )
@@ -1153,7 +1165,8 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
                       )
                     })}
                   </div>
-                ))}
+                  ))
+                })()}
               </div>
             </div>
           )}
