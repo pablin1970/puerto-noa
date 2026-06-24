@@ -233,6 +233,8 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
   const [showTerceroDD, setShowTerceroDD] = useState(false)
   const [saving, setSaving] = useState(false)
   const [compFile, setCompFile] = useState<File|null>(null)
+  const [recibidasRef, setRecibidasRef] = useState<any[]>([])   // recibidas de la operación para refacturar
+  const [cargandoRec, setCargandoRec] = useState(false)
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 
   const comp = tiposComp?.find((c: any) => c.id === form.tipo_comprobante_id) || null
@@ -278,21 +280,93 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
     return { neto: item.exento ? 0 : subtotal, exento: item.exento ? subtotal : 0, iva, total: subtotal + iva }
   }
 
-  const totales = items.reduce((acc, item) => { const c = calcItem(item); return { neto: acc.neto + c.neto, exento: acc.exento + c.exento, iva: acc.iva + c.iva, total: acc.total + c.total } }, { neto: 0, exento: 0, iva: 0, total: 0 })
+  // ---- Refacturación (recupero de gastos / mixto) ----
+  const usaRecupero = form.tipo_cobro === 'recupero_gastos' || form.tipo_cobro === 'mixto'
+  const usaCatalogo = form.tipo_cobro !== 'recupero_gastos'
+
+  // Trae las recibidas de la operación marcadas "a recuperar" y aún no refacturadas
+  useEffect(() => {
+    if (!usaRecupero || !form.operacion_id) { setRecibidasRef([]); return }
+    let cancel = false
+    ;(async () => {
+      setCargandoRec(true)
+      const { data } = await (supabase.from('facturas_recibidas') as any)
+        .select('id, folio, nro_ingreso, proveedor_razon_social, moneda, items, neto')
+        .eq('operacion_id', form.operacion_id)
+        .eq('a_recuperar', true)
+        .is('refactura_emitida_id', null)
+        .neq('estado', 'anulada')
+      if (cancel) return
+      const lista = (data || []).map((r: any) => ({
+        id: r.id, folio: r.folio, nro_ingreso: r.nro_ingreso,
+        proveedor_razon_social: r.proveedor_razon_social, moneda: r.moneda, neto: r.neto,
+        _sel: true, _open: true,
+        _items: (Array.isArray(r.items) ? r.items : []).map((it: any) => {
+          const costo = Number(it.precio_unit) || 0
+          return {
+            descripcion: it.descripcion || '', rubro: it.rubro || null, unidad: it.unidad || null,
+            cantidad: Number(it.cantidad) || 1, exento: !!it.exento, costo,
+            _sel: true, _mkTipo: 'pct', _mkVal: 0, _precio: costo, nota: '',
+          }
+        }),
+      }))
+      setRecibidasRef(lista)
+      setCargandoRec(false)
+    })()
+    return () => { cancel = true }
+  }, [usaRecupero, form.operacion_id])
+
+  // Recalcula el precio unitario de un ítem refacturado según el markup (editable luego a mano)
+  function recalcPrecio(it: any) {
+    if (it._mkTipo === 'monto') return Math.max(0, (it.costo || 0) + (Number(it._mkVal) || 0))
+    return Math.max(0, (it.costo || 0) * (1 + (Number(it._mkVal) || 0) / 100))
+  }
+  function updRecItem(ri: number, ii: number, patch: any) {
+    setRecibidasRef(rs => rs.map((r, x) => x !== ri ? r : {
+      ...r, _items: r._items.map((it: any, y: number) => {
+        if (y !== ii) return it
+        const merged = { ...it, ...patch }
+        if ('_mkTipo' in patch || '_mkVal' in patch) merged._precio = recalcPrecio(merged)
+        return merged
+      })
+    }))
+  }
+  function updRecibida(ri: number, patch: any) {
+    setRecibidasRef(rs => rs.map((r, x) => x === ri ? { ...r, ...patch } : r))
+  }
+
+  // Ítems refacturados derivados (formato compatible con calcItem y el guardado)
+  const itemsRefacturados = recibidasRef.filter(r => r._sel).flatMap(r =>
+    (r._items || []).filter((it: any) => it._sel && (Number(it._precio) > 0)).map((it: any) => ({
+      servicio_id: null, metrica_id: null,
+      descripcion: it.descripcion, rubro: it.rubro || null, unidad: it.unidad || null, nota: it.nota || null,
+      cantidad: it.cantidad, precio_unit: Number(it._precio) || 0, descuento: 0, exento: it.exento,
+      origen_recibida_id: r.id, origen_folio: r.folio || null, costo_origen: it.costo,
+    })))
+
+  // Ítems efectivos de la factura = catálogo (si aplica) + refacturados (si aplica)
+  const itemsEfectivos = [
+    ...(usaCatalogo ? items.filter(i => i.servicio_id || i.descripcion) : []),
+    ...(usaRecupero ? itemsRefacturados : []),
+  ]
+
+  const totales = itemsEfectivos.reduce((acc, item) => { const c = calcItem(item); return { neto: acc.neto + c.neto, exento: acc.exento + c.exento, iva: acc.iva + c.iva, total: acc.total + c.total } }, { neto: 0, exento: 0, iva: 0, total: 0 })
 
   async function guardar() {
     if (!form.tipo_comprobante_id) { alert('Elegí el tipo de comprobante'); return }
     if (!form.cliente_razon_social) { alert('Ingresá el cliente'); return }
-    if (items.filter(i => (i.servicio_id || i.descripcion) && i.precio_unit > 0).length === 0) { alert('Agregá al menos un ítem'); return }
+    if (usaRecupero && !form.operacion_id) { alert('Para refacturar un recupero, elegí primero la operación'); return }
+    if (itemsEfectivos.filter(i => (i.servicio_id || i.descripcion) && i.precio_unit > 0).length === 0) { alert('Agregá al menos un ítem'); return }
     if (comp?.requiere_referencia && !form.ref_folio) { alert('Este comprobante (nota de crédito/débito) requiere el folio del documento que modifica'); return }
     setSaving(true)
-    const itemsLimpios = items.filter(i => i.servicio_id || i.descripcion).map(i => {
+    const itemsLimpios = itemsEfectivos.filter(i => i.servicio_id || i.descripcion).map(i => {
       const c = calcItem(i)
       return {
         servicio_id: i.servicio_id || null, metrica_id: i.metrica_id || null,
         descripcion: i.descripcion, rubro: i.rubro || null, unidad: i.unidad || null, nota: i.nota || null,
-        cantidad: i.cantidad, precio_unit: i.precio_unit, descuento: i.descuento, exento: i.exento,
+        cantidad: i.cantidad, precio_unit: i.precio_unit, descuento: i.descuento || 0, exento: i.exento,
         neto: c.neto, iva_monto: c.iva, exento_monto: c.exento, total: c.total,
+        origen_recibida_id: (i as any).origen_recibida_id || null, origen_folio: (i as any).origen_folio || null, costo_origen: (i as any).costo_origen ?? null,
       }
     })
     const tcRef = parseFloat(form.tc_referencia as any) || null
@@ -306,6 +380,13 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
       total_usd: tcRef ? totales.total / tcRef : null, estado: 'borrador',
       creado_por: currentUser?.nombre, creado_por_id: currentUser?.id,
     }).select('id').single()
+    // Vincula las recibidas refacturadas a esta emitida (quedan marcadas como refacturadas)
+    if (factData && usaRecupero) {
+      const ids = recibidasRef.filter(r => r._sel && (r._items || []).some((it: any) => it._sel && Number(it._precio) > 0)).map(r => r.id)
+      if (ids.length > 0) {
+        await (supabase.from('facturas_recibidas') as any).update({ refactura_emitida_id: factData.id }).in('id', ids)
+      }
+    }
     if (factData && compFile) {
       const ext = compFile.name.split('.').pop()
       const path = `facturas-emitidas/${factData.id}.${ext}`
@@ -435,6 +516,7 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
             )}
           </div>
         </div>
+        {usaCatalogo && (<>
         <div className="mb-4">
           <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Rubro de la factura (Puerto NOA actúa como proveedor)</label>
           <select value={rubroFactura} onChange={e => { setRubroFactura(e.target.value); setItems([{ ...itemVacio }]) }}
@@ -516,6 +598,95 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
           <div className="flex gap-4">
             <button onClick={() => setItems([...items, { ...itemVacio }])} className="text-xs text-[#1168F8] hover:underline">+ Agregar ítem</button>
             <button onClick={() => setModalItem(true)} className="text-xs text-gray-500 hover:text-[#1168F8] hover:underline">+ Otro ítem (al catálogo)</button>
+          </div>
+        )}
+        </>)}
+
+        {usaRecupero && (
+          <div className={usaCatalogo ? 'mt-5 pt-5 border-t border-gray-100' : ''}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs font-bold text-[#7C3AED]">Recupero de gastos</span>
+              <span className="text-[11px] text-gray-400">— elegí las facturas recibidas de la operación y los ítems a refacturar</span>
+            </div>
+            {!form.operacion_id ? (
+              <div className="text-center py-8 text-xs text-amber-600 border border-dashed border-amber-200 rounded-xl">
+                Elegí arriba la <b>operación vinculada</b> para traer sus facturas recibidas.
+              </div>
+            ) : cargandoRec ? (
+              <div className="text-center py-8 text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl">Cargando recibidas…</div>
+            ) : recibidasRef.length === 0 ? (
+              <div className="text-center py-8 text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                No hay facturas recibidas pendientes de refacturar en esta operación.<br/>
+                <span className="text-[10px]">(deben estar marcadas "se refactura al cliente" y no haber sido refacturadas antes)</span>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {recibidasRef.map((r, ri) => (
+                  <div key={r.id} className="border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50">
+                      <input type="checkbox" checked={r._sel} onChange={e => updRecibida(ri, { _sel: e.target.checked })} />
+                      <button onClick={() => updRecibida(ri, { _open: !r._open })} className="flex-1 text-left">
+                        <span className="text-xs font-semibold text-gray-900">{r.proveedor_razon_social}</span>
+                        {r.folio && <span className="text-[11px] text-gray-400 font-mono"> · {r.folio}</span>}
+                        <span className="text-[11px] text-gray-400"> · {r.moneda} {fmtCLP(r.neto || 0)} neto</span>
+                      </button>
+                      <span className="text-[10px] text-gray-400">{r._open ? '▲' : '▼'}</span>
+                    </div>
+                    {r._sel && r._open && (
+                      <div className="p-2 space-y-2">
+                        {(r._items || []).length === 0 && <div className="text-[11px] text-gray-400 px-2 py-3">Esta factura no tiene ítems detallados.</div>}
+                        {(r._items || []).map((it: any, ii: number) => {
+                          const total = (Number(it._precio) || 0) * (Number(it.cantidad) || 0)
+                          return (
+                            <div key={ii} className={`border rounded-lg p-2 ${it._sel ? 'border-gray-200' : 'border-gray-100 opacity-50'}`}>
+                              <div className="flex items-center gap-2 mb-2">
+                                <input type="checkbox" checked={it._sel} onChange={e => updRecItem(ri, ii, { _sel: e.target.checked })} />
+                                <span className="text-xs font-medium flex-1">{it.descripcion || 'ítem sin descripción'}</span>
+                                {it.rubro && <span className="text-[10px] bg-[#EEEDFE] text-[#3C3489] px-2 py-0.5 rounded">{nombreRubro(it.rubro)}</span>}
+                              </div>
+                              {it._sel && (
+                                <div className="grid grid-cols-12 gap-2 items-end">
+                                  <div className="col-span-3">
+                                    <label className="block text-[9px] text-gray-400 mb-0.5 uppercase">Costo unit.</label>
+                                    <div className="text-xs font-mono py-1.5">{fmtCLP(it.costo)}</div>
+                                  </div>
+                                  <div className="col-span-4">
+                                    <label className="block text-[9px] text-gray-400 mb-0.5 uppercase">Markup</label>
+                                    <div className="flex items-center gap-1">
+                                      <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+                                        <button onClick={() => updRecItem(ri, ii, { _mkTipo: 'pct' })} className={`px-2 py-1 text-[11px] ${it._mkTipo === 'pct' ? 'bg-[#0a9e6e] text-white' : 'text-gray-500'}`}>%</button>
+                                        <button onClick={() => updRecItem(ri, ii, { _mkTipo: 'monto' })} className={`px-2 py-1 text-[11px] ${it._mkTipo === 'monto' ? 'bg-[#0a9e6e] text-white' : 'text-gray-500'}`}>$</button>
+                                      </div>
+                                      <input type="number" value={it._mkVal} onFocus={e => e.target.select()}
+                                        onChange={e => updRecItem(ri, ii, { _mkVal: parseFloat(e.target.value) || 0 })}
+                                        className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:border-[#0a9e6e]" />
+                                    </div>
+                                  </div>
+                                  <div className="col-span-2">
+                                    <label className="block text-[9px] text-gray-400 mb-0.5 uppercase">Precio unit.</label>
+                                    <input type="text" inputMode="decimal" value={it._precio || ''} onFocus={e => e.target.select()}
+                                      onChange={e => updRecItem(ri, ii, { _precio: parseFloat(e.target.value.replace(/\./g, '').replace(',', '.')) || 0 })}
+                                      className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono text-[#0F6E56] focus:outline-none focus:border-[#0a9e6e]" />
+                                  </div>
+                                  <div className="col-span-1">
+                                    <label className="block text-[9px] text-gray-400 mb-0.5 uppercase">Cant.</label>
+                                    <div className="text-xs font-mono py-1.5 text-center">{it.cantidad}</div>
+                                  </div>
+                                  <div className="col-span-2 text-right">
+                                    <label className="block text-[9px] text-gray-400 mb-0.5 uppercase">Total</label>
+                                    <span className="font-mono font-bold text-xs text-gray-800">{fmtCLP(total)}</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
         <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
