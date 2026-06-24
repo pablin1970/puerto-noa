@@ -68,6 +68,7 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
   {
     section: 'Tesorería', icono: '🏦',
     items: [
+      { modulo: 'recibos',       label: 'Recibos',                   acciones: ['ver','crear','editar','descargar'] },
       { modulo: 'flujo_cuentas', label: 'Flujo cuentas ARG↔CHL',     acciones: ['ver','crear','editar','descargar'] },
       { modulo: 'tipos_cambio',  label: 'Tipos de cambio',           acciones: ['ver','editar'] },
     ]
