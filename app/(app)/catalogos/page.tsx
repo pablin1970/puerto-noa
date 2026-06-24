@@ -6,7 +6,7 @@ import TributosConfig from './TributosConfig'
 import TalonariosCatalogo from './TalonariosCatalogo'
 import { cargarPermisos, puede } from '@/lib/permisos'
 
-type Tab = 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'ciudades_prestacion' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm' | 'empresa' | 'condiciones_cotizacion' | 'servicios_deposito' | 'tributos' | 'talonarios'
+type Tab = 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm' | 'empresa' | 'condiciones_cotizacion' | 'servicios_deposito' | 'tributos' | 'talonarios'
 
 const TABS = [
   { key: 'puertos_china', label: 'Puertos China',        icon: '🇨🇳' },
@@ -19,7 +19,6 @@ const TABS = [
   { key: 'bloques_cotizacion', label: 'Bloques cotización',   icon: '📋' },
   { key: 'rubros_proveedor',   label: 'Rubros de proveedor',  icon: '🏷️' },
   { key: 'servicios_deposito', label: 'Catálogo de servicios',   icon: '📋' },
-  { key: 'ciudades_prestacion', label: 'Lugares de prestación', icon: '🏙' },
   { key: 'condiciones_cotizacion', label: 'Condiciones cotización', icon: '📜' },
   { key: 'gastos_categorias',  label: 'Cat. gastos fijos',    icon: '💸' },
   { key: 'cuentas_abm',        label: 'Cuentas (caja y bancos)', icon: '🏦' },
@@ -30,7 +29,7 @@ const TABS = [
 
 // Agrupación en árbol por categoría superior, con color por grupo
 const GRUPOS = [
-  { titulo:'Catálogo de servicios', icon:'📋', color:'#1168F8', claro:'#E7F0FE', texto:'#0a3d8f', keys:['rubros_proveedor','servicios_deposito','ciudades_prestacion'] },
+  { titulo:'Catálogo de servicios', icon:'📋', color:'#1168F8', claro:'#E7F0FE', texto:'#0a3d8f', keys:['rubros_proveedor','servicios_deposito'] },
   { titulo:'Cotizador',             icon:'🧾', color:'#7C3AED', claro:'#F1EBFD', texto:'#5B21B6', keys:['bloques_cotizacion','condiciones_cotizacion'] },
   { titulo:'Geografía y rutas',     icon:'📍', color:'#0a9e6e', claro:'#E3F6EF', texto:'#07614A', keys:['puertos_china','puertos_chile','pasos','ciudades'] },
   { titulo:'Logística',             icon:'🚛', color:'#ef9f27', claro:'#FDF3E2', texto:'#92610C', keys:['contenedores','camiones'] },
@@ -487,27 +486,6 @@ export default function CatalogosPage() {
             { key: 'orden',     label: 'Orden',     type: 'number', placeholder: '1' },
             { key: 'ciudad',    label: 'Ciudad',    placeholder: 'San Salvador de Jujuy' },
             { key: 'provincia', label: 'Provincia', placeholder: 'Jujuy' },
-          ]}
-        />
-      )}
-
-      {/* ── LUGARES DE PRESTACIÓN (ciudades CL/AR/CN donde el depósito presta servicios) ── */}
-      {tab === 'ciudades_prestacion' && (
-        <CatalogoABM
-          modulo="cat_servicios"
-          tabla="ciudades"
-          titulo="Lugares de prestación"
-          orden="orden"
-          extra={<p className="text-xs text-gray-400">Ciudades de Chile, Argentina y China donde los depósitos/operadores prestan servicios. Las activas aparecen al cargar una cotización de depósito.</p>}
-          cols={[
-            { key: 'orden',  label: 'Orden',  type: 'number', placeholder: '1' },
-            { key: 'pais',   label: 'País',   type: 'select', options: [
-              { value: 'CL', label: 'Chile' },
-              { value: 'AR', label: 'Argentina' },
-              { value: 'CN', label: 'China' },
-            ] },
-            { key: 'ciudad', label: 'Ciudad', placeholder: 'Iquique' },
-            { key: 'region', label: 'Región / Provincia', placeholder: 'Tarapacá' },
           ]}
         />
       )}
