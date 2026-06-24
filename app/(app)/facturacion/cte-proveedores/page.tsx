@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt } from '@/lib/utils'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import ModalImputacion from '../ModalImputacion'
 
 const TIPO_L: Record<string, string> = {
   factura: 'Factura', pago: 'Pago realizado',
@@ -32,6 +33,7 @@ export default function CteProveedoresPage() {
   const [saving, setSaving] = useState(false)
   const [uploadingComp, setUploadingComp] = useState(false)
   const [compUrl, setCompUrl] = useState('')
+  const [imputTercero, setImputTercero] = useState<any>(null)
 
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
   const [permListos, setPermListos] = useState(false)
@@ -121,10 +123,7 @@ export default function CteProveedoresPage() {
           <h1 className="text-xl font-bold text-gray-900">Cuenta corriente — Proveedores</h1>
           <p className="text-xs text-gray-400 mt-0.5">Movimientos con proveedores · Facturas recibidas y pagos realizados</p>
         </div>
-        {puede(permisos,'cte_proveedores_pago','crear') && <button onClick={() => { setForm({ tercero_id: '', operacion_id: '', tipo: 'pago', fecha: new Date().toISOString().slice(0, 10), concepto: '', moneda: 'CLP', monto: '', tc_referencia: '', notas: '' }); setCompUrl(''); setShowModal(true) }}
-          className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">
-          + Registrar movimiento
-        </button>}
+        <div className="text-[11px] text-gray-400 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 max-w-xs text-right leading-snug">Los pagos se registran desde <b>Órdenes de pago</b>. Esta pantalla es de consulta de saldos e imputación.</div>
       </div>
 
       {saldosPorProveedor.length > 0 && (
@@ -137,17 +136,21 @@ export default function CteProveedoresPage() {
           </div>
           <div className="grid grid-cols-3 gap-3">
             {saldosPorProveedor.map(t => (
-              <button key={t.id} onClick={() => setFiltroTercero(filtroTercero === t.id ? '' : t.id)}
-                className={`text-left p-3 rounded-xl border transition-all ${filtroTercero === t.id ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-100 hover:bg-gray-50'}`}>
-                <div className="font-semibold text-xs text-gray-900 truncate">{t.razon_social}</div>
-                <div className="flex justify-between mt-1">
-                  <span className="text-[10px] text-gray-400">Pagado: <span className="font-mono text-green-700">{fmtCLP(t.debe)}</span></span>
-                  <span className="text-[10px] text-gray-400">Facturado: <span className="font-mono text-[#1168F8]">{fmtCLP(t.haber)}</span></span>
-                </div>
-                <div className={`text-xs font-bold font-mono mt-1 ${t.saldo > 0 ? 'text-red-600' : 'text-green-700'}`}>
-                  {t.saldo > 0 ? `A pagar: ${fmtCLP(t.saldo)}` : 'Sin deuda'}
-                </div>
-              </button>
+              <div key={t.id} className={`p-3 rounded-xl border transition-all ${filtroTercero === t.id ? 'border-[#1168F8] bg-[#EBF2FF]' : 'border-gray-100 hover:bg-gray-50'}`}>
+                <button onClick={() => setFiltroTercero(filtroTercero === t.id ? '' : t.id)} className="text-left w-full">
+                  <div className="font-semibold text-xs text-gray-900 truncate">{t.razon_social}</div>
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[10px] text-gray-400">Pagado: <span className="font-mono text-green-700">{fmtCLP(t.debe)}</span></span>
+                    <span className="text-[10px] text-gray-400">Facturado: <span className="font-mono text-[#1168F8]">{fmtCLP(t.haber)}</span></span>
+                  </div>
+                  <div className={`text-xs font-bold font-mono mt-1 ${t.saldo > 0 ? 'text-red-600' : 'text-green-700'}`}>
+                    {t.saldo > 0 ? `A pagar: ${fmtCLP(t.saldo)}` : 'Sin deuda'}
+                  </div>
+                </button>
+                {puede(permisos, 'cte_proveedores_pago', 'crear') && (
+                  <button onClick={() => setImputTercero(t)} className="mt-2 w-full px-2 py-1.5 rounded-lg text-[10px] font-semibold border border-[#93B8FC] text-[#1168F8] hover:bg-[#EBF2FF]">↪ Imputar a cuenta</button>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -261,6 +264,11 @@ export default function CteProveedoresPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {imputTercero && (
+        <ModalImputacion supabase={supabase} lado="proveedor" tercero={imputTercero}
+          onClose={() => setImputTercero(null)} onDone={async () => { await loadData() }} />
       )}
     </div>
   )
