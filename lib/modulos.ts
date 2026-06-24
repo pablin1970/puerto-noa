@@ -91,6 +91,7 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
       { modulo: 'cat_finanzas',   label: '→ Finanzas',               acciones: ['ver','crear','editar','eliminar'], subitem: true },
       { modulo: 'cat_empresa',    label: '→ Empresa',                acciones: ['ver','editar'], subitem: true },
       { modulo: 'tributos',       label: '→ Tributos ARCA',          acciones: ['ver','crear','editar','eliminar'], subitem: true },
+      { modulo: 'talonarios',     label: '→ Talonarios',             acciones: ['ver','crear','editar','eliminar'], subitem: true },
       { modulo: 'usuarios',              label: 'Usuarios',             acciones: ['ver','crear','editar','eliminar'] },
       { modulo: 'usuarios_historial',    label: '→ Historial de conexiones', acciones: ['ver'], subitem: true },
       { modulo: 'roles',                 label: 'Roles y permisos',     acciones: ['ver','crear','editar','eliminar'] },
