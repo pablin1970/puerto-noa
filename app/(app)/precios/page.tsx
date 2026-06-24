@@ -25,8 +25,8 @@ const RUBROS_PRECIO: Record<string, { label: string; color: string; bg: string; 
   naviera:              { label: 'Naviera',              color: '#0891b2', bg: '#E0F2FE', icon: '⚓', cat: true },
   transporte_terrestre: { label: 'Transporte terrestre', color: '#b45309', bg: '#FEF3C7', icon: '🚛', cat: false },
   deposito:             { label: 'Depósito',             color: '#0a9e6e', bg: '#E1F5EE', icon: '🏭', cat: true },
-  gastos_argentina:     { label: 'Despachante',          color: '#6b21a8', bg: '#F3E8FF', icon: '📋', cat: true },
-  transporte_chile:     { label: 'Agente',               color: '#0891b2', bg: '#E0F2FE', icon: '🤝', cat: true },
+  despachante:     { label: 'Despachante',          color: '#6b21a8', bg: '#F3E8FF', icon: '📋', cat: true },
+  agente:     { label: 'Agente',               color: '#0891b2', bg: '#E0F2FE', icon: '🤝', cat: true },
   seguro:               { label: 'Seguro',               color: '#052698', bg: '#EBF2FF', icon: '🛡', cat: true },
   otro:                 { label: 'Otro',                 color: '#6b7280', bg: '#F3F4F6', icon: '·', cat: true },
 }
