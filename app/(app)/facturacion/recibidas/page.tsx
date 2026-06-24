@@ -75,6 +75,7 @@ export default function FacturasRecibidasPage() {
   const [view, setView] = useState<'lista' | 'nueva' | 'detalle'>('lista')
   const [selId, setSelId] = useState<string | null>(null)
   const [filtroEstado, setFiltroEstado] = useState('')
+  const [filtroOp, setFiltroOp] = useState('')   // '' todas · 'con' con operación · 'sin' sin operación
   const [buscar, setBuscar] = useState('')
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [terceros, setTerceros] = useState<any[]>([])
@@ -130,7 +131,11 @@ export default function FacturasRecibidasPage() {
     const b = buscar.toLowerCase()
     const matchB = !b || f.proveedor_razon_social.toLowerCase().includes(b) || (f.folio || '').includes(b)
     const matchE = !filtroEstado || f.estado === filtroEstado
-    return matchB && matchE
+    const esGastoFijo = (f as any).destino === 'gasto_fijo'
+    const matchOp = !filtroOp
+      || (filtroOp === 'con' && !!f.operacion_id)
+      || (filtroOp === 'sin' && !f.operacion_id && !esGastoFijo)
+    return matchB && matchE && matchOp
   })
 
   const stats = {
@@ -197,7 +202,13 @@ export default function FacturasRecibidasPage() {
               <option value="">Todos los estados</option>
               {Object.entries(ESTADO_L).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
-            {(buscar || filtroEstado) && <button onClick={() => { setBuscar(''); setFiltroEstado('') }} className="px-3 py-2 border border-gray-200 rounded-xl text-xs text-gray-500">✕</button>}
+            <select value={filtroOp} onChange={e => setFiltroOp(e.target.value)}
+              className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8] shadow-sm">
+              <option value="">Todas (operación)</option>
+              <option value="con">Con operación</option>
+              <option value="sin">Sin operación asignar</option>
+            </select>
+            {(buscar || filtroEstado || filtroOp) && <button onClick={() => { setBuscar(''); setFiltroEstado(''); setFiltroOp('') }} className="px-3 py-2 border border-gray-200 rounded-xl text-xs text-gray-500">✕</button>}
             <span className="text-xs text-gray-400 ml-auto">{filtradas.length} factura(s)</span>
           </div>
 
@@ -270,7 +281,7 @@ export default function FacturasRecibidasPage() {
 
       {view === 'detalle' && sel && (
         <DetalleFacturaRecibida
-          factura={sel} supabase={supabase} permisos={permisos}
+          factura={sel} supabase={supabase} permisos={permisos} operaciones={operaciones}
           onReload={async () => { await loadData() }}
           onBack={() => setView('lista')}
         />
@@ -854,16 +865,34 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, cat
   )
 }
 
-function DetalleFacturaRecibida({ factura, supabase, permisos, onReload, onBack }: any) {
+function DetalleFacturaRecibida({ factura, supabase, permisos, operaciones, onReload, onBack }: any) {
   const puedeEditarFR = puede(permisos,'facturas_recibidas','editar')
   const fmtCLP = (n: number) => Math.round(n).toLocaleString('es-CL')
   const items = Array.isArray(factura.items) ? factura.items : []
   const [abriendo, setAbriendo] = useState(false)
   const [refacturando, setRefacturando] = useState(false)
+  const [editandoOp, setEditandoOp] = useState(false)
+  const [nuevaOp, setNuevaOp] = useState(factura.operacion_id || '')
+  const [guardandoOp, setGuardandoOp] = useState(false)
 
   async function cambiarEstado(estado: string) {
     await (supabase.from('facturas_recibidas') as any).update({ estado }).eq('id', factura.id)
     await onReload()
+  }
+
+  // Asigna o cambia la operación de una factura ya cargada (ej. gastos pagados antes de tener la operación).
+  async function guardarOp() {
+    if (guardandoOp) return
+    setGuardandoOp(true)
+    try {
+      await (supabase.from('facturas_recibidas') as any).update({ operacion_id: nuevaOp || null }).eq('id', factura.id)
+      setEditandoOp(false)
+      await onReload()
+    } catch (e: any) {
+      alert('No se pudo guardar la operación: ' + (e?.message || e))
+    } finally {
+      setGuardandoOp(false)
+    }
   }
 
   // Refactura al cliente: genera una factura emitida (borrador) de recupero y la vincula a esta recibida.
@@ -959,6 +988,48 @@ function DetalleFacturaRecibida({ factura, supabase, permisos, onReload, onBack 
           ))}
         </div>
       </div>
+
+      {factura.destino !== 'gasto_fijo' && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-bold text-gray-800">Operación vinculada</div>
+              {!editandoOp ? (
+                <div className="text-[11px] text-gray-500 mt-0.5">
+                  {factura.operacion_id
+                    ? (() => {
+                        const op = (operaciones || []).find((o: any) => o.id === factura.operacion_id)
+                        return op ? `${op.cotizacion?.num || 's/n'} · ${op.cotizacion?.cliente || ''}` : 'Operación asignada'
+                      })()
+                    : 'Sin vincular — asignala cuando la operación esté creada para poder refacturar este gasto.'}
+                </div>
+              ) : (
+                <select value={nuevaOp} onChange={e => setNuevaOp(e.target.value)}
+                  className="mt-1.5 w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
+                  <option value="">Sin vincular</option>
+                  {(operaciones || []).map((o: any) => <option key={o.id} value={o.id}>{o.cotizacion?.num} · {o.cotizacion?.cliente}</option>)}
+                </select>
+              )}
+            </div>
+            {puedeEditarFR && (
+              !editandoOp ? (
+                <button onClick={() => { setNuevaOp(factura.operacion_id || ''); setEditandoOp(true) }}
+                  className="px-4 py-2 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:border-[#1168F8] hover:text-[#1168F8] whitespace-nowrap">
+                  {factura.operacion_id ? 'Cambiar' : 'Asignar operación'}
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button onClick={() => setEditandoOp(false)} className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-50">Cancelar</button>
+                  <button onClick={guardarOp} disabled={guardandoOp}
+                    className="px-4 py-2 bg-[#1168F8] text-white rounded-lg text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50 whitespace-nowrap">
+                    {guardandoOp ? 'Guardando…' : 'Guardar'}
+                  </button>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      )}
 
       {factura.a_recuperar && (
         <div className="bg-white border border-purple-100 rounded-2xl p-4 shadow-sm flex items-center justify-between gap-3">
