@@ -281,7 +281,7 @@ const [tercerosProv,setTercerosProv]=useState<any[]>([])
 // Cotizaciones de proveedores seleccionadas por bloque
 const [provUsado,setProvUsado]=useState<Record<number,string|null>>({0:null,1:null,2:null,3:null,4:null})
 const [terceros,setTerceros]=useState<any[]>([])
-const [lugaresProvMap,setLugaresProvMap]=useState<Map<string,Set<string>>>(new Map())  // terceroId → ciudades (normalizadas) donde presta
+const [lugaresProvMap,setLugaresProvMap]=useState<Map<string,Set<string>>>(new Map())  // terceroId → claves "lugar_tipo:lugar_id" donde presta
 const [despachantes,setDespachantes]=useState<any[]>([])
 const [despachanteSelId,setDespachanteSelId]=useState<string|null>(null)
 const [cotDesp,setCotDesp]=useState<{id:string;referencia:string;fecha:string;tipo:'generica'|'especifica'}|null>(null)
@@ -411,16 +411,16 @@ useEffect(()=>{
     if(tc.data) setTiposCont(tc.data)
     if(tca.data) setTiposCamion(tca.data)
   })
-  // Lugares de prestación de los proveedores (frente ①): terceroId → ciudades normalizadas
-  supabase.from('tercero_lugares_prestacion').select('tercero_id, ciudades(ciudad)')
+  // Lugares de prestación de los proveedores (frente ①): terceroId → claves "lugar_tipo:lugar_id"
+  // (referencia directa a las tablas estables puertos_chile/puertos_china/ciudades_destino_arg).
+  supabase.from('tercero_lugares_prestacion').select('tercero_id, lugar_tipo, lugar_id')
     .then(({data}:any)=>{
       if(!data) return
       const m = new Map<string,Set<string>>()
       data.forEach((l:any)=>{
-        const nom = (l?.ciudades?.ciudad||'').toLowerCase().trim()
-        if(!l.tercero_id || !nom) return
+        if(!l.tercero_id || !l.lugar_tipo || !l.lugar_id) return
         if(!m.has(l.tercero_id)) m.set(l.tercero_id, new Set())
-        m.get(l.tercero_id)!.add(nom)
+        m.get(l.tercero_id)!.add(l.lugar_tipo + ':' + l.lugar_id)
       })
       setLugaresProvMap(m)
     })
@@ -750,10 +750,10 @@ const criteriosProvChile = (terceroId:any): CritCoincidencia[] => {
     { label:'Toca Chile',        aplica: true,   ok: !!s.puertoChileId },
     { label:'Proveedor chileno', aplica: !!pais, ok: esPaisCL(pais) },
   ]
-  // Lugar de prestación (frente ①): solo si el proveedor declaró dónde presta y la operación tiene puerto chileno.
+  // Lugar de prestación (frente ①): match por id contra el puerto chileno de la operación.
   const presta = lugaresProvMap.get(terceroId) || new Set<string>()
   const ciudadOp = ciudadPuertoChileOp()
-  if(presta.size>0 && ciudadOp) out.push({ label:'Presta en '+ciudadOp, aplica:true, ok: presta.has(ciudadOp) })
+  if(presta.size>0 && s.puertoChileId) out.push({ label:'Presta en '+(ciudadOp||'el puerto'), aplica:true, ok: presta.has('puerto_chile:'+s.puertoChileId) })
   return out
 }
 // ARGENTINA (rubro gastos_argentina=despachante). Argentina nunca es tránsito → coincide si la
@@ -766,7 +766,7 @@ const criteriosProvArg = (terceroId:any): CritCoincidencia[] => {
   ]
   const presta = lugaresProvMap.get(terceroId) || new Set<string>()
   const ciudadOp = ciudadDestinoArgOp()
-  if(presta.size>0 && ciudadOp) out.push({ label:'Presta en '+ciudadOp, aplica:true, ok: presta.has(ciudadOp) })
+  if(presta.size>0 && s.ciudadDestinoId) out.push({ label:'Presta en '+(ciudadOp||'destino'), aplica:true, ok: presta.has('ciudad_arg:'+s.ciudadDestinoId) })
   return out
 }
 const criteriosDespachanteCot = (c:any): CritCoincidencia[] => criteriosProvArg(c?.tercero_id || c?.terceroId || null)
