@@ -474,6 +474,8 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
   const [ops, setOps] = useState<any[]>([])
   const [rubros, setRubros] = useState<any[]>([])
   const [todosRubros, setTodosRubros] = useState<any[]>([])
+  const [ciudades, setCiudades] = useState<any[]>([])
+  const [lugares, setLugares] = useState<Set<string>>(new Set())  // "rubro_id|ciudad_id" donde el proveedor presta
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
   const [editando, setEditando] = useState(false)
   const [form, setForm] = useState<any>({
@@ -486,6 +488,9 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
   const [uploading, setUploading] = useState(false)
   const [docForm, setDocForm] = useState({ tipo: 'estatuto', nombre_custom: '', referencia: '', fecha: '', notas: '' })
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+  // Rubros que prestan en una ciudad concreta (Chile o Argentina). Forwarder/terrestre/seguro no cargan lugar.
+  const RUBROS_CON_LUGAR = ['deposito', 'gastos_argentina', 'transporte_chile']
+  const PAISES_LUGAR = [{ code: 'AR', label: 'Argentina' }, { code: 'CL', label: 'Chile' }]
 
   useEffect(() => {
     loadDocs(); loadOps(); loadCuentas()
@@ -499,19 +504,38 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
   }
 
   async function loadRubros() {
-    const [rubrosTercero, todosRes] = await Promise.all([
-      supabase.from('tercero_rubros').select('rubro_id, rubro:proveedor_rubros(id,nombre,color,icono,descripcion)').eq('tercero_id', tercero.id),
-      supabase.from('proveedor_rubros').select('*').eq('activo', true).order('orden')
+    const [rubrosTercero, todosRes, ciuRes, lugRes] = await Promise.all([
+      supabase.from('tercero_rubros').select('rubro_id, rubro:proveedor_rubros(id,nombre,codigo,color,icono,descripcion)').eq('tercero_id', tercero.id),
+      supabase.from('proveedor_rubros').select('*').eq('activo', true).order('orden'),
+      supabase.from('ciudades').select('id,pais,ciudad,region').eq('activo', true).order('pais').order('orden'),
+      supabase.from('tercero_lugares_prestacion').select('rubro_id,ciudad_id').eq('tercero_id', tercero.id),
     ])
     if (rubrosTercero.data) setRubros((rubrosTercero.data as any[]).map(r => (r as any).rubro).filter(Boolean))
     if (todosRes.data) setTodosRubros(todosRes.data)
+    if (ciuRes.data) setCiudades(ciuRes.data)
+    if (lugRes.data) setLugares(new Set((lugRes.data as any[]).map(l => l.rubro_id + '|' + l.ciudad_id)))
+  }
+
+  // Togglea una ciudad como lugar de prestación de un rubro del proveedor.
+  async function toggleLugar(rubroId: string, ciudadId: string) {
+    const key = rubroId + '|' + ciudadId
+    const ya = lugares.has(key)
+    setLugares(prev => { const n = new Set(prev); if (ya) n.delete(key); else n.add(key); return n })
+    if (ya) {
+      await supabase.from('tercero_lugares_prestacion').delete().eq('tercero_id', tercero.id).eq('rubro_id', rubroId).eq('ciudad_id', ciudadId)
+    } else {
+      await (supabase.from('tercero_lugares_prestacion') as any).insert({ tercero_id: tercero.id, rubro_id: rubroId, ciudad_id: ciudadId })
+    }
   }
 
   async function toggleRubro(rubroId: string) {
     const yaAsignado = rubros.some((r: any) => r.id === rubroId)
     if (yaAsignado) {
       await supabase.from('tercero_rubros').delete().eq('tercero_id', tercero.id).eq('rubro_id', rubroId)
+      // Los lugares de prestación cuelgan del rubro asignado: si se desasigna, se limpian.
+      await supabase.from('tercero_lugares_prestacion').delete().eq('tercero_id', tercero.id).eq('rubro_id', rubroId)
       setRubros(prev => prev.filter((r: any) => r.id !== rubroId))
+      setLugares(prev => { const n = new Set<string>(); prev.forEach(k => { if (!k.startsWith(rubroId + '|')) n.add(k) }); return n })
     } else {
       await (supabase.from('tercero_rubros') as any).insert({ tercero_id: tercero.id, rubro_id: rubroId })
       const nuevo = todosRubros.find(r => r.id === rubroId)
@@ -1057,30 +1081,72 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
       )}
 
       {tab === 'rubros' && (
-        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-          <div className="mb-4">
-            <div className="text-sm font-bold text-gray-900 mb-1">Rubros asignados</div>
-            <div className="text-[10px] text-gray-400">Determina en que bloque del cotizador aparece este proveedor</div>
+        <div className="space-y-4">
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <div className="mb-4">
+              <div className="text-sm font-bold text-gray-900 mb-1">Rubros asignados</div>
+              <div className="text-[10px] text-gray-400">Determina en que bloque del cotizador aparece este proveedor</div>
+            </div>
+            {todosRubros.length === 0 ? (
+              <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 text-center">No hay rubros configurados.</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {todosRubros.map(r => {
+                  const asignado = rubros.some((x: any) => x.id === r.id)
+                  return (
+                    <button key={r.id} onClick={() => toggleRubro(r.id)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${asignado ? '' : 'border-gray-200 hover:border-gray-300 bg-gray-50'}`}
+                      style={asignado ? { background: r.color + '15', borderColor: r.color + '40' } : {}}>
+                      <span className="text-xl flex-shrink-0">{r.icono}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold truncate" style={asignado ? { color: r.color } : { color: '#374151' }}>{r.nombre}</div>
+                        {r.descripcion && <div className="text-[10px] text-gray-400 truncate mt-0.5">{r.descripcion}</div>}
+                      </div>
+                      {asignado && <span className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style={{ background: r.color }}>v</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
-          {todosRubros.length === 0 ? (
-            <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 text-center">No hay rubros configurados.</div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {todosRubros.map(r => {
-                const asignado = rubros.some((x: any) => x.id === r.id)
-                return (
-                  <button key={r.id} onClick={() => toggleRubro(r.id)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${asignado ? '' : 'border-gray-200 hover:border-gray-300 bg-gray-50'}`}
-                    style={asignado ? { background: r.color + '15', borderColor: r.color + '40' } : {}}>
-                    <span className="text-xl flex-shrink-0">{r.icono}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold truncate" style={asignado ? { color: r.color } : { color: '#374151' }}>{r.nombre}</div>
-                      {r.descripcion && <div className="text-[10px] text-gray-400 truncate mt-0.5">{r.descripcion}</div>}
+
+          {/* Lugares de prestación — solo para rubros asignados que prestan en una ciudad concreta */}
+          {rubros.some((r: any) => RUBROS_CON_LUGAR.includes(r.codigo)) && (
+            <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+              <div className="mb-4">
+                <div className="text-sm font-bold text-gray-900 mb-1">Lugares de prestación</div>
+                <div className="text-[10px] text-gray-400">Ciudades donde este proveedor presta cada servicio. Al cotizar se marca si coinciden con la operación.</div>
+              </div>
+              <div className="space-y-4">
+                {rubros.filter((r: any) => RUBROS_CON_LUGAR.includes(r.codigo)).map((r: any) => (
+                  <div key={r.id} className="border border-gray-100 rounded-xl p-3">
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <span className="text-base flex-shrink-0">{r.icono}</span>
+                      <span className="text-xs font-semibold" style={{ color: r.color }}>{r.nombre}</span>
                     </div>
-                    {asignado && <span className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style={{ background: r.color }}>v</span>}
-                  </button>
-                )
-              })}
+                    {PAISES_LUGAR.map(p => {
+                      const ciuPais = ciudades.filter((c: any) => c.pais === p.code)
+                      if (ciuPais.length === 0) return null
+                      return (
+                        <div key={p.code} className="mb-2 last:mb-0">
+                          <div className="text-[10px] text-gray-400 mb-1">{p.label}</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {ciuPais.map((c: any) => {
+                              const on = lugares.has(r.id + '|' + c.id)
+                              return (
+                                <button key={c.id} onClick={() => toggleLugar(r.id, c.id)}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${on ? 'bg-[#1168F8] text-white border-[#1168F8]' : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'}`}>
+                                  {on ? '✓ ' : ''}{c.ciudad}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
