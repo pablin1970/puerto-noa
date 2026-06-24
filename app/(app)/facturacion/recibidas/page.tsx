@@ -83,6 +83,7 @@ export default function FacturasRecibidasPage() {
   const [tiposComp, setTiposComp] = useState<any[]>([])         // catálogo de comprobantes
   const [gastoCats, setGastoCats] = useState<any[]>([])         // categorías de gastos fijos
   const [tcGasto, setTcGasto] = useState<{ usd: number; ars: number }>({ usd: 908, ars: 0 })
+  const [tcSnap, setTcSnap] = useState<any>(null)   // snapshot completo de TC vigentes al momento de cargar
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
 
   const [permListos, setPermListos] = useState(false)
@@ -107,7 +108,7 @@ export default function FacturasRecibidasPage() {
       supabase.from('tipos_comprobante').select('*').eq('activo', true)
         .in('ambito', ['recibido', 'ambos']).order('orden', { ascending: true }),
       supabase.from('gastos_fijos_categorias').select('id,nombre,codigo,orden').eq('activo', true).order('orden', { ascending: true }),
-      (supabase.from('tipos_cambio_eventos') as any).select('clp, ars').order('created_at', { ascending: false }).limit(1),
+      (supabase.from('tipos_cambio_eventos') as any).select('fecha, fuente, ars, clp, cny').order('created_at', { ascending: false }).limit(1),
     ])
     if (fRes.data) setFacturas(fRes.data as FacturaRecibida[])
     if (tRes.data) setTerceros(tRes.data)
@@ -115,7 +116,11 @@ export default function FacturasRecibidasPage() {
     if (cRes.data) setCatalogo(cRes.data)
     if (tcRes.data) setTiposComp(tcRes.data)
     if (gcRes.data) setGastoCats(gcRes.data)
-    if (tceRes.data?.[0]) { const tce: any = tceRes.data[0]; setTcGasto({ usd: tce.clp || 908, ars: tce.ars || 0 }) }
+    if (tceRes.data?.[0]) {
+      const tce: any = tceRes.data[0]
+      setTcGasto({ usd: tce.clp || 908, ars: tce.ars || 0 })
+      setTcSnap({ fecha: tce.fecha, fuente: tce.fuente || null, USD: 1, ARS: Number(tce.ars) || null, CLP: Number(tce.clp) || null, CNY: Number(tce.cny) || null })
+    }
     setLoading(false)
   }
 
@@ -257,7 +262,7 @@ export default function FacturasRecibidasPage() {
         <FormFacturaRecibida
           supabase={supabase} currentUser={currentUser} terceros={terceros} operaciones={operaciones}
           catalogo={catalogo} tiposComp={tiposComp} permisos={permisos} facturas={facturas}
-          gastoCats={gastoCats} tcGasto={tcGasto}
+          gastoCats={gastoCats} tcGasto={tcGasto} tcSnap={tcSnap}
           onSave={async () => { await loadData(); setView('lista') }}
           onCancel={() => setView('lista')}
         />
@@ -274,7 +279,7 @@ export default function FacturasRecibidasPage() {
   )
 }
 
-function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, catalogo, tiposComp, permisos, facturas, gastoCats, tcGasto, onSave, onCancel }: any) {
+function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, catalogo, tiposComp, permisos, facturas, gastoCats, tcGasto, tcSnap, onSave, onCancel }: any) {
   const [form, setForm] = useState({
     tipo_comprobante_id: '',
     tipo_doc: 'factura',
@@ -468,6 +473,7 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, cat
         [`monto_${m.toLowerCase()}`]: totalRedondeado,
         monto_clp_equiv: Math.round(clpEquiv) || null,
         tipo_cambio_ref: m === 'CLP' ? null : m === 'USD' ? (tcGasto?.usd || null) : (tcGasto?.ars || null),
+        tc_snapshot: tcSnap || null,
         fecha: fechaFact,
         periodo_anio: parseInt(fechaFact.slice(0, 4)),
         periodo_mes: parseInt(fechaFact.slice(5, 7)),
@@ -484,6 +490,7 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, cat
     const { tipo_comprobante_id, caracterizacion, ref_tipo, ref_folio, nro_ingreso, ...formRest } = form
     await (supabase.from('facturas_recibidas') as any).insert({
       ...formRest, tc_referencia: tcRef,
+      tc_snapshot: tcSnap || null,
       tipo_comprobante_id, caracterizacion,
       destino,
       operacion_id: esGasto ? null : (formRest.operacion_id || null),
