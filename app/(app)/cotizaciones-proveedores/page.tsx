@@ -604,7 +604,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     tipo_contenedor: '', tipo_camion: '', tc_referencia: '', es_tarifa_base: false,
     flete_ida: '', flete_vuelta: '', flete_rt: '',
     almacen_ubicacion: '', almacen_dias_gratis: '0',
-    ciudad_prestacion_id: '', etiqueta_lugar: '',
+    lugar_prestacion_tipo: '', lugar_prestacion_id: '', etiqueta_lugar: '',
     almacen_m3_dia: '', almacen_m3_min: '',
     almacen_pallet_dia: '', almacen_pallet_min: '',
     almacen_bigbag_dia: '', almacen_bigbag_min: '',
@@ -643,7 +643,12 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [depHabMin, setDepHabMin] = useState<Set<string>>(new Set())  // formas con "mínimo de cobro" tildado en el catálogo
   const [depServicios, setDepServicios] = useState<any[]>(snapshotInicial?.depServicios || [])
   const [depSelSvc, setDepSelSvc] = useState('')
-  const [ciudades_, setCiudades_] = useState<any[]>([])
+  // Lugares de prestación = unión de las tablas estables (puertos Chile/China + ciudades NOA). Sin tabla 'ciudades'.
+  const lugaresEstables = useMemo<any[]>(() => ([
+    ...((puertosChile as any[]) || []).map(c => ({ lugar_tipo: 'puerto_chile', id: c.id, ciudad: c.ciudad, pais: 'CL', region: c.region || '' })),
+    ...((puertosCh as any[]) || []).map(c => ({ lugar_tipo: 'puerto_china', id: c.id, ciudad: c.ciudad, pais: 'CN', region: c.region || '' })),
+    ...((ciudades as any[]) || []).map(c => ({ lugar_tipo: 'ciudad_arg', id: c.id, ciudad: c.ciudad, pais: 'AR', region: c.provincia || '' })),
+  ]), [puertosChile, puertosCh, ciudades])
 
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
   const sel = inp
@@ -680,14 +685,14 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   useEffect(() => {
     const rubroEsDeposito = tipoFormulario(form.rubro) === 'almacenaje'
     if(!rubroEsDeposito) return
-    if(!form.ciudad_prestacion_id) return
+    if(!form.lugar_prestacion_id) return
     if(!form.tercero_id && !form.proveedor_nombre) return
     if(form.etiqueta_lugar && form.etiqueta_lugar.trim() !== '') return
     let cancelado = false
     ;(async () => {
       let q = supabase.from('cotizaciones_proveedor_v2')
         .select('etiqueta_lugar,fecha')
-        .eq('ciudad_prestacion_id', form.ciudad_prestacion_id)
+        .eq('lugar_prestacion_id', form.lugar_prestacion_id)
         .not('etiqueta_lugar', 'is', null)
         .order('fecha', { ascending: false })
         .limit(1)
@@ -700,7 +705,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       }
     })()
     return () => { cancelado = true }
-  }, [form.ciudad_prestacion_id, form.tercero_id, form.proveedor_nombre, form.rubro])
+  }, [form.lugar_prestacion_id, form.tercero_id, form.proveedor_nombre, form.rubro])
 
   // Carga los lugares de prestación del proveedor para el rubro actual (frente ①).
   // El selector de ciudad se acota a estos lugares; si hay uno solo, se autoselecciona.
@@ -712,16 +717,17 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     let cancelado = false
     ;(async () => {
       const { data } = await supabase.from('tercero_lugares_prestacion')
-        .select('ciudad_id, ciudades(id,ciudad,pais,region)')
+        .select('lugar_tipo, lugar_id')
         .eq('tercero_id', form.tercero_id)
         .eq('rubro_id', rubro.id)
       if (cancelado) return
-      const lugares = (data || []).map((l: any) => l.ciudades).filter(Boolean)
+      const idx = new Map(lugaresEstables.map((c: any) => [c.lugar_tipo + ':' + c.id, c]))
+      const lugares = (data || []).map((l: any) => idx.get(l.lugar_tipo + ':' + l.lugar_id)).filter(Boolean)
       setLugaresProv(lugares)
-      if (lugares.length === 1) setForm((p: any) => p.ciudad_prestacion_id ? p : { ...p, ciudad_prestacion_id: lugares[0].id })
+      if (lugares.length === 1) setForm((p: any) => p.lugar_prestacion_id ? p : { ...p, lugar_prestacion_tipo: (lugares[0] as any).lugar_tipo, lugar_prestacion_id: (lugares[0] as any).id })
     })()
     return () => { cancelado = true }
-  }, [form.tercero_id, form.rubro, rubrosCatalogo])
+  }, [form.tercero_id, form.rubro, rubrosCatalogo, lugaresEstables])
 
   useEffect(() => {
     Promise.all([
@@ -735,9 +741,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       supabase.from('servicios_catalogo').select('*').eq('activo',true).order('rubro').order('orden'),
       supabase.from('servicios_metricas').select('*').eq('activo',true).order('orden'),
       supabase.from('servicios_metricas_habilitadas').select('servicio_id,metrica_id,usa_minimo'),
-      supabase.from('ciudades').select('id,pais,ciudad,region').eq('activo',true).order('pais').order('orden'),
       supabase.from('tipos_camion').select('id,nombre,icono').eq('activo','true').order('orden'),
-    ]).then(([bl,ch,cl,ps,ci,tc,ru,dsv,dmt,dhb,ciu,tcam]) => {
+    ]).then(([bl,ch,cl,ps,ci,tc,ru,dsv,dmt,dhb,tcam]) => {
       if(bl.data) setBloques(bl.data)
       if(ch.data) setPuertosCh(ch.data)
       if(cl.data) setPuertosChile(cl.data)
@@ -747,7 +752,6 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       if(dsv.data) setDepServiciosCat(dsv.data)
       if(dmt.data) setDepMetricas(dmt.data)
       if(dhb.data) { setDepHab(new Set((dhb.data as any[]).map(h=>h.servicio_id+'|'+h.metrica_id))); setDepHabMin(new Set((dhb.data as any[]).filter(h=>h.usa_minimo).map(h=>h.servicio_id+'|'+h.metrica_id))) }
-      if(ciu.data) setCiudades_(ciu.data)
       if(tcam.data) setTiposCamion(tcam.data)
       if(ru.data){
         // Normalizar: cada rubro con su código (fallback al nombre normalizado)
@@ -953,7 +957,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       paso_id: form.paso_id||null, ciudad_destino_id: form.ciudad_destino_id||null,
       tipo_contenedor: form.tipo_contenedor||null, tc_referencia: parseN(String(form.tc_referencia))||null,
       tc_snapshot: tcSnapshot, tc_evento_id: tcEventoId,
-      ciudad_prestacion_id: (tf==='almacenaje' || tf==='despachante') ? (form.ciudad_prestacion_id||null) : null,
+      lugar_prestacion_tipo: (tf==='almacenaje' || tf==='despachante') ? (form.lugar_prestacion_tipo||null) : null,
+      lugar_prestacion_id: (tf==='almacenaje' || tf==='despachante') ? (form.lugar_prestacion_id||null) : null,
       etiqueta_lugar: (tf==='almacenaje' || tf==='despachante') ? (form.etiqueta_lugar||null) : null,
       // Snapshot completo del formulario para poder duplicar la cotización después
       estado_formulario: { sentido, tramos, tramosB, formB, form, items, depServicios },
@@ -1621,21 +1626,21 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 {lbl('Ciudad de prestación')}
                 {form.tercero_id && lugaresProv.length > 0 ? (
                   // Acotado a los lugares que el proveedor cargó en su ficha (frente ①)
-                  <select value={form.ciudad_prestacion_id} onChange={e=>setF('ciudad_prestacion_id',e.target.value)} className={sel}>
-                    <option value="">— Elegí la ciudad —</option>
-                    {lugaresProv.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad}{c.region?' ('+c.region+')':''}</option>)}
+                  <select value={form.lugar_prestacion_id ? form.lugar_prestacion_tipo+':'+form.lugar_prestacion_id : ''} onChange={e=>{const [t,i]=e.target.value.split(':'); setForm((p:any)=>({...p, lugar_prestacion_tipo:t||'', lugar_prestacion_id:i||''}))}} className={sel}>
+                    <option value="">— Elegí el lugar —</option>
+                    {lugaresProv.map((c:any)=><option key={c.lugar_tipo+c.id} value={c.lugar_tipo+':'+c.id}>{c.ciudad}{c.region?' ('+c.region+')':''}</option>)}
                   </select>
                 ) : (
                   <>
-                    <select value={form.ciudad_prestacion_id} onChange={e=>setF('ciudad_prestacion_id',e.target.value)} className={sel}>
-                      <option value="">— Elegí la ciudad —</option>
+                    <select value={form.lugar_prestacion_id ? form.lugar_prestacion_tipo+':'+form.lugar_prestacion_id : ''} onChange={e=>{const [t,i]=e.target.value.split(':'); setForm((p:any)=>({...p, lugar_prestacion_tipo:t||'', lugar_prestacion_id:i||''}))}} className={sel}>
+                      <option value="">— Elegí el lugar —</option>
                       {['CL','AR','CN'].map(pais=>{
-                        const grupo = ciudades_.filter(c=>c.pais===pais)
+                        const grupo = lugaresEstables.filter((c:any)=>c.pais===pais)
                         if(grupo.length===0) return null
                         const nombrePais = pais==='CL'?'Chile':pais==='AR'?'Argentina':'China'
                         return (
                           <optgroup key={pais} label={nombrePais}>
-                            {grupo.map(c=><option key={c.id} value={c.id}>{c.ciudad}{c.region?' ('+c.region+')':''}</option>)}
+                            {grupo.map((c:any)=><option key={c.lugar_tipo+c.id} value={c.lugar_tipo+':'+c.id}>{c.ciudad}{c.region?' ('+c.region+')':''}</option>)}
                           </optgroup>
                         )
                       })}
