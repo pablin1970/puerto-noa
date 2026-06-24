@@ -953,8 +953,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       paso_id: form.paso_id||null, ciudad_destino_id: form.ciudad_destino_id||null,
       tipo_contenedor: form.tipo_contenedor||null, tc_referencia: parseN(String(form.tc_referencia))||null,
       tc_snapshot: tcSnapshot, tc_evento_id: tcEventoId,
-      ciudad_prestacion_id: tf==='almacenaje' ? (form.ciudad_prestacion_id||null) : null,
-      etiqueta_lugar: tf==='almacenaje' ? (form.etiqueta_lugar||null) : null,
+      ciudad_prestacion_id: (tf==='almacenaje' || tf==='despachante') ? (form.ciudad_prestacion_id||null) : null,
+      etiqueta_lugar: (tf==='almacenaje' || tf==='despachante') ? (form.etiqueta_lugar||null) : null,
       // Snapshot completo del formulario para poder duplicar la cotización después
       estado_formulario: { sentido, tramos, tramosB, formB, form, items, depServicios },
     }
@@ -1614,8 +1614,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             </div>
           </div>
 
-          {/* Datos del lugar de prestación — depósito y agente (formulario almacenaje) */}
-          {tf==='almacenaje' && (
+          {/* Datos del lugar de prestación — depósito y agente (almacenaje) y despachante */}
+          {(tf==='almacenaje' || tf==='despachante') && (
             <div className="grid grid-cols-2 gap-3 pt-1 border-t border-gray-50">
               <div>
                 {lbl('Ciudad de prestación')}
