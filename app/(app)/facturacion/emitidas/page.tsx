@@ -365,19 +365,24 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
           <div className="col-span-2 relative">
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Razón social *</label>
             <input value={buscarTercero || form.cliente_razon_social}
-              onChange={e => { setBuscarTercero(e.target.value); setForm(f => ({ ...f, cliente_razon_social: e.target.value, tercero_id: '' })); setShowTerceroDD(e.target.value.length > 1) }}
-              onFocus={() => { if ((buscarTercero || form.cliente_razon_social).length > 1) setShowTerceroDD(true) }}
+              onChange={e => { setBuscarTercero(e.target.value); setForm(f => ({ ...f, cliente_razon_social: e.target.value, tercero_id: '' })); setShowTerceroDD(true) }}
+              onFocus={() => setShowTerceroDD(true)}
+              onBlur={() => setTimeout(() => setShowTerceroDD(false), 150)}
               className={inp} placeholder="Buscar o ingresar cliente..." />
-            {showTerceroDD && (
-              <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-40 overflow-y-auto mt-1">
-                {terceros.filter((t: any) => t.razon_social.toLowerCase().includes((buscarTercero || form.cliente_razon_social).toLowerCase())).slice(0, 6).map((t: any) => (
-                  <button key={t.id} onMouseDown={() => selectTercero(t)} className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] border-b border-gray-50 last:border-0">
-                    <div className="font-semibold text-xs text-gray-900">{t.razon_social}</div>
-                    {t.nro_doc && <div className="text-[10px] text-gray-400 font-mono">{t.tipo_doc}: {t.nro_doc}</div>}
-                  </button>
-                ))}
-              </div>
-            )}
+            {showTerceroDD && (() => {
+              const q = (buscarTercero || form.cliente_razon_social || '').trim().toLowerCase()
+              const lista = terceros.filter((t: any) => !q || t.razon_social.toLowerCase().includes(q)).slice(0, 8)
+              return lista.length > 0 ? (
+                <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto mt-1">
+                  {lista.map((t: any) => (
+                    <button key={t.id} onMouseDown={() => selectTercero(t)} className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] border-b border-gray-50 last:border-0">
+                      <div className="font-semibold text-xs text-gray-900">{t.razon_social}</div>
+                      {t.nro_doc && <div className="text-[10px] text-gray-400 font-mono">{t.tipo_doc}: {t.nro_doc}</div>}
+                    </button>
+                  ))}
+                </div>
+              ) : null
+            })()}
           </div>
           <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">RUT / CUIT</label>
             <input value={form.cliente_rut} onChange={e => setForm(f => ({ ...f, cliente_rut: e.target.value }))} className={inp} placeholder="XX.XXX.XXX-X" /></div>
@@ -417,11 +422,10 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
               <input type="checkbox" checked={form.discriminar_items} onChange={e => setForm(f => ({ ...f, discriminar_items: e.target.checked }))} />
               Discriminar ítems en impresión
             </label>
-            {comp?.afecta_iva && (
-              <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-                <input type="checkbox" checked={form.afecta_iva} onChange={e => setForm(f => ({ ...f, afecta_iva: e.target.checked }))} />
-                Aplica IVA {form.iva_pct}%
-              </label>
+            {comp && (
+              <span className={`text-[11px] font-semibold ${comp.afecta_iva ? 'text-green-700' : 'text-gray-400'}`}>
+                {comp.afecta_iva ? `IVA ${form.iva_pct}%` : comp.categoria === 'exportacion' ? 'Exportación · sin IVA' : 'Sin IVA'}
+              </span>
             )}
           </div>
         </div>
