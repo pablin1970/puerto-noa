@@ -639,6 +639,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [depServiciosCat, setDepServiciosCat] = useState<any[]>([])
   const [depMetricas, setDepMetricas] = useState<any[]>([])
   const [depHab, setDepHab] = useState<Set<string>>(new Set())
+  const [depHabMin, setDepHabMin] = useState<Set<string>>(new Set())  // formas con "mínimo de cobro" tildado en el catálogo
   const [depServicios, setDepServicios] = useState<any[]>(snapshotInicial?.depServicios || [])
   const [depSelSvc, setDepSelSvc] = useState('')
   const [ciudades_, setCiudades_] = useState<any[]>([])
@@ -655,11 +656,15 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     const formas = depMetricas
       .filter(m=>depHab.has(svc.id+'|'+m.id))
       .map(m=>({ metrica_id:m.id, nombre:m.nombre, codigo:m.codigo, comportamiento:m.comportamiento, precio:'', moneda:(m.codigo==='fijo_ars'?'ARS':''), minimo:'', dias_libres:'', techo:'' }))
-    setDepServicios(prev=>[...prev, { servicio_id:svc.id, nombre:svc.nombre, grupo:svc.grupo, formas }])
+    setDepServicios(prev=>[...prev, { servicio_id:svc.id, nombre:svc.nombre, grupo:svc.grupo, dias_libres:'', formas }])
     setDepSelSvc('')
   }
   function depQuitarServicio(servicioId:string) {
     setDepServicios(prev=>prev.filter(s=>s.servicio_id!==servicioId))
+  }
+  // Días libres es UNO por servicio (no por forma): el depósito da X días, no importa cómo facture.
+  function depSetDiasServicio(servicioId:string, valor:string) {
+    setDepServicios(prev=>prev.map(s=> s.servicio_id===servicioId ? { ...s, dias_libres:valor } : s))
   }
   function depSetForma(servicioId:string, metricaId:string, campo:string, valor:string) {
     setDepServicios(prev=>prev.map(s=>{
@@ -707,7 +712,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       supabase.from('proveedor_rubros').select('*').eq('activo',true).order('nombre'),
       supabase.from('servicios_catalogo').select('*').eq('activo',true).order('rubro').order('orden'),
       supabase.from('servicios_metricas').select('*').eq('activo',true).order('orden'),
-      supabase.from('servicios_metricas_habilitadas').select('servicio_id,metrica_id'),
+      supabase.from('servicios_metricas_habilitadas').select('servicio_id,metrica_id,usa_minimo'),
       supabase.from('ciudades').select('id,pais,ciudad,region').eq('activo',true).order('pais').order('orden'),
       supabase.from('tipos_camion').select('id,nombre,icono').eq('activo','true').order('orden'),
     ]).then(([bl,ch,cl,ps,ci,tc,ru,dsv,dmt,dhb,ciu,tcam]) => {
@@ -719,7 +724,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       if(tc.data) setTiposCont(tc.data)
       if(dsv.data) setDepServiciosCat(dsv.data)
       if(dmt.data) setDepMetricas(dmt.data)
-      if(dhb.data) setDepHab(new Set((dhb.data as any[]).map(h=>h.servicio_id+'|'+h.metrica_id)))
+      if(dhb.data) { setDepHab(new Set((dhb.data as any[]).map(h=>h.servicio_id+'|'+h.metrica_id))); setDepHabMin(new Set((dhb.data as any[]).filter(h=>h.usa_minimo).map(h=>h.servicio_id+'|'+h.metrica_id))) }
       if(ciu.data) setCiudades_(ciu.data)
       if(tcam.data) setTiposCamion(tcam.data)
       if(ru.data){
@@ -1057,13 +1062,15 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           const usaDias = !!cat.usa_dias_libres
           const pctPiso = !!cat.pct_piso
           const pctTecho = !!cat.pct_techo
+          // Días libres: uno por servicio, el mismo para todas sus formas
+          const diasSvc = usaDias && svc.dias_libres!=='' ? parseN(String(svc.dias_libres)) : null
           svc.formas.forEach((fr:any)=>{
             const v = parseN(String(fr.precio||0))
             if(v<=0) return
             const esPct = fr.comportamiento==='porcentaje'
+            const tieneMin = depHabMin.has(svc.servicio_id+'|'+fr.metrica_id)  // mínimo solo si esa forma lo tildó
             const min = parseN(String(fr.minimo||0))
             const techoVal = parseN(String(fr.techo||0))
-            const diasFr = fr.dias_libres!=='' ? parseN(String(fr.dias_libres)) : 0
             out.push({
               cotizacion_id: cotizId,
               descripcion: svc.nombre+' — '+fr.nombre,
@@ -1072,9 +1079,9 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               metrica_id: fr.metrica_id,
               valor: v,
               moneda: esPct ? 'USD' : (fr.moneda||form.moneda||'USD'),
-              piso_usd: esPct ? (pctPiso && min>0 ? min : null) : (min>0 ? min : null),
+              piso_usd: esPct ? (pctPiso && min>0 ? min : null) : (tieneMin && min>0 ? min : null),
               techo_usd: esPct && pctTecho && techoVal>0 ? techoVal : null,
-              dias_libres: usaDias ? diasFr : null,
+              dias_libres: diasSvc,
               categoria: form.rubro==='deposito' ? 'almacenaje' : form.rubro,
               ...ruta, orden:ord++,
             })
@@ -1221,17 +1228,29 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               const usaDias = !!cat.usa_dias_libres
               const pctPiso = !!cat.pct_piso
               const pctTecho = !!cat.pct_techo
+              const svcTienePct = svc.formas.some((f:any)=>f.comportamiento==='porcentaje')
               return (
               <div key={svc.servicio_id} className="border border-[#B9D0F6] bg-[#EFF4FE] rounded-2xl px-4 py-3">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-sm font-semibold text-gray-800 flex-1">{svc.nombre}</span>
+                  {usaDias && (
+                    <div className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-lg px-2 py-1">
+                      <span className="text-[11px] text-[#0a9e6e] whitespace-nowrap">📅 Días libres</span>
+                      <input type="text" inputMode="decimal" value={svc.dias_libres||''} onFocus={e=>e.target.select()} onChange={e=>depSetDiasServicio(svc.servicio_id,e.target.value)} className="w-12 px-1.5 py-0.5 border border-green-200 rounded-md text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#0a9e6e]" placeholder="0"/>
+                    </div>
+                  )}
                   <button type="button" onClick={()=>depQuitarServicio(svc.servicio_id)} className="text-gray-300 hover:text-red-500 text-sm" title="Quitar servicio">✕</button>
                 </div>
                 <div className="grid gap-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-[#dbe7fb] pb-1.5 mb-1.5" style={{gridTemplateColumns:'1.4fr 0.9fr 0.7fr 0.9fr 0.9fr'}}>
-                  <span>Forma de cobro</span><span className="text-right">Precio</span><span>Moneda</span><span className="text-right">Mín./Piso</span><span className="text-right">Días/Techo</span>
+                  <span>Forma de cobro</span>
+                  <span className="text-right">{svcTienePct?'Porcentaje':'Precio'}</span>
+                  <span>{svcTienePct?'':'Moneda'}</span>
+                  <span className="text-right">{svcTienePct?'Piso':'Mínimo'}</span>
+                  <span className="text-right">{svcTienePct?'Techo':''}</span>
                 </div>
                 {svc.formas.map((f:any)=>{
                   const esPorcentaje = f.comportamiento==='porcentaje'
+                  const tieneMin = depHabMin.has(svc.servicio_id+'|'+f.metrica_id)
                   return (
                     <div key={f.metrica_id} className="grid gap-2 items-center py-1" style={{gridTemplateColumns:'1.4fr 0.9fr 0.7fr 0.9fr 0.9fr'}}>
                       <span className="text-xs text-gray-700">{f.nombre}</span>
@@ -1243,25 +1262,21 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                           <option>USD</option><option>ARS</option><option>CLP</option><option>CNY</option>
                         </select>
                       )}
-                      {/* Mín./Piso: mínimo de cobro (no %) o piso del % solo si el ítem lo habilitó */}
+                      {/* Col Mínimo (cantidad, si la forma lo tildó) / Piso (%, si el ítem lo habilitó) */}
                       {esPorcentaje ? (
                         pctPiso ? (
                           <input type="text" inputMode="decimal" value={f.minimo} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'minimo',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder="piso"/>
                         ) : (
                           <span className="text-center text-gray-300 text-xs">—</span>
                         )
-                      ) : (
+                      ) : tieneMin ? (
                         <input type="text" inputMode="decimal" value={f.minimo} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'minimo',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder="mín."/>
+                      ) : (
+                        <span className="text-center text-gray-300 text-xs">—</span>
                       )}
-                      {/* Días/Techo: días libres si el ítem los usa; techo del % solo si lo habilitó */}
-                      {esPorcentaje ? (
-                        pctTecho ? (
-                          <input type="text" inputMode="decimal" value={f.techo||''} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'techo',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder="techo"/>
-                        ) : (
-                          <span className="text-center text-gray-300 text-xs">—</span>
-                        )
-                      ) : usaDias ? (
-                        <input type="text" inputMode="decimal" value={f.dias_libres} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'dias_libres',e.target.value)} className="w-full px-2 py-1.5 border border-green-200 bg-green-50 rounded-lg text-[11px] text-right font-mono focus:outline-none focus:border-[#0a9e6e]" placeholder="0"/>
+                      {/* Col Techo: solo % con techo habilitado (los días libres ahora van arriba, únicos por servicio) */}
+                      {esPorcentaje && pctTecho ? (
+                        <input type="text" inputMode="decimal" value={f.techo||''} onFocus={e=>e.target.select()} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'techo',e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]" placeholder="techo"/>
                       ) : (
                         <span className="text-center text-gray-300 text-xs">—</span>
                       )}
