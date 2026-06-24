@@ -6,6 +6,9 @@ import { cargarPermisos, esSuperAdmin, puede } from '@/lib/permisos'
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 const chipOn = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border-0 bg-[#1168F8] text-white shadow-sm cursor-pointer hover:bg-[#052698] transition-colors'
 const chipOff = 'px-2.5 py-1 rounded-lg text-[11px] border border-gray-300 bg-white text-gray-500 cursor-pointer hover:border-gray-400 hover:bg-gray-50 hover:text-gray-700 transition-colors'
+// Sub-pastillas de piso/techo: cuelgan de la forma de cobro "% sobre CIF" (verde para distinguirlas)
+const subOn = 'px-2 py-0.5 rounded-md text-[10px] font-semibold bg-[#0a9e6e] text-white cursor-pointer hover:bg-[#08855d] transition-colors'
+const subOff = 'px-2 py-0.5 rounded-md text-[10px] border border-gray-300 bg-white text-gray-400 cursor-pointer hover:border-gray-400 hover:text-gray-600 transition-colors'
 
 const COMPORTAMIENTO_LABEL: Record<string, string> = {
   cantidad_simple: 'Cantidad × precio',
@@ -115,6 +118,15 @@ export default function ServiciosCatalogo() {
     if (!puedeEditar) return
     await (supabase.from('servicios_catalogo') as any).update({ activo: !s.activo }).eq('id', s.id)
     setServicios(prev => prev.map(x => x.id === s.id ? { ...x, activo: !x.activo } : x))
+  }
+
+  // Togglea un flag booleano del ítem del catálogo (usa_dias_libres / pct_piso / pct_techo).
+  // Son las pastillas de comportamiento: días libres es autónoma; piso/techo cuelgan del "% sobre CIF".
+  async function toggleCampoItem(s: any, campo: 'usa_dias_libres' | 'pct_piso' | 'pct_techo') {
+    if (!puedeEditar) return
+    const nuevo = !s[campo]
+    setServicios(prev => prev.map(x => x.id === s.id ? { ...x, [campo]: nuevo } : x))
+    await (supabase.from('servicios_catalogo') as any).update({ [campo]: nuevo }).eq('id', s.id)
   }
 
   async function toggleMetrica(servicioId: string, metricaId: string) {
@@ -307,12 +319,30 @@ export default function ServiciosCatalogo() {
                       <span className="text-[10px] text-gray-400 mr-1">Formas de cobro:</span>
                       {metricasActivas.map(m => {
                         const on = habSet.has(s.id + '|' + m.id)
+                        const esPct = m.comportamiento === 'porcentaje'
                         return (
-                          <button key={m.id} onClick={() => toggleMetrica(s.id, m.id)} className={(on ? chipOn : chipOff) + (puedeEditar ? '' : ' pointer-events-none')} title={COMPORTAMIENTO_LABEL[m.comportamiento] || ''}>
-                            {on ? '✓ ' : ''}{m.nombre}
-                          </button>
+                          <span key={m.id} className="inline-flex items-center gap-1">
+                            <button onClick={() => toggleMetrica(s.id, m.id)} className={(on ? chipOn : chipOff) + (puedeEditar ? '' : ' pointer-events-none')} title={COMPORTAMIENTO_LABEL[m.comportamiento] || ''}>
+                              {on ? '✓ ' : ''}{m.nombre}
+                            </button>
+                            {esPct && on && (
+                              <span className="inline-flex items-center gap-1 pl-1 pr-1.5 py-0.5 rounded-lg bg-white/70 border border-dashed border-[#0a9e6e]/40">
+                                <span className="text-[9px] text-gray-400">admite:</span>
+                                <button onClick={() => toggleCampoItem(s, 'pct_piso')} className={(s.pct_piso ? subOn : subOff) + (puedeEditar ? '' : ' pointer-events-none')} title="Al cotizar por %, habilita cargar un piso (mínimo)">
+                                  {s.pct_piso ? '✓ ' : ''}Piso
+                                </button>
+                                <button onClick={() => toggleCampoItem(s, 'pct_techo')} className={(s.pct_techo ? subOn : subOff) + (puedeEditar ? '' : ' pointer-events-none')} title="Al cotizar por %, habilita cargar un techo (máximo)">
+                                  {s.pct_techo ? '✓ ' : ''}Techo
+                                </button>
+                              </span>
+                            )}
+                          </span>
                         )
                       })}
+                      <span className="text-gray-300 mx-0.5">·</span>
+                      <button onClick={() => toggleCampoItem(s, 'usa_dias_libres')} className={(s.usa_dias_libres ? chipOn : chipOff) + (puedeEditar ? '' : ' pointer-events-none')} title="Este ítem maneja días libres — el número se carga al cotizar">
+                        {s.usa_dias_libres ? '✓ ' : ''}📅 Días libres
+                      </button>
                     </div>
                   </div>
                 )
