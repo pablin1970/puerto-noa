@@ -41,6 +41,7 @@ export default function ServiciosCatalogo() {
   const [servicios, setServicios] = useState<any[]>([])
   const [metricas, setMetricas] = useState<any[]>([])
   const [habSet, setHabSet] = useState<Set<string>>(new Set())
+  const [habMinSet, setHabMinSet] = useState<Set<string>>(new Set())  // formas con "mínimo de cobro" tildado
   const [usados, setUsados] = useState<Set<string>>(new Set())
   const [metricasUsadas, setMetricasUsadas] = useState<Set<string>>(new Set())
   const [superAdmin, setSuperAdmin] = useState(false)
@@ -72,13 +73,14 @@ export default function ServiciosCatalogo() {
     const [rRes, mRes, hRes, iRes] = await Promise.all([
       supabase.from('proveedor_rubros').select('codigo,nombre,color,icono,activo,orden').eq('activo', true).order('orden', { ascending: true }),
       supabase.from('servicios_metricas').select('*').order('orden', { ascending: true }),
-      supabase.from('servicios_metricas_habilitadas').select('servicio_id,metrica_id'),
+      supabase.from('servicios_metricas_habilitadas').select('servicio_id,metrica_id,usa_minimo'),
       supabase.from('cotizaciones_proveedor_v2_items').select('servicio_id,metrica_id'),
     ])
     if (rRes.data) setRubros(rRes.data)
     if (mRes.data) setMetricas(mRes.data)
     const hData: any[] = hRes.data || []
     setHabSet(new Set(hData.map((h: any) => h.servicio_id + '|' + h.metrica_id)))
+    setHabMinSet(new Set(hData.filter((h: any) => h.usa_minimo).map((h: any) => h.servicio_id + '|' + h.metrica_id)))
     const iData: any[] = iRes.data || []
     setUsados(new Set(iData.filter((r: any) => r.servicio_id).map((r: any) => r.servicio_id)))
     const mU = new Set<string>()
@@ -139,10 +141,27 @@ export default function ServiciosCatalogo() {
       return n
     })
     if (yaEsta) {
+      // Al quitar la forma, también se va su flag de mínimo (la fila se borra)
+      setHabMinSet(prev => { const n = new Set(prev); n.delete(key); return n })
       await supabase.from('servicios_metricas_habilitadas').delete().eq('servicio_id', servicioId).eq('metrica_id', metricaId)
     } else {
       await (supabase.from('servicios_metricas_habilitadas') as any).insert({ servicio_id: servicioId, metrica_id: metricaId })
     }
+  }
+
+  // Togglea "mínimo de cobro" de una forma (relación ítem↔forma). Solo formas cantidad × precio.
+  async function toggleMinimo(servicioId: string, metricaId: string) {
+    if (!puedeEditar) return
+    const key = servicioId + '|' + metricaId
+    const yaEsta = habMinSet.has(key)
+    setHabMinSet(prev => {
+      const n = new Set(prev)
+      if (yaEsta) n.delete(key); else n.add(key)
+      return n
+    })
+    await (supabase.from('servicios_metricas_habilitadas') as any)
+      .update({ usa_minimo: !yaEsta })
+      .eq('servicio_id', servicioId).eq('metrica_id', metricaId)
   }
 
   async function addServicio() {
@@ -320,6 +339,8 @@ export default function ServiciosCatalogo() {
                       {metricasActivas.map(m => {
                         const on = habSet.has(s.id + '|' + m.id)
                         const esPct = m.comportamiento === 'porcentaje'
+                        const esCantidad = m.comportamiento === 'cantidad_simple' || m.comportamiento === 'por_tiempo' || m.comportamiento === 'por_hora'
+                        const minOn = habMinSet.has(s.id + '|' + m.id)
                         return (
                           <span key={m.id} className="inline-flex items-center gap-1">
                             <button onClick={() => toggleMetrica(s.id, m.id)} className={(on ? chipOn : chipOff) + (puedeEditar ? '' : ' pointer-events-none')} title={COMPORTAMIENTO_LABEL[m.comportamiento] || ''}>
@@ -333,6 +354,14 @@ export default function ServiciosCatalogo() {
                                 </button>
                                 <button onClick={() => toggleCampoItem(s, 'pct_techo')} className={(s.pct_techo ? subOn : subOff) + (puedeEditar ? '' : ' pointer-events-none')} title="Al cotizar por %, habilita cargar un techo (máximo)">
                                   {s.pct_techo ? '✓ ' : ''}Techo
+                                </button>
+                              </span>
+                            )}
+                            {esCantidad && on && (
+                              <span className="inline-flex items-center gap-1 pl-1 pr-1.5 py-0.5 rounded-lg bg-white/70 border border-dashed border-[#0a9e6e]/40">
+                                <span className="text-[9px] text-gray-400">admite:</span>
+                                <button onClick={() => toggleMinimo(s.id, m.id)} className={(minOn ? subOn : subOff) + (puedeEditar ? '' : ' pointer-events-none')} title="Al cotizar, habilita cargar un mínimo de cobro para esta forma">
+                                  {minOn ? '✓ ' : ''}Mín.
                                 </button>
                               </span>
                             )}
