@@ -57,6 +57,7 @@ export default function FacturasEmitidasPage() {
   const [catalogo, setCatalogo] = useState<any[]>([])       // servicios_catalogo + formas
   const [rubrosCat, setRubrosCat] = useState<any[]>([])     // proveedor_rubros (PN factura como proveedor)
   const [tiposComp, setTiposComp] = useState<any[]>([])     // catálogo de comprobantes (emitido/ambos)
+  const [tcSnap, setTcSnap] = useState<any>(null)           // snapshot completo de TC vigentes al momento de cargar
   const [permisos, setPermisos] = useState<Record<string,string[]>>({})
 
   const [permListos, setPermListos] = useState(false)
@@ -71,7 +72,7 @@ export default function FacturasEmitidasPage() {
 
   async function loadData() {
     setLoading(true)
-    const [fRes, tRes, oRes, cRes, rRes, tcRes] = await Promise.all([
+    const [fRes, tRes, oRes, cRes, rRes, tcRes, tceRes] = await Promise.all([
       supabase.from('facturas_emitidas').select('*').order('fecha_emision', { ascending: false }),
       supabase.from('terceros').select('id,razon_social,nro_doc,tipo_doc,actividad,dir_fiscal_calle,dir_fiscal_ciudad,pais').contains('tipo', ['cliente']),
       supabase.from('operaciones').select('id,cotizacion:cotizaciones(num,cliente)').order('created_at', { ascending: false }).limit(50),
@@ -81,6 +82,7 @@ export default function FacturasEmitidasPage() {
       supabase.from('proveedor_rubros').select('codigo,nombre').order('codigo', { ascending: true }),
       supabase.from('tipos_comprobante').select('*').eq('activo', true)
         .in('ambito', ['emitido', 'ambos']).order('orden', { ascending: true }),
+      (supabase.from('tipos_cambio_eventos') as any).select('fecha, fuente, ars, clp, cny').order('created_at', { ascending: false }).limit(1),
     ])
     if (fRes.data) setFacturas(fRes.data as FacturaEmitida[])
     if (tRes.data) setTerceros(tRes.data)
@@ -88,6 +90,10 @@ export default function FacturasEmitidasPage() {
     if (cRes.data) setCatalogo(cRes.data)
     if (rRes.data) setRubrosCat(rRes.data)
     if (tcRes.data) setTiposComp(tcRes.data)
+    if (tceRes.data?.[0]) {
+      const tce: any = tceRes.data[0]
+      setTcSnap({ fecha: tce.fecha, fuente: tce.fuente || null, USD: 1, ARS: Number(tce.ars) || null, CLP: Number(tce.clp) || null, CNY: Number(tce.cny) || null })
+    }
     setLoading(false)
   }
 
@@ -202,14 +208,14 @@ export default function FacturasEmitidasPage() {
         </>
       )}
 
-      {view === 'nueva' && <FormFactura supabase={supabase} currentUser={currentUser} terceros={terceros} operaciones={operaciones} catalogo={catalogo} rubrosCat={rubrosCat} tiposComp={tiposComp} permisos={permisos} onSave={async () => { await loadData(); setView('lista') }} onCancel={() => setView('lista')} />}
+      {view === 'nueva' && <FormFactura supabase={supabase} currentUser={currentUser} terceros={terceros} operaciones={operaciones} catalogo={catalogo} rubrosCat={rubrosCat} tiposComp={tiposComp} tcSnap={tcSnap} permisos={permisos} onSave={async () => { await loadData(); setView('lista') }} onCancel={() => setView('lista')} />}
       {view === 'detalle' && sel && <DetalleFactura factura={sel} supabase={supabase} permisos={permisos} onReload={loadData} onImprimir={() => setView('impresion')} onBack={() => setView('lista')} />}
       {view === 'impresion' && sel && <ImpresionFactura factura={sel} onBack={() => setView('detalle')} />}
     </div>
   )
 }
 
-function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, rubrosCat, tiposComp, permisos, onSave, onCancel }: any) {
+function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, rubrosCat, tiposComp, tcSnap, permisos, onSave, onCancel }: any) {
   const [form, setForm] = useState({
     tipo_comprobante_id: '', tipo_doc: 'factura', folio_sii: '', caracterizacion: 'del_giro',
     ref_tipo: '', ref_folio: '',
@@ -292,7 +298,7 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
     const tcRef = parseFloat(form.tc_referencia as any) || null
     const { ref_tipo, ref_folio, ...formRest } = form
     const { data: factData } = await (supabase.from('facturas_emitidas') as any).insert({
-      ...formRest, tc_referencia: tcRef, iva_pct: form.iva_pct, items: itemsLimpios,
+      ...formRest, tc_referencia: tcRef, tc_snapshot: tcSnap || null, iva_pct: form.iva_pct, items: itemsLimpios,
       ref_tipo: comp?.requiere_referencia ? (ref_tipo || comp?.nombre || null) : null,
       ref_folio: comp?.requiere_referencia ? (parseInt(ref_folio as any) || null) : null,
       neto: Math.round(totales.neto), iva_monto: Math.round(totales.iva),
