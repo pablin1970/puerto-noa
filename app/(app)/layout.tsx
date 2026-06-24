@@ -43,6 +43,7 @@ const NAV: NavItem[] = [
   { href: '/facturacion/recibidas',       label: 'Facturas recibidas',    icon: '📥', modulo: 'facturas_recibidas' },
   { href: '/facturacion/cte-clientes',    label: 'Cta. cte. clientes',    icon: '👥', modulo: 'cte_clientes' },
   { href: '/facturacion/cte-proveedores', label: 'Cta. cte. proveedores', icon: '🤝', modulo: 'cte_proveedores' },
+  { href: '/tesoreria/recibos',            label: 'Recibos',               icon: '🧾', modulo: 'recibos' },
   { href: '/fondos',                      label: 'Fondos en custodia',    icon: '🏦', modulo: 'fondos_custodia' },
 
   // ── TESORERÍA ──────────────────────────────────────
