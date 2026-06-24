@@ -3,6 +3,16 @@ import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt, ETAPAS_L, ETAPAS_ORD } from '@/lib/utils'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import ModalAgregarItemCatalogo from '@/components/ModalAgregarItemCatalogo'
+
+// Caracterización tributaria del documento de compra (RCV / SII).
+// Define si la compra da crédito fiscal de IVA y si es gasto para Renta.
+const CARACTERIZACIONES: { codigo: string; nombre: string; hint: string }[] = [
+  { codigo: 'del_giro',          nombre: 'Del giro',           hint: 'Compra de la actividad. Da crédito fiscal IVA y es gasto para Renta.' },
+  { codigo: 'activo_fijo',       nombre: 'Activo fijo',        hint: 'Maquinaria, vehículos, bienes de larga duración.' },
+  { codigo: 'iva_no_recuperable',nombre: 'IVA no recuperable', hint: 'Sin derecho a crédito fiscal (ej. registro fuera de plazo).' },
+  { codigo: 'no_incluir',        nombre: 'No incluir',         hint: 'No es del giro. No da crédito IVA ni gasto para Renta.' },
+]
 
 interface FacturaRecibida {
   id: string
@@ -68,6 +78,8 @@ export default function FacturasRecibidasPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [terceros, setTerceros] = useState<any[]>([])
   const [operaciones, setOperaciones] = useState<any[]>([])
+  const [catalogo, setCatalogo] = useState<any[]>([])           // servicios_catalogo + formas de cobro
+  const [tiposComp, setTiposComp] = useState<any[]>([])         // catálogo de comprobantes
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
 
   const [permListos, setPermListos] = useState(false)
@@ -82,14 +94,21 @@ export default function FacturasRecibidasPage() {
 
   async function loadData() {
     setLoading(true)
-    const [fRes, tRes, oRes] = await Promise.all([
+    const [fRes, tRes, oRes, cRes, tcRes] = await Promise.all([
       supabase.from('facturas_recibidas').select('*').order('fecha_emision', { ascending: false }),
       supabase.from('terceros').select('id,razon_social,nro_doc,tipo_doc,pais').contains('tipo', ['proveedor']),
       supabase.from('operaciones').select('id,cotizacion:cotizaciones(num,cliente)').order('created_at', { ascending: false }).limit(50),
+      supabase.from('servicios_catalogo')
+        .select('id,rubro,grupo,nombre,orden,formas:servicios_metricas_habilitadas(metrica:servicios_metricas(id,nombre,unidad_label,comportamiento))')
+        .eq('activo', true).order('orden', { ascending: true }),
+      supabase.from('tipos_comprobante').select('*').eq('activo', true)
+        .in('ambito', ['recibido', 'ambos']).order('orden', { ascending: true }),
     ])
     if (fRes.data) setFacturas(fRes.data as FacturaRecibida[])
     if (tRes.data) setTerceros(tRes.data)
     if (oRes.data) setOperaciones(oRes.data)
+    if (cRes.data) setCatalogo(cRes.data)
+    if (tcRes.data) setTiposComp(tcRes.data)
     setLoading(false)
   }
 
@@ -230,6 +249,7 @@ export default function FacturasRecibidasPage() {
       {view === 'nueva' && (
         <FormFacturaRecibida
           supabase={supabase} currentUser={currentUser} terceros={terceros} operaciones={operaciones}
+          catalogo={catalogo} tiposComp={tiposComp} permisos={permisos} facturas={facturas}
           onSave={async () => { await loadData(); setView('lista') }}
           onCancel={() => setView('lista')}
         />
@@ -246,10 +266,15 @@ export default function FacturasRecibidasPage() {
   )
 }
 
-function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onSave, onCancel }: any) {
+function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, catalogo, tiposComp, permisos, facturas, onSave, onCancel }: any) {
   const [form, setForm] = useState({
+    tipo_comprobante_id: '',
     tipo_doc: 'factura',
     folio: '',
+    nro_ingreso: '' as any,
+    caracterizacion: 'del_giro',
+    ref_tipo: '',
+    ref_folio: '',
     fecha_emision: new Date().toISOString().slice(0, 10),
     fecha_recepcion: new Date().toISOString().slice(0, 10),
     fecha_vencimiento: '',
@@ -266,7 +291,10 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
     etapa: '',
     facturada_a: 'puerto_noa',
   })
-  const [items, setItems] = useState([{ descripcion: '', cantidad: 1, precio_unit: 0, exento: false }])
+  const itemVacio = { servicio_id: '', metrica_id: '', descripcion: '', rubro: '', unidad: '', nota: '', cantidad: 1, precio_unit: 0, exento: false }
+  const [items, setItems] = useState<any[]>([{ ...itemVacio }])
+  const [rubrosProv, setRubrosProv] = useState<any[]>([])   // [{codigo,nombre}] rubros del proveedor elegido
+  const [modalItem, setModalItem] = useState(false)         // abre modal "Otro ítem"
   const [buscarProv, setBuscarProv] = useState('')
   const [showProvDD, setShowProvDD] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -276,12 +304,87 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
   const fmtCLP = (n: number) => Math.round(n).toLocaleString('es-CL')
 
+  // Comprobante elegido (del catálogo de comprobantes)
+  const comp = tiposComp?.find((c: any) => c.id === form.tipo_comprobante_id) || null
+
+  // Catálogo filtrado por los rubros del proveedor, agrupado por rubro (para el selector de ítems)
+  const rubrosCodigos = rubrosProv.map(r => r.codigo)
+  const catalogoFiltrado = (catalogo || []).filter((c: any) => rubrosCodigos.includes(c.rubro))
+  const catalogoPorRubro = rubrosProv.map(r => ({
+    codigo: r.codigo, nombre: r.nombre,
+    items: catalogoFiltrado.filter((c: any) => c.rubro === r.codigo),
+  })).filter(g => g.items.length > 0)
+
+  // Formas de cobro (métricas) de un ítem del catálogo
+  function formasDeItem(servicioId: string) {
+    const it = (catalogo || []).find((c: any) => c.id === servicioId)
+    if (!it) return []
+    return (it.formas || []).map((f: any) => f.metrica).filter(Boolean)
+  }
+
+  // Carga los rubros del proveedor cuando cambia el tercero elegido
+  useEffect(() => {
+    let activo = true
+    async function cargarRubros() {
+      if (!form.tercero_id) { setRubrosProv([]); return }
+      const { data } = await supabase.from('tercero_rubros')
+        .select('rubro:proveedor_rubros(codigo,nombre)').eq('tercero_id', form.tercero_id)
+      if (!activo) return
+      const rs = (data || []).map((x: any) => x.rubro).filter(Boolean)
+      setRubrosProv(rs)
+    }
+    cargarRubros()
+    return () => { activo = false }
+  }, [form.tercero_id, supabase])
+
+  // Próximo correlativo de ingreso interno (max + 1)
+  useEffect(() => {
+    const maxIng = (facturas || []).reduce((m: number, f: any) => Math.max(m, f.nro_ingreso || 0), 0)
+    setForm(f => ({ ...f, nro_ingreso: maxIng + 1 }))
+  }, [facturas])
+
   function selectProveedor(t: any) {
     setForm(f => {
       const pais = t.pais || 'Chile'
-      return { ...f, tercero_id: t.id, proveedor_razon_social: t.razon_social, proveedor_rut: t.nro_doc || '', proveedor_pais: pais, afecta_iva: pais === 'Chile' && f.tipo_doc !== 'factura_exenta' }
+      return { ...f, tercero_id: t.id, proveedor_razon_social: t.razon_social, proveedor_rut: t.nro_doc || '', proveedor_pais: pais }
     })
     setBuscarProv(t.razon_social); setShowProvDD(false)
+  }
+
+  // Elegir comprobante del catálogo: setea afecta IVA según el tipo + país
+  function selectComprobante(id: string) {
+    const c = tiposComp.find((x: any) => x.id === id)
+    setForm(f => ({
+      ...f,
+      tipo_comprobante_id: id,
+      tipo_doc: c?.nombre || f.tipo_doc,
+      afecta_iva: !!c?.afecta_iva && !c?.es_exterior && f.proveedor_pais === 'Chile',
+    }))
+  }
+
+  // Al elegir un ítem del catálogo en una fila: autoselecciona la forma si hay una sola
+  function setItemServicio(i: number, servicioId: string) {
+    const it = (catalogo || []).find((c: any) => c.id === servicioId)
+    const formas = formasDeItem(servicioId)
+    const unaForma = formas.length === 1 ? formas[0] : null
+    const n = [...items]
+    n[i] = {
+      ...n[i],
+      servicio_id: servicioId,
+      descripcion: it?.nombre || '',
+      rubro: it?.rubro || '',
+      metrica_id: unaForma?.id || '',
+      unidad: unaForma?.unidad_label || '',
+    }
+    setItems(n)
+  }
+
+  function setItemForma(i: number, metricaId: string) {
+    const formas = formasDeItem(items[i].servicio_id)
+    const m = formas.find((f: any) => f.id === metricaId)
+    const n = [...items]
+    n[i] = { ...n[i], metrica_id: metricaId, unidad: m?.unidad_label || '' }
+    setItems(n)
   }
 
   function calcItem(item: any) {
@@ -313,16 +416,31 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
   }
 
   async function guardar() {
+    if (!form.tipo_comprobante_id) { alert('Elegí el tipo de comprobante'); return }
     if (!form.proveedor_razon_social) { alert('Ingresá el proveedor'); return }
+    if (comp?.requiere_referencia && !form.ref_folio) { alert('Este comprobante (nota de crédito/débito) requiere el folio del documento que modifica'); return }
     setSaving(true)
     const tcRef = parseFloat(form.tc_referencia as any) || null
-    const itemsLimpios = items.filter(i => i.descripcion).map(i => { const c = calcItem(i); return { ...i, neto: c.neto, iva_monto: c.iva, total: c.total } })
+    const itemsLimpios = items.filter(i => i.servicio_id || i.descripcion).map(i => {
+      const c = calcItem(i)
+      return {
+        servicio_id: i.servicio_id || null, metrica_id: i.metrica_id || null,
+        descripcion: i.descripcion, rubro: i.rubro || null, unidad: i.unidad || null, nota: i.nota || null,
+        cantidad: i.cantidad, precio_unit: i.precio_unit, exento: i.exento,
+        neto: c.neto, iva_monto: c.iva, total: c.total,
+      }
+    })
+    const { tipo_comprobante_id, caracterizacion, ref_tipo, ref_folio, nro_ingreso, ...formRest } = form
     await (supabase.from('facturas_recibidas') as any).insert({
-      ...form, tc_referencia: tcRef,
+      ...formRest, tc_referencia: tcRef,
+      tipo_comprobante_id, caracterizacion,
+      nro_ingreso: parseInt(nro_ingreso as any) || null,
+      ref_tipo: comp?.requiere_referencia ? (ref_tipo || comp?.nombre || null) : null,
+      ref_folio: comp?.requiere_referencia ? (ref_folio || null) : null,
       items: itemsLimpios,
       neto: Math.round(totales.neto), iva_monto: Math.round(totales.iva),
       exento: Math.round(totales.exento), total: Math.round(totales.total),
-      credito_fiscal: form.afecta_iva ? Math.round(totales.iva) : 0,
+      credito_fiscal: (form.afecta_iva && caracterizacion !== 'iva_no_recuperable' && caracterizacion !== 'no_incluir') ? Math.round(totales.iva) : 0,
       total_usd: tcRef ? totales.total / tcRef : null,
       estado: 'recibida',
       archivo_url: docPath || null, archivo_nombre: docNombre || null,
@@ -335,15 +453,39 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
   return (
     <div className="max-w-3xl space-y-4">
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-        <h3 className="font-bold text-sm text-gray-900 mb-4">Datos del documento recibido</h3>
+        <h3 className="font-bold text-sm text-gray-900 mb-4">¿Qué comprobante estás cargando?</h3>
         <div className="grid grid-cols-4 gap-3">
-          <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
-            <select value={form.tipo_doc} onChange={e => setForm(f => ({ ...f, tipo_doc: e.target.value, afecta_iva: e.target.value !== 'factura_exenta' && f.proveedor_pais === 'Chile' }))} className={inp}>
-              {Object.entries(TIPO_DOC_L).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          <div className="col-span-2"><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo de comprobante *</label>
+            <select value={form.tipo_comprobante_id} onChange={e => selectComprobante(e.target.value)} className={inp}>
+              <option value="">— elegí el comprobante —</option>
+              {tiposComp.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.codigo_sii ? `(${c.codigo_sii}) ` : ''}{c.nombre}{c.es_exterior ? ' · exterior' : ''}</option>
+              ))}
             </select>
+            {comp && (
+              <div className="text-[10px] mt-1 flex gap-2 flex-wrap">
+                <span className={comp.afecta_iva ? 'text-green-700' : 'text-gray-400'}>{comp.afecta_iva ? '● Afecto a IVA' : '○ No afecto a IVA'}</span>
+                {comp.efecto === 'resta' && <span className="text-red-600">● Resta (nota de crédito)</span>}
+                {comp.es_exterior && <span className="text-amber-600">● Exterior · afecta Renta, no IVA chileno</span>}
+              </div>
+            )}
           </div>
-          <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Folio proveedor</label>
-            <input value={form.folio} onChange={e => setForm(f => ({ ...f, folio: e.target.value }))} className={inp} placeholder="N° factura" />
+          <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N° ingreso interno</label>
+            <input value={form.nro_ingreso} onChange={e => setForm(f => ({ ...f, nro_ingreso: e.target.value }))} className={inp + ' font-mono'} placeholder="auto" />
+          </div>
+          <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Folio del proveedor</label>
+            <input value={form.folio} onChange={e => setForm(f => ({ ...f, folio: e.target.value }))} className={inp} placeholder="N° del comprobante" />
+          </div>
+          {comp?.requiere_referencia && (
+            <div className="col-span-2"><label className="block text-[10px] font-semibold text-amber-600 mb-1 uppercase">Folio del documento que modifica *</label>
+              <input value={form.ref_folio} onChange={e => setForm(f => ({ ...f, ref_folio: e.target.value }))} className={inp} placeholder="Folio de la factura original (obligatorio para NC/ND)" />
+            </div>
+          )}
+          <div className={comp?.requiere_referencia ? 'col-span-2' : 'col-span-2'}><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Caracterización tributaria (IVA / Renta)</label>
+            <select value={form.caracterizacion} onChange={e => setForm(f => ({ ...f, caracterizacion: e.target.value }))} className={inp}>
+              {CARACTERIZACIONES.map(c => <option key={c.codigo} value={c.codigo}>{c.nombre}</option>)}
+            </select>
+            <div className="text-[10px] text-gray-400 mt-1">{CARACTERIZACIONES.find(c => c.codigo === form.caracterizacion)?.hint}</div>
           </div>
           <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Fecha emisión</label>
             <input type="date" value={form.fecha_emision} onChange={e => setForm(f => ({ ...f, fecha_emision: e.target.value }))} className={inp} />
@@ -424,7 +566,7 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-sm text-gray-900">Detalle</h3>
-          {form.tipo_doc !== 'factura_exenta' && (
+          {comp?.afecta_iva && (
             <div className="flex items-center gap-3">
               {form.proveedor_pais !== 'Chile' && (
                 <span className="text-[10px] text-amber-600">Proveedor no chileno · normalmente sin IVA chileno</span>
@@ -436,46 +578,87 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
             </div>
           )}
         </div>
-        <table className="w-full text-xs mb-3">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              {['Descripción', 'Cant.', 'Precio unit.', 'Exento', 'Total'].map(h => (
-                <th key={h} className="text-left px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase">{h}</th>
-              ))}
-              <th className="w-8"></th>
-            </tr>
-          </thead>
-          <tbody>
+        {!form.tercero_id ? (
+          <div className="text-center py-8 text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl">
+            Elegí primero el proveedor para traer los ítems de su catálogo.
+          </div>
+        ) : catalogoPorRubro.length === 0 ? (
+          <div className="text-center py-8 text-xs text-amber-600 border border-dashed border-amber-200 rounded-xl">
+            Este proveedor no tiene rubros con ítems en el catálogo. Usá "Otro ítem" para agregar uno, o asignale rubros en su ficha.
+          </div>
+        ) : (
+          <div className="space-y-3 mb-3">
             {items.map((item, i) => {
               const c = calcItem(item)
+              const formas = formasDeItem(item.servicio_id)
               return (
-                <tr key={i} className="border-b border-gray-50">
-                  <td className="px-2 py-2">
-                    <input value={item.descripcion} onChange={e => { const n = [...items]; n[i] = { ...n[i], descripcion: e.target.value }; setItems(n) }}
-                      className="w-full px-2 py-1.5 border border-transparent rounded-lg hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs" placeholder="Descripción..." />
-                  </td>
-                  <td className="px-2 py-2 w-16">
-                    <input type="number" value={item.cantidad} onChange={e => { const n = [...items]; n[i] = { ...n[i], cantidad: parseFloat(e.target.value) || 1 }; setItems(n) }}
-                      className="w-full px-2 py-1.5 border border-transparent rounded-lg hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs text-right" />
-                  </td>
-                  <td className="px-2 py-2 w-28">
-                    <input type="text" inputMode="decimal" value={item.precio_unit || ''} onFocus={e => e.target.select()}
-                      onChange={e => { const n = [...items]; n[i] = { ...n[i], precio_unit: parseFloat(e.target.value.replace(/\./g, '').replace(',', '.')) || 0 }; setItems(n) }}
-                      className="w-full px-2 py-1.5 border border-transparent rounded-lg hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs text-right font-mono" />
-                  </td>
-                  <td className="px-2 py-2 w-16 text-center">
-                    <input type="checkbox" checked={item.exento} onChange={e => { const n = [...items]; n[i] = { ...n[i], exento: e.target.checked }; setItems(n) }} />
-                  </td>
-                  <td className="px-2 py-2 w-28 text-right font-mono font-bold text-gray-800">{fmtCLP(c.total)}</td>
-                  <td className="px-2 py-2">
-                    {items.length > 1 && <button onClick={() => setItems(items.filter((_, j) => j !== i))} className="text-gray-300 hover:text-red-500 text-xs">✕</button>}
-                  </td>
-                </tr>
+                <div key={i} className="border border-gray-200 rounded-xl p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <select value={item.servicio_id} onChange={e => setItemServicio(i, e.target.value)}
+                      className="flex-1 px-2.5 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+                      <option value="">— elegí un ítem del catálogo —</option>
+                      {catalogoPorRubro.map((g: any) => (
+                        <optgroup key={g.codigo} label={g.nombre}>
+                          {g.items.map((it: any) => <option key={it.id} value={it.id}>{it.nombre}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
+                    {item.rubro && (
+                      <span className="text-[10px] bg-violet-50 text-violet-700 px-2 py-1 rounded-md whitespace-nowrap border border-violet-100">
+                        {rubrosProv.find(r => r.codigo === item.rubro)?.nombre || item.rubro}
+                      </span>
+                    )}
+                    {items.length > 1 && <button onClick={() => setItems(items.filter((_, j) => j !== i))} className="text-gray-300 hover:text-red-500 text-sm px-1">✕</button>}
+                  </div>
+                  <div className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-4">
+                      <label className="block text-[9px] text-gray-400 mb-0.5 uppercase">Forma de cobro</label>
+                      {formas.length > 0 ? (
+                        <select value={item.metrica_id} onChange={e => setItemForma(i, e.target.value)}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+                          <option value="">— forma —</option>
+                          {formas.map((f: any) => <option key={f.id} value={f.id}>{f.nombre}</option>)}
+                        </select>
+                      ) : (
+                        <div className="text-[10px] text-gray-300 py-1.5">sin forma definida</div>
+                      )}
+                    </div>
+                    <div className="col-span-3">
+                      <label className="block text-[9px] text-gray-400 mb-0.5 uppercase">Cantidad</label>
+                      <div className="flex items-center gap-1">
+                        <input type="number" value={item.cantidad} onChange={e => { const n = [...items]; n[i] = { ...n[i], cantidad: parseFloat(e.target.value) || 1 }; setItems(n) }}
+                          className="w-14 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-right focus:outline-none focus:border-[#1168F8]" />
+                        {item.unidad && <span className="text-[9px] text-gray-400 truncate">{item.unidad}</span>}
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-[9px] text-gray-400 mb-0.5 uppercase">Precio unit.</label>
+                      <input type="text" inputMode="decimal" value={item.precio_unit || ''} onFocus={e => e.target.select()}
+                        onChange={e => { const n = [...items]; n[i] = { ...n[i], precio_unit: parseFloat(e.target.value.replace(/\./g, '').replace(',', '.')) || 0 }; setItems(n) }}
+                        className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:border-[#1168F8]" />
+                    </div>
+                    <div className="col-span-1 text-center">
+                      <label className="block text-[9px] text-gray-400 mb-0.5 uppercase">Exe.</label>
+                      <input type="checkbox" checked={item.exento} onChange={e => { const n = [...items]; n[i] = { ...n[i], exento: e.target.checked }; setItems(n) }} className="mt-1.5" />
+                    </div>
+                    <div className="col-span-2 text-right">
+                      <label className="block text-[9px] text-gray-400 mb-0.5 uppercase">Total</label>
+                      <span className="font-mono font-bold text-xs text-gray-800">{fmtCLP(c.total)}</span>
+                    </div>
+                  </div>
+                  <input value={item.nota} onChange={e => { const n = [...items]; n[i] = { ...n[i], nota: e.target.value }; setItems(n) }}
+                    className="w-full mt-2 px-2 py-1.5 border border-dashed border-gray-200 rounded-lg text-[11px] text-gray-600 focus:outline-none focus:border-[#1168F8]" placeholder="nota aclaratoria (opcional)…" />
+                </div>
               )
             })}
-          </tbody>
-        </table>
-        <button onClick={() => setItems([...items, { descripcion: '', cantidad: 1, precio_unit: 0, exento: false }])} className="text-xs text-[#1168F8] hover:underline">+ Agregar ítem</button>
+          </div>
+        )}
+        {form.tercero_id && (
+          <div className="flex gap-4">
+            <button onClick={() => setItems([...items, { ...itemVacio }])} className="text-xs text-[#1168F8] hover:underline">+ Agregar ítem</button>
+            <button onClick={() => setModalItem(true)} className="text-xs text-gray-500 hover:text-[#1168F8] hover:underline">+ Otro ítem (al catálogo)</button>
+          </div>
+        )}
         <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
           <div className="w-64 space-y-1.5 text-xs">
             {totales.neto > 0 && <div className="flex justify-between"><span className="text-gray-500">Neto afecto</span><span className="font-mono">{fmtCLP(totales.neto)}</span></div>}
@@ -517,6 +700,26 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, onS
           {saving ? 'Guardando...' : '✓ Registrar factura'}
         </button>
       </div>
+
+      {modalItem && (
+        <ModalAgregarItemCatalogo
+          supabase={supabase} permisos={permisos}
+          rubrosDisponibles={rubrosProv}
+          onClose={() => setModalItem(false)}
+          onCreated={(nuevo: any) => {
+            // sumamos el ítem nuevo al catálogo en memoria y lo dejamos elegido en la primera fila vacía
+            const itemCat = { ...nuevo, formas: [] }
+            catalogo.push(itemCat)
+            const idx = items.findIndex(it => !it.servicio_id)
+            const target = idx >= 0 ? idx : items.length
+            const base = idx >= 0 ? items : [...items, { ...itemVacio }]
+            const n = [...base]
+            n[target] = { ...n[target], servicio_id: nuevo.id, descripcion: nuevo.nombre, rubro: nuevo.rubro, metrica_id: '', unidad: '' }
+            setItems(n)
+            setModalItem(false)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -607,7 +810,7 @@ function DetalleFacturaRecibida({ factura, supabase, permisos, onReload, onBack 
               {factura.refactura_emitida_id && <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-[10px] font-semibold border border-green-200">Refacturada</span>}
             </div>
             <div className="text-sm font-semibold text-gray-900">{factura.proveedor_razon_social}</div>
-            <div className="text-xs text-gray-500 mt-1">{TIPO_DOC_L[factura.tipo_doc]} · {factura.fecha_emision} · {factura.proveedor_pais}</div>
+            <div className="text-xs text-gray-500 mt-1">{TIPO_DOC_L[factura.tipo_doc] || factura.tipo_doc} · {factura.fecha_emision} · {factura.proveedor_pais}</div>
           </div>
           <div className="text-right">
             <div className="text-2xl font-black font-mono text-gray-900">{factura.moneda} {fmtCLP(factura.total)}</div>
