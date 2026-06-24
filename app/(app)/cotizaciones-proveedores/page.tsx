@@ -625,6 +625,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [altaProvRubroId, setAltaProvRubroId] = useState('')
   const [altaProvSaving, setAltaProvSaving] = useState(false)
   const [tercerosConRubro, setTercerosConRubro] = useState<any[]>([])
+  const [lugaresProv, setLugaresProv] = useState<any[]>([])  // ciudades donde el proveedor presta el rubro actual
   const [buscarCot, setBuscarCot] = useState('')
   const [showCotDropdown, setShowCotDropdown] = useState(false)
   const [bloques, setBloques] = useState<any[]>([])
@@ -700,6 +701,27 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     })()
     return () => { cancelado = true }
   }, [form.ciudad_prestacion_id, form.tercero_id, form.proveedor_nombre, form.rubro])
+
+  // Carga los lugares de prestación del proveedor para el rubro actual (frente ①).
+  // El selector de ciudad se acota a estos lugares; si hay uno solo, se autoselecciona.
+  useEffect(() => {
+    const rubroConLugar = ['deposito', 'transporte_chile', 'gastos_argentina'].includes(form.rubro)
+    if (!rubroConLugar || !form.tercero_id) { setLugaresProv([]); return }
+    const rubro = rubrosCatalogo.find((r: any) => r.codigo === form.rubro)
+    if (!rubro) { setLugaresProv([]); return }
+    let cancelado = false
+    ;(async () => {
+      const { data } = await supabase.from('tercero_lugares_prestacion')
+        .select('ciudad_id, ciudades(id,ciudad,pais,region)')
+        .eq('tercero_id', form.tercero_id)
+        .eq('rubro_id', rubro.id)
+      if (cancelado) return
+      const lugares = (data || []).map((l: any) => l.ciudades).filter(Boolean)
+      setLugaresProv(lugares)
+      if (lugares.length === 1) setForm((p: any) => p.ciudad_prestacion_id ? p : { ...p, ciudad_prestacion_id: lugares[0].id })
+    })()
+    return () => { cancelado = true }
+  }, [form.tercero_id, form.rubro, rubrosCatalogo])
 
   useEffect(() => {
     Promise.all([
@@ -1592,24 +1614,37 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             </div>
           </div>
 
-          {/* Datos del lugar de prestación — solo para depósito */}
+          {/* Datos del lugar de prestación — depósito y agente (formulario almacenaje) */}
           {tf==='almacenaje' && (
             <div className="grid grid-cols-2 gap-3 pt-1 border-t border-gray-50">
               <div>
                 {lbl('Ciudad de prestación')}
-                <select value={form.ciudad_prestacion_id} onChange={e=>setF('ciudad_prestacion_id',e.target.value)} className={sel}>
-                  <option value="">— Elegí la ciudad —</option>
-                  {['CL','AR','CN'].map(pais=>{
-                    const grupo = ciudades_.filter(c=>c.pais===pais)
-                    if(grupo.length===0) return null
-                    const nombrePais = pais==='CL'?'Chile':pais==='AR'?'Argentina':'China'
-                    return (
-                      <optgroup key={pais} label={nombrePais}>
-                        {grupo.map(c=><option key={c.id} value={c.id}>{c.ciudad}{c.region?' ('+c.region+')':''}</option>)}
-                      </optgroup>
-                    )
-                  })}
-                </select>
+                {form.tercero_id && lugaresProv.length > 0 ? (
+                  // Acotado a los lugares que el proveedor cargó en su ficha (frente ①)
+                  <select value={form.ciudad_prestacion_id} onChange={e=>setF('ciudad_prestacion_id',e.target.value)} className={sel}>
+                    <option value="">— Elegí la ciudad —</option>
+                    {lugaresProv.map((c:any)=><option key={c.id} value={c.id}>{c.ciudad}{c.region?' ('+c.region+')':''}</option>)}
+                  </select>
+                ) : (
+                  <>
+                    <select value={form.ciudad_prestacion_id} onChange={e=>setF('ciudad_prestacion_id',e.target.value)} className={sel}>
+                      <option value="">— Elegí la ciudad —</option>
+                      {['CL','AR','CN'].map(pais=>{
+                        const grupo = ciudades_.filter(c=>c.pais===pais)
+                        if(grupo.length===0) return null
+                        const nombrePais = pais==='CL'?'Chile':pais==='AR'?'Argentina':'China'
+                        return (
+                          <optgroup key={pais} label={nombrePais}>
+                            {grupo.map(c=><option key={c.id} value={c.id}>{c.ciudad}{c.region?' ('+c.region+')':''}</option>)}
+                          </optgroup>
+                        )
+                      })}
+                    </select>
+                    {form.tercero_id && (
+                      <div className="text-[10px] text-amber-600 mt-1">Este proveedor no tiene lugares cargados para este rubro. Cargalos en su ficha (tab Rubros) para que aparezcan acá.</div>
+                    )}
+                  </>
+                )}
               </div>
               <div>
                 {lbl('Etiqueta del lugar (opcional)')}
