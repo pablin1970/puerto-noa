@@ -44,10 +44,13 @@ const NAV: NavItem[] = [
   { href: '/facturacion/cte-clientes',    label: 'Cta. cte. clientes',    icon: '👥', modulo: 'cte_clientes' },
   { href: '/facturacion/cte-proveedores', label: 'Cta. cte. proveedores', icon: '🤝', modulo: 'cte_proveedores' },
   { href: '/tesoreria/recibos',            label: 'Recibos',               icon: '🧾', modulo: 'recibos' },
+  { href: '/tesoreria/ordenes-pago',       label: 'Órdenes de pago',       icon: '📤', modulo: 'ordenes_pago' },
+  { href: '/tesoreria/aplicaciones-pago',  label: 'Aplic. pago de tercero', icon: '🔗', modulo: 'aplicaciones_pago' },
   { href: '/fondos',                      label: 'Fondos en custodia',    icon: '🏦', modulo: 'fondos_custodia' },
 
   // ── TESORERÍA ──────────────────────────────────────
   { label: 'TESORERÍA', section: true },
+  { href: '/tesoreria/movimientos',     label: 'Movim. entre cuentas',  icon: '💱', modulo: 'movimientos_cuentas' },
   { href: '/tesoreria/flujo', label: 'Flujo cuentas',   icon: '↔', modulo: 'flujo_cuentas' },
   { href: '/tipos-cambio',    label: 'Tipos de cambio', icon: '💱', modulo: 'tipos_cambio' },
 
