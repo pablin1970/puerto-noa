@@ -7,9 +7,9 @@ import { cargarPermisos, puede } from '@/lib/permisos'
 // Colores por código — se combina con rubros dinámicos de DB
 const RUBRO_COLORS: Record<string, { color: string; bg: string }> = {
   forwarder:            { color: '#1168F8', bg: '#EBF2FF' },
-  transporte_chile:     { color: '#0a9e6e', bg: '#E1F5EE' },
+  agente:     { color: '#0a9e6e', bg: '#E1F5EE' },
   transporte_terrestre: { color: '#b45309', bg: '#FEF3C7' },
-  gastos_argentina:     { color: '#6b21a8', bg: '#F3E8FF' },
+  despachante:     { color: '#6b21a8', bg: '#F3E8FF' },
   deposito:             { color: '#0891b2', bg: '#E0F2FE' },
   naviera:              { color: '#0e7490', bg: '#E0F7FA' },
   seguro:               { color: '#15803d', bg: '#DCFCE7' },
@@ -18,9 +18,9 @@ const RUBRO_COLORS: Record<string, { color: string; bg: string }> = {
 // RUBROS se reconstruye dinámicamente — este es el fallback
 const RUBROS: Record<string, { label: string; color: string; bg: string }> = {
   forwarder:            { label: 'ForWarder',            color: '#1168F8', bg: '#EBF2FF' },
-  transporte_chile:     { label: 'Transporte Chile',     color: '#0a9e6e', bg: '#E1F5EE' },
+  agente:     { label: 'Agente',     color: '#0a9e6e', bg: '#E1F5EE' },
   transporte_terrestre: { label: 'Transporte terrestre', color: '#b45309', bg: '#FEF3C7' },
-  gastos_argentina:     { label: 'Gastos Argentina',     color: '#6b21a8', bg: '#F3E8FF' },
+  despachante:     { label: 'Despachante',     color: '#6b21a8', bg: '#F3E8FF' },
   deposito:             { label: 'Deposito fiscal',      color: '#0891b2', bg: '#E0F2FE' },
   naviera:              { label: 'Naviera',              color: '#0e7490', bg: '#E0F7FA' },
   seguro:               { label: 'Seguro de carga',      color: '#15803d', bg: '#DCFCE7' },
@@ -34,9 +34,9 @@ const RUBRO_BLOQUE_DEFAULT: Record<string, number> = {
   forwarder: 1,           // Freight Forwarder → marítimo
   naviera: 1,             // Naviera → marítimo
   deposito: 2,            // Almacen extra puertario → Chile
-  transporte_chile: 2,    // Agente → Chile
+  agente: 2,    // Agente → Chile
   transporte_terrestre: 3,// Transporte terrestre
-  gastos_argentina: 4,    // Despachante de aduana → Argentina
+  despachante: 4,    // Despachante de aduana → Argentina
 }
 
 // Categoría por defecto de los ítems según rubro (para inteligencia de precios)
@@ -45,7 +45,7 @@ const RUBRO_CATEGORIA_DEFAULT: Record<string, string> = {
   forwarder: 'flete_maritimo',
   naviera: 'flete_maritimo',
   deposito: 'almacenaje',
-  gastos_argentina: 'honorarios_despachante',
+  despachante: 'honorarios_despachante',
   transporte_terrestre: 'flete_terrestre',
   seguro: 'seguro',
 }
@@ -60,9 +60,9 @@ const FORMULARIO_POR_RUBRO: Record<string, TipoFormulario> = {
   naviera: 'maritimo',
   transporte_terrestre: 'terrestre',
   deposito: 'almacenaje',
-  gastos_argentina: 'despachante',
+  despachante: 'despachante',
   seguro: 'seguro',
-  transporte_chile: 'almacenaje', // Agente — usa catálogo de servicios
+  agente: 'almacenaje', // Agente — usa catálogo de servicios
   otro: 'almacenaje',             // Otro — usa catálogo de servicios
 }
 const tipoFormulario = (codigo: string): TipoFormulario => FORMULARIO_POR_RUBRO[codigo] || 'generico'
@@ -710,10 +710,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   // Carga los lugares de prestación del proveedor para el rubro actual (frente ①).
   // El selector de ciudad se acota a estos lugares; si hay uno solo, se autoselecciona.
   useEffect(() => {
-    const rubroConLugar = ['deposito', 'transporte_chile', 'gastos_argentina'].includes(form.rubro)
-    if (!rubroConLugar || !form.tercero_id) { setLugaresProv([]); return }
     const rubro = rubrosCatalogo.find((r: any) => r.codigo === form.rubro)
-    if (!rubro) { setLugaresProv([]); return }
+    if (!rubro || rubro.tiene_lugares_prestacion !== true || !form.tercero_id) { setLugaresProv([]); return }
     let cancelado = false
     ;(async () => {
       const { data } = await supabase.from('tercero_lugares_prestacion')
