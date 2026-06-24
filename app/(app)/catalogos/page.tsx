@@ -1433,7 +1433,7 @@ function BloquesCotizacionABM() {
 }
 
 
-const RUBRO_VACIO = { nombre: '', codigo: '', descripcion: '', icono: '', color: '#6b7280' }
+const RUBRO_VACIO = { nombre: '', codigo: '', descripcion: '', icono: '', color: '#6b7280', tiene_lugares_prestacion: false }
 
 const ICONOS_RUBRO = ['🚢','🚛','🏭','📋','🛡','⚓','🏦','🏷️','·','📦','🔧','💼']
 
@@ -1485,6 +1485,17 @@ function FormRubro({ form, setForm, editId, saving, onGuardar, onCancelar }: any
           </div>
         </div>
       </div>
+      <div className="mb-4 flex items-center gap-2.5 p-3 rounded-xl bg-gray-50 border border-gray-100">
+        <button type="button" onClick={() => setForm((f: any) => ({ ...f, tiene_lugares_prestacion: !f.tiene_lugares_prestacion }))}
+          className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 ${form.tiene_lugares_prestacion ? 'bg-[#1168F8]' : 'bg-gray-300'}`}>
+          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${form.tiene_lugares_prestacion ? 'left-[18px]' : 'left-0.5'}`} />
+        </button>
+        <div>
+          <div className="text-xs font-semibold text-gray-700">Maneja lugares de prestación</div>
+          <div className="text-[10px] text-gray-400">Si está activo, al cargar un proveedor de este rubro podrás indicar en qué ciudades/puertos presta (ej. agente, despachante, depósito fiscal).</div>
+        </div>
+      </div>
+
       <div className="flex gap-2 justify-end">
         <button onClick={onCancelar}
           className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50">Cancelar</button>
@@ -1499,9 +1510,9 @@ function FormRubro({ form, setForm, editId, saving, onGuardar, onCancelar }: any
 
 const RUBROS_DEFAULT = [
   { nombre: 'Freight Forwarder',    codigo: 'forwarder',            icono: '🚢', color: '#1168F8', descripcion: 'Flete marítimo, handling, gastos naviero' },
-  { nombre: 'Agente',               codigo: 'transporte_chile',     icono: '🏭', color: '#0a9e6e', descripcion: 'Transporte Chile-NOA' },
+  { nombre: 'Agente',               codigo: 'agente',     icono: '🏭', color: '#0a9e6e', descripcion: 'Transporte Chile-NOA' },
   { nombre: 'Transporte terrestre', codigo: 'transporte_terrestre', icono: '🚛', color: '#b45309', descripcion: 'Flete terrestre Argentina' },
-  { nombre: 'Despachante de aduana',codigo: 'gastos_argentina',     icono: '📋', color: '#6b21a8', descripcion: 'Honorarios y gastos de despacho' },
+  { nombre: 'Despachante de aduana',codigo: 'despachante',     icono: '📋', color: '#6b21a8', descripcion: 'Honorarios y gastos de despacho' },
   { nombre: 'Deposito fiscal',      codigo: 'deposito',             icono: '🏭', color: '#0891b2', descripcion: 'Almacenaje en depósito fiscal' },
   { nombre: 'Naviera',              codigo: 'naviera',              icono: '⚓', color: '#0e7490', descripcion: 'Línea naviera' },
   { nombre: 'Seguro de carga',      codigo: 'seguro',               icono: '🛡', color: '#15803d', descripcion: 'Seguro de mercadería' },
@@ -1548,7 +1559,7 @@ function RubrosProveedorABM() {
   function startEdit(r: any) {
     if (!pEditar) return
     setEditId(r.id)
-    setForm({ icono: r.icono || '', nombre: r.nombre || '', descripcion: r.descripcion || '', color: r.color || '#6b7280', activo: r.activo !== false })
+    setForm({ icono: r.icono || '', nombre: r.nombre || '', codigo: r.codigo || '', descripcion: r.descripcion || '', color: r.color || '#6b7280', activo: r.activo !== false, tiene_lugares_prestacion: r.tiene_lugares_prestacion === true })
     setShowNew(false)
   }
 
@@ -1564,6 +1575,7 @@ function RubrosProveedorABM() {
       descripcion: form.descripcion || null,
       color: form.color || '#6b7280',
       activo: form.activo,
+      tiene_lugares_prestacion: !!form.tiene_lugares_prestacion,
     }
     if (!editId) payload.orden = rubros.length + 1
     if (editId) {
