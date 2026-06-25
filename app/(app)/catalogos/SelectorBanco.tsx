@@ -43,11 +43,12 @@ export default function SelectorBanco({ pais, value, onChange, className }: {
   const delPais = ents.filter(e => e.pais === code)
   const bancos = delPais.filter(e => e.tipo === 'banco')
   const fintechs = delPais.filter(e => e.tipo === 'fintech')
+  const alycs = delPais.filter(e => e.tipo === 'alyc')
   const enLista = delPais.some(e => e.nombre === value)
 
   return (
     <select value={value || ''} onChange={e => onChange(e.target.value)} className={className}>
-      <option value="">— elegí banco / fintech —</option>
+      <option value="">— elegí entidad —</option>
       {value && !enLista && <option value={value}>{value} (actual)</option>}
       {bancos.length > 0 && (
         <optgroup label="Bancos">
@@ -57,6 +58,11 @@ export default function SelectorBanco({ pais, value, onChange, className }: {
       {fintechs.length > 0 && (
         <optgroup label="Fintech / billeteras">
           {fintechs.map(e => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
+        </optgroup>
+      )}
+      {alycs.length > 0 && (
+        <optgroup label="ALyC / Agentes de inversión">
+          {alycs.map(e => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
         </optgroup>
       )}
     </select>
