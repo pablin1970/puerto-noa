@@ -56,7 +56,8 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
     section: 'Finanzas — Clientes y Proveedores', icono: '🧾',
     items: [
       { modulo: 'facturas_emitidas',        label: 'Facturas emitidas',       acciones: ['ver','crear','editar','eliminar','descargar'] },
-      { modulo: 'facturas_emitidas_anular', label: '→ Anular factura',        acciones: ['ver','editar'], subitem: true },
+      { modulo: 'facturas_emitidas_anular', label: '→ Solicitar anulación / NC', acciones: ['ver','editar'], subitem: true },
+      { modulo: 'facturas_emitidas_autorizar', label: '→ Autorizar anulaciones / NC', acciones: ['ver','editar'], subitem: true },
       { modulo: 'facturas_recibidas',       label: 'Facturas recibidas',      acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'cte_clientes',             label: 'Cta. cte. clientes',      acciones: ['ver','crear','editar','descargar'] },
       { modulo: 'cte_clientes_cobro',       label: '→ Registrar cobro',       acciones: ['ver','crear'], subitem: true },
