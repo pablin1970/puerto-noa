@@ -137,11 +137,14 @@ function FormAPT({ supabase, currentUser, talonarios, operaciones, tcSnap, onSav
   const seleccionadas = facturas.filter((f: any) => sel[f.id])
   const totalAplicado = seleccionadas.reduce((s: number, f: any) => s + (Number(f.total) || 0), 0)
   const monedaAplicada = seleccionadas[0]?.moneda || 'CLP'
+  const monedaMixta = seleccionadas.some((f: any) => f.moneda !== monedaAplicada)
+  const totalUsd = aUSD(totalAplicado, monedaAplicada, tcSnap)
 
   async function guardar() {
     if (!form.talonario_id) { alert('No hay talonario de aplicaciones. Cargá uno en Catálogos › Talonarios.'); return }
     if (!form.operacion_id) { alert('Elegí la operación'); return }
     if (seleccionadas.length === 0) { alert('Marcá al menos una factura que pagó el cliente'); return }
+    if (monedaMixta) { alert('Las facturas seleccionadas tienen monedas distintas. Aplicá una sola moneda por vez.'); return }
     setSaving(true)
     try {
       const { data: numData, error: numErr } = await (supabase.rpc as any)('emitir_numero_talonario', { p_talonario: form.talonario_id })
@@ -221,7 +224,12 @@ function FormAPT({ supabase, currentUser, talonarios, operaciones, tcSnap, onSav
               ))}
             </div>
           )}
-          {seleccionadas.length > 0 && <div className="text-right text-xs text-gray-500 mt-3">Total aplicado: <span className="font-mono font-bold text-gray-900">{monedaAplicada} {fmt(totalAplicado)}</span></div>}
+          {seleccionadas.length > 0 && (
+            <div className="mt-3 text-right">
+              <div className="text-xs text-gray-500">Total aplicado: <span className="font-mono font-bold text-gray-900">{monedaAplicada} {fmt(totalAplicado)}</span>{!monedaMixta && monedaAplicada !== 'USD' && <span className="text-gray-400"> · ≈ USD {fmt(totalUsd)}</span>}</div>
+              {monedaMixta && <div className="text-[11px] text-[#E11D48] mt-1">⚠ Hay facturas en monedas distintas. Aplicá una sola moneda por vez.</div>}
+            </div>
+          )}
         </div>
       )}
 
