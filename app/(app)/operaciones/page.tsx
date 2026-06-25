@@ -687,8 +687,8 @@ function MinutaTab({ opId, cotNum, cliente, permisos }: { opId: string; cotNum: 
     setLoading(true)
     const [fRes, mRes, tRes] = await Promise.all([
       (supabase.from('facturas_recibidas') as any)
-        .select('id,folio,moneda,total,fecha_vencimiento,fecha_emision,tercero_id,proveedor_razon_social,estado,estado_pago')
-        .eq('operacion_id', opId).not('estado', 'in', '("anulada")'),
+        .select('id,folio,moneda,total,fecha_vencimiento,fecha_emision,tercero_id,proveedor_razon_social,estado,estado_pago,facturada_a')
+        .eq('operacion_id', opId).eq('facturada_a', 'cliente').not('estado', 'in', '("anulada")'),
       (supabase.from('minutas') as any)
         .select('*, tercero:terceros(razon_social), cuenta:tercero_cuentas_bancarias(banco,cuenta,cbu_iban,swift,moneda), facturas:minuta_facturas(id,factura_recibida_id,monto,moneda,factura:facturas_recibidas(folio,fecha_vencimiento))')
         .eq('operacion_id', opId).order('created_at', { ascending: false }),
@@ -773,7 +773,7 @@ function MinutaTab({ opId, cotNum, cliente, permisos }: { opId: string; cotNum: 
       {puedeEditar && (
         <div className="bg-white border border-gray-100 rounded-xl p-5">
           <h3 className="font-medium text-sm text-gray-900 mb-1">Emitir minuta de pago</h3>
-          <p className="text-[11px] text-gray-400 mb-4">Elegí un proveedor de la operación y las facturas que el cliente debe pagarle directamente.</p>
+          <p className="text-[11px] text-gray-400 mb-4">Solo facturas de proveedor emitidas <b>a nombre del cliente</b> en esta operación. Las facturadas a Puerto NOA se pagan desde Tesorería.</p>
           {proveedores.length === 0 ? (
             <div className="text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-4 text-center">No hay facturas de proveedor cargadas en esta operación todavía.</div>
           ) : (
