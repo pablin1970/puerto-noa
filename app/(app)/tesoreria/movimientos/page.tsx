@@ -14,6 +14,11 @@ function aUSD(monto: number, moneda: string, snap: any): number {
   return tasa > 0 ? monto / tasa : 0
 }
 
+function aCLP(monto: number, moneda: string, snap: any): number {
+  const usd = aUSD(monto, moneda, snap)
+  return snap?.CLP ? usd * Number(snap.CLP) : usd
+}
+
 export default function MovimientosCuentasPage() {
   const supabase = createClient()
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
@@ -121,6 +126,7 @@ function FormMovimiento({ supabase, currentUser, talonarios, cuentas, tcSnap, on
   const [form, setForm] = useState<any>({
     fecha: new Date().toISOString().slice(0, 10), cuenta_origen_id: '', cuenta_destino_id: '',
     monto_origen: '', monto_destino: '', tipo_cambio: '', concepto: '', notas: '',
+    costo_on: false, costo_modo: 'origen', costo_monto: '',
   })
   const [saving, setSaving] = useState(false)
   const [compFile, setCompFile] = useState<File | null>(null)
@@ -131,6 +137,16 @@ function FormMovimiento({ supabase, currentUser, talonarios, cuentas, tcSnap, on
   const montoDestino = modo === 'cambio' ? (parseFloat(form.monto_destino) || 0) : montoOrigen
   // En cambio, destino calculado si hay TC
   const destinoCalculado = modo === 'cambio' && form.tipo_cambio && montoOrigen ? montoOrigen * (parseFloat(form.tipo_cambio) || 0) : null
+
+  // Costo de conversión (comisión bancaria) opcional
+  const costoMonto = parseFloat(form.costo_monto) || 0
+  const costoActivo = modo === 'cambio' && form.costo_on && costoMonto > 0
+  const costoMoneda = form.costo_modo === 'destino' ? (destino?.moneda || '') : (origen?.moneda || '')
+  // Saldos reales: si la comisión se cobra en origen, sale más; si en destino, entra menos
+  const egresoOrigen = montoOrigen + (costoActivo && form.costo_modo === 'origen' ? costoMonto : 0)
+  const ingresoDestino = montoDestino - (costoActivo && form.costo_modo === 'destino' ? costoMonto : 0)
+  // TC efectivo (con comisión adentro), misma orientación que el TC ingresado: destino / origen
+  const tcEfectivo = modo === 'cambio' && egresoOrigen > 0 && ingresoDestino > 0 ? ingresoDestino / egresoOrigen : null
 
   // Talonario según modo
   const talonarioMov = talonarios.find((t: any) => t.tipo?.nombre === 'Movimiento de fondos')
@@ -172,6 +188,10 @@ function FormMovimiento({ supabase, currentUser, talonarios, cuentas, tcSnap, on
         cuenta_destino_id: form.cuenta_destino_id, cuenta_destino_tipo: destino?.pais === 'AR' ? 'propia_argentina' : 'propia_chile', cuenta_destino_nombre: destino?.nombre,
         monto_origen: montoOrigen, moneda_origen: monedaO, monto_destino: montoDestino, moneda_destino: monedaD,
         tipo_cambio_aplicado: tcAplicado, monto_usd_equiv: aUSD(montoOrigen, monedaO, tcSnap),
+        costo_conversion: costoActivo ? costoMonto : null,
+        costo_conversion_moneda: costoActivo ? costoMoneda : null,
+        costo_conversion_modo: costoActivo ? form.costo_modo : null,
+        tc_efectivo: costoActivo ? tcEfectivo : null,
         referencia: formateado, talonario_id: talonario.id, numero_comprobante: formateado, tc_snapshot: tcSnap || null,
         created_by: currentUser?.id,
       }).select('id').single()
@@ -185,21 +205,41 @@ function FormMovimiento({ supabase, currentUser, talonarios, cuentas, tcSnap, on
         if (flujo) await (supabase.from('flujo_cuentas_pn') as any).update({ archivo_url: path, archivo_nombre: compFile.name }).eq('id', flujo.id)
       }
 
-      // Egreso cuenta origen + ingreso cuenta destino, con saldos
+      // Costo de conversión → se registra como gasto (comisión bancaria) en contabilidad
+      if (costoActivo) {
+        const catNombre = origen?.pais === 'AR' ? 'Gastos bancarios Argentina' : 'Gastos bancarios Chile'
+        const { data: cat } = await (supabase.from('gastos_fijos_categorias') as any).select('id').eq('nombre', catNombre).maybeSingle()
+        const [pAnio, pMes] = String(form.fecha).split('-').map(Number)
+        await (supabase.from('gastos_fijos_pn') as any).insert({
+          categoria_id: cat?.id || null,
+          descripcion: `Comisión cambio de divisa ${monedaO}→${monedaD} · ${formateado}`,
+          moneda: costoMoneda,
+          monto_clp: costoMoneda === 'CLP' ? costoMonto : null,
+          monto_usd: costoMoneda === 'USD' ? costoMonto : null,
+          monto_ars: costoMoneda === 'ARS' ? costoMonto : null,
+          monto_clp_equiv: aCLP(costoMonto, costoMoneda, tcSnap),
+          fecha: form.fecha, periodo_anio: pAnio, periodo_mes: pMes,
+          es_recurrente: false, comprobante_ref: formateado,
+          notas: `Generado automáticamente desde cambio de divisa (${form.costo_modo === 'origen' ? 'descontado de más en ' + monedaO : 'acreditado de menos en ' + monedaD})`,
+          tc_snapshot: tcSnap || null, created_by: currentUser?.id,
+        })
+      }
+
+      // Egreso cuenta origen + ingreso cuenta destino, con saldos (ya considerando la comisión)
       await (supabase.from('movimientos_cuentas_pn') as any).insert({
         cuenta_id: form.cuenta_origen_id, fecha: form.fecha, tipo: 'transferencia_out',
-        concepto: `${formateado} · a ${destino?.nombre}`, monto: montoOrigen, moneda: monedaO,
+        concepto: `${formateado} · a ${destino?.nombre}`, monto: egresoOrigen, moneda: monedaO,
         referencia: formateado, flujo_id: flujo?.id || null, talonario_id: talonario.id, numero_comprobante: formateado, tc_snapshot: tcSnap || null,
-        saldo_posterior: (Number(origen?.saldo_actual) || 0) - montoOrigen,
+        saldo_posterior: (Number(origen?.saldo_actual) || 0) - egresoOrigen,
       })
-      await (supabase.from('cuentas_pn') as any).update({ saldo_actual: (Number(origen?.saldo_actual) || 0) - montoOrigen }).eq('id', form.cuenta_origen_id)
+      await (supabase.from('cuentas_pn') as any).update({ saldo_actual: (Number(origen?.saldo_actual) || 0) - egresoOrigen }).eq('id', form.cuenta_origen_id)
       await (supabase.from('movimientos_cuentas_pn') as any).insert({
         cuenta_id: form.cuenta_destino_id, fecha: form.fecha, tipo: 'transferencia_in',
-        concepto: `${formateado} · de ${origen?.nombre}`, monto: montoDestino, moneda: monedaD,
+        concepto: `${formateado} · de ${origen?.nombre}`, monto: ingresoDestino, moneda: monedaD,
         referencia: formateado, flujo_id: flujo?.id || null, talonario_id: talonario.id, numero_comprobante: formateado, tc_snapshot: tcSnap || null,
-        saldo_posterior: (Number(destino?.saldo_actual) || 0) + montoDestino,
+        saldo_posterior: (Number(destino?.saldo_actual) || 0) + ingresoDestino,
       })
-      await (supabase.from('cuentas_pn') as any).update({ saldo_actual: (Number(destino?.saldo_actual) || 0) + montoDestino }).eq('id', form.cuenta_destino_id)
+      await (supabase.from('cuentas_pn') as any).update({ saldo_actual: (Number(destino?.saldo_actual) || 0) + ingresoDestino }).eq('id', form.cuenta_destino_id)
 
       await onSave()
     } catch (e: any) { alert('Error inesperado: ' + (e?.message || e)); setSaving(false) }
@@ -245,6 +285,47 @@ function FormMovimiento({ supabase, currentUser, talonarios, cuentas, tcSnap, on
           )}
         </div>
       </div>
+
+      {modo === 'cambio' && (
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-3">
+        <div className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
+          <div>
+            <div className="text-[10px] font-semibold text-gray-500 uppercase">TC efectivo (con comisión)</div>
+            <div className="text-[10px] text-gray-400">El que termina quedando una vez metida la comisión adentro. Informativo.</div>
+          </div>
+          <div className="font-mono font-bold text-sm text-gray-900">{tcEfectivo != null ? tcEfectivo.toLocaleString('es-CL', { maximumFractionDigits: 6 }) : '—'}</div>
+        </div>
+
+        <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer">
+          <input type="checkbox" checked={form.costo_on} onChange={e => setForm((f: any) => ({ ...f, costo_on: e.target.checked }))} />
+          Tuvo costo / comisión de cambio
+        </label>
+
+        {form.costo_on && (
+          <div className="space-y-3 border border-amber-200 bg-amber-50/40 rounded-xl p-3">
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setForm((f: any) => ({ ...f, costo_modo: 'origen' }))}
+                className={`px-3 py-2 rounded-xl text-[11px] font-semibold border text-left ${form.costo_modo === 'origen' ? 'border-[#ef9f27] bg-white text-gray-900' : 'border-gray-200 bg-white text-gray-500'}`}>
+                Me descontaron de más{origen ? ` en ${origen.moneda}` : ''}
+                <div className="text-[10px] font-normal text-gray-400">Sale más de la cuenta origen</div>
+              </button>
+              <button type="button" onClick={() => setForm((f: any) => ({ ...f, costo_modo: 'destino' }))}
+                className={`px-3 py-2 rounded-xl text-[11px] font-semibold border text-left ${form.costo_modo === 'destino' ? 'border-[#ef9f27] bg-white text-gray-900' : 'border-gray-200 bg-white text-gray-500'}`}>
+                Me acreditaron de menos{destino ? ` en ${destino.moneda}` : ''}
+                <div className="text-[10px] font-normal text-gray-400">Entra menos a la cuenta destino</div>
+              </button>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Monto del costo {costoMoneda ? `(${costoMoneda})` : ''}</label>
+              <input type="text" inputMode="decimal" value={form.costo_monto} onChange={e => setForm((f: any) => ({ ...f, costo_monto: e.target.value.replace(/\./g, '').replace(',', '.') }))} className={inp + ' text-right font-mono'} placeholder="0" />
+            </div>
+            <div className="text-[11px] text-[#0a9e6e] bg-[#0a9e6e]/10 rounded-lg px-3 py-2">
+              ✓ Este costo se registra automáticamente como gasto (comisión bancaria{origen ? ` ${origen.pais === 'AR' ? 'Argentina' : 'Chile'}` : ''}) en la contabilidad.
+            </div>
+          </div>
+        )}
+      </div>
+      )}
 
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <div className="grid grid-cols-1 gap-3">
