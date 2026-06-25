@@ -37,10 +37,13 @@ const ESTADO_CLS: Record<string, string> = {
   aceptada_sii: 'bg-green-50 text-green-700 border-green-200',
   anulada: 'bg-red-50 text-red-700 border-red-200',
   pagada: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  pendiente_anulacion: 'bg-violet-50 text-[#7C3AED] border-violet-200',
+  pendiente_autorizacion: 'bg-violet-50 text-[#7C3AED] border-violet-200',
 }
 const ESTADO_L: Record<string, string> = {
   borrador: 'Borrador', emitida: 'Emitida', enviada_sii: 'Enviada SII',
   aceptada_sii: 'Aceptada SII', anulada: 'Anulada', pagada: 'Pagada',
+  pendiente_anulacion: 'Anulación pendiente', pendiente_autorizacion: 'NC pendiente',
 }
 
 export default function FacturasEmitidasPage() {
@@ -101,7 +104,7 @@ export default function FacturasEmitidasPage() {
   const filtradas = facturas.filter(f => {
     const b = buscar.toLowerCase()
     const matchB = !b || f.cliente_razon_social.toLowerCase().includes(b) || String(f.folio || '').includes(b) || (f.cotizacion_num || '').toLowerCase().includes(b)
-    return matchB && (!filtroEstado || f.estado === filtroEstado)
+    return matchB && (!filtroEstado || (filtroEstado === 'pendientes' ? (f.estado === 'pendiente_anulacion' || f.estado === 'pendiente_autorizacion') : f.estado === filtroEstado))
   })
   const stats = {
     total: facturas.length,
@@ -116,6 +119,9 @@ export default function FacturasEmitidasPage() {
   }
   const puedeCrearFE = puede(permisos,'facturas_emitidas','crear')
   const puedeDescargarFE = puede(permisos,'facturas_emitidas','descargar')
+  const puedeAutorizar = puede(permisos,'facturas_emitidas_autorizar','autorizar')
+  const puedeVerPendientes = puedeAutorizar || puede(permisos,'facturas_emitidas_autorizar','ver')
+  const pendientesAutorizar = facturas.filter(f => f.estado === 'pendiente_anulacion' || f.estado === 'pendiente_autorizacion').length
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -130,6 +136,13 @@ export default function FacturasEmitidasPage() {
           {view === 'detalle' && sel && puedeDescargarFE && <button onClick={() => setView('impresion')} className="px-4 py-2 bg-[#052698] text-white rounded-xl text-xs font-bold hover:bg-[#1168F8]">🖨 Imprimir / PDF</button>}
         </div>
       </div>
+
+      {view === 'lista' && puedeVerPendientes && pendientesAutorizar > 0 && (
+        <div className="mb-4 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-[#7C3AED] font-semibold">⏳ Tenés {pendientesAutorizar} documento(s) esperando autorización.</div>
+          <button onClick={() => setFiltroEstado('pendientes')} className="px-3 py-1.5 bg-[#7C3AED] text-white rounded-lg text-xs font-semibold hover:opacity-90">Ver pendientes</button>
+        </div>
+      )}
 
       {view === 'lista' && (
         <>
@@ -209,7 +222,7 @@ export default function FacturasEmitidasPage() {
       )}
 
       {view === 'nueva' && <FormFactura supabase={supabase} currentUser={currentUser} terceros={terceros} operaciones={operaciones} catalogo={catalogo} rubrosCat={rubrosCat} tiposComp={tiposComp} tcSnap={tcSnap} permisos={permisos} onSave={async () => { await loadData(); setView('lista') }} onCancel={() => setView('lista')} />}
-      {view === 'detalle' && sel && <DetalleFactura factura={sel} supabase={supabase} permisos={permisos} onReload={loadData} onImprimir={() => setView('impresion')} onBack={() => setView('lista')} />}
+      {view === 'detalle' && sel && <DetalleFactura factura={sel} supabase={supabase} permisos={permisos} currentUser={currentUser} onReload={loadData} onImprimir={() => setView('impresion')} onBack={() => setView('lista')} />}
       {view === 'impresion' && sel && <ImpresionFactura factura={sel} onBack={() => setView('detalle')} />}
     </div>
   )
@@ -753,15 +766,23 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
   )
 }
 
-function DetalleFactura({ factura, supabase, permisos, onReload, onImprimir, onBack }: any) {
+function DetalleFactura({ factura, supabase, permisos, currentUser, onReload, onImprimir, onBack }: any) {
   const puedeEditarFE = puede(permisos,'facturas_emitidas','editar')
-  const puedeAnular = puede(permisos,'facturas_emitidas_anular','editar')
+  const puedeAnular = puede(permisos,'facturas_emitidas_anular','solicitar')
+  const puedeAutorizar = puede(permisos,'facturas_emitidas_autorizar','autorizar')
   const [editandoFolio, setEditandoFolio] = useState(false)
   const [folio, setFolio] = useState(String(factura.folio || ''))
   const [editandoSii, setEditandoSii] = useState(false)
   const [folioSii, setFolioSii] = useState(String(factura.folio_sii || ''))
   const [saving, setSaving] = useState(false)
   const [abriendo, setAbriendo] = useState(false)
+  const [mostrarMotivo, setMostrarMotivo] = useState(false)
+  const [motivo, setMotivo] = useState('')
+  const [procesando, setProcesando] = useState(false)
+
+  const enPendiente = factura.estado === 'pendiente_anulacion' || factura.estado === 'pendiente_autorizacion'
+  const declaradaSii = !!factura.folio_sii   // ya replicada en el portal del SII → no se anula internamente, va NC
+  const quien = currentUser?.nombre || currentUser?.email || 'usuario'
 
   async function guardarFolio() {
     setSaving(true)
@@ -778,6 +799,36 @@ function DetalleFactura({ factura, supabase, permisos, onReload, onImprimir, onB
   async function cambiarEstado(estado: string) {
     await (supabase.from('facturas_emitidas') as any).update({ estado }).eq('id', factura.id)
     await onReload()
+  }
+
+  async function solicitarAnulacion() {
+    if (!motivo.trim()) { alert('Indicá el motivo de la anulación.'); return }
+    setProcesando(true)
+    await (supabase.from('facturas_emitidas') as any).update({
+      estado: 'pendiente_anulacion', motivo_anulacion: motivo.trim(),
+      solicitado_por: quien, solicitado_por_id: currentUser?.id || null, solicitado_at: new Date().toISOString(),
+    }).eq('id', factura.id)
+    await onReload(); setMostrarMotivo(false); setMotivo(''); setProcesando(false)
+  }
+
+  async function autorizar() {
+    setProcesando(true)
+    // anulación aprobada → anulada ; NC aprobada → emitida (recién ahí impacta CC e IVA)
+    const nuevo = factura.estado === 'pendiente_anulacion' ? 'anulada' : 'emitida'
+    await (supabase.from('facturas_emitidas') as any).update({
+      estado: nuevo, autorizado_por: quien, autorizado_por_id: currentUser?.id || null, autorizado_at: new Date().toISOString(),
+    }).eq('id', factura.id)
+    await onReload(); setProcesando(false)
+  }
+
+  async function rechazar() {
+    setProcesando(true)
+    // anulación rechazada → vuelve a emitida ; NC rechazada → se descarta (anulada)
+    const nuevo = factura.estado === 'pendiente_anulacion' ? 'emitida' : 'anulada'
+    await (supabase.from('facturas_emitidas') as any).update({
+      estado: nuevo, autorizado_por: quien, autorizado_por_id: currentUser?.id || null, autorizado_at: new Date().toISOString(),
+    }).eq('id', factura.id)
+    await onReload(); setProcesando(false)
   }
 
   // Genera la signed URL al vuelo desde el PATH guardado (las firmadas expiran a 1h, por eso no se guardan).
@@ -797,6 +848,20 @@ function DetalleFactura({ factura, supabase, permisos, onReload, onImprimir, onB
 
   return (
     <div className="max-w-3xl space-y-4">
+      {mostrarMotivo && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setMostrarMotivo(false)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="font-semibold text-sm text-gray-900 mb-1">Solicitar anulación</h3>
+            <p className="text-[11px] text-gray-400 mb-3">La factura queda pendiente hasta que un usuario con permiso de autorización la apruebe. No se modifica la cuenta corriente ni el IVA hasta entonces.</p>
+            <label className="block text-[10px] text-gray-500 font-medium mb-1">Motivo</label>
+            <textarea value={motivo} onChange={e => setMotivo(e.target.value)} rows={3} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]" placeholder="Ej.: error en el monto · cliente equivocado · operación cancelada" />
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setMostrarMotivo(false)} className="px-4 py-2 text-xs text-gray-500 hover:text-gray-700">Cancelar</button>
+              <button onClick={solicitarAnulacion} disabled={procesando} className="bg-[#E11D48] text-white px-4 py-2 rounded-lg text-xs font-semibold hover:opacity-90 disabled:opacity-40">{procesando ? 'Enviando…' : 'Solicitar anulación'}</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <div className="flex items-start justify-between">
           <div>
@@ -846,12 +911,42 @@ function DetalleFactura({ factura, supabase, permisos, onReload, onImprimir, onB
           </div>
         </div>
         {!factura.folio_sii && <div className="text-[10px] text-amber-600 mt-1.5">⚠ Cargá el folio SII cuando repliques la factura impresa en el portal del SII (carga posterior).</div>}
-        <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100 flex-wrap">
-          {(puedeEditarFE || puedeAnular) && <span className="text-[10px] text-gray-400 self-center">Cambiar estado:</span>}
-          {(['emitida','enviada_sii','aceptada_sii','pagada','anulada'] as string[]).filter(e => e !== factura.estado).map(e => (
-            (e === 'anulada' ? puedeAnular : puedeEditarFE) ? <button key={e} onClick={() => cambiarEstado(e)} className={`px-3 py-1 rounded-full text-[10px] font-semibold border ${ESTADO_CLS[e]} hover:opacity-80`}>{ESTADO_L[e]}</button> : null
-          ))}
-        </div>
+        {enPendiente && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 text-[#7C3AED] font-semibold text-sm">⏳ {factura.estado === 'pendiente_anulacion' ? 'Anulación pendiente de autorización' : 'Nota de crédito pendiente de autorización'}</div>
+              {factura.motivo_anulacion && <div className="text-xs text-violet-700 mt-1">Motivo: {factura.motivo_anulacion}</div>}
+              {factura.solicitado_por && <div className="text-[10px] text-violet-500 mt-0.5">Solicitado por {factura.solicitado_por}{factura.solicitado_at ? ` · ${new Date(factura.solicitado_at).toLocaleString('es-AR')}` : ''}</div>}
+              {puedeAutorizar ? (
+                <div className="flex gap-2 mt-3">
+                  <button onClick={autorizar} disabled={procesando} className="bg-[#0a9e6e] text-white px-4 py-2 rounded-lg text-xs font-semibold hover:opacity-90 disabled:opacity-40">✓ Autorizar</button>
+                  <button onClick={rechazar} disabled={procesando} className="border-2 border-[#E11D48] text-[#E11D48] px-4 py-2 rounded-lg text-xs font-semibold hover:bg-red-50 disabled:opacity-40">✕ Rechazar</button>
+                </div>
+              ) : (
+                <div className="text-[10px] text-violet-500 mt-2">Un usuario con permiso de autorización debe aprobarla. Hasta entonces no impacta la cuenta corriente ni el IVA.</div>
+              )}
+            </div>
+          </div>
+        )}
+        {!enPendiente && (
+          <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100 flex-wrap">
+            {(puedeEditarFE || puedeAnular) && <span className="text-[10px] text-gray-400 self-center">Cambiar estado:</span>}
+            {(['emitida','enviada_sii','aceptada_sii','pagada'] as string[]).filter(e => e !== factura.estado).map(e => (
+              puedeEditarFE ? <button key={e} onClick={() => cambiarEstado(e)} className={`px-3 py-1 rounded-full text-[10px] font-semibold border ${ESTADO_CLS[e]} hover:opacity-80`}>{ESTADO_L[e]}</button> : null
+            ))}
+            {factura.estado !== 'anulada' && puedeAnular && !declaradaSii && (
+              <button onClick={() => setMostrarMotivo(true)} className="px-3 py-1 rounded-full text-[10px] font-semibold border bg-red-50 text-red-700 border-red-200 hover:opacity-80">Solicitar anulación</button>
+            )}
+          </div>
+        )}
+        {!enPendiente && factura.estado !== 'anulada' && declaradaSii && (
+          <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+            ⚠ Esta factura ya tiene folio SII (declarada). No se anula internamente: emití una <b>nota de crédito</b> que la referencie desde “+ Nueva factura”.
+          </div>
+        )}
+        {factura.estado === 'anulada' && factura.autorizado_por && (
+          <div className="text-[10px] text-gray-400 mt-2">Anulada · autorizó {factura.autorizado_por}{factura.autorizado_at ? ` · ${new Date(factura.autorizado_at).toLocaleString('es-AR')}` : ''}{factura.motivo_anulacion ? ` · ${factura.motivo_anulacion}` : ''}</div>
+        )}
       </div>
 
       <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
