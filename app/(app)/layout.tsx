@@ -7,11 +7,21 @@ import Image from 'next/image'
 import type { Usuario } from '@/types'
 import { modulosPendientesSet } from '@/lib/modulos'
 import { cargarPermisos, esSuperAdmin } from '@/lib/permisos'
+import type { LucideIcon } from 'lucide-react'
+import {
+  LayoutDashboard, LineChart, Sparkles, List, Building2,
+  Ship, ClipboardCheck, ClipboardList, BarChart3, Package,
+  FileText, FileDown, Users, Handshake,
+  Receipt, Send, Link2, Repeat, ArrowLeftRight, Landmark, DollarSign,
+  BookOpen, TrendingDown, TrendingUp,
+  Library, UserCog,
+  ChevronLeft, ChevronRight, AlertTriangle, HelpCircle, LogOut,
+} from 'lucide-react'
 
 interface NavItem {
   href?: string
   label: string
-  icon?: string
+  icon?: LucideIcon
   section?: boolean
   adminOnly?: boolean
   soon?: boolean
@@ -20,50 +30,50 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   // ── INICIO ─────────────────────────────────────────
-  { href: '/dashboard',              label: 'Dashboard logístico',  icon: '⊞', modulo: 'dashboard' },
-  { href: '/contabilidad/dashboard', label: 'Dashboard financiero', icon: '💹', modulo: 'dashboard_financiero' },
+  { href: '/dashboard',              label: 'Dashboard logístico',  icon: LayoutDashboard, modulo: 'dashboard' },
+  { href: '/contabilidad/dashboard', label: 'Dashboard financiero', icon: LineChart, modulo: 'dashboard_financiero' },
 
-  // ── VENTAS ─────────────────────────────────────────
-  { label: 'VENTAS', section: true },
-  { href: '/cotizador', label: 'Nueva cotizacion', icon: '✦', modulo: 'cotizaciones' },
-  { href: '/registro',  label: 'Cotizaciones',     icon: '☰', modulo: 'cotizaciones' },
-  { href: '/clientes',  label: 'Clientes',         icon: '🏢', modulo: 'clientes' },
+  // ── COMERCIAL ──────────────────────────────────────
+  { label: 'Comercial', section: true },
+  { href: '/cotizador', label: 'Nueva cotización', icon: Sparkles, modulo: 'cotizaciones' },
+  { href: '/registro',  label: 'Cotizaciones',     icon: List, modulo: 'cotizaciones' },
+  { href: '/clientes',  label: 'Clientes',         icon: Building2, modulo: 'clientes' },
 
   // ── OPERACIONES ────────────────────────────────────
-  { label: 'OPERACIONES', section: true },
-  { href: '/operaciones',              label: 'Operaciones activas',      icon: '🚢', modulo: 'operaciones' },
-  { href: '/cierre',                   label: 'Liquidacion y cierre',     icon: '✓', modulo: 'cierre' },
-  { href: '/cotizaciones-proveedores', label: 'Cotizaciones proveedores', icon: '📋', modulo: 'cotizaciones_proveedores' },
-  { href: '/precios',                  label: 'Inteligencia de precios',  icon: '📊', modulo: 'precios' },
-  { href: '/clientes?ver=proveedores', label: 'Proveedores',              icon: '📦', modulo: 'proveedores' },
+  { label: 'Operaciones', section: true },
+  { href: '/operaciones',              label: 'Operaciones activas',      icon: Ship, modulo: 'operaciones' },
+  { href: '/cierre',                   label: 'Liquidación y cierre',     icon: ClipboardCheck, modulo: 'cierre' },
+  { href: '/cotizaciones-proveedores', label: 'Cotizaciones proveedores', icon: ClipboardList, modulo: 'cotizaciones_proveedores' },
+  { href: '/precios',                  label: 'Inteligencia de precios',  icon: BarChart3, modulo: 'precios' },
+  { href: '/clientes?ver=proveedores', label: 'Proveedores',              icon: Package, modulo: 'proveedores' },
 
-  // ── FINANZAS CLIENTES ──────────────────────────────
-  { label: 'FINANZAS CLIENTES', section: true },
-  { href: '/facturacion/emitidas',        label: 'Facturas emitidas',     icon: '📄', modulo: 'facturas_emitidas' },
-  { href: '/facturacion/recibidas',       label: 'Facturas recibidas',    icon: '📥', modulo: 'facturas_recibidas' },
-  { href: '/facturacion/cte-clientes',    label: 'Cta. cte. clientes',    icon: '👥', modulo: 'cte_clientes' },
-  { href: '/facturacion/cte-proveedores', label: 'Cta. cte. proveedores', icon: '🤝', modulo: 'cte_proveedores' },
-  { href: '/tesoreria/recibos',            label: 'Recibos',               icon: '🧾', modulo: 'recibos' },
-  { href: '/tesoreria/ordenes-pago',       label: 'Órdenes de pago',       icon: '📤', modulo: 'ordenes_pago' },
-  { href: '/tesoreria/aplicaciones-pago',  label: 'Aplic. pago de tercero', icon: '🔗', modulo: 'aplicaciones_pago' },
-  { href: '/fondos',                      label: 'Fondos en custodia',    icon: '🏦', modulo: 'fondos_custodia' },
+  // ── FACTURACIÓN ────────────────────────────────────
+  { label: 'Facturación', section: true },
+  { href: '/facturacion/emitidas',        label: 'Facturas emitidas',     icon: FileText, modulo: 'facturas_emitidas' },
+  { href: '/facturacion/recibidas',       label: 'Facturas recibidas',    icon: FileDown, modulo: 'facturas_recibidas' },
+  { href: '/facturacion/cte-clientes',    label: 'Cta. cte. clientes',    icon: Users, modulo: 'cte_clientes' },
+  { href: '/facturacion/cte-proveedores', label: 'Cta. cte. proveedores', icon: Handshake, modulo: 'cte_proveedores' },
 
-  // ── TESORERÍA ──────────────────────────────────────
-  { label: 'TESORERÍA', section: true },
-  { href: '/tesoreria/movimientos',     label: 'Movim. entre cuentas',  icon: '💱', modulo: 'movimientos_cuentas' },
-  { href: '/tesoreria/flujo', label: 'Flujo cuentas',   icon: '↔', modulo: 'flujo_cuentas' },
-  { href: '/tipos-cambio',    label: 'Tipos de cambio', icon: '💱', modulo: 'tipos_cambio' },
+  // ── TESORERÍA (todo lo que mueve plata) ────────────
+  { label: 'Tesorería', section: true },
+  { href: '/tesoreria/recibos',           label: 'Recibos',                icon: Receipt, modulo: 'recibos' },
+  { href: '/tesoreria/ordenes-pago',      label: 'Órdenes de pago',        icon: Send, modulo: 'ordenes_pago' },
+  { href: '/tesoreria/aplicaciones-pago', label: 'Aplicaciones de pago',   icon: Link2, modulo: 'aplicaciones_pago' },
+  { href: '/tesoreria/movimientos',       label: 'Movim. entre cuentas',   icon: Repeat, modulo: 'movimientos_cuentas' },
+  { href: '/tesoreria/flujo',             label: 'Flujo de cuentas',       icon: ArrowLeftRight, modulo: 'flujo_cuentas' },
+  { href: '/fondos',                      label: 'Fondos en custodia',     icon: Landmark, modulo: 'fondos_custodia' },
+  { href: '/tipos-cambio',                label: 'Tipos de cambio',        icon: DollarSign, modulo: 'tipos_cambio' },
 
   // ── CONTABILIDAD ───────────────────────────────────
-  { label: 'CONTABILIDAD', section: true },
-  { href: '/contabilidad/iva',        label: 'Libro IVA',       icon: '📖', modulo: 'iva' },
-  { href: '/contabilidad/gastos',     label: 'Gastos y costos', icon: '📉', modulo: 'gastos_fijos' },
-  { href: '/contabilidad/resultados', label: 'Resultados',      icon: '📈', modulo: 'resultados' },
+  { label: 'Contabilidad', section: true },
+  { href: '/contabilidad/iva',        label: 'Libro IVA',       icon: BookOpen, modulo: 'iva' },
+  { href: '/contabilidad/gastos',     label: 'Gastos y costos', icon: TrendingDown, modulo: 'gastos_fijos' },
+  { href: '/contabilidad/resultados', label: 'Resultados',      icon: TrendingUp, modulo: 'resultados' },
 
   // ── CONFIGURACIÓN ──────────────────────────────────
-  { label: 'CONFIGURACION', section: true },
-  { href: '/catalogos',       label: 'Catálogos',    icon: '📚', modulo: 'catalogos' },
-  { href: '/usuarios',        label: 'Usuarios',      icon: '◎', modulo: 'usuarios' },
+  { label: 'Configuración', section: true },
+  { href: '/catalogos',       label: 'Catálogos',    icon: Library, modulo: 'catalogos' },
+  { href: '/usuarios',        label: 'Usuarios',     icon: UserCog, modulo: 'usuarios' },
 ]
 interface TCWidget {
   ARS: number | null
@@ -221,8 +231,8 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
             <Image src="/logo-white.png" alt="Puertonoa" width={120} height={36} style={{ objectFit: 'contain' }} />
           )}
           <button onClick={() => setCollapsed(!collapsed)}
-            className="text-white/60 hover:text-white transition-colors text-sm p-1 rounded-lg hover:bg-white/10">
-            {collapsed ? '›' : '‹'}
+            className="text-white/60 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10">
+            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
         </div>
 
@@ -233,7 +243,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
             style={{ background: '#f59e0b', border: '1px solid #fbbf24' }}>
             <div className="px-3 py-2.5">
               <div className="flex items-center gap-1.5 mb-0.5">
-                <span className="text-sm">⚠️</span>
+                <AlertTriangle size={13} className="text-amber-950" />
                 <span className="text-[11px] font-bold text-amber-950">
                   {modulosNuevosCount} módulo(s) nuevo(s)
                 </span>
@@ -249,42 +259,42 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           <Link href="/usuarios" title={`${modulosNuevosCount} módulos nuevos sin configurar`}
             className="mx-2 mt-3 flex items-center justify-center py-2 rounded-lg hover:brightness-105"
             style={{ background: '#f59e0b' }}>
-            <span className="text-sm">⚠️</span>
+            <AlertTriangle size={15} className="text-amber-950" />
           </Link>
         )}
 
-        {/* Fecha + TC Widget */}
+        {/* Fecha + TC Widget (compacto) */}
         {!collapsed && (
           <div className="mx-3 mt-3 mb-1 rounded-xl overflow-hidden" style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)' }}>
-            <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+            <div className="px-2.5 py-1.5 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
               <span className="text-[10px] text-white/80 font-medium capitalize">{hoy}</span>
               <Link href="/tipos-cambio" className="text-[9px] text-white/50 hover:text-white transition-colors">TC →</Link>
             </div>
-            <div className="px-3 py-2 space-y-1.5">
+            <div className="flex px-1.5 py-1.5">
               {[
-                { moneda: 'ARS', flag: '🇦🇷', valor: tc.ARS, decimals: 0 },
-                { moneda: 'CLP', flag: '🇨🇱', valor: tc.CLP, decimals: 0 },
-                { moneda: 'CNY', flag: '🇨🇳', valor: tc.CNY, decimals: 4 },
-              ].map(({ moneda, flag, valor, decimals }) => (
-                <div key={moneda} className="flex items-center justify-between">
-                  <span className="text-[11px] text-white/70 font-medium">{flag} {moneda}</span>
-                  <span className="font-mono font-bold text-white text-[12px]">
+                { moneda: 'AR ARS', valor: tc.ARS, decimals: 0 },
+                { moneda: 'CL CLP', valor: tc.CLP, decimals: 0 },
+                { moneda: 'CN CNY', valor: tc.CNY, decimals: 2 },
+              ].map(({ moneda, valor, decimals }, i) => (
+                <div key={moneda} className={`flex-1 text-center px-1 ${i === 1 ? 'border-x border-white/10' : ''}`}>
+                  <div className="text-[9px] text-white/55 font-medium">{moneda}</div>
+                  <div className="font-mono font-bold text-white text-[11px] leading-tight">
                     {valor !== null ? (decimals > 0 ? valor.toFixed(decimals) : Math.round(valor).toLocaleString('es-AR')) : '-'}
-                  </span>
+                  </div>
                 </div>
               ))}
-              {utm !== null && (
-                <div className="flex items-center justify-between pt-1.5 mt-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                  <span className="text-[11px] text-white/70 font-medium">🇨🇱 UTM <span className="text-white/45">{utm.label}</span></span>
-                  <span className="font-mono font-bold text-white text-[12px]">$ {Math.round(utm.valor).toLocaleString('es-CL')}</span>
-                </div>
-              )}
-              {tc.fecha && (
-                <div className="pt-1 mt-1 flex items-center justify-between" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                  <span className="text-[9px] text-white/50">{tc.fuente} {tc.fecha ? tc.fecha.split('-').reverse().join('/') : ''} {tc.hora}</span>
-                </div>
-              )}
             </div>
+            {utm !== null && (
+              <div className="flex items-center justify-between px-2.5 py-1" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <span className="text-[9px] text-white/55 font-medium">UTM <span className="text-white/40">{utm.label}</span></span>
+                <span className="font-mono font-bold text-white text-[10px]">$ {Math.round(utm.valor).toLocaleString('es-CL')}</span>
+              </div>
+            )}
+            {tc.fecha && (
+              <div className="px-2.5 pb-1">
+                <span className="text-[8px] text-white/40">{tc.fuente} {tc.fecha ? tc.fecha.split('-').reverse().join('/') : ''} {tc.hora}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -292,10 +302,8 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 py-2 overflow-y-auto scrollbar-thin">
           {NAV.map((item, i) => {
             if (item.section) return (
-              <div key={i} className={`${collapsed ? 'hidden' : ''} px-3 pt-4 pb-1 text-[8px] font-black text-white/40 tracking-widest uppercase flex items-center gap-1`}>
-                <div className="flex-1 h-px bg-white/10"></div>
-                <span>{item.label}</span>
-                <div className="flex-1 h-px bg-white/10"></div>
+              <div key={i} className={`${collapsed ? 'hidden' : ''} px-4 pt-3 pb-1 text-[10px] font-semibold text-white/40`}>
+                {item.label}
               </div>
             )
             if (!item.href) return null
@@ -318,7 +326,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
               <div key={item.href} className="relative group">
                 {item.soon ? (
                   <div className={`flex items-center gap-2 mx-2 px-3 py-1.5 rounded-lg text-[11px] mb-0.5 opacity-40 cursor-not-allowed ${collapsed ? 'justify-center' : ''}`}>
-                    <span className={`${collapsed ? 'text-base' : 'text-sm'} w-4 text-center flex-shrink-0 text-white/40`}>{item.icon}</span>
+                    <span className="w-5 flex items-center justify-center flex-shrink-0 text-white/40">{item.icon && <item.icon size={collapsed ? 18 : 16} strokeWidth={1.75} />}</span>
                     {!collapsed && <span className="text-white/40 truncate">{item.label}</span>}
                     {!collapsed && <span className="ml-auto text-[7px] text-white/30 uppercase tracking-wide bg-white/10 px-1.5 py-0.5 rounded-full">Pronto</span>}
                   </div>
@@ -329,7 +337,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
                         ? 'bg-white/20 text-white shadow-sm'
                         : 'text-white/70 hover:text-white hover:bg-white/10'
                     }`}>
-                    <span className={`${collapsed ? 'text-base' : 'text-sm'} w-4 text-center flex-shrink-0`}>{item.icon}</span>
+                    <span className="w-5 flex items-center justify-center flex-shrink-0">{item.icon && <item.icon size={collapsed ? 18 : 16} strokeWidth={1.75} />}</span>
                     {!collapsed && <span className="truncate">{item.label}</span>}
                   </Link>
                 )}
@@ -344,40 +352,47 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* User */}
-        <div className={`${collapsed ? 'px-2' : 'px-3'} py-3`} style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-          {user && !collapsed && (
-            <div className="flex items-center gap-2 mb-2 px-1">
-              <div className="w-7 h-7 rounded-xl flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-                style={{ background: 'rgba(255,255,255,0.15)' }}>
-                {user.iniciales}
-              </div>
+        {/* User (compacto: una sola fila) */}
+        <div className="px-3 py-2" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          {!collapsed ? (
+            <div className="flex items-center gap-2">
+              {user && (
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                  style={{ background: 'rgba(255,255,255,0.15)' }}>
+                  {user.iniciales}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
-                <div className="text-white text-[11px] font-semibold truncate">{user.nombre.split(' ')[0]}</div>
-                <div className="text-white/50 text-[9px]">{rolNombre.replace(/^\d+\s*-\s*/, '') || user.rol}</div>
+                <div className="text-white text-[11px] font-semibold truncate">{user?.nombre.split(' ')[0]}</div>
+                <div className="text-white/50 text-[9px] truncate">{rolNombre.replace(/^\d+\s*-\s*/, '') || user?.rol}</div>
               </div>
+              <Link href="/ayuda" title="Ayuda"
+                className="text-white/55 hover:text-white hover:bg-white/10 rounded-lg p-1.5 transition-colors flex-shrink-0">
+                <HelpCircle size={16} />
+              </Link>
+              <button onClick={handleLogout} title="Cerrar sesión"
+                className="text-white/55 hover:text-white hover:bg-white/10 rounded-lg p-1.5 transition-colors flex-shrink-0">
+                <LogOut size={16} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-1.5">
+              {user && (
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[10px] font-bold"
+                  style={{ background: 'rgba(255,255,255,0.15)' }}>
+                  {user.iniciales}
+                </div>
+              )}
+              <Link href="/ayuda" title="Ayuda"
+                className="text-white/55 hover:text-white hover:bg-white/10 rounded-lg p-1.5 transition-colors">
+                <HelpCircle size={16} />
+              </Link>
+              <button onClick={handleLogout} title="Cerrar sesión"
+                className="text-white/55 hover:text-white hover:bg-white/10 rounded-lg p-1.5 transition-colors">
+                <LogOut size={16} />
+              </button>
             </div>
           )}
-          {user && collapsed && (
-            <div className="flex justify-center mb-2">
-              <div className="w-7 h-7 rounded-xl flex items-center justify-center text-white text-[10px] font-bold"
-                style={{ background: 'rgba(255,255,255,0.15)' }}>
-                {user.iniciales}
-              </div>
-            </div>
-          )}
-          {/* Ayuda */}
-          <div className={`border-t border-white/10 pt-2 mb-1 ${collapsed?'mx-0':'mx-1'}`}>
-            <Link href="/ayuda"
-              className={`flex items-center gap-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-[11px] py-1.5 ${collapsed?'justify-center px-0':'px-2'}`}>
-              <span className="text-sm">📖</span>
-              {!collapsed && <span className="font-medium">Ayuda</span>}
-            </Link>
-          </div>
-          <button onClick={handleLogout}
-            className={`w-full text-white/50 hover:text-white/80 text-[10px] transition-colors rounded-lg hover:bg-white/10 py-1 ${collapsed ? 'px-0 text-center' : 'px-2 text-left'}`}>
-            {collapsed ? '↪' : '↪ Cerrar sesion'}
-          </button>
         </div>
       </aside>
 
