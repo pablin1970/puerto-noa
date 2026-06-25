@@ -11,15 +11,17 @@ interface TCEvento {
   ars: number | null
   clp: number | null
   cny: number | null
+  clp_fiscal: number | null
   ars_anterior: number | null
   clp_anterior: number | null
   cny_anterior: number | null
+  clp_fiscal_anterior: number | null
   api_fuente: string | null
   usuario_nombre: string | null
   created_at: string
 }
 
-interface TCVigente { ars: number | null; clp: number | null; cny: number | null; fecha: string }
+interface TCVigente { ars: number | null; clp: number | null; cny: number | null; clpFiscal: number | null; fecha: string }
 
 const FUENTE_BADGE: Record<string, { label: string; icon: string; cls: string }> = {
   manual:     { label: 'Manual',   icon: '✏️', cls: 'bg-gray-100 text-gray-600' },
@@ -29,12 +31,13 @@ const FUENTE_BADGE: Record<string, { label: string; icon: string; cls: string }>
 
 export default function TiposCambioPage() {
   const supabase = useMemo(() => createClient(), [])
-  const [vigente, setVigente] = useState<TCVigente>({ ars: null, clp: null, cny: null, fecha: '' })
+  const [vigente, setVigente] = useState<TCVigente>({ ars: null, clp: null, cny: null, clpFiscal: null, fecha: '' })
   const [eventos, setEventos] = useState<TCEvento[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [editARS, setEditARS] = useState('')
   const [editCLP, setEditCLP] = useState('')
   const [editCNY, setEditCNY] = useState('')
+  const [editCLPFiscal, setEditCLPFiscal] = useState('')
   const [actualizando, setActualizando] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -68,57 +71,65 @@ export default function TiposCambioPage() {
 
     if (data && data.length > 0) {
       setEventos(data as TCEvento[])
-      const vig: TCVigente = { ars: null, clp: null, cny: null, fecha: '' }
+      const vig: TCVigente = { ars: null, clp: null, cny: null, clpFiscal: null, fecha: '' }
       for (const ev of data as TCEvento[]) {
         if (vig.ars === null && ev.ars !== null) { vig.ars = ev.ars; vig.fecha = ev.fecha }
         if (vig.clp === null && ev.clp !== null) vig.clp = ev.clp
         if (vig.cny === null && ev.cny !== null) vig.cny = ev.cny
-        if (vig.ars !== null && vig.clp !== null && vig.cny !== null) break
+        if (vig.clpFiscal === null && ev.clp_fiscal !== null) vig.clpFiscal = ev.clp_fiscal
       }
       setVigente(vig)
       setEditARS(vig.ars ? String(Math.round(vig.ars)) : '')
       setEditCLP(vig.clp ? String(Math.round(vig.clp)) : '')
       setEditCNY(vig.cny ? String(vig.cny?.toFixed(4) || '') : '')
+      setEditCLPFiscal(vig.clpFiscal ? String(Math.round(vig.clpFiscal)) : '')
     }
     setLoading(false)
   }
 
-  async function getVigentes() {
+  // Ultimo evento de un dia ANTERIOR a hoy (para calcular la variacion % de cada moneda).
+  async function getAnteriores() {
+    const hoy = new Date().toISOString().slice(0, 10)
     const { data } = await supabase
       .from('tipos_cambio_eventos')
-      .select('ars, clp, cny')
-      .order('created_at', { ascending: false })
+      .select('ars, clp, cny, clp_fiscal')
+      .lt('fecha', hoy)
+      .order('fecha', { ascending: false })
       .limit(10)
-    if (!data) return { ars: 0, clp: 0, cny: 0 }
-    let ars = 0, clp = 0, cny = 0
+    const prev = { ars: 0, clp: 0, cny: 0, clpFiscal: 0 }
+    if (!data) return prev
     for (const ev of data as any[]) {
-      if (!ars && ev.ars) ars = ev.ars
-      if (!clp && ev.clp) clp = ev.clp
-      if (!cny && ev.cny) cny = ev.cny
-      if (ars && clp && cny) break
+      if (!prev.ars && ev.ars) prev.ars = ev.ars
+      if (!prev.clp && ev.clp) prev.clp = ev.clp
+      if (!prev.cny && ev.cny) prev.cny = ev.cny
+      if (!prev.clpFiscal && ev.clp_fiscal) prev.clpFiscal = ev.clp_fiscal
     }
-    return { ars, clp, cny }
+    return prev
   }
 
   async function guardarManual() {
     const arsVal = parseFloat(editARS.replace(',', '.')) || null
     const clpVal = parseFloat(editCLP.replace(',', '.')) || null
     const cnyVal = parseFloat(editCNY.replace(',', '.')) || null
-    if (!arsVal && !clpVal && !cnyVal) return
+    const clpFiscalVal = parseFloat(editCLPFiscal.replace(',', '.')) || null
+    if (!arsVal && !clpVal && !cnyVal && !clpFiscalVal) return
     setGuardando(true)
-    const prev = await getVigentes()
-    await (supabase.from('tipos_cambio_eventos') as any).insert({
+    const prev = await getAnteriores()
+    const { error } = await (supabase.from('tipos_cambio_eventos') as any).upsert({
       fecha: new Date().toISOString().slice(0, 10),
       fuente: 'manual',
       ars: arsVal,
       clp: clpVal,
       cny: cnyVal,
+      clp_fiscal: clpFiscalVal,
       ars_anterior: arsVal ? prev.ars : null,
       clp_anterior: clpVal ? prev.clp : null,
       cny_anterior: cnyVal ? prev.cny : null,
+      clp_fiscal_anterior: clpFiscalVal ? prev.clpFiscal : null,
       api_fuente: 'Ingreso manual',
       usuario_nombre: currentUser?.nombre || 'Usuario',
-    })
+    }, { onConflict: 'fecha' })
+    if (error) alert('No se pudo guardar: ' + error.message)
     await loadData()
     setGuardando(false)
   }
@@ -126,7 +137,7 @@ export default function TiposCambioPage() {
   async function actualizarDesdeAPI(fuente: 'automatico' | 'forzado' = 'forzado') {
     setActualizando(true)
     try {
-      let ars: number | null = null, clp: number | null = null, cny: number | null = null
+      let ars: number | null = null, clp: number | null = null, cny: number | null = null, clpFiscal: number | null = null
       let apiFuente = ''
 
       // ARS desde DolarAPI (oficial BNA)
@@ -139,44 +150,48 @@ export default function TiposCambioPage() {
         }
       } catch {}
 
-      // CLP desde mindicador.cl (BCCh)
-      try {
-        const r = await fetch('https://mindicador.cl/api/dolar')
-        if (r.ok) {
-          const d = await r.json()
-          clp = d?.serie?.[0]?.valor || null
-          if (clp) apiFuente = apiFuente ? apiFuente + ' - mindicador.cl (BCCh)' : 'mindicador.cl (BCCh)'
-        }
-      } catch {}
-
-      // CNY desde Open Exchange Rates
+      // CLP COMERCIAL y CNY desde Open Exchange Rates (mercado)
       try {
         const r = await fetch('https://open.er-api.com/v6/latest/USD')
         if (r.ok) {
           const d = await r.json()
+          clp = d?.rates?.CLP || null
           cny = d?.rates?.CNY || null
-          if (cny) apiFuente = apiFuente ? apiFuente + ' - Open Exchange Rates' : 'Open Exchange Rates'
+          if (clp || cny) apiFuente = apiFuente ? apiFuente + ' - Open Exchange Rates' : 'Open Exchange Rates'
         }
       } catch {}
 
-      if (ars || clp || cny) {
-        const prev = await getVigentes()
-        await (supabase.from('tipos_cambio_eventos') as any).insert({
+      // CLP FISCAL desde mindicador.cl (dolar observado BCCh, uso tributario SII)
+      try {
+        const r = await fetch('https://mindicador.cl/api/dolar')
+        if (r.ok) {
+          const d = await r.json()
+          clpFiscal = d?.serie?.[0]?.valor || null
+          if (clpFiscal) apiFuente = apiFuente ? apiFuente + ' - mindicador.cl (BCCh fiscal)' : 'mindicador.cl (BCCh fiscal)'
+        }
+      } catch {}
+
+      if (ars || clp || cny || clpFiscal) {
+        const prev = await getAnteriores()
+        const { error } = await (supabase.from('tipos_cambio_eventos') as any).upsert({
           fecha: new Date().toISOString().slice(0, 10),
           fuente,
           ars, clp, cny,
+          clp_fiscal: clpFiscal,
           ars_anterior: prev.ars,
           clp_anterior: prev.clp,
           cny_anterior: prev.cny,
+          clp_fiscal_anterior: prev.clpFiscal,
           api_fuente: apiFuente,
           usuario_nombre: fuente === 'forzado' ? (currentUser?.nombre || 'Usuario') : 'Sistema (cron)',
-        })
+        }, { onConflict: 'fecha' })
+        if (error && fuente === 'forzado') alert('No se pudo actualizar: ' + error.message)
         await loadData()
-      } else {
+      } else if (fuente === 'forzado') {
         alert('No se pudo obtener datos de las APIs.')
       }
     } catch {
-      alert('Error conectando con las APIs.')
+      if (fuente === 'forzado') alert('Error conectando con las APIs.')
     }
     setActualizando(false)
   }
@@ -216,6 +231,10 @@ export default function TiposCambioPage() {
 
   const hoy = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
+  // Brecha entre el TC comercial (mercado) y el fiscal (BCCh observado)
+  const brechaCLP = (vigente.clp !== null && vigente.clpFiscal !== null && vigente.clpFiscal !== 0)
+    ? ((vigente.clp - vigente.clpFiscal) / vigente.clpFiscal) * 100 : null
+
   if (permListos && !puede(permisos, 'tipos_cambio', 'ver')) {
     return (
       <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
@@ -233,7 +252,7 @@ export default function TiposCambioPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Tipos de cambio</h1>
-          <p className="text-xs text-gray-400 mt-0.5">TC vigentes · Actualizacion automatica · Historial</p>
+          <p className="text-xs text-gray-400 mt-0.5">TC comercial (mercado) y fiscal (BCCh observado · SII) · Actualizacion automatica · Historial</p>
         </div>
         <div className="bg-white border border-gray-100 rounded-xl px-4 py-2.5 shadow-sm text-right">
           <div className="text-xs font-semibold text-gray-700 capitalize">{hoy}</div>
@@ -249,7 +268,7 @@ export default function TiposCambioPage() {
           </div>
           <button disabled={actualizando} onClick={() => actualizarDesdeAPI('forzado')}
             className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-colors border border-white/20 disabled:opacity-50">
-            {actualizando ? 'Consultando APIs...' : 'Actualizar los 3 desde APIs'}
+            {actualizando ? 'Consultando APIs...' : 'Actualizar todo desde APIs'}
           </button>
         </div>
 
@@ -267,6 +286,9 @@ export default function TiposCambioPage() {
                   <div className="text-[10px] text-gray-400">{label} - {banco}</div>
                 </div>
               </div>
+              {moneda === 'CLP' && (
+                <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">Comercial · mercado</div>
+              )}
               <div className="text-3xl font-black font-mono mb-3" style={{ color }}>
                 {valor !== null ? fmt(valor, decimals) : '-'}
               </div>
@@ -276,12 +298,35 @@ export default function TiposCambioPage() {
                   className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono font-bold text-right focus:outline-none focus:border-[#1168F8]"
                   placeholder="0.00" />
               </div>
+
+              {moneda === 'CLP' && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#7C3AED' }}>Fiscal · BCCh observado (SII)</div>
+                    {brechaCLP !== null && (
+                      <span className="text-[9px] font-semibold text-gray-400">
+                        brecha {brechaCLP > 0 ? '+' : ''}{brechaCLP.toFixed(2)}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-2xl font-black font-mono mb-3" style={{ color: '#7C3AED' }}>
+                    {vigente.clpFiscal !== null ? fmt(vigente.clpFiscal, 0) : '-'}
+                  </div>
+                  <input type="text" inputMode="decimal" value={editCLPFiscal}
+                    onChange={e => setEditCLPFiscal(e.target.value)} onFocus={e => e.target.select()}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono font-bold text-right focus:outline-none focus:border-[#7C3AED]"
+                    placeholder="0" />
+                  <div className="text-[9px] text-gray-400 mt-1.5 leading-tight">
+                    Este es el valor que exige el SII para facturar en USD.
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
 
         <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
-          <div className="text-[10px] text-gray-400">Edita uno, dos o los tres valores y haz click en Guardar.</div>
+          <div className="text-[10px] text-gray-400">Edita los valores que quieras (incluido el fiscal) y haz click en Guardar.</div>
           <button disabled={guardando} onClick={guardarManual}
             className="flex items-center gap-2 px-5 py-2 bg-gray-800 text-white rounded-xl text-xs font-bold hover:bg-gray-700 disabled:opacity-50 transition-colors">
             {guardando ? 'Guardando...' : 'Guardar cambios manuales'}
@@ -326,7 +371,8 @@ export default function TiposCambioPage() {
                 <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Fecha</th>
                 <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Hora</th>
                 <th className="text-right px-4 py-3 text-[10px] font-semibold text-[#1168F8] uppercase tracking-wider">ARS</th>
-                <th className="text-right px-4 py-3 text-[10px] font-semibold text-red-600 uppercase tracking-wider">CLP</th>
+                <th className="text-right px-4 py-3 text-[10px] font-semibold text-red-600 uppercase tracking-wider">CLP comercial</th>
+                <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#7C3AED' }}>CLP fiscal</th>
                 <th className="text-right px-4 py-3 text-[10px] font-semibold text-amber-700 uppercase tracking-wider">CNY</th>
                 <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Fuente</th>
                 <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Origen</th>
@@ -361,6 +407,14 @@ export default function TiposCambioPage() {
                       ) : <span className="text-gray-200 font-mono">-</span>}
                     </td>
                     <td className="px-4 py-3 text-right">
+                      {e.clp_fiscal !== null ? (
+                        <div>
+                          <div className="font-mono font-bold" style={{ color: '#7C3AED' }}>{fmt(e.clp_fiscal, 0)}</div>
+                          {varBadge(e.clp_fiscal, e.clp_fiscal_anterior)}
+                        </div>
+                      ) : <span className="text-gray-200 font-mono">-</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right">
                       {e.cny !== null ? (
                         <div>
                           <div className="font-mono font-bold text-amber-700">{e.cny.toFixed(4)}</div>
@@ -384,8 +438,9 @@ export default function TiposCambioPage() {
       </div>
 
       <div className="mt-4 bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-4 py-3 text-xs text-[#052698]">
-        El TC vigente se aplica automaticamente en todas las cotizaciones nuevas.
-        Manual = valor ingresado - Cron = actualizacion diaria automatica - Forzado = actualizacion manual desde APIs
+        <strong>Comercial</strong> (mercado) = gestion interna · <strong>Fiscal</strong> (BCCh observado) = obligatorio para facturar en USD ante el SII.
+        El TC vigente se aplica automaticamente en las cotizaciones y facturas nuevas.
+        Manual = valor ingresado · Automatico = cron diario · Forzado = actualizacion manual desde APIs.
       </div>
     </div>
   )
