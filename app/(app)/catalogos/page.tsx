@@ -934,7 +934,7 @@ function CuentasABM() {
         </div>
         <div>
           <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
-          <select value={data.tipo||'banco'} onChange={e => setData((p:any)=>({...p,tipo:e.target.value, banco: e.target.value==='banco' ? p.banco : ''}))} className={inp2}>
+          <select value={data.tipo||'banco'} onChange={e => setData((p:any)=>({...p,tipo:e.target.value, banco: e.target.value==='caja' ? '' : p.banco, nro_cuenta: e.target.value==='caja' ? '' : p.nro_cuenta}))} className={inp2}>
             <option value="banco">Banco</option>
             <option value="caja">Caja / efectivo</option>
             <option value="inversion">Inversión (fondos / custodia)</option>
@@ -955,16 +955,18 @@ function CuentasABM() {
             <option value="USD">USD — Dólar</option>
           </select>
         </div>
-        {(data.tipo||'banco') === 'banco' && (
+        {(data.tipo||'banco') !== 'caja' && (
+        <>
         <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco / Entidad</label>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{data.tipo === 'inversion' ? 'ALyC / Agente (custodia)' : 'Banco / Entidad'}</label>
           <SelectorBanco pais={data.pais} value={data.banco||''} onChange={(n)=>setData((p:any)=>({...p,banco:n}))} className={inp2} />
         </div>
-        )}
         <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N° Cuenta / CBU / IBAN</label>
-          <input value={data.nro_cuenta||''} onChange={e => setData((p:any)=>({...p,nro_cuenta:e.target.value}))} className={inp2} placeholder="Número de cuenta"/>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{data.tipo === 'inversion' ? 'N° de cuenta comitente / custodia' : 'N° Cuenta / CBU / IBAN'}</label>
+          <input value={data.nro_cuenta||''} onChange={e => setData((p:any)=>({...p,nro_cuenta:e.target.value}))} className={inp2} placeholder={data.tipo === 'inversion' ? 'Número de cuenta comitente' : 'Número de cuenta'}/>
         </div>
+        </>
+        )}
         <div className="col-span-2">
           <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Titular (para cuentas de custodia)</label>
           <input value={data.titular||''} onChange={e => setData((p:any)=>({...p,titular:e.target.value}))} className={inp2} placeholder="Nombre del titular"/>
