@@ -142,6 +142,7 @@ function FormMovimiento({ supabase, currentUser, talonarios, cuentas, tcSnap, on
   const costoMonto = parseFloat(form.costo_monto) || 0
   const costoActivo = modo === 'cambio' && form.costo_on && costoMonto > 0
   const costoMoneda = form.costo_modo === 'destino' ? (destino?.moneda || '') : (origen?.moneda || '')
+  const costoCLP = costoActivo ? aCLP(costoMonto, costoMoneda, tcSnap) : 0
   // Saldos reales: si la comisión se cobra en origen, sale más; si en destino, entra menos
   const egresoOrigen = montoOrigen + (costoActivo && form.costo_modo === 'origen' ? costoMonto : 0)
   const ingresoDestino = montoDestino - (costoActivo && form.costo_modo === 'destino' ? costoMonto : 0)
@@ -218,6 +219,7 @@ function FormMovimiento({ supabase, currentUser, talonarios, cuentas, tcSnap, on
           monto_usd: costoMoneda === 'USD' ? costoMonto : null,
           monto_ars: costoMoneda === 'ARS' ? costoMonto : null,
           monto_clp_equiv: aCLP(costoMonto, costoMoneda, tcSnap),
+          tipo_cambio_ref: aCLP(1, costoMoneda, tcSnap),
           fecha: form.fecha, periodo_anio: pAnio, periodo_mes: pMes,
           es_recurrente: false, comprobante_ref: formateado,
           notas: `Generado automáticamente desde cambio de divisa (${form.costo_modo === 'origen' ? 'descontado de más en ' + monedaO : 'acreditado de menos en ' + monedaD})`,
@@ -320,7 +322,7 @@ function FormMovimiento({ supabase, currentUser, talonarios, cuentas, tcSnap, on
               <input type="text" inputMode="decimal" value={form.costo_monto} onChange={e => setForm((f: any) => ({ ...f, costo_monto: e.target.value.replace(/\./g, '').replace(',', '.') }))} className={inp + ' text-right font-mono'} placeholder="0" />
             </div>
             <div className="text-[11px] text-[#0a9e6e] bg-[#0a9e6e]/10 rounded-lg px-3 py-2">
-              ✓ Este costo se registra automáticamente como gasto (comisión bancaria{origen ? ` ${origen.pais === 'AR' ? 'Argentina' : 'Chile'}` : ''}) en la contabilidad.
+              ✓ Se registra como gasto (comisión bancaria{origen ? ` ${origen.pais === 'AR' ? 'Argentina' : 'Chile'}` : ''}) en la contabilidad{costoCLP > 0 ? `, en pesos: ≈ CLP ${fmt(costoCLP)}` : ''}{costoActivo && costoMoneda !== 'CLP' ? ` (convertido de ${fmt(costoMonto)} ${costoMoneda} con el TC del día)` : ''}.
             </div>
           </div>
         )}
