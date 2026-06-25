@@ -3,7 +3,7 @@
 // importan de aquí. Para agregar un módulo nuevo: agregarlo a MODULOS_PERMISOS
 // y queda cubierto automáticamente (deny by default para todos, salvo super admin).
 
-export const ACCIONES = ['ver', 'crear', 'editar', 'eliminar', 'descargar'] as const
+export const ACCIONES = ['ver', 'crear', 'editar', 'eliminar', 'descargar', 'solicitar', 'autorizar'] as const
 export type Accion = typeof ACCIONES[number]
 
 export interface ModuloItem {
@@ -56,8 +56,8 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
     section: 'Finanzas — Clientes y Proveedores', icono: '🧾',
     items: [
       { modulo: 'facturas_emitidas',        label: 'Facturas emitidas',       acciones: ['ver','crear','editar','eliminar','descargar'] },
-      { modulo: 'facturas_emitidas_anular', label: '→ Solicitar anulación / NC', acciones: ['ver','editar'], subitem: true },
-      { modulo: 'facturas_emitidas_autorizar', label: '→ Autorizar anulaciones / NC', acciones: ['ver','editar'], subitem: true },
+      { modulo: 'facturas_emitidas_anular', label: '→ Solicitar anulación / NC', acciones: ['solicitar'], subitem: true },
+      { modulo: 'facturas_emitidas_autorizar', label: '→ Autorizar anulaciones / NC', acciones: ['ver','autorizar'], subitem: true },
       { modulo: 'facturas_recibidas',       label: 'Facturas recibidas',      acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'cte_clientes',             label: 'Cta. cte. clientes',      acciones: ['ver','crear','editar','descargar'] },
       { modulo: 'cte_clientes_cobro',       label: '→ Registrar cobro',       acciones: ['ver','crear'], subitem: true },
