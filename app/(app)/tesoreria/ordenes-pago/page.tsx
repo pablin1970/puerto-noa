@@ -164,7 +164,7 @@ function FormOrdenPago({ supabase, currentUser, talonarios, proveedores, cliente
   const [modoRendir, setModoRendir] = useState<'proveedor' | 'devolucion'>('proveedor')  // solo en rendir
   const [form, setForm] = useState<any>({
     talonario_id: talonarios?.[0]?.id || '', tercero_id: '', operacion_id: '',
-    fecha: new Date().toISOString().slice(0, 10), moneda: 'CLP', tc_referencia: '',
+    fecha: new Date().toISOString().slice(0, 10), moneda: '',
     cuenta_propia_id: '', cuenta_rendir_id: '', monto: '', concepto: '', notas: '',
   })
   const [buscarT, setBuscarT] = useState('')
@@ -213,7 +213,8 @@ function FormOrdenPago({ supabase, currentUser, talonarios, proveedores, cliente
   const monto = parseFloat(form.monto) || 0
   const totalImputado = Object.values(imput).reduce((s: number, v: any) => s + (Number(v) || 0), 0)
   const aCuenta = Math.max(0, monto - totalImputado)
-  const cuentasPropiasFiltradas = cuentasPropias.filter((c: any) => !form.moneda || c.moneda === form.moneda)
+  // El TC sale del snapshot según la moneda de la cuenta (no se carga a mano)
+  const tcMoneda = form.moneda === 'USD' ? 1 : (Number(tcSnap?.[form.moneda]) || null)
 
   function selTercero(t: any) { setForm((f: any) => ({ ...f, tercero_id: t.id })); setBuscarT(t.razon_social); setShowTDD(false) }
   function setImp(fid: string, val: number, max: number) { setImput(prev => ({ ...prev, [fid]: Math.max(0, Math.min(val, max)) })) }
@@ -231,7 +232,7 @@ function FormOrdenPago({ supabase, currentUser, talonarios, proveedores, cliente
       const { data: numData, error: numErr } = await (supabase.rpc as any)('emitir_numero_talonario', { p_talonario: form.talonario_id })
       if (numErr || !numData?.[0]) { alert('Error al numerar: ' + (numErr?.message || 'desconocido')); setSaving(false); return }
       const numero = numData[0].numero, formateado = numData[0].formateado
-      const tcRef = parseFloat(form.tc_referencia) || null
+      const tcRef = tcMoneda
       const montoUsd = aUSD(monto, form.moneda, tcSnap)
 
       const { data: comp, error: cErr } = await (supabase.from('comprobantes_tesoreria') as any).insert({
@@ -372,28 +373,26 @@ function FormOrdenPago({ supabase, currentUser, talonarios, proveedores, cliente
           </div>
           {contexto === 'propia' ? (
             <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cuenta de Puerto NOA (sale)</label>
-              <select value={form.cuenta_propia_id} onChange={e => setForm((f: any) => ({ ...f, cuenta_propia_id: e.target.value }))} className={inp}>
+              <select value={form.cuenta_propia_id} onChange={e => { const c = cuentasPropias.find((x: any) => x.id === e.target.value); setForm((f: any) => ({ ...f, cuenta_propia_id: e.target.value, moneda: c?.moneda || '' })) }} className={inp}>
                 <option value="">— elegí la cuenta —</option>
-                {cuentasPropiasFiltradas.map((c: any) => <option key={c.id} value={c.id}>{c.nombre} · {c.tipo === 'banco' ? '🏦' : '💵'} {c.moneda} ({c.pais}) · saldo {fmt(c.saldo_actual)}</option>)}
+                {cuentasPropias.map((c: any) => <option key={c.id} value={c.id}>{c.nombre} · {c.tipo === 'banco' ? '🏦' : '💵'} {c.moneda} ({c.pais}) · saldo {fmt(c.saldo_actual)}</option>)}
               </select>
             </div>
           ) : (
             <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Caja a rendir (sale)</label>
-              <select value={form.cuenta_rendir_id} onChange={e => setForm((f: any) => ({ ...f, cuenta_rendir_id: e.target.value }))} className={inp}>
+              <select value={form.cuenta_rendir_id} onChange={e => { const c = cuentasRendir.find((x: any) => x.id === e.target.value); setForm((f: any) => ({ ...f, cuenta_rendir_id: e.target.value, moneda: c?.moneda || '' })) }} className={inp}>
                 <option value="">— elegí la caja —</option>
                 {cuentasRendir.map((c: any) => <option key={c.id} value={c.id}>{c.nombre} · {c.moneda} ({c.pais})</option>)}
               </select>
             </div>
           )}
           <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
-            <select value={form.moneda} onChange={e => setForm((f: any) => ({ ...f, moneda: e.target.value }))} className={inp}>
-              <option value="CLP">CLP</option><option value="USD">USD</option><option value="ARS">ARS</option>
-            </select>
+            <div className={inp + ' bg-gray-50 text-gray-600 flex items-center'}>{form.moneda || <span className="text-gray-400">la define la cuenta</span>}</div>
           </div>
           <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Monto</label>
             <input type="text" inputMode="decimal" value={form.monto} onChange={e => setForm((f: any) => ({ ...f, monto: e.target.value.replace(/\./g, '').replace(',', '.') }))} className={inp + ' text-right font-mono'} placeholder="0" /></div>
-          {form.moneda !== 'USD' && <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">TC ref. (a USD)</label>
-            <input type="text" value={form.tc_referencia} onChange={e => setForm((f: any) => ({ ...f, tc_referencia: e.target.value }))} className={inp} placeholder="ej. 906" /></div>}
+          {form.moneda && form.moneda !== 'USD' && <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">TC del día (snapshot)</label>
+            <div className={inp + ' bg-gray-50 text-gray-600 font-mono flex items-center'}>{tcMoneda ? `1 USD = ${fmt(tcMoneda)} ${form.moneda}` : <span className="text-gray-400 font-sans">sin snapshot</span>}</div></div>}
         </div>
       </div>
 
