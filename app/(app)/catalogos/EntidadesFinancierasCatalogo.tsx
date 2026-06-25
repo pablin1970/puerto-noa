@@ -51,6 +51,7 @@ export default function EntidadesFinancierasCatalogo() {
   const delPais = lista.filter(e => e.pais === pais)
   const bancos = delPais.filter(e => e.tipo === 'banco')
   const fintechs = delPais.filter(e => e.tipo === 'fintech')
+  const alycs = delPais.filter(e => e.tipo === 'alyc')
 
   function empezarNuevo() {
     setEditId(null); setDraft(null)
@@ -108,6 +109,7 @@ export default function EntidadesFinancierasCatalogo() {
           <select value={d.tipo} onChange={e => set({ ...d, tipo: e.target.value })} className={inp}>
             <option value="banco">Banco</option>
             <option value="fintech">Fintech / billetera</option>
+            <option value="alyc">ALyC / Agente de inversión</option>
           </select></div>
         <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Código oficial</label>
           <input value={d.codigo} onChange={e => set({ ...d, codigo: e.target.value })} className={inp} placeholder="ej. 011 (BCRA) / 001 (CMF)" /></div>
@@ -166,7 +168,7 @@ export default function EntidadesFinancierasCatalogo() {
         <h2 className="font-bold text-base text-gray-900">Entidades financieras</h2>
         {puedeCrear && <button onClick={empezarNuevo} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Agregar entidad</button>}
       </div>
-      <p className="text-xs text-gray-400 mb-3">Bancos y fintech por país. Las que estén activas aparecen al cargar una cuenta del país correspondiente.</p>
+      <p className="text-xs text-gray-400 mb-3">Bancos, fintech y ALyC / agentes de inversión por país. Las que estén activas aparecen al cargar una cuenta del país correspondiente.</p>
 
       {/* Tabs de país */}
       <div className="flex gap-2 mb-4">
@@ -200,6 +202,7 @@ export default function EntidadesFinancierasCatalogo() {
         <>
           <Tabla titulo="🏦 Bancos" filas={bancos} />
           <Tabla titulo="📱 Fintech / billeteras" filas={fintechs} />
+          <Tabla titulo="📈 ALyC / Agentes de inversión" filas={alycs} />
         </>
       )}
     </div>
