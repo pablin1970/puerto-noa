@@ -143,6 +143,7 @@ function FormMovimiento({ supabase, currentUser, talonarios, cuentas, tcSnap, on
   const costoActivo = modo === 'cambio' && form.costo_on && costoMonto > 0
   const costoMoneda = form.costo_modo === 'destino' ? (destino?.moneda || '') : (origen?.moneda || '')
   const costoCLP = costoActivo ? aCLP(costoMonto, costoMoneda, tcSnap) : 0
+  const costoTC = costoActivo ? aCLP(1, costoMoneda, tcSnap) : 0
   // Saldos reales: si la comisión se cobra en origen, sale más; si en destino, entra menos
   const egresoOrigen = montoOrigen + (costoActivo && form.costo_modo === 'origen' ? costoMonto : 0)
   const ingresoDestino = montoDestino - (costoActivo && form.costo_modo === 'destino' ? costoMonto : 0)
@@ -290,6 +291,11 @@ function FormMovimiento({ supabase, currentUser, talonarios, cuentas, tcSnap, on
 
       {modo === 'cambio' && (
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-3">
+        {tcSnap && (
+          <div className="text-[10px] text-gray-600 bg-blue-50/50 border border-blue-100 rounded-xl px-3 py-2">
+            <span className="font-semibold text-gray-700">📌 Snapshot del día{tcSnap.fecha ? ` (${tcSnap.fecha})` : ''}:</span> 1 USD = {fmt(tcSnap.CLP)} CLP · {fmt(tcSnap.ARS)} ARS · {tcSnap.CNY} CNY. Es el TC del Banco Central con el que se valoriza el gasto en pesos para la contabilidad.
+          </div>
+        )}
         <div className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
           <div>
             <div className="text-[10px] font-semibold text-gray-500 uppercase">TC efectivo (con comisión)</div>
@@ -322,7 +328,8 @@ function FormMovimiento({ supabase, currentUser, talonarios, cuentas, tcSnap, on
               <input type="text" inputMode="decimal" value={form.costo_monto} onChange={e => setForm((f: any) => ({ ...f, costo_monto: e.target.value.replace(/\./g, '').replace(',', '.') }))} className={inp + ' text-right font-mono'} placeholder="0" />
             </div>
             <div className="text-[11px] text-[#0a9e6e] bg-[#0a9e6e]/10 rounded-lg px-3 py-2">
-              ✓ Se registra como gasto (comisión bancaria{origen ? ` ${origen.pais === 'AR' ? 'Argentina' : 'Chile'}` : ''}) en la contabilidad{costoCLP > 0 ? `, en pesos: ≈ CLP ${fmt(costoCLP)}` : ''}{costoActivo && costoMoneda !== 'CLP' ? ` (convertido de ${fmt(costoMonto)} ${costoMoneda} con el TC del día)` : ''}.
+              ✓ Se registra como gasto (comisión bancaria{origen ? ` ${origen.pais === 'AR' ? 'Argentina' : 'Chile'}` : ''}) en la contabilidad.
+              {costoCLP > 0 && <div className="mt-1 font-mono font-semibold">{costoMoneda === 'CLP' ? `CLP ${fmt(costoCLP)}` : `${fmt(costoMonto)} ${costoMoneda} × ${costoTC.toLocaleString('es-CL', { maximumFractionDigits: 2 })} = CLP ${fmt(costoCLP)}`}</div>}
             </div>
           </div>
         )}
