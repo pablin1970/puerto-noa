@@ -305,7 +305,7 @@ export default function UsuariosPage() {
     return roles.filter(r => (u.roles_ids || []).includes(r.id))
   }
 
-  const accionLabel: Record<Accion, string> = { ver: 'Ver', crear: 'Crear', editar: 'Editar', eliminar: 'Elim.', descargar: 'Descargar' }
+  const accionLabel: Record<Accion, string> = { ver: 'Ver', crear: 'Crear', editar: 'Editar', eliminar: 'Elim.', descargar: 'Descargar', solicitar: 'Solicitar', autorizar: 'Autorizar' }
 
   if (permUserListos && !puedeAccion(permUser, 'usuarios', 'ver')) {
     return (
