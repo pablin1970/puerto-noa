@@ -1,8 +1,8 @@
 'use client'
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useState, useMemo, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt, ETAPAS_L, ETAPAS_ORD, nowDate } from '@/lib/utils'
-import type { Cotizacion, Operacion, MinutaItem, Moneda } from '@/types'
+import type { Cotizacion, Operacion } from '@/types'
 import { useSearchParams } from 'next/navigation'
 import { cargarPermisos, puede } from '@/lib/permisos'
 
@@ -119,7 +119,6 @@ function OperacionDetail({ op, cot, tab, setTab, reload, permisos }: {
 }) {
   const [facturas, setFacturas] = useState<FacturaOp[]>([])
   const [movs, setMovs] = useState<FondoMov[]>([])
-  const [minuta, setMinuta] = useState<MinutaItem[]>([])
   const [docs, setDocs] = useState<any[]>([])
   const [loadingDetail, setLoadingDetail] = useState(true)
   const supabase = createClient()
@@ -128,7 +127,7 @@ function OperacionDetail({ op, cot, tab, setTab, reload, permisos }: {
 
   async function loadDetail() {
     setLoadingDetail(true)
-    const [fe, fr, mv, mi, d] = await Promise.all([
+    const [fe, fr, mv, d] = await Promise.all([
       supabase.from('facturas_emitidas')
         .select('id,folio,fecha_emision,cliente_razon_social,etapa,moneda,total,total_usd,estado,via_cobro,archivo_url,archivo_nombre')
         .eq('operacion_id', op.id).order('fecha_emision'),
@@ -138,7 +137,6 @@ function OperacionDetail({ op, cot, tab, setTab, reload, permisos }: {
       supabase.from('fondos_movimientos')
         .select('*, cuenta:fondos_cuentas!fondos_movimientos_cuenta_id_fkey(nombre,tipo,pais,moneda)')
         .eq('operacion_id', op.id).order('fecha'),
-      supabase.from('minuta_items').select('*').eq('operacion_id', op.id),
       supabase.from('operacion_documentos').select('*').eq('operacion_id', op.id).order('created_at'),
     ])
     const fac: FacturaOp[] = []
@@ -156,7 +154,6 @@ function OperacionDetail({ op, cot, tab, setTab, reload, permisos }: {
     })
     setFacturas(fac)
     if (mv.data) setMovs(mv.data as any[])
-    if (mi.data) setMinuta(mi.data as MinutaItem[])
     if (d.data) setDocs(d.data as any[])
     setLoadingDetail(false)
   }
@@ -279,7 +276,7 @@ function OperacionDetail({ op, cot, tab, setTab, reload, permisos }: {
           {tab === 'comparativo' && <ComparativoTab presup={presup} facturas={facturas} />}
           {tab === 'caja' && <CajaRendirTab opId={op.id} cotNum={cot.num || ''} movs={movs} saldo={saldoCaja} permisos={permisos} />}
           {tab === 'cierre' && <CierreTab op={op} saldoCaja={saldoCaja} totalPresup={totalPresup} facturadoGasto={facturadoGasto} saldadoUsd={saldadoUsd} pendienteUsd={pendienteUsd} reload={reload} permisos={permisos} />}
-          {tab === 'minuta' && <MinutaTab opId={op.id} cotNum={cot.num || ''} cliente={cot.cliente} minuta={minuta} reload={loadDetail} permisos={permisos} />}
+          {tab === 'minuta' && <MinutaTab opId={op.id} cotNum={cot.num || ''} cliente={cot.cliente} permisos={permisos} />}
           {tab === 'documentos' && <DocumentosTab opId={op.id} docs={docs} reload={loadDetail} permisos={permisos} />}
         </>
       )}
@@ -665,53 +662,222 @@ function CierreTab({ op, saldoCaja, totalPresup, facturadoGasto, saldadoUsd, pen
 }
 
 // ── MINUTA TAB ─────────────────────────────────────────────────
-function MinutaTab({ opId, cotNum, cliente, minuta, reload, permisos }: { opId: string; cotNum: string; cliente: string; minuta: MinutaItem[]; reload: () => void; permisos: Record<string, string[]> }) {
-  const puedeEditar = puede(permisos, 'operaciones', 'editar')
-  const [form, setForm] = useState({ prov: '', concepto: '', moneda: 'USD', monto: '', fecha: nowDate(), banco: '', cuenta: '', swift: '', notas: '' })
+function MinutaTab({ opId, cotNum, cliente, permisos }: { opId: string; cotNum: string; cliente: string; permisos: Record<string, string[]> }) {
   const supabase = createClient()
-  const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })
-  const totalUSD = minuta.filter(i => i.moneda === 'USD').reduce((s, i) => s + i.monto, 0)
-  const totalARS = minuta.filter(i => i.moneda === 'ARS').reduce((s, i) => s + i.monto, 0)
+  const puedeEditar = puede(permisos, 'operaciones', 'editar')
+  const puedeProveedores = puede(permisos, 'proveedores', 'editar')
+
+  const [facturas, setFacturas] = useState<any[]>([])
+  const [minutas, setMinutas] = useState<any[]>([])
+  const [talonarioMin, setTalonarioMin] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  const [provSel, setProvSel] = useState<string>('')
+  const [factSel, setFactSel] = useState<Record<string, boolean>>({})
+  const [cuentas, setCuentas] = useState<any[]>([])
+  const [cuentaSel, setCuentaSel] = useState<string>('')
+  const [emitiendo, setEmitiendo] = useState(false)
+
+  const [addCta, setAddCta] = useState(false)
+  const [ctaForm, setCtaForm] = useState({ banco: '', cuenta: '', cbu_iban: '', swift: '', moneda: 'USD', notas: '' })
+
   const inp = 'w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]'
 
-  async function agregar() {
-    if (!form.prov || !form.monto) { alert('Completá proveedor y monto.'); return }
-    await (supabase.from('minuta_items') as any).insert({ operacion_id: opId, proveedor: form.prov, concepto: form.concepto, moneda: form.moneda as Moneda, monto: parseFloat(form.monto), fecha_vto: form.fecha, banco: form.banco, cuenta: form.cuenta, swift: form.swift, notas: form.notas })
-    setForm({ prov: '', concepto: '', moneda: 'USD', monto: '', fecha: nowDate(), banco: '', cuenta: '', swift: '', notas: '' })
-    reload()
+  async function load() {
+    setLoading(true)
+    const [fRes, mRes, tRes] = await Promise.all([
+      (supabase.from('facturas_recibidas') as any)
+        .select('id,folio,moneda,total,fecha_vencimiento,fecha_emision,tercero_id,proveedor_razon_social,estado,estado_pago')
+        .eq('operacion_id', opId).not('estado', 'in', '("anulada")'),
+      (supabase.from('minutas') as any)
+        .select('*, tercero:terceros(razon_social), cuenta:tercero_cuentas_bancarias(banco,cuenta,cbu_iban,swift,moneda), facturas:minuta_facturas(id,factura_recibida_id,monto,moneda,factura:facturas_recibidas(folio,fecha_vencimiento))')
+        .eq('operacion_id', opId).order('created_at', { ascending: false }),
+      (supabase.from('talonarios') as any).select('id,prefijo,tipo_comprobante_id, tipo:tipos_comprobante(nombre)').eq('activo', true),
+    ])
+    setFacturas(fRes.data || [])
+    setMinutas(mRes.data || [])
+    const tmin = (tRes.data || []).find((t: any) => t.tipo?.nombre === 'Minuta de pago' || t.prefijo === 'MIN')
+    setTalonarioMin(tmin || null)
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [opId])
+
+  const proveedores = useMemo(() => {
+    const m = new Map<string, { id: string; nombre: string; n: number }>()
+    facturas.forEach((f: any) => {
+      if (!f.tercero_id) return
+      const e = m.get(f.tercero_id) || { id: f.tercero_id, nombre: f.proveedor_razon_social || 'Proveedor', n: 0 }
+      e.n++; m.set(f.tercero_id, e)
+    })
+    return Array.from(m.values())
+  }, [facturas])
+
+  const factsProv = facturas.filter((f: any) => f.tercero_id === provSel && f.estado_pago !== 'pagada')
+
+  async function elegirProveedor(tid: string) {
+    setProvSel(tid); setFactSel({}); setCuentaSel('')
+    if (!tid) { setCuentas([]); return }
+    const { data } = await (supabase.from('tercero_cuentas_bancarias') as any).select('*').eq('tercero_id', tid).order('principal', { ascending: false })
+    setCuentas(data || [])
+    const ppal = (data || []).find((c: any) => c.principal) || (data || [])[0]
+    setCuentaSel(ppal?.id || '')
   }
 
-  async function eliminar(id: string) {
-    await (supabase.from('minuta_items') as any).delete().eq('id', id)
-    reload()
+  const seleccionadas = factsProv.filter((f: any) => factSel[f.id])
+  const monedaMin = seleccionadas[0]?.moneda || ''
+  const monedaMixta = seleccionadas.some((f: any) => f.moneda !== monedaMin)
+  const totalMin = seleccionadas.reduce((s: number, f: any) => s + (Number(f.total) || 0), 0)
+
+  async function guardarCuenta() {
+    if (!ctaForm.banco) { alert('Completá al menos el banco.'); return }
+    const { data, error } = await (supabase.from('tercero_cuentas_bancarias') as any)
+      .insert({ tercero_id: provSel, banco: ctaForm.banco, cuenta: ctaForm.cuenta || null, cbu_iban: ctaForm.cbu_iban || null, swift: ctaForm.swift || null, moneda: ctaForm.moneda, principal: cuentas.length === 0, notas: ctaForm.notas || null })
+      .select('*').single()
+    if (error) { alert('Error al guardar la cuenta: ' + error.message); return }
+    setCuentas(c => [...c, data]); setCuentaSel(data.id); setAddCta(false)
+    setCtaForm({ banco: '', cuenta: '', cbu_iban: '', swift: '', moneda: 'USD', notas: '' })
   }
+
+  async function emitir() {
+    if (!provSel) { alert('Elegí el proveedor.'); return }
+    if (seleccionadas.length === 0) { alert('Marcá al menos una factura.'); return }
+    if (monedaMixta) { alert('Las facturas seleccionadas tienen monedas distintas. Emití una minuta por moneda.'); return }
+    if (cuentas.length > 0 && !cuentaSel) { alert('Elegí la cuenta bancaria del proveedor.'); return }
+    if (!talonarioMin) { alert('No hay talonario de minutas. Cargalo en Catálogos › Talonarios.'); return }
+    setEmitiendo(true)
+    try {
+      const { data: numData, error: numErr } = await (supabase.rpc as any)('emitir_numero_talonario', { p_talonario: talonarioMin.id })
+      if (numErr || !numData?.[0]) { alert('Error al numerar: ' + (numErr?.message || '')); setEmitiendo(false); return }
+      const numero = numData[0].numero, formateado = numData[0].formateado
+      const { data: min, error: mErr } = await (supabase.from('minutas') as any).insert({
+        operacion_id: opId, tercero_id: provSel, cuenta_bancaria_id: cuentaSel || null,
+        talonario_id: talonarioMin.id, numero, numero_formateado: formateado,
+        fecha: nowDate(), moneda: monedaMin, total: totalMin, estado: 'emitida',
+      }).select('id').single()
+      if (mErr || !min) { alert('Error al emitir la minuta: ' + (mErr?.message || '')); setEmitiendo(false); return }
+      for (const f of seleccionadas) {
+        await (supabase.from('minuta_facturas') as any).insert({ minuta_id: min.id, factura_recibida_id: f.id, monto: Number(f.total) || 0, moneda: f.moneda })
+        await (supabase.from('facturas_recibidas') as any).update({ estado_pago: 'minuta_emitida' }).eq('id', f.id)
+      }
+      setProvSel(''); setFactSel({}); setCuentas([]); setCuentaSel('')
+      await load()
+      alert(`Minuta ${formateado} emitida.`)
+    } catch (e: any) { alert('Error inesperado: ' + (e?.message || e)) }
+    setEmitiendo(false)
+  }
+
+  if (loading) return <div className="text-center text-gray-400 text-xs py-8">Cargando…</div>
 
   return (
+    <div className="space-y-4">
+      {puedeEditar && (
+        <div className="bg-white border border-gray-100 rounded-xl p-5">
+          <h3 className="font-medium text-sm text-gray-900 mb-1">Emitir minuta de pago</h3>
+          <p className="text-[11px] text-gray-400 mb-4">Elegí un proveedor de la operación y las facturas que el cliente debe pagarle directamente.</p>
+          {proveedores.length === 0 ? (
+            <div className="text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-4 text-center">No hay facturas de proveedor cargadas en esta operación todavía.</div>
+          ) : (
+            <>
+              <div className="mb-3">
+                <label className="block text-[10px] text-gray-500 font-medium mb-1">Proveedor</label>
+                <select value={provSel} onChange={e => elegirProveedor(e.target.value)} className={inp + ' bg-white'}>
+                  <option value="">— elegí proveedor —</option>
+                  {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre} ({p.n} fact.)</option>)}
+                </select>
+              </div>
+              {provSel && (
+                <>
+                  <div className="border border-gray-100 rounded-lg divide-y divide-gray-50 mb-3">
+                    {factsProv.length === 0 && <div className="px-3 py-3 text-xs text-gray-400">Este proveedor no tiene facturas pendientes en la operación.</div>}
+                    {factsProv.map((f: any) => (
+                      <label key={f.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50">
+                        <input type="checkbox" checked={!!factSel[f.id]} onChange={e => setFactSel(s => ({ ...s, [f.id]: e.target.checked }))} className="w-4 h-4 rounded" />
+                        <div className="flex-1">
+                          <div className="text-xs font-medium text-gray-800">Factura {f.folio || '—'}</div>
+                          <div className="text-[10px] text-gray-400">{f.fecha_emision || ''}{f.fecha_vencimiento ? ` · vence ${f.fecha_vencimiento.split('-').reverse().join('/')}` : ''}{f.estado_pago === 'minuta_emitida' ? ' · ya en una minuta' : ''}</div>
+                        </div>
+                        <div className="font-mono font-semibold text-xs text-gray-900">{f.moneda} {fmt(Number(f.total) || 0)}</div>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="mb-3">
+                    <label className="block text-[10px] text-gray-500 font-medium mb-1">Cuenta bancaria del proveedor</label>
+                    {cuentas.length > 0 ? (
+                      <select value={cuentaSel} onChange={e => setCuentaSel(e.target.value)} className={inp + ' bg-white'}>
+                        {cuentas.map((c: any) => <option key={c.id} value={c.id}>{c.banco} · {c.cuenta || c.cbu_iban || ''} · {c.moneda}{c.principal ? ' (principal)' : ''}</option>)}
+                      </select>
+                    ) : (
+                      puedeProveedores ? (
+                        <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 flex items-center justify-between">
+                          <span>El proveedor no tiene cuentas bancarias cargadas.</span>
+                          <button onClick={() => setAddCta(true)} className="text-[#1168F8] font-semibold hover:underline">+ Agregar cuenta</button>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">El proveedor no tiene cuentas bancarias cargadas. Pedile a un administrador que las cargue en la ficha del proveedor.</div>
+                      )
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+                    <div className="text-xs text-gray-500">
+                      {seleccionadas.length} factura(s){monedaMin && !monedaMixta ? ` · ${monedaMin} ${fmt(totalMin)}` : ''}
+                      {monedaMixta && <span className="text-[#E11D48] ml-1">⚠ monedas distintas</span>}
+                    </div>
+                    <button onClick={emitir} disabled={emitiendo || seleccionadas.length === 0 || monedaMixta || (cuentas.length > 0 && !cuentaSel)}
+                      className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] disabled:opacity-40">
+                      {emitiendo ? 'Emitiendo…' : 'Emitir minuta'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {minutas.length === 0 ? (
+        <div className="text-center text-gray-400 text-xs py-8">No hay minutas emitidas en esta operación.</div>
+      ) : (
+        minutas.map((m: any) => <MinutaDoc key={m.id} m={m} cotNum={cotNum} cliente={cliente} />)
+      )}
+
+      {addCta && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setAddCta(false)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="font-semibold text-sm text-gray-900 mb-3">Agregar cuenta bancaria del proveedor</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2"><label className="block text-[10px] text-gray-500 font-medium mb-1">Banco / entidad</label><input value={ctaForm.banco} onChange={e => setCtaForm(f => ({ ...f, banco: e.target.value }))} className={inp} /></div>
+              <div><label className="block text-[10px] text-gray-500 font-medium mb-1">N° cuenta</label><input value={ctaForm.cuenta} onChange={e => setCtaForm(f => ({ ...f, cuenta: e.target.value }))} className={inp} /></div>
+              <div><label className="block text-[10px] text-gray-500 font-medium mb-1">CBU / IBAN</label><input value={ctaForm.cbu_iban} onChange={e => setCtaForm(f => ({ ...f, cbu_iban: e.target.value }))} className={inp} /></div>
+              <div><label className="block text-[10px] text-gray-500 font-medium mb-1">SWIFT / alias</label><input value={ctaForm.swift} onChange={e => setCtaForm(f => ({ ...f, swift: e.target.value }))} className={inp} /></div>
+              <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Moneda</label><select value={ctaForm.moneda} onChange={e => setCtaForm(f => ({ ...f, moneda: e.target.value }))} className={inp + ' bg-white'}><option>USD</option><option>ARS</option><option>CLP</option><option>EUR</option><option>CNY</option></select></div>
+              <div className="col-span-2"><label className="block text-[10px] text-gray-500 font-medium mb-1">Notas</label><input value={ctaForm.notas} onChange={e => setCtaForm(f => ({ ...f, notas: e.target.value }))} className={inp} /></div>
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setAddCta(false)} className="px-4 py-2 text-xs text-gray-500 hover:text-gray-700">Cancelar</button>
+              <button onClick={guardarCuenta} className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Guardar cuenta</button>
+            </div>
+            <p className="text-[10px] text-gray-400 mt-2">Queda guardada en la ficha del proveedor como una cuenta más.</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Documento imprimible de una minuta emitida
+function MinutaDoc({ m, cotNum, cliente }: { m: any; cotNum: string; cliente: string }) {
+  const fecha = m.fecha ? m.fecha.split('-').reverse().join('/') : ''
+  const cta = m.cuenta
+  const printId = `minuta-print-${m.id}`
+  return (
     <div>
-      <style>{`@media print { body * { visibility: hidden; } #minuta-print, #minuta-print * { visibility: visible; } #minuta-print { position: absolute; left: 0; top: 0; width: 100%; } .no-print { display: none !important; } @page { margin: 10mm 12mm; size: A4 portrait; } }`}</style>
-      <div className="no-print bg-white border border-gray-100 rounded-xl p-5 mb-4">
-        <h3 className="font-medium text-sm text-gray-900 mb-4">Agregar ítem a la minuta</h3>
-        <div className="grid grid-cols-4 gap-3 mb-3">
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Proveedor</label><input value={form.prov} onChange={e => setForm(f => ({ ...f, prov: e.target.value }))} className={inp} placeholder="ej. Hellmann Logistics" /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Concepto</label><input value={form.concepto} onChange={e => setForm(f => ({ ...f, concepto: e.target.value }))} className={inp} placeholder="ej. Flete marítimo" /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Moneda</label><select value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value }))} className={inp + ' bg-white'}><option>USD</option><option>ARS</option><option>CLP</option></select></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Monto</label><input type="text" inputMode="decimal" onFocus={e => e.target.select()} value={form.monto} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} className={inp + ' text-right'} placeholder="0.00" /></div>
-        </div>
-        <div className="grid grid-cols-4 gap-3 mb-3">
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Fecha vencimiento</label><input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} className={inp} /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Banco / entidad</label><input value={form.banco} onChange={e => setForm(f => ({ ...f, banco: e.target.value }))} className={inp} placeholder="ej. Banco BCI" /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">N° cuenta / CBU</label><input value={form.cuenta} onChange={e => setForm(f => ({ ...f, cuenta: e.target.value }))} className={inp} /></div>
-          <div><label className="block text-[10px] text-gray-500 font-medium mb-1">Swift / alias</label><input value={form.swift} onChange={e => setForm(f => ({ ...f, swift: e.target.value }))} className={inp} /></div>
-        </div>
-        <div className="mb-4"><label className="block text-[10px] text-gray-500 font-medium mb-1">Notas</label><input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} className={inp} placeholder="Referencia a incluir en la transferencia" /></div>
-        <div className="flex justify-end">{puedeEditar && <button onClick={agregar} className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">+ Agregar a minuta</button>}</div>
+      <style>{`@media print { body * { visibility: hidden; } #${printId}, #${printId} * { visibility: visible; } #${printId} { position: absolute; left: 0; top: 0; width: 100%; } .no-print { display: none !important; } @page { margin: 10mm 12mm; size: A4 portrait; } }`}</style>
+      <div className="no-print flex items-center justify-between mb-2">
+        <span className="text-xs text-gray-600 font-semibold">Minuta {m.numero_formateado} · {m.tercero?.razon_social || ''} · {fecha}</span>
+        <button onClick={() => { const t = document.title; document.title = `Minuta_${m.numero_formateado}`; window.print(); document.title = t }}
+          className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF]">🖨 Imprimir / PDF</button>
       </div>
-      <div className="no-print flex items-center justify-between mb-3">
-        <span className="text-xs text-gray-500">{minuta.length} ítem(s) · {totalUSD > 0 ? `USD ${fmt(totalUSD)}` : ''}{totalARS > 0 ? ` · ARS ${Math.round(totalARS).toLocaleString('es-AR')}` : ''}</span>
-        <button onClick={() => { const t = document.title; document.title = `Minuta_${opId}`; window.print(); document.title = t }}
-          className="flex items-center gap-1.5 px-4 py-2 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF]">🖨 Imprimir / PDF</button>
-      </div>
-      <div id="minuta-print" className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+      <div id={printId} className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-4">
         <div className="flex items-start justify-between px-6 py-5 border-b-2 border-[#1168F8]">
           <div>
             <img src="/logo.png" alt="Puerto NOA SpA" style={{ height: '36px', objectFit: 'contain' }} />
@@ -719,52 +885,41 @@ function MinutaTab({ opId, cotNum, cliente, minuta, reload, permisos }: { opId: 
           </div>
           <div className="text-right">
             <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Minuta de pago</div>
-            <div className="text-xl font-bold font-mono text-[#052698]">{cotNum}</div>
-            <div className="text-xs text-gray-500 mt-1">{fecha}</div>
+            <div className="text-xl font-bold font-mono text-[#052698]">{m.numero_formateado}</div>
+            <div className="text-xs text-gray-500 mt-1">{fecha} · Op. {cotNum}</div>
           </div>
         </div>
         <div className="px-6 py-4 bg-[#EBF2FF] border-b border-[#93B8FC]">
           <div className="text-[10px] text-[#052698] uppercase tracking-wider font-bold mb-1">Estimado cliente</div>
           <div className="text-sm font-semibold text-[#052698]">{cliente}</div>
-          <div className="text-xs text-[#1168F8] mt-1">Le solicitamos efectuar las siguientes transferencias para continuar con el proceso de importación correspondiente a la operación {cotNum}.</div>
+          <div className="text-xs text-[#1168F8] mt-1">Le solicitamos efectuar la transferencia al proveedor por las siguientes facturas de la operación {cotNum}.</div>
         </div>
-        <div className="divide-y divide-gray-100">
-          {minuta.map((it, idx) => (
-            <div key={it.id} className="px-6 py-4">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-[#1168F8] text-white text-[10px] font-bold flex items-center justify-center">{idx + 1}</div>
-                  <div><div className="font-semibold text-sm text-gray-900">{it.proveedor}</div><div className="text-xs text-gray-500">{it.concepto}</div></div>
+        <div className="px-6 py-4">
+          <div className="font-semibold text-sm text-gray-900 mb-2">{m.tercero?.razon_social || ''}</div>
+          <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg mb-3">
+            {(m.facturas || []).map((mf: any, idx: number) => (
+              <div key={mf.id} className="flex items-center justify-between px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-[#1168F8] text-white text-[9px] font-bold flex items-center justify-center">{idx + 1}</div>
+                  <div className="text-xs text-gray-700">Factura {mf.factura?.folio || '—'}{mf.factura?.fecha_vencimiento ? ` · vence ${mf.factura.fecha_vencimiento.split('-').reverse().join('/')}` : ''}</div>
                 </div>
-                <div className="text-right">
-                  <div className="text-xl font-bold text-[#052698] font-mono">{it.moneda} {fmt(it.monto)}</div>
-                  {it.fecha_vto && <div className="text-[10px] text-amber-600 mt-0.5 font-medium">⏱ Vence: {it.fecha_vto}</div>}
-                </div>
+                <div className="font-mono font-semibold text-xs text-gray-900">{mf.moneda} {fmt(Number(mf.monto) || 0)}</div>
               </div>
-              {(it.banco || it.cuenta || it.swift) && (
-                <div className="grid grid-cols-3 gap-3 bg-gray-50 rounded-lg p-3 text-xs">
-                  {it.banco && <div><div className="text-[9px] text-gray-400 uppercase mb-0.5">Banco</div><div className="font-medium text-gray-700">{it.banco}</div></div>}
-                  {it.cuenta && <div><div className="text-[9px] text-gray-400 uppercase mb-0.5">Cuenta / CBU</div><div className="font-mono text-gray-700">{it.cuenta}</div></div>}
-                  {it.swift && <div><div className="text-[9px] text-gray-400 uppercase mb-0.5">Swift / Alias</div><div className="font-mono text-gray-700">{it.swift}</div></div>}
-                </div>
-              )}
-              {it.notas && <div className="mt-2 text-[10px] text-amber-700 bg-amber-50 rounded px-3 py-1.5">📌 {it.notas}</div>}
-              <div className="no-print flex justify-end mt-2">{puedeEditar && <button onClick={() => eliminar(it.id)} className="text-gray-400 hover:text-red-500 text-xs">🗑 Quitar</button>}</div>
-            </div>
-          ))}
-          {!minuta.length && <div className="px-6 py-8 text-center text-gray-400 text-xs">Agregá ítems a la minuta para presentar al cliente.</div>}
-        </div>
-        {minuta.length > 0 && (
-          <div className="px-6 py-4 bg-gray-50 border-t-2 border-[#1168F8]">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-gray-700">TOTAL A TRANSFERIR</div>
-              <div className="text-right space-y-0.5">
-                {totalUSD > 0 && <div className="font-mono font-bold text-[#052698] text-base">USD {fmt(totalUSD)}</div>}
-                {totalARS > 0 && <div className="font-mono font-bold text-[#052698] text-base">ARS {Math.round(totalARS).toLocaleString('es-AR')}</div>}
-              </div>
-            </div>
+            ))}
           </div>
-        )}
+          {cta && (
+            <div className="grid grid-cols-4 gap-3 bg-gray-50 rounded-lg p-3 text-xs">
+              <div><div className="text-[9px] text-gray-400 uppercase mb-0.5">Banco</div><div className="font-medium text-gray-700">{cta.banco}</div></div>
+              {cta.cuenta && <div><div className="text-[9px] text-gray-400 uppercase mb-0.5">Cuenta</div><div className="font-mono text-gray-700">{cta.cuenta}</div></div>}
+              {cta.cbu_iban && <div><div className="text-[9px] text-gray-400 uppercase mb-0.5">CBU / IBAN</div><div className="font-mono text-gray-700">{cta.cbu_iban}</div></div>}
+              {cta.swift && <div><div className="text-[9px] text-gray-400 uppercase mb-0.5">SWIFT</div><div className="font-mono text-gray-700">{cta.swift}</div></div>}
+            </div>
+          )}
+        </div>
+        <div className="px-6 py-4 bg-gray-50 border-t-2 border-[#1168F8] flex items-center justify-between">
+          <div className="text-xs font-semibold text-gray-700">TOTAL A TRANSFERIR</div>
+          <div className="font-mono font-bold text-[#052698] text-base">{m.moneda} {fmt(Number(m.total) || 0)}</div>
+        </div>
         <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100">
           <div className="text-[9px] text-gray-400">Ante cualquier consulta comuníquese con Puerto NOA SpA · San Salvador de Jujuy, Argentina</div>
           <img src="/logo.png" alt="Puerto NOA" style={{ height: '20px', objectFit: 'contain', opacity: 0.5 }} />
