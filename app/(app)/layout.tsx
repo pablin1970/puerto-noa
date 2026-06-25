@@ -314,10 +314,11 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
               const hrefVer = (hrefQuery || '').includes('ver=proveedores') ? 'proveedores' : 'clientes'
               active = hrefVer === verActual
             }
-            // Filtrar por permisos del rol
-            // Si el usuario tiene permisos cargados y el ítem tiene módulo → verificar
-            // Si el módulo no está en permisos → ocultar
-            if (Object.keys(permisos).length > 0 && item.modulo) {
+            // Filtrar por permisos del rol.
+            // REGLA DE ORO: el Super Administrador ve TODO (incluso módulos sin
+            // permiso configurado aún). Para el resto: deny by default — si el
+            // módulo no tiene 'ver' en sus permisos, se oculta.
+            if (!esSuper && Object.keys(permisos).length > 0 && item.modulo) {
               const tienePermiso = permisos[item.modulo]?.includes('ver')
               if (!tienePermiso) return null
             }
