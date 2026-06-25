@@ -377,8 +377,9 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
       ref_folio: comp?.requiere_referencia ? (parseInt(ref_folio as any) || null) : null,
       neto: Math.round(totales.neto), iva_monto: Math.round(totales.iva),
       exento: Math.round(totales.exento), total: Math.round(totales.total),
-      total_usd: tcRef ? totales.total / tcRef : null, estado: 'borrador',
+      total_usd: tcRef ? totales.total / tcRef : null, estado: comp?.efecto === 'resta' ? 'pendiente_autorizacion' : 'borrador',
       creado_por: currentUser?.nombre, creado_por_id: currentUser?.id,
+      ...(comp?.efecto === 'resta' ? { solicitado_por: currentUser?.nombre, solicitado_por_id: currentUser?.id, solicitado_at: new Date().toISOString(), motivo_anulacion: form.glosa || null } : {}),
     }).select('id').single()
     // Vincula las recibidas refacturadas a esta emitida (quedan marcadas como refacturadas)
     if (factData && usaRecupero) {
