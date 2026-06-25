@@ -852,19 +852,22 @@ function CuentasABM() {
   const [editData, setEditData] = useState<any>({})
   const [showNew, setShowNew] = useState(false)
   const [tipoCuenta, setTipoCuenta] = useState<'propia'|'custodia'>('propia')
-  const [newData, setNewData] = useState<any>({ nombre:'', tipo:'banco', pais:'CL', moneda:'CLP', banco:'', nro_cuenta:'', titular:'', notas:'' })
+  const [newData, setNewData] = useState<any>({ nombre:'', tipo:'banco', pais:'CL', moneda:'CLP', banco:'', nro_cuenta:'', firmante:'', notas:'' })
   const [saving, setSaving] = useState(false)
+  const [empresaNombre, setEmpresaNombre] = useState<string>('PUERTO NOA SPA')
 
   useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
-    const [pRes, cRes] = await Promise.all([
+    const [pRes, cRes, eRes] = await Promise.all([
       (supabase.from('cuentas_pn') as any).select('*').order('pais').order('moneda'),
       (supabase.from('fondos_cuentas') as any).select('*').order('pais').order('nombre'),
+      (supabase.from('empresa_config') as any).select('razon_social').limit(1).maybeSingle(),
     ])
     if (pRes.data) setPropias(pRes.data)
     if (cRes.data) setCustodia(cRes.data)
+    if (eRes?.data?.razon_social) setEmpresaNombre(eRes.data.razon_social)
     setLoading(false)
   }
 
@@ -877,6 +880,7 @@ function CuentasABM() {
         nombre: newData.nombre, tipo: newData.tipo||'banco',
         pais: newData.pais, moneda: newData.moneda,
         banco: newData.banco||null, nro_cuenta: newData.nro_cuenta||null,
+        firmante: newData.firmante||null,
         notas: newData.notas||null, saldo_inicial: 0, saldo_actual: 0, activo: true,
       })
     } else {
@@ -884,11 +888,11 @@ function CuentasABM() {
         nombre: newData.nombre, tipo: newData.tipo||'banco',
         pais: newData.pais, moneda: newData.moneda,
         banco: newData.banco||null, nro_cuenta: newData.nro_cuenta||null,
-        titular: newData.titular||null, notas: newData.notas||null, activo: true,
+        firmante: newData.firmante||null, notas: newData.notas||null, activo: true,
       })
     }
     setShowNew(false)
-    setNewData({ nombre:'', tipo:'banco', pais:'CL', moneda:'CLP', banco:'', nro_cuenta:'', titular:'', notas:'' })
+    setNewData({ nombre:'', tipo:'banco', pais:'CL', moneda:'CLP', banco:'', nro_cuenta:'', firmante:'', notas:'' })
     await load()
     setSaving(false)
   }
@@ -901,7 +905,7 @@ function CuentasABM() {
       nombre: editData.nombre, tipo: editData.tipo,
       pais: editData.pais, moneda: editData.moneda,
       banco: editData.banco||null, nro_cuenta: editData.nro_cuenta||null,
-      titular: editData.titular||null, notas: editData.notas||null,
+      firmante: editData.firmante||null, notas: editData.notas||null,
     }).eq('id', editId)
     setEditId(null)
     await load()
@@ -968,8 +972,12 @@ function CuentasABM() {
         </>
         )}
         <div className="col-span-2">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Titular (para cuentas de custodia)</label>
-          <input value={data.titular||''} onChange={e => setData((p:any)=>({...p,titular:e.target.value}))} className={inp2} placeholder="Nombre del titular"/>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Titular de la cuenta</label>
+          <div className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-gray-50 text-gray-600 flex items-center gap-1">{empresaNombre}<span className="text-gray-400">· titular legal</span></div>
+        </div>
+        <div className="col-span-2">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{data.tipo === 'caja' ? 'Responsable de la caja' : 'Firmante / Apoderado'}</label>
+          <input value={data.firmante||''} onChange={e => setData((p:any)=>({...p,firmante:e.target.value}))} className={inp2} placeholder={data.tipo === 'caja' ? 'Quién hace el arqueo y responde por la caja' : 'Nombre del firmante o apoderado de la cuenta'}/>
         </div>
         <div className="col-span-2">
           <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas</label>
@@ -1003,7 +1011,7 @@ function CuentasABM() {
           <div className="text-[10px] text-gray-400 mt-0.5 flex gap-3">
             {row.banco && <span>{row.banco}</span>}
             {row.nro_cuenta && <span className="font-mono">{row.nro_cuenta}</span>}
-            {row.titular && <span>Titular: {row.titular}</span>}
+            {row.firmante && <span>{row.tipo === 'caja' ? 'Responsable' : 'Firmante'}: {row.firmante}</span>}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
