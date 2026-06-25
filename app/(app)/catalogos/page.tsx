@@ -934,10 +934,10 @@ function CuentasABM() {
         </div>
         <div>
           <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
-          <select value={data.tipo||'banco'} onChange={e => setData((p:any)=>({...p,tipo:e.target.value}))} className={inp2}>
+          <select value={data.tipo||'banco'} onChange={e => setData((p:any)=>({...p,tipo:e.target.value, banco: e.target.value==='banco' ? p.banco : ''}))} className={inp2}>
             <option value="banco">Banco</option>
             <option value="caja">Caja / efectivo</option>
-            <option value="inversion">Inversión</option>
+            <option value="inversion">Inversión (fondos / custodia)</option>
           </select>
         </div>
         <div>
@@ -955,10 +955,12 @@ function CuentasABM() {
             <option value="USD">USD — Dólar</option>
           </select>
         </div>
+        {(data.tipo||'banco') === 'banco' && (
         <div>
           <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco / Entidad</label>
           <SelectorBanco pais={data.pais} value={data.banco||''} onChange={(n)=>setData((p:any)=>({...p,banco:n}))} className={inp2} />
         </div>
+        )}
         <div>
           <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N° Cuenta / CBU / IBAN</label>
           <input value={data.nro_cuenta||''} onChange={e => setData((p:any)=>({...p,nro_cuenta:e.target.value}))} className={inp2} placeholder="Número de cuenta"/>
