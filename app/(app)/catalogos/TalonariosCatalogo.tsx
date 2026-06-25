@@ -17,6 +17,7 @@ interface Talonario {
   longitud: number
   pais: string | null
   moneda: string | null
+  monedas_habilitadas: string[] | null
   activo: boolean
   orden: number
   notas: string | null
@@ -26,6 +27,51 @@ interface Talonario {
 function previewNumero(t: { prefijo: string | null; serie: string | null; proximo_numero: number; longitud: number }) {
   const num = t.longitud > 0 ? String(t.proximo_numero).padStart(t.longitud, '0') : String(t.proximo_numero)
   return [t.prefijo, t.serie, num].filter(Boolean).join('-')
+}
+
+const MONEDAS_DISP = ['CLP', 'USD', 'EUR', 'ARS', 'CNY']
+
+// Selector de monedas habilitadas del talonario: se marcan las permitidas y,
+// si hay más de una, se elige cuál queda por defecto al emitir. Una sola = fija.
+function SelectorMonedas({ habilitadas, porDefecto, onChange }: {
+  habilitadas: string[]; porDefecto: string; onChange: (habilitadas: string[], porDefecto: string) => void
+}) {
+  function toggle(m: string) {
+    const tenia = habilitadas.includes(m)
+    let nuevas = tenia ? habilitadas.filter(x => x !== m) : [...habilitadas, m]
+    nuevas = MONEDAS_DISP.filter(x => nuevas.includes(x)) // mantener orden
+    let def = porDefecto
+    if (tenia && porDefecto === m) def = nuevas[0] || ''   // saqué la default
+    if (!tenia && !porDefecto) def = m                      // primera marcada
+    if (def && !nuevas.includes(def)) def = nuevas[0] || ''
+    onChange(nuevas, def)
+  }
+  return (
+    <div>
+      <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Monedas habilitadas</label>
+      <div className="flex flex-wrap gap-1.5 mb-1">
+        {MONEDAS_DISP.map(m => (
+          <button type="button" key={m} onClick={() => toggle(m)}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${habilitadas.includes(m) ? 'bg-[#1168F8] text-white border-[#1168F8]' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}>
+            {m}
+          </button>
+        ))}
+      </div>
+      {habilitadas.length > 1 ? (
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-gray-400">Por defecto al emitir:</span>
+          <select value={porDefecto} onChange={e => onChange(habilitadas, e.target.value)}
+            className="text-[11px] border border-gray-200 rounded-lg px-2 py-1">
+            {habilitadas.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+      ) : habilitadas.length === 1 ? (
+        <div className="text-[10px] text-gray-400">Moneda fija: <span className="font-semibold text-gray-600">{habilitadas[0]}</span></div>
+      ) : (
+        <div className="text-[10px] text-amber-600">Sin monedas marcadas (no se podrá emitir)</div>
+      )}
+    </div>
+  )
 }
 
 export default function TalonariosCatalogo() {
@@ -67,13 +113,15 @@ export default function TalonariosCatalogo() {
 
   function empezarEdicion(t: Talonario) {
     setEditId(t.id)
-    setDraft({ nombre: t.nombre, prefijo: t.prefijo || '', serie: t.serie || '', proximo_numero: t.proximo_numero, longitud: t.longitud, activo: t.activo, notas: t.notas || '' })
+    setDraft({ nombre: t.nombre, prefijo: t.prefijo || '', serie: t.serie || '', proximo_numero: t.proximo_numero, longitud: t.longitud, moneda: t.moneda || '', monedas: t.monedas_habilitadas || [], activo: t.activo, notas: t.notas || '' })
   }
 
   async function guardarEdicion(id: string) {
     await (supabase.from('talonarios') as any).update({
       nombre: draft.nombre, prefijo: draft.prefijo || null, serie: draft.serie || null,
       proximo_numero: parseInt(draft.proximo_numero) || 1, longitud: parseInt(draft.longitud) || 0,
+      moneda: draft.moneda || null,
+      monedas_habilitadas: draft.monedas?.length ? draft.monedas : null,
       activo: draft.activo, notas: draft.notas || null,
     }).eq('id', id)
     setEditId(null); setDraft(null)
@@ -94,7 +142,7 @@ export default function TalonariosCatalogo() {
 
   function empezarNuevo() {
     setCreando(true)
-    setNuevo({ tipo_comprobante_id: '', nombre: '', prefijo: '', serie: '', proximo_numero: 1, longitud: 6, notas: '' })
+    setNuevo({ tipo_comprobante_id: '', nombre: '', prefijo: '', serie: '', proximo_numero: 1, longitud: 6, moneda: familia === 'fiscal' ? 'CLP' : '', monedas: familia === 'fiscal' ? ['CLP'] : [], notas: '' })
   }
 
   async function guardarNuevo() {
@@ -105,6 +153,8 @@ export default function TalonariosCatalogo() {
       tipo_comprobante_id: nuevo.tipo_comprobante_id, nombre: nuevo.nombre.trim(),
       fiscal: familia === 'fiscal', prefijo: nuevo.prefijo || null, serie: nuevo.serie || null,
       proximo_numero: parseInt(nuevo.proximo_numero) || 1, longitud: parseInt(nuevo.longitud) || 0,
+      moneda: nuevo.moneda || null,
+      monedas_habilitadas: nuevo.monedas?.length ? nuevo.monedas : null,
       activo: true, orden: maxOrden + 10, notas: nuevo.notas || null,
     })
     if (error) { alert('No se pudo crear: ' + error.message); return }
@@ -137,7 +187,7 @@ export default function TalonariosCatalogo() {
 
       {familia === 'fiscal' && (
         <div className="mb-4 text-[11px] text-gray-500 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5">
-          Los talonarios fiscales corresponden a folios autorizados por el SII (DTE). El número lo asigna la autoridad; acá los registrás para tener la trazabilidad de la serie.
+          Los talonarios fiscales corresponden a folios autorizados por el SII (DTE). El número lo asigna la autoridad; acá los registrás para tener la trazabilidad de la serie. Marcá las <b>monedas habilitadas</b> de cada talonario: una sola queda fija; varias se eligen al emitir (siempre sobre el mismo correlativo, el folio no se separa por moneda). Al emitir se fija el tipo de cambio del momento.
         </div>
       )}
 
@@ -166,6 +216,10 @@ export default function TalonariosCatalogo() {
               <input type="number" value={nuevo.proximo_numero} onChange={e => setNuevo({ ...nuevo, proximo_numero: e.target.value })} className={inp} /></div>
             <div className="flex items-end">
               <div className="text-[11px] text-gray-500">Vista previa: <span className="font-mono font-bold text-gray-800">{previewNumero({ prefijo: nuevo.prefijo, serie: nuevo.serie, proximo_numero: parseInt(nuevo.proximo_numero) || 1, longitud: parseInt(nuevo.longitud) || 0 })}</span></div>
+            </div>
+            <div className="col-span-2">
+              <SelectorMonedas habilitadas={nuevo.monedas || []} porDefecto={nuevo.moneda || ''}
+                onChange={(h, d) => setNuevo({ ...nuevo, monedas: h, moneda: d })} />
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
@@ -197,11 +251,17 @@ export default function TalonariosCatalogo() {
                     <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Dígitos</label>
                       <input type="number" value={draft.longitud} onChange={e => setDraft({ ...draft, longitud: e.target.value })} className={inp} /></div>
                   </div>
-                  <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Próximo número (corregible)</label>
-                    <input type="number" value={draft.proximo_numero} onChange={e => setDraft({ ...draft, proximo_numero: e.target.value })} className={inp} /></div>
-                  <div className="flex items-end justify-between">
-                    <div className="text-[11px] text-gray-500">Próximo: <span className="font-mono font-bold text-gray-800">{previewNumero({ prefijo: draft.prefijo, serie: draft.serie, proximo_numero: parseInt(draft.proximo_numero) || 1, longitud: parseInt(draft.longitud) || 0 })}</span></div>
-                    <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={draft.activo} onChange={e => setDraft({ ...draft, activo: e.target.checked })} />Activo</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Próximo número (corregible)</label>
+                      <input type="number" value={draft.proximo_numero} onChange={e => setDraft({ ...draft, proximo_numero: e.target.value })} className={inp} /></div>
+                    <div className="flex items-end justify-between">
+                      <div className="text-[11px] text-gray-500">Próximo: <span className="font-mono font-bold text-gray-800">{previewNumero({ prefijo: draft.prefijo, serie: draft.serie, proximo_numero: parseInt(draft.proximo_numero) || 1, longitud: parseInt(draft.longitud) || 0 })}</span></div>
+                      <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={draft.activo} onChange={e => setDraft({ ...draft, activo: e.target.checked })} />Activo</label>
+                    </div>
+                  </div>
+                  <div className="col-span-2">
+                    <SelectorMonedas habilitadas={draft.monedas || []} porDefecto={draft.moneda || ''}
+                      onChange={(h, d) => setDraft({ ...draft, monedas: h, moneda: d })} />
                   </div>
                   <div className="col-span-2 flex justify-end gap-2">
                     <button onClick={() => { setEditId(null); setDraft(null) }} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50">Cancelar</button>
@@ -218,7 +278,7 @@ export default function TalonariosCatalogo() {
                     <div className="text-[11px] text-gray-400 mt-0.5">{t.tipo?.nombre || 'tipo'}</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[10px] text-gray-400 uppercase">Próximo número</div>
+                    <div className="text-[10px] text-gray-400 uppercase">Próximo número{t.monedas_habilitadas?.length ? ` · ${t.monedas_habilitadas.join(' · ')}` : (t.moneda ? ` · ${t.moneda}` : '')}</div>
                     <div className="font-mono font-bold text-sm text-[#1168F8]">{previewNumero(t)}</div>
                   </div>
                   <div className="flex gap-2">
