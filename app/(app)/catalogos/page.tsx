@@ -4,9 +4,11 @@ import { createClient } from '@/lib/supabase'
 import ServiciosCatalogo from './ServiciosCatalogo'
 import TributosConfig from './TributosConfig'
 import TalonariosCatalogo from './TalonariosCatalogo'
+import EntidadesFinancierasCatalogo from './EntidadesFinancierasCatalogo'
+import SelectorBanco from './SelectorBanco'
 import { cargarPermisos, puede } from '@/lib/permisos'
 
-type Tab = 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm' | 'empresa' | 'condiciones_cotizacion' | 'servicios_deposito' | 'tributos' | 'talonarios'
+type Tab = 'puertos_china' | 'puertos_chile' | 'pasos' | 'ciudades' | 'contenedores' | 'camiones' | 'fondos' | 'bloques_cotizacion' | 'rubros_proveedor' | 'gastos_categorias' | 'cuentas_abm' | 'empresa' | 'condiciones_cotizacion' | 'servicios_deposito' | 'tributos' | 'talonarios' | 'entidades_financieras'
 
 const TABS = [
   { key: 'puertos_china', label: 'Puertos China',        icon: '🇨🇳' },
@@ -22,6 +24,7 @@ const TABS = [
   { key: 'condiciones_cotizacion', label: 'Condiciones cotización', icon: '📜' },
   { key: 'gastos_categorias',  label: 'Cat. gastos fijos',    icon: '💸' },
   { key: 'cuentas_abm',        label: 'Cuentas (caja y bancos)', icon: '🏦' },
+  { key: 'entidades_financieras', label: 'Entidades financieras', icon: '🏛️' },
   { key: 'empresa',             label: 'Datos de la empresa',    icon: '🏢' },
   { key: 'tributos',            label: 'Tributos ARCA',          icon: '🏛️' },
   { key: 'talonarios',          label: 'Talonarios',             icon: '🧾' },
@@ -33,7 +36,7 @@ const GRUPOS = [
   { titulo:'Cotizador',             icon:'🧾', color:'#7C3AED', claro:'#F1EBFD', texto:'#5B21B6', keys:['bloques_cotizacion','condiciones_cotizacion'] },
   { titulo:'Geografía y rutas',     icon:'📍', color:'#0a9e6e', claro:'#E3F6EF', texto:'#07614A', keys:['puertos_china','puertos_chile','pasos','ciudades'] },
   { titulo:'Logística',             icon:'🚛', color:'#ef9f27', claro:'#FDF3E2', texto:'#92610C', keys:['contenedores','camiones'] },
-  { titulo:'Finanzas',              icon:'💰', color:'#0d9488', claro:'#E0F5F2', texto:'#0A5F58', keys:['fondos','cuentas_abm','gastos_categorias','tributos','talonarios'] },
+  { titulo:'Finanzas',              icon:'💰', color:'#0d9488', claro:'#E0F5F2', texto:'#0A5F58', keys:['fondos','cuentas_abm','entidades_financieras','gastos_categorias','tributos','talonarios'] },
   { titulo:'Empresa',               icon:'🏢', color:'#64748b', claro:'#EEF1F5', texto:'#475569', keys:['empresa'] },
 ] as const
 const labelDe = (k:string) => TABS.find(t=>t.key===k)?.label || k
@@ -532,6 +535,7 @@ export default function CatalogosPage() {
       {tab === 'bloques_cotizacion' && <BloquesCotizacionABM />}
       {tab === 'gastos_categorias' && <GastosCatABM />}
       {tab === 'cuentas_abm' && <CuentasABM />}
+      {tab === 'entidades_financieras' && <EntidadesFinancierasCatalogo />}
       {tab === 'empresa' && <EmpresaABM />}
 
       {/* ── RUBROS DE PROVEEDOR ── */}
@@ -668,8 +672,7 @@ function FondosCuentasABM() {
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco</label>
-              <input value={form.banco || ''} onChange={e => setForm((f: any) => ({ ...f, banco: e.target.value }))}
-                className={inp} placeholder="ej. Banco Nación Argentina"/>
+              <SelectorBanco pais={form.pais} value={form.banco || ''} onChange={(n) => setForm((f: any) => ({ ...f, banco: n }))} className={inp} />
             </div>
             <div>
               <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Titular de la cuenta</label>
@@ -954,7 +957,7 @@ function CuentasABM() {
         </div>
         <div>
           <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco / Entidad</label>
-          <input value={data.banco||''} onChange={e => setData((p:any)=>({...p,banco:e.target.value}))} className={inp2} placeholder="ej. Banco Itaú"/>
+          <SelectorBanco pais={data.pais} value={data.banco||''} onChange={(n)=>setData((p:any)=>({...p,banco:n}))} className={inp2} />
         </div>
         <div>
           <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N° Cuenta / CBU / IBAN</label>
