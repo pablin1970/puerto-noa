@@ -126,10 +126,10 @@ function FormAPT({ supabase, currentUser, talonarios, operaciones, tcSnap, onSav
     let cancel = false
     ;(async () => {
       const { data: fs } = await (supabase.from('facturas_recibidas') as any)
-        .select('id,folio,fecha_emision,moneda,total,estado,estado_pago,proveedor_razon_social,via_pago')
-        .eq('operacion_id', form.operacion_id).not('estado', 'in', '("anulada")').neq('estado_pago', 'pagada')
+        .select('id,folio,fecha_emision,moneda,total,estado,estado_pago,proveedor_razon_social,via_pago, minuta_facturas(minuta:minutas(id,numero_formateado))')
+        .eq('operacion_id', form.operacion_id).eq('facturada_a', 'cliente').not('estado', 'in', '("anulada")').neq('estado_pago', 'pagada')
       if (cancel) return
-      setFacturas(fs || [])
+      setFacturas((fs || []).map((f: any) => ({ ...f, minuta: f.minuta_facturas?.[0]?.minuta || null })))
     })()
     return () => { cancel = true }
   }, [form.operacion_id])
@@ -173,6 +173,7 @@ function FormAPT({ supabase, currentUser, talonarios, operaciones, tcSnap, onSav
       for (const f of seleccionadas) {
         await (supabase.from('comprobantes_tesoreria_imputaciones') as any).insert({
           comprobante_id: comp.id, factura_recibida_id: f.id, monto: Number(f.total) || 0, monto_usd: aUSD(Number(f.total) || 0, f.moneda, tcSnap),
+          minuta_id: f.minuta?.id || null,
         })
         await (supabase.from('facturas_recibidas') as any).update({ estado: 'pagada', estado_pago: 'pagada', fecha_pago: form.fecha }).eq('id', f.id)
       }
@@ -217,7 +218,7 @@ function FormAPT({ supabase, currentUser, talonarios, operaciones, tcSnap, onSav
                   <input type="checkbox" checked={!!sel[f.id]} onChange={e => setSel(prev => ({ ...prev, [f.id]: e.target.checked }))} />
                   <div className="flex-1">
                     <div className="text-xs font-semibold">{f.folio ? `Folio ${f.folio}` : '(s/folio)'} <span className="text-gray-400">· {f.proveedor_razon_social}</span></div>
-                    <div className="text-[10px] text-gray-400">{f.fecha_emision} · {f.estado_pago === 'minuta_emitida' ? 'minuta emitida' : 'impaga'}</div>
+                    <div className="text-[10px] text-gray-400">{f.fecha_emision} · {f.minuta ? <span className="text-[#7C3AED] font-semibold">📄 Minuta {f.minuta.numero_formateado}</span> : (f.estado_pago === 'minuta_emitida' ? 'minuta emitida' : 'impaga')}</div>
                   </div>
                   <div className="font-mono font-semibold text-xs">{f.moneda} {fmt(f.total)}</div>
                 </label>
@@ -258,7 +259,7 @@ function DetalleAPT({ apt, supabase }: any) {
   useEffect(() => {
     (async () => {
       const { data } = await (supabase.from('comprobantes_tesoreria_imputaciones') as any)
-        .select('*, factura:facturas_recibidas(folio,proveedor_razon_social,total)').eq('comprobante_id', apt.id)
+        .select('*, factura:facturas_recibidas(folio,proveedor_razon_social,total), minuta:minutas(numero_formateado)').eq('comprobante_id', apt.id)
       setImps(data || [])
     })()
   }, [apt.id])
@@ -290,7 +291,7 @@ function DetalleAPT({ apt, supabase }: any) {
           <div className="space-y-1.5">
             {imps.map((i: any) => (
               <div key={i.id} className="flex justify-between text-xs border-b border-gray-50 pb-1.5">
-                <span className="text-gray-700">{i.factura?.folio ? `Folio ${i.factura.folio}` : 'factura'} <span className="text-gray-400">· {i.factura?.proveedor_razon_social}</span></span>
+                <span className="text-gray-700">{i.factura?.folio ? `Folio ${i.factura.folio}` : 'factura'} <span className="text-gray-400">· {i.factura?.proveedor_razon_social}</span>{i.minuta ? <span className="text-[#7C3AED] font-medium"> · 📄 Minuta {i.minuta.numero_formateado}</span> : ''}</span>
                 <span className="font-mono font-semibold">{fmt(i.monto)}</span>
               </div>
             ))}
