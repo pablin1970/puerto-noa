@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { abrirConMarca } from '@/lib/documentos'
 import { imprimirComprobante } from '@/lib/comprobantePrint'
 
 const AZUL = '#1168F8'
@@ -435,11 +436,10 @@ function DetalleRecibo({ recibo, supabase, onBack }: any) {
     })()
   }, [recibo.id])
 
-  async function abrir() {
+  function abrir() {
     if (!recibo.archivo_url) return
     setAbriendo(true)
-    const { data } = await supabase.storage.from('comprobantes').createSignedUrl(recibo.archivo_url, 120)
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+    abrirConMarca('comprobantes', recibo.archivo_url)
     setAbriendo(false)
   }
 
