@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt, ETAPAS_L, ETAPAS_ORD } from '@/lib/utils'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { abrirConMarca } from '@/lib/documentos'
 import ModalAgregarItemCatalogo from '@/components/ModalAgregarItemCatalogo'
 import ModalAgregarCategoriaGasto from '@/components/ModalAgregarCategoriaGasto'
 
@@ -464,11 +465,10 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, cat
     setUploadingDoc(false)
   }
 
-  // Abre el adjunto recién subido generando una signed URL temporal desde el path
-  async function verPreview() {
+  // Abre el adjunto recién subido pasando por el motor de marca de agua.
+  function verPreview() {
     if (!docPath) return
-    const { data } = await supabase.storage.from('facturas').createSignedUrl(docPath, 3600)
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+    abrirConMarca('facturas', docPath)
   }
 
   async function guardar() {
@@ -983,11 +983,12 @@ function DetalleFacturaRecibida({ factura, supabase, permisos, operaciones, onRe
   // Bucket privado: la signed URL se genera al vuelo desde el PATH guardado en archivo_url.
   async function abrirArchivo(descargar: boolean) {
     if (!factura.archivo_url || abriendo) return
+    // Ver pasa por el motor de marca de agua; descargar entrega el original limpio.
+    if (!descargar) { abrirConMarca('facturas', factura.archivo_url); return }
     setAbriendo(true)
     try {
-      const opts = descargar ? { download: factura.archivo_nombre || 'factura' } : undefined
-      const { data, error } = await supabase.storage.from('facturas').createSignedUrl(factura.archivo_url, 3600, opts)
-      if (error || !data?.signedUrl) { alert('No se pudo abrir el archivo'); return }
+      const { data, error } = await supabase.storage.from('facturas').createSignedUrl(factura.archivo_url, 3600, { download: factura.archivo_nombre || 'factura' })
+      if (error || !data?.signedUrl) { alert('No se pudo descargar el archivo'); return }
       window.open(data.signedUrl, '_blank')
     } finally { setAbriendo(false) }
   }
