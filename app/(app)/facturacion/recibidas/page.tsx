@@ -109,7 +109,7 @@ export default function FacturasRecibidasPage() {
       supabase.from('tipos_comprobante').select('*').eq('activo', true)
         .in('ambito', ['recibido', 'ambos']).order('orden', { ascending: true }),
       supabase.from('gastos_fijos_categorias').select('id,nombre,codigo,orden').eq('activo', true).order('orden', { ascending: true }),
-      (supabase.from('tipos_cambio_eventos') as any).select('fecha, fuente, ars, clp, cny').order('created_at', { ascending: false }).limit(1),
+      (supabase.from('tipos_cambio_eventos') as any).select('fecha, fuente, ars, clp, cny, clp_fiscal').order('created_at', { ascending: false }).limit(1),
     ])
     if (fRes.data) setFacturas(fRes.data as FacturaRecibida[])
     if (tRes.data) setTerceros(tRes.data)
@@ -120,7 +120,7 @@ export default function FacturasRecibidasPage() {
     if (tceRes.data?.[0]) {
       const tce: any = tceRes.data[0]
       setTcGasto({ usd: tce.clp || 908, ars: tce.ars || 0 })
-      setTcSnap({ fecha: tce.fecha, fuente: tce.fuente || null, USD: 1, ARS: Number(tce.ars) || null, CLP: Number(tce.clp) || null, CNY: Number(tce.cny) || null })
+      setTcSnap({ fecha: tce.fecha, fuente: tce.fuente || null, USD: 1, ARS: Number(tce.ars) || null, CLP: Number(tce.clp) || null, CNY: Number(tce.cny) || null, CLP_FISCAL: Number(tce.clp_fiscal) || null })
     }
     setLoading(false)
   }
@@ -334,6 +334,28 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, cat
   // Comprobante elegido (del catálogo de comprobantes)
   const comp = tiposComp?.find((c: any) => c.id === form.tipo_comprobante_id) || null
 
+  // USD → el SII obliga al dólar OBSERVADO (BCCh) de la FECHA DE EMISIÓN del documento del proveedor.
+  // Es el TC con que se contabiliza (valorización CLP para Renta; y crédito fiscal IVA cuando aplica).
+  // Las facturas del exterior no llevan IVA chileno: igual se valorizan al observado de su fecha.
+  const esUSD = form.moneda === 'USD'
+  const [tcFiscal, setTcFiscal] = useState<number | null>(null)
+  const [cargandoFiscal, setCargandoFiscal] = useState(false)
+  useEffect(() => {
+    if (!esUSD || !form.fecha_emision) { setTcFiscal(null); return }
+    let cancel = false
+    ;(async () => {
+      setCargandoFiscal(true)
+      const { data } = await (supabase as any).rpc('get_tc_fiscal', { p_fecha: form.fecha_emision })
+      if (!cancel) {
+        const v = Number(data) || null
+        setTcFiscal(v)
+        if (v) setForm(f => ({ ...f, tc_referencia: String(v) }))
+      }
+      setCargandoFiscal(false)
+    })()
+    return () => { cancel = true }
+  }, [esUSD, form.fecha_emision])
+
   // Catálogo filtrado por los rubros del proveedor, agrupado por rubro (para el selector de ítems)
   const rubrosCodigos = rubrosProv.map(r => r.codigo)
   const catalogoFiltrado = (catalogo || []).filter((c: any) => rubrosCodigos.includes(c.rubro))
@@ -501,7 +523,7 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, cat
     const { tipo_comprobante_id, caracterizacion, ref_tipo, ref_folio, nro_ingreso, ...formRest } = form
     await (supabase.from('facturas_recibidas') as any).insert({
       ...formRest, tc_referencia: tcRef,
-      tc_snapshot: tcSnap || null,
+      tc_snapshot: tcSnap ? { ...tcSnap, tc_aplicado: esUSD ? 'fiscal' : 'comercial', tc_referencia_usado: tcRef } : null,
       tipo_comprobante_id, caracterizacion,
       destino,
       operacion_id: esGasto ? null : (formRest.operacion_id || null),
@@ -587,9 +609,16 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, cat
             </select>
           </div>
           {form.moneda !== 'CLP' && (
-            <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">TC referencia</label>
-              <input value={form.tc_referencia} onChange={e => setForm(f => ({ ...f, tc_referencia: e.target.value }))} className={inp} placeholder="ej. 950" />
-            </div>
+            esUSD ? (
+              <div><label className="block text-[10px] font-semibold mb-1 uppercase" style={{ color: '#7C3AED' }}>TC fiscal · BCCh observado (SII)</label>
+                <input type="text" readOnly value={cargandoFiscal ? 'cargando…' : (tcFiscal ? String(tcFiscal) : 'sin dato')} className={inp + ' font-mono font-bold cursor-not-allowed'} style={{ color: '#7C3AED', background: '#F3EEFF' }} />
+                <p className="text-[9px] text-gray-400 mt-1 leading-tight">Dólar observado del {form.fecha_emision ? form.fecha_emision.split('-').reverse().join('/') : '—'} (fecha de emisión del proveedor). Con este TC se contabiliza ante el SII (no editable).</p>
+              </div>
+            ) : (
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">TC referencia</label>
+                <input value={form.tc_referencia} onChange={e => setForm(f => ({ ...f, tc_referencia: e.target.value }))} className={inp} placeholder="ej. 950" />
+              </div>
+            )
           )}
           <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Vencimiento</label>
             <input type="date" value={form.fecha_vencimiento} onChange={e => setForm(f => ({ ...f, fecha_vencimiento: e.target.value }))} className={inp} />
@@ -802,6 +831,12 @@ function FormFacturaRecibida({ supabase, currentUser, terceros, operaciones, cat
               <span>TOTAL {form.moneda}</span>
               <span className="font-mono text-[#052698]">{fmtCLP(totales.total)}</span>
             </div>
+            {esUSD && tcFiscal && totales.total > 0 && (
+              <div className="flex justify-between text-[10px]" style={{ color: '#7C3AED' }}>
+                <span>Equiv. CLP (TC fiscal {tcFiscal})</span>
+                <span className="font-mono">$ {fmtCLP(totales.total * tcFiscal)}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
