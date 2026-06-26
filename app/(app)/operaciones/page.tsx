@@ -5,6 +5,7 @@ import { fmt, ETAPAS_L, ETAPAS_ORD, nowDate } from '@/lib/utils'
 import type { Cotizacion, Operacion } from '@/types'
 import { useSearchParams } from 'next/navigation'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { urlVerConMarca } from '@/lib/documentos'
 
 type Tab = 'resumen' | 'facturas' | 'comparativo' | 'caja' | 'cierre' | 'minuta' | 'documentos'
 
@@ -291,14 +292,13 @@ function FacturasTab({ facturas, cot, tipoOp, permisos, reload }: {
 }) {
   const supabase = createClient()
   const [previewModal, setPreviewModal] = useState<{ url: string; nombre: string; tipo: string } | null>(null)
-  const puedeVer = puede(permisos, 'operaciones', 'ver')
+  // El comprobante pertenece al módulo de la factura (emitida/recibida), no a 'operaciones'.
+  const puedeVerFactura = (f: FacturaOp) => puede(permisos, f.origen === 'emitida' ? 'facturas_emitidas' : 'facturas_recibidas', 'ver')
 
   async function verArchivo(f: FacturaOp) {
     if (!f.archivo_url) return
     const bucket = f.origen === 'emitida' ? 'comprobantes' : 'facturas'
-    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(f.archivo_url, 3600)
-    if (error || !data?.signedUrl) { alert('No se pudo abrir el archivo'); return }
-    setPreviewModal({ url: data.signedUrl, nombre: f.archivo_nombre || 'documento', tipo: f.archivo_nombre?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'img' })
+    setPreviewModal({ url: urlVerConMarca(bucket, f.archivo_url), nombre: f.archivo_nombre || 'documento', tipo: f.archivo_nombre?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'img' })
   }
 
   const totalGasto = facturas.filter(f => f.origen === 'recibida').reduce((s, f) => s + usdDe(f), 0)
@@ -367,7 +367,7 @@ function FacturasTab({ facturas, cot, tipoOp, permisos, reload }: {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {f.archivo_url && puedeVer
+                    {f.archivo_url && puedeVerFactura(f)
                       ? <button onClick={() => verArchivo(f)} className="px-1.5 py-0.5 bg-[#EBF2FF] text-[#1168F8] rounded text-[9px]">📄 Ver</button>
                       : f.origen === 'emitida'
                         ? <span className="text-[9px] text-gray-300">emitido PN</span>
@@ -481,16 +481,15 @@ function CajaRendirTab({ opId, cotNum, movs, saldo, permisos }: {
 }) {
   const supabase = createClient()
   const [previewModal, setPreviewModal] = useState<{ url: string; nombre: string; tipo: string } | null>(null)
-  const puedeVer = puede(permisos, 'operaciones', 'ver')
+  // El comprobante de caja a rendir pertenece a Fondos en custodia, no a 'operaciones'.
+  const puedeVer = puede(permisos, 'fondos_custodia', 'ver')
 
   const ingresos = movs.filter(m => MOV_INGRESO.includes(m.tipo)).reduce((s, m) => s + m.usd, 0)
   const egresos = movs.filter(m => MOV_EGRESO.includes(m.tipo)).reduce((s, m) => s + m.usd, 0)
 
   async function verComp(m: FondoMov) {
     if (!m.comprobante_url) return
-    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(m.comprobante_url, 3600)
-    if (error || !data?.signedUrl) { alert('No se pudo abrir el comprobante'); return }
-    setPreviewModal({ url: data.signedUrl, nombre: m.comprobante_nombre || 'comprobante', tipo: m.comprobante_nombre?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'img' })
+    setPreviewModal({ url: urlVerConMarca('comprobantes', m.comprobante_url), nombre: m.comprobante_nombre || 'comprobante', tipo: m.comprobante_nombre?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'img' })
   }
 
   const TIPO_L: Record<string, string> = {
@@ -991,9 +990,7 @@ function DocumentosTab({ opId, docs, reload, permisos }: { opId: string; docs: a
 
   async function verDoc(doc: any) {
     if (!doc.archivo_url) return
-    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(doc.archivo_url, 3600)
-    if (error || !data?.signedUrl) { alert('No se pudo abrir el documento'); return }
-    setPreviewModal({ url: data.signedUrl, nombre: doc.archivo_nombre, tipo: doc.archivo_nombre?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'img' })
+    setPreviewModal({ url: urlVerConMarca('comprobantes', doc.archivo_url), nombre: doc.archivo_nombre, tipo: doc.archivo_nombre?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'img' })
   }
 
   async function descargarDoc(doc: any) {
