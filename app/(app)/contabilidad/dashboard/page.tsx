@@ -77,7 +77,7 @@ export default function DashboardFinancieroPage() {
   async function load() {
     setLoading(true)
     const hoy = new Date(); const isoHoy = hoy.toISOString().slice(0, 10)
-    const [tcRes, utilRes, ivavRes, ivacRes, feRes, frRes, gfRes, gcRes, cpRes, fmRes, terRes] = await Promise.all([
+    const [tcRes, utilRes, ivavRes, ivacRes, feRes, frRes, gfRes, gcRes, cpRes, fmRes, terRes, dcRes] = await Promise.all([
       supabase.from('tipos_cambio_eventos').select('clp,ars,created_at').order('created_at', { ascending: false }).limit(1),
       (supabase.from('utilidad_operacion') as any).select('ingresos_usd,costos_proveedor_usd,margen_bruto_usd,fecha_cierre'),
       (supabase.from('libro_iva_ventas') as any).select('iva_clp').eq('anio', anio).eq('mes', mes),
@@ -89,6 +89,7 @@ export default function DashboardFinancieroPage() {
       (supabase.from('cuentas_pn') as any).select('moneda,saldo_actual,activo').eq('activo', true),
       supabase.from('fondos_movimientos').select('tipo,usd'),
       supabase.from('terceros').select('id,razon_social'),
+      (supabase.from('notas_diferencia_cambio') as any).select('tipo,monto_clp,fecha').eq('afecta_resultado', true).eq('estado', 'confirmada').gte('fecha', `${anio}-01-01`).lte('fecha', `${anio}-12-31`),
     ])
 
     const tc = (tcRes.data?.[0] as any) || {}
@@ -111,6 +112,10 @@ export default function DashboardFinancieroPage() {
     const gastosYTDclp = gf.filter(g => g.periodo_anio === anio).reduce((t, g) => t + (g.monto_clp_equiv || 0), 0)
     const gastosYTDusd = gastosYTDclp / tcClp
     const margenNetoYTD = margenBrutoYTD - gastosYTDusd
+    // Diferencia de cambio del ejercicio (resultado financiero): débito suma, crédito resta. CLP→USD.
+    const dcYTDclp = ((dcRes.data || []) as any[]).reduce((t: number, n: any) => t + (n.tipo === 'debito' ? 1 : -1) * (Number(n.monto_clp) || 0), 0)
+    const difCambioYTD = dcYTDclp / tcClp
+    const resultadoEjercicio = margenNetoYTD + difCambioYTD   // alineado con la pantalla Resultados
     const margenPct = ingresosYTD > 0 ? margenNetoYTD / ingresosYTD * 100 : 0
     const margenBrutoPct = ingresosYTD > 0 ? margenBrutoYTD / ingresosYTD * 100 : 0
 
@@ -174,6 +179,7 @@ export default function DashboardFinancieroPage() {
     setD({
       tcClp, tcArs, tcOk,
       ingresosYTD, costosYTD, margenBrutoYTD, margenNetoYTD, margenPct, margenBrutoPct, gastosYTDusd, opsCerradas,
+      difCambioYTD, resultadoEjercicio,
       ivaVentas, ivaCompras, ivaSaldo,
       porCobrar, porPagar, posNeta: porCobrar - porPagar, agCobrar, agPagar, topDeudores,
       recCobrado, recPagado, markup,
@@ -211,16 +217,17 @@ export default function DashboardFinancieroPage() {
       {/* HERO Resultado */}
       <div className="rounded-3xl p-6 mb-4 text-white grid gap-5" style={{ gridTemplateColumns: '1.3fr 1fr', background: 'linear-gradient(135deg,#1168F8 0%,#052698 100%)', boxShadow: '0 8px 24px rgba(17,104,248,.22)' }}>
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-wider opacity-75">Margen neto · año en curso</div>
-          <div className="font-extrabold font-mono" style={{ fontSize: 40, marginTop: 4 }}>{fmtUSDk(d.margenNetoYTD)}</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider opacity-75">Resultado del ejercicio · año en curso</div>
+          <div className="font-extrabold font-mono" style={{ fontSize: 40, marginTop: 4 }}>{fmtUSDk(d.resultadoEjercicio)}</div>
           <div className="flex gap-2 mt-2 flex-wrap">
             <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: 'rgba(255,255,255,.16)' }}>{d.margenPct >= 0 ? '▲' : '▼'} {Math.abs(d.margenPct).toFixed(1)}% margen</span>
             <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: 'rgba(255,255,255,.16)' }}>{d.opsCerradas} operaciones cerradas</span>
           </div>
-          <div className="flex gap-6 mt-5">
+          <div className="flex gap-6 mt-5 flex-wrap">
             <div><div className="text-[10px] opacity-70 uppercase tracking-wide">Margen bruto</div><div className="font-extrabold font-mono" style={{ fontSize: 19, marginTop: 2 }}>{fmtUSDk(d.margenBrutoYTD)}</div></div>
             <div><div className="text-[10px] opacity-70 uppercase tracking-wide">Gastos fijos</div><div className="font-extrabold font-mono" style={{ fontSize: 19, marginTop: 2 }}>{fmtUSDk(d.gastosYTDusd)}</div></div>
-            <div><div className="text-[10px] opacity-70 uppercase tracking-wide">Ingresos</div><div className="font-extrabold font-mono" style={{ fontSize: 19, marginTop: 2 }}>{fmtUSDk(d.ingresosYTD)}</div></div>
+            <div><div className="text-[10px] opacity-70 uppercase tracking-wide">Margen neto</div><div className="font-extrabold font-mono" style={{ fontSize: 19, marginTop: 2 }}>{fmtUSDk(d.margenNetoYTD)}</div></div>
+            <div><div className="text-[10px] opacity-70 uppercase tracking-wide">± Dif. cambio</div><div className="font-extrabold font-mono" style={{ fontSize: 19, marginTop: 2, color: d.difCambioYTD < 0 ? '#FCA5A5' : '#7CF5C4' }}>{d.difCambioYTD < 0 ? '−' : '+'}{fmtUSDk(Math.abs(d.difCambioYTD))}</div></div>
           </div>
         </div>
         <div className="rounded-2xl p-4 flex items-center gap-4" style={{ background: 'rgba(255,255,255,.1)' }}>
