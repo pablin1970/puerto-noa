@@ -240,5 +240,135 @@ export default function TiposCambioPage() {
   const brechaCLP = brechaPct(vigente.clp, vigente.clpFiscal)
 
   if (permListos && !puede(permisos, 'tipos_cambio', 'ver')) {
-    return (
-      <div className="p-6 bg-gray-50 min-h-screen
+  return (
+      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-3">🔒</div>
+          <h2 className="text-lg font-bold text-gray-700">Sin acceso</h2>
+          <p className="text-sm text-gray-400 mt-1">No tenés permiso para ver esta sección. Si creés que es un error, contactá al administrador.</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Tipos de cambio</h1>
+          <p className="text-xs text-gray-400 mt-0.5">TC comercial (mercado) y fiscal (BCCh observado · SII) · Actualizacion automatica · Historial</p>
+        </div>
+        <div className="bg-white border border-gray-100 rounded-xl px-4 py-2.5 shadow-sm text-right">
+          <div className="text-xs font-semibold text-gray-700 capitalize">{hoy}</div>
+          <div className="text-[10px] text-gray-400 mt-0.5">Fecha de referencia del sistema</div>
+        </div>
+      </div>
+
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm mb-6 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between" style={{ background: '#052698' }}>
+          <div>
+            <div className="font-bold text-white text-sm">Tipos de cambio vigentes</div>
+            <div className="text-blue-200 text-[10px] mt-0.5">Ultima actualizacion: {vigente.fecha || '-'}</div>
+          </div>
+          <button disabled={actualizando} onClick={() => actualizarDesdeAPI('forzado')}
+            className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-colors border border-white/20 disabled:opacity-50">
+            {actualizando ? 'Consultando APIs...' : 'Actualizar todo desde APIs'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-3 divide-x divide-gray-100">
+          {[
+            { moneda: 'ARS', flag: '🇦🇷', label: 'Peso argentino', banco: 'BNA', valor: vigente.ars, edit: editARS, setEdit: setEditARS, color: '#1168F8', decimals: 0 },
+            { moneda: 'CLP', flag: '🇨🇱', label: 'Peso chileno', banco: 'BCCh', valor: vigente.clp, edit: editCLP, setEdit: setEditCLP, color: '#dc2626', decimals: 0 },
+            { moneda: 'CNY', flag: '🇨🇳', label: 'Yuan chino', banco: 'PBoC', valor: vigente.cny, edit: editCNY, setEdit: setEditCNY, color: '#b45309', decimals: 4 },
+          ].map(({ moneda, flag, label, banco, valor, edit, setEdit, color, decimals }) => (
+            <div key={moneda} className="px-6 py-5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xl">{flag}</span>
+                <div>
+                  <div className="font-bold text-sm" style={{ color }}>USD a {moneda}</div>
+                  <div className="text-[10px] text-gray-400">{label} - {banco}</div>
+                </div>
+              </div>
+              {moneda === 'CLP' && (
+                <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">Comercial · mercado</div>
+              )}
+              <div className="text-3xl font-black font-mono mb-3" style={{ color }}>
+                {valor !== null ? fmt(valor, decimals) : '-'}
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="text" inputMode="decimal" value={edit}
+                  onChange={e => setEdit(e.target.value)} onFocus={e => e.target.select()}
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono font-bold text-right focus:outline-none focus:border-[#1168F8]"
+                  placeholder="0.00" />
+              </div>
+
+              {moneda === 'CLP' && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#7C3AED' }}>Fiscal · BCCh observado (SII)</div>
+                    {brechaCLP !== null && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#F3EEFF', color: '#7C3AED' }}>
+                        brecha {brechaCLP > 0 ? '+' : ''}{brechaCLP.toFixed(2)}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-2xl font-black font-mono mb-3" style={{ color: '#7C3AED' }}>
+                    {vigente.clpFiscal !== null ? fmt(vigente.clpFiscal, 0) : '-'}
+                  </div>
+                  <input type="text" inputMode="decimal" value={editCLPFiscal}
+                    onChange={e => setEditCLPFiscal(e.target.value)} onFocus={e => e.target.select()}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono font-bold text-right focus:outline-none focus:border-[#7C3AED]"
+                    placeholder="0" />
+                  <div className="text-[9px] text-gray-400 mt-1.5 leading-tight">
+                    Este es el valor que exige el SII para facturar en USD.
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+          <div className="text-[10px] text-gray-400">Edita los valores que quieras (incluido el fiscal) y haz click en Guardar.</div>
+          <button disabled={guardando} onClick={guardarManual}
+            className="flex items-center gap-2 px-5 py-2 bg-gray-800 text-white rounded-xl text-xs font-bold hover:bg-gray-700 disabled:opacity-50 transition-colors">
+            {guardando ? 'Guardando...' : 'Guardar cambios manuales'}
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <span className="font-bold text-sm text-gray-900">Historial</span>
+            <span className="text-xs text-gray-400 ml-2">{eventosFiltrados.length} evento(s)</span>
+          </div>
+          <div className="flex gap-2 flex-wrap items-center">
+            <select value={filtroFuente} onChange={e => setFiltroFuente(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
+              <option value="">Todos</option>
+              <option value="manual">Manual</option>
+              <option value="automatico">Automatico</option>
+              <option value="forzado">Forzado</option>
+            </select>
+            <input type="date" value={filtroDesde} onChange={e => setFiltroDesde(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8]" />
+            <span className="text-gray-300">-</span>
+            <input type="date" value={filtroHasta} onChange={e => setFiltroHasta(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8]" />
+            {(filtroDesde || filtroHasta || filtroFuente) && (
+              <button onClick={() => { setFiltroDesde(''); setFiltroHasta(''); setFiltroFuente('') }}
+                className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-500 hover:bg-gray-50">X</button>
+            )}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center text-gray-400">Cargando...</div>
+        ) : eventosFiltrados.length === 0 ? (
+          <div className="p-8 text-center text-gray-400 text-sm">Sin registros.</div>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-gray-50 border-b
