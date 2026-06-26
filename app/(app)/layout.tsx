@@ -104,6 +104,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})  // modulo → acciones permitidas
   const [esSuper, setEsSuper] = useState(false)
   const [rolNombre, setRolNombre] = useState('')
+  const [tc, setTc] = useState<TCWidget>({ ARS: null, CLP: null, CLPFiscal: null, CNY: null, fecha: '', hora: '', fuente: '' })
   const [modulosNuevosCount, setModulosNuevosCount] = useState(0)
   const [collapsed, setCollapsed] = useState(false)
   const supabase = useMemo(() => createClient(), [])
@@ -174,11 +175,11 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('tipos_cambio_eventos')
-        .select('ars, clp, cny, fecha, fuente, created_at')
+        .select('ars, clp, clp_fiscal, cny, fecha, fuente, created_at')
         .order('created_at', { ascending: false })
         .limit(10)
       if (error || !data || data.length === 0) return
-      const latest: TCWidget = { ARS: null, CLP: null, CNY: null, fecha: '', hora: '', fuente: '' }
+      const latest: TCWidget = { ARS: null, CLP: null, CLPFiscal: null, CNY: null, fecha: '', hora: '', fuente: '' }
       for (const ev of data as any[]) {
         if (latest.ARS === null && ev.ars !== null) {
           latest.ARS = ev.ars
@@ -189,6 +190,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           }
         }
         if (latest.CLP === null && ev.clp !== null) latest.CLP = ev.clp
+        if (latest.CLPFiscal === null && ev.clp_fiscal !== null) latest.CLPFiscal = ev.clp_fiscal
         if (latest.CNY === null && ev.cny !== null) latest.CNY = ev.cny
         if (latest.ARS !== null && latest.CLP !== null && latest.CNY !== null) break
       }
