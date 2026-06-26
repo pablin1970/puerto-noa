@@ -518,8 +518,8 @@ function CajaRendirTab({ opId, cotNum, movs, saldo, permisos }: {
 
       <style>{`@media print { body * { visibility: hidden; } #rend-print, #rend-print * { visibility: visible; } #rend-print { position: absolute; left: 0; top: 0; width: 100%; } .no-print { display: none !important; } @page { margin: 10mm 12mm; size: A4 portrait; } }`}</style>
       <div className="no-print flex justify-end mb-3">
-        <button onClick={() => { const t = document.title; document.title = `Rendicion_${cotNum}`; window.print(); document.title = t }}
-          className="flex items-center gap-1.5 px-4 py-2 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF]">🖨 Imprimir rendición</button>
+        {puede(permisos,'fondos_custodia','descargar') && <button onClick={() => { const t = document.title; document.title = `Rendicion_${cotNum}`; window.print(); document.title = t }}
+          className="flex items-center gap-1.5 px-4 py-2 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF]">🖨 Imprimir rendición</button>}
       </div>
 
       <div id="rend-print" className="bg-white border border-gray-100 rounded-xl overflow-hidden">
@@ -836,7 +836,7 @@ function MinutaTab({ opId, cotNum, cliente, permisos }: { opId: string; cotNum: 
       {minutas.length === 0 ? (
         <div className="text-center text-gray-400 text-xs py-8">No hay minutas emitidas en esta operación.</div>
       ) : (
-        minutas.map((m: any) => <MinutaDoc key={m.id} m={m} cotNum={cotNum} cliente={cliente} />)
+        minutas.map((m: any) => <MinutaDoc key={m.id} m={m} cotNum={cotNum} cliente={cliente} permisos={permisos} />)
       )}
 
       {addCta && (
@@ -864,7 +864,7 @@ function MinutaTab({ opId, cotNum, cliente, permisos }: { opId: string; cotNum: 
 }
 
 // Documento imprimible de una minuta emitida
-function MinutaDoc({ m, cotNum, cliente }: { m: any; cotNum: string; cliente: string }) {
+function MinutaDoc({ m, cotNum, cliente, permisos }: { m: any; cotNum: string; cliente: string; permisos: Record<string, string[]> }) {
   const fecha = m.fecha ? m.fecha.split('-').reverse().join('/') : ''
   const cta = m.cuenta
   const printId = `minuta-print-${m.id}`
@@ -873,8 +873,8 @@ function MinutaDoc({ m, cotNum, cliente }: { m: any; cotNum: string; cliente: st
       <style>{`@media print { body * { visibility: hidden; } #${printId}, #${printId} * { visibility: visible; } #${printId} { position: absolute; left: 0; top: 0; width: 100%; } .no-print { display: none !important; } @page { margin: 10mm 12mm; size: A4 portrait; } }`}</style>
       <div className="no-print flex items-center justify-between mb-2">
         <span className="text-xs text-gray-600 font-semibold">Minuta {m.numero_formateado} · {m.tercero?.razon_social || ''} · {fecha}</span>
-        <button onClick={() => { const t = document.title; document.title = `Minuta_${m.numero_formateado}`; window.print(); document.title = t }}
-          className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF]">🖨 Imprimir / PDF</button>
+        {puede(permisos,'operaciones','descargar') && <button onClick={() => { const t = document.title; document.title = `Minuta_${m.numero_formateado}`; window.print(); document.title = t }}
+          className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF]">🖨 Imprimir / PDF</button>}
       </div>
       <div id={printId} className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-4">
         <div className="flex items-start justify-between px-6 py-5 border-b-2 border-[#1168F8]">
