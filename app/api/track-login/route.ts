@@ -20,14 +20,15 @@ export async function POST(request: Request) {
     const ip = forwarded ? forwarded.split(',')[0].trim() : request.headers.get('x-real-ip') || 'unknown'
     const userAgent = request.headers.get('user-agent') || ''
 
-    // Geolocate IP
-    let ciudad = '', pais = '', paisCodigo = ''
+    // Geolocate IP (incluye región)
+    let ciudad = '', region = '', pais = '', paisCodigo = ''
     if (ip && ip !== 'unknown' && ip !== '127.0.0.1' && !ip.startsWith('192.168')) {
       try {
-        const geo = await fetch(`http://ip-api.com/json/${ip}?fields=city,country,countryCode&lang=es`)
+        const geo = await fetch(`http://ip-api.com/json/${ip}?fields=city,regionName,country,countryCode&lang=es`)
         if (geo.ok) {
           const geoData = await geo.json()
           ciudad = geoData.city || ''
+          region = geoData.regionName || ''
           pais = geoData.country || ''
           paisCodigo = geoData.countryCode || ''
         }
@@ -40,17 +41,17 @@ export async function POST(request: Request) {
     await fetch(`${url}/rest/v1/login_historial`, {
       method: 'POST',
       headers: { ...headers, 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ usuario_id, ip, ciudad, pais, pais_codigo: paisCodigo, user_agent: userAgent })
+      body: JSON.stringify({ usuario_id, ip, ciudad, region, pais, pais_codigo: paisCodigo, user_agent: userAgent })
     })
 
     // Update last login on usuario
     await fetch(`${url}/rest/v1/usuarios?id=eq.${usuario_id}`, {
       method: 'PATCH',
       headers: { ...headers, 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ last_login_at: now, last_login_ip: ip, last_login_ciudad: ciudad, last_login_pais: pais })
+      body: JSON.stringify({ last_login_at: now, last_login_ip: ip, last_login_ciudad: ciudad, last_login_region: region, last_login_pais: pais })
     })
 
-    return NextResponse.json({ ok: true, ip, ciudad, pais })
+    return NextResponse.json({ ok: true, ip, ciudad, region, pais })
   } catch (e) {
     return NextResponse.json({ error: 'Error tracking login' }, { status: 500 })
   }
