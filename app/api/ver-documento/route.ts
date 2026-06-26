@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
         const offset = (fila % 2) * (stepX / 2)
         for (let x = -stepX; x < width + stepX; x += stepX) {
           page.drawText(sello, {
-            x: x + offset, y, size, font, color: rojo, opacity: 0.16, rotate: degrees(35),
+            x: x + offset, y, size, font, color: rojo, opacity: 0.35, rotate: degrees(35),
           })
         }
         fila++
