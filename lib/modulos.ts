@@ -59,9 +59,9 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
       { modulo: 'facturas_emitidas_anular', label: '→ Solicitar anulación / NC', acciones: ['solicitar'], subitem: true },
       { modulo: 'facturas_emitidas_autorizar', label: '→ Autorizar anulaciones / NC', acciones: ['ver','autorizar'], subitem: true },
       { modulo: 'facturas_recibidas',       label: 'Facturas recibidas',      acciones: ['ver','crear','editar','eliminar','descargar'] },
-      { modulo: 'cte_clientes',             label: 'Cta. cte. clientes',      acciones: ['ver','crear','editar','descargar'] },
+      { modulo: 'cte_clientes',             label: 'Cta. cte. clientes',      acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'cte_clientes_cobro',       label: '→ Registrar cobro',       acciones: ['ver','crear'], subitem: true },
-      { modulo: 'cte_proveedores',          label: 'Cta. cte. proveedores',   acciones: ['ver','crear','editar','descargar'] },
+      { modulo: 'cte_proveedores',          label: 'Cta. cte. proveedores',   acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'cte_proveedores_pago',     label: '→ Registrar pago',        acciones: ['ver','crear'], subitem: true },
       { modulo: 'fondos_custodia',          label: 'Fondos en custodia',      acciones: ['ver','crear','editar','eliminar','descargar'] },
     ]
@@ -69,11 +69,11 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
   {
     section: 'Tesorería', icono: '🏦',
     items: [
-      { modulo: 'recibos',       label: 'Recibos',                   acciones: ['ver','crear','editar','descargar'] },
-      { modulo: 'ordenes_pago',  label: 'Órdenes de pago',           acciones: ['ver','crear','editar','descargar'] },
-      { modulo: 'aplicaciones_pago', label: 'Aplic. pago de tercero',  acciones: ['ver','crear','editar','descargar'] },
-      { modulo: 'movimientos_cuentas', label: 'Movim. entre cuentas',    acciones: ['ver','crear','editar','descargar'] },
-      { modulo: 'flujo_cuentas', label: 'Flujo cuentas ARG↔CHL',     acciones: ['ver','crear','editar','descargar'] },
+      { modulo: 'recibos',       label: 'Recibos',                   acciones: ['ver','crear','editar','eliminar','descargar'] },
+      { modulo: 'ordenes_pago',  label: 'Órdenes de pago',           acciones: ['ver','crear','editar','eliminar','descargar'] },
+      { modulo: 'aplicaciones_pago', label: 'Aplic. pago de tercero',  acciones: ['ver','crear','editar','eliminar','descargar'] },
+      { modulo: 'movimientos_cuentas', label: 'Movim. entre cuentas',    acciones: ['ver','crear','editar','eliminar','descargar'] },
+      { modulo: 'flujo_cuentas', label: 'Flujo cuentas ARG↔CHL',     acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'tipos_cambio',  label: 'Tipos de cambio',           acciones: ['ver','editar'] },
     ]
   },
