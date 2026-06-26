@@ -61,6 +61,7 @@ export default function FacturasEmitidasPage() {
   const [rubrosCat, setRubrosCat] = useState<any[]>([])     // proveedor_rubros (PN factura como proveedor)
   const [tiposComp, setTiposComp] = useState<any[]>([])     // catálogo de comprobantes (emitido/ambos)
   const [tcSnap, setTcSnap] = useState<any>(null)           // snapshot completo de TC vigentes al momento de cargar
+  const [talonarios, setTalonarios] = useState<any[]>([])   // talonarios → definen monedas habilitadas por comprobante
   const [permisos, setPermisos] = useState<Record<string,string[]>>({})
 
   const [permListos, setPermListos] = useState(false)
@@ -75,7 +76,7 @@ export default function FacturasEmitidasPage() {
 
   async function loadData() {
     setLoading(true)
-    const [fRes, tRes, oRes, cRes, rRes, tcRes, tceRes] = await Promise.all([
+    const [fRes, tRes, oRes, cRes, rRes, tcRes, tceRes, talRes] = await Promise.all([
       supabase.from('facturas_emitidas').select('*').order('fecha_emision', { ascending: false }),
       supabase.from('terceros').select('id,razon_social,nro_doc,tipo_doc,actividad,dir_fiscal_calle,dir_fiscal_ciudad,pais').contains('tipo', ['cliente']),
       supabase.from('operaciones').select('id,cotizacion:cotizaciones(num,cliente)').order('created_at', { ascending: false }).limit(50),
@@ -86,6 +87,7 @@ export default function FacturasEmitidasPage() {
       supabase.from('tipos_comprobante').select('*').eq('activo', true)
         .in('ambito', ['emitido', 'ambos']).order('orden', { ascending: true }),
       (supabase.from('tipos_cambio_eventos') as any).select('fecha, fuente, ars, clp, cny, clp_fiscal').order('created_at', { ascending: false }).limit(1),
+      (supabase.from('talonarios') as any).select('tipo_comprobante_id, moneda, monedas_habilitadas'),
     ])
     if (fRes.data) setFacturas(fRes.data as FacturaEmitida[])
     if (tRes.data) setTerceros(tRes.data)
@@ -93,6 +95,7 @@ export default function FacturasEmitidasPage() {
     if (cRes.data) setCatalogo(cRes.data)
     if (rRes.data) setRubrosCat(rRes.data)
     if (tcRes.data) setTiposComp(tcRes.data)
+    if (talRes.data) setTalonarios(talRes.data)
     if (tceRes.data?.[0]) {
       const tce: any = tceRes.data[0]
       setTcSnap({ fecha: tce.fecha, fuente: tce.fuente || null, USD: 1, ARS: Number(tce.ars) || null, CLP: Number(tce.clp) || null, CNY: Number(tce.cny) || null, CLP_FISCAL: Number(tce.clp_fiscal) || null })
@@ -221,15 +224,15 @@ export default function FacturasEmitidasPage() {
         </>
       )}
 
-      {view === 'nueva' && <FormFactura supabase={supabase} currentUser={currentUser} terceros={terceros} operaciones={operaciones} catalogo={catalogo} rubrosCat={rubrosCat} tiposComp={tiposComp} tcSnap={tcSnap} permisos={permisos} onSave={async () => { await loadData(); setView('lista') }} onCancel={() => setView('lista')} />}
+      {view === 'nueva' && <FormFactura supabase={supabase} currentUser={currentUser} terceros={terceros} operaciones={operaciones} catalogo={catalogo} rubrosCat={rubrosCat} tiposComp={tiposComp} talonarios={talonarios} tcSnap={tcSnap} permisos={permisos} onSave={async () => { await loadData(); setView('lista') }} onCancel={() => setView('lista')} />}
       {view === 'detalle' && sel && <DetalleFactura factura={sel} supabase={supabase} permisos={permisos} currentUser={currentUser} onReload={loadData} onImprimir={() => setView('impresion')} onBack={() => setView('lista')} />}
       {view === 'impresion' && sel && <ImpresionFactura factura={sel} onBack={() => setView('detalle')} />}
     </div>
   )
 }
 
-function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, rubrosCat, tiposComp, tcSnap, permisos, onSave, onCancel }: any) {
-  const [form, setForm] = useState({
+function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, rubrosCat, tiposComp, talonarios, tcSnap, permisos, onSave, onCancel }: any) {
+const [form, setForm] = useState({
     tipo_comprobante_id: '', tipo_doc: 'factura', folio_sii: '', caracterizacion: 'del_giro',
     ref_tipo: '', ref_folio: '',
     fecha_emision: new Date().toISOString().slice(0, 10),
@@ -287,9 +290,26 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
     setBuscarTercero(t.razon_social); setShowTerceroDD(false)
   }
 
+  // Monedas habilitadas por el talonario del comprobante elegido (catálogo). Sin talonario → todas.
+  const monedasComp = (() => {
+    if (!comp) return ['CLP', 'USD', 'ARS', 'CNY']
+    const s = new Set<string>()
+    ;(talonarios || []).filter((t: any) => t.tipo_comprobante_id === comp.id)
+      .forEach((t: any) => (t.monedas_habilitadas || []).forEach((m: string) => s.add(m)))
+    return s.size > 0 ? Array.from(s) : ['CLP', 'USD', 'ARS', 'CNY']
+  })()
+
   function selectComprobante(id: string) {
     const c = tiposComp.find((x: any) => x.id === id)
-    setForm(f => ({ ...f, tipo_comprobante_id: id, tipo_doc: c?.nombre || f.tipo_doc, afecta_iva: !!c?.afecta_iva }))
+    const tals = (talonarios || []).filter((t: any) => t.tipo_comprobante_id === id)
+    const s = new Set<string>()
+    tals.forEach((t: any) => (t.monedas_habilitadas || []).forEach((m: string) => s.add(m)))
+    const permitidas = s.size > 0 ? Array.from(s) : ['CLP', 'USD', 'ARS', 'CNY']
+    const tal = tals[0]
+    setForm(f => {
+      const moneda = permitidas.includes(f.moneda) ? f.moneda : ((tal?.moneda && permitidas.includes(tal.moneda)) ? tal.moneda : permitidas[0])
+      return { ...f, tipo_comprobante_id: id, tipo_doc: c?.nombre || f.tipo_doc, afecta_iva: !!c?.afecta_iva, moneda }
+    })
   }
 
   function setItemServicio(i: number, servicioId: string) {
@@ -473,7 +493,7 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
             <input type="date" value={form.fecha_vencimiento} onChange={e => setForm(f => ({ ...f, fecha_vencimiento: e.target.value }))} className={inp} /></div>
           <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
             <select value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value }))} className={inp}>
-              {['CLP','USD','ARS','CNY'].map(m => <option key={m}>{m}</option>)}
+              {monedasComp.map((m: string) => <option key={m}>{m}</option>)}
             </select></div>
           {form.moneda !== 'CLP' && (
             esExportacionUSD ? (
