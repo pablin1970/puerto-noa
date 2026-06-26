@@ -99,7 +99,6 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const verActual = searchParams.get('ver') === 'proveedores' ? 'proveedores' : 'clientes'
   const router = useRouter()
   const [user, setUser] = useState<Usuario | null>(null)
-  const [tc, setTc] = useState<TCWidget>({ ARS: null, CLP: null, CNY: null, fecha: '', hora: '', fuente: '' })
   const [utm, setUtm] = useState<{ valor: number; label: string } | null>(null)
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})  // modulo → acciones permitidas
   const [esSuper, setEsSuper] = useState(false)
@@ -192,7 +191,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         if (latest.CLP === null && ev.clp !== null) latest.CLP = ev.clp
         if (latest.CLPFiscal === null && ev.clp_fiscal !== null) latest.CLPFiscal = ev.clp_fiscal
         if (latest.CNY === null && ev.cny !== null) latest.CNY = ev.cny
-        if (latest.ARS !== null && latest.CLP !== null && latest.CNY !== null) break
+        if (latest.ARS !== null && latest.CLP !== null && latest.CNY !== null && latest.CLPFiscal !== null) break
       }
       setTc(latest)
     } catch {}
@@ -287,6 +286,12 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
                 </div>
               ))}
             </div>
+            {tc.CLPFiscal !== null && (
+              <div className="flex items-center justify-between px-2.5 py-1" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <span className="text-[9px] text-white/55 font-medium">CLP fiscal <span className="text-white/40">BCCh · SII</span></span>
+                <span className="font-mono font-bold text-[10px]" style={{ color: '#d6c2ff' }}>{Math.round(tc.CLPFiscal).toLocaleString('es-AR')}</span>
+              </div>
+            )}
             {utm !== null && (
               <div className="flex items-center justify-between px-2.5 py-1" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                 <span className="text-[9px] text-white/55 font-medium">UTM <span className="text-white/40">{utm.label}</span></span>
