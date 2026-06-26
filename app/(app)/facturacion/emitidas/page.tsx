@@ -85,7 +85,7 @@ export default function FacturasEmitidasPage() {
       supabase.from('proveedor_rubros').select('codigo,nombre').order('codigo', { ascending: true }),
       supabase.from('tipos_comprobante').select('*').eq('activo', true)
         .in('ambito', ['emitido', 'ambos']).order('orden', { ascending: true }),
-      (supabase.from('tipos_cambio_eventos') as any).select('fecha, fuente, ars, clp, cny').order('created_at', { ascending: false }).limit(1),
+      (supabase.from('tipos_cambio_eventos') as any).select('fecha, fuente, ars, clp, cny, clp_fiscal').order('created_at', { ascending: false }).limit(1),
     ])
     if (fRes.data) setFacturas(fRes.data as FacturaEmitida[])
     if (tRes.data) setTerceros(tRes.data)
@@ -95,7 +95,7 @@ export default function FacturasEmitidasPage() {
     if (tcRes.data) setTiposComp(tcRes.data)
     if (tceRes.data?.[0]) {
       const tce: any = tceRes.data[0]
-      setTcSnap({ fecha: tce.fecha, fuente: tce.fuente || null, USD: 1, ARS: Number(tce.ars) || null, CLP: Number(tce.clp) || null, CNY: Number(tce.cny) || null })
+      setTcSnap({ fecha: tce.fecha, fuente: tce.fuente || null, USD: 1, ARS: Number(tce.ars) || null, CLP: Number(tce.clp) || null, CNY: Number(tce.cny) || null, CLP_FISCAL: Number(tce.clp_fiscal) || null })
     }
     setLoading(false)
   }
@@ -251,6 +251,27 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 
   const comp = tiposComp?.find((c: any) => c.id === form.tipo_comprobante_id) || null
+
+  // Exportación (110/111/112) en USD → el SII obliga al dólar OBSERVADO (BCCh) de la fecha de emisión.
+  const esExportacionUSD = comp?.categoria === 'exportacion' && form.moneda === 'USD'
+  const [tcFiscal, setTcFiscal] = useState<number | null>(null)
+  const [cargandoFiscal, setCargandoFiscal] = useState(false)
+  useEffect(() => {
+    if (!esExportacionUSD || !form.fecha_emision) { setTcFiscal(null); return }
+    let cancel = false
+    ;(async () => {
+      setCargandoFiscal(true)
+      const { data } = await (supabase as any).rpc('get_tc_fiscal', { p_fecha: form.fecha_emision })
+      if (!cancel) {
+        const v = Number(data) || null
+        setTcFiscal(v)
+        if (v) setForm(f => ({ ...f, tc_referencia: String(v) }))
+      }
+      setCargandoFiscal(false)
+    })()
+    return () => { cancel = true }
+  }, [esExportacionUSD, form.fecha_emision])
+
   const nombreRubro = (cod: string) => rubrosCat?.find((r: any) => r.codigo === cod)?.nombre || cod
   // Ítems del catálogo del rubro elegido para esta factura
   const itemsDelRubro = (catalogo || []).filter((c: any) => c.rubro === rubroFactura)
@@ -385,7 +406,7 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
     const tcRef = parseFloat(form.tc_referencia as any) || null
     const { ref_tipo, ref_folio, ...formRest } = form
     const { data: factData } = await (supabase.from('facturas_emitidas') as any).insert({
-      ...formRest, tc_referencia: tcRef, tc_snapshot: tcSnap || null, iva_pct: form.iva_pct, items: itemsLimpios,
+      ...formRest, tc_referencia: tcRef, tc_snapshot: tcSnap ? { ...tcSnap, tc_aplicado: esExportacionUSD ? 'fiscal' : 'comercial', tc_referencia_usado: tcRef } : null, iva_pct: form.iva_pct, items: itemsLimpios,
       ref_tipo: comp?.requiere_referencia ? (ref_tipo || comp?.nombre || null) : null,
       ref_folio: comp?.requiere_referencia ? (parseInt(ref_folio as any) || null) : null,
       neto: Math.round(totales.neto), iva_monto: Math.round(totales.iva),
@@ -454,8 +475,17 @@ function FormFactura({ supabase, currentUser, terceros, operaciones, catalogo, r
             <select value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value }))} className={inp}>
               {['CLP','USD','ARS','CNY'].map(m => <option key={m}>{m}</option>)}
             </select></div>
-          {form.moneda !== 'CLP' && <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">TC referencia</label>
-            <input type="text" value={form.tc_referencia} onChange={e => setForm(f => ({ ...f, tc_referencia: e.target.value }))} className={inp} placeholder="ej. 950" /></div>}
+          {form.moneda !== 'CLP' && (
+            esExportacionUSD ? (
+              <div><label className="block text-[10px] font-semibold mb-1 uppercase" style={{ color: '#7C3AED' }}>TC fiscal · BCCh observado (SII)</label>
+                <input type="text" readOnly value={cargandoFiscal ? 'cargando…' : (tcFiscal ? String(tcFiscal) : 'sin dato')} className={inp + ' font-mono font-bold cursor-not-allowed'} style={{ color: '#7C3AED', background: '#F3EEFF' }} />
+                <p className="text-[9px] text-gray-400 mt-1 leading-tight">Dólar observado del {form.fecha_emision ? form.fecha_emision.split('-').reverse().join('/') : '—'}. Obligatorio para facturar en USD ante el SII (no editable).</p>
+              </div>
+            ) : (
+              <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">TC referencia</label>
+                <input type="text" value={form.tc_referencia} onChange={e => setForm(f => ({ ...f, tc_referencia: e.target.value }))} className={inp} placeholder="ej. 950" /></div>
+            )
+          )}
         </div>
         <p className="text-[10px] text-gray-400 mt-2">El folio propio correlativo se asigna al confirmar la emisión. El folio SII podés cargarlo ahora o después (cuando repliques la factura impresa en el portal del SII).</p>
       </div>
