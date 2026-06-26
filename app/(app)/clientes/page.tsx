@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { abrirConMarca } from '@/lib/documentos'
 
 interface Tercero {
   id: string
@@ -664,9 +665,11 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
   const tiposDocs = TIPO_DOC_POR_PAIS[form.pais] || TIPO_DOC_POR_PAIS.default
 
   // Permisos de archivos: esta pantalla es la de terceros (ruta /clientes); el control de
-  // Ver/Descargar de documentos va por el módulo `clientes`.
-  const puedeVerDoc = puede(permisos, ctx, 'ver')
-  const puedeDescargarDoc = puede(permisos, ctx, 'descargar')
+  // Documentos del tercero: permiso PROPIO y separado de ver/editar el cliente o proveedor.
+  const ctxDoc = ctx === 'proveedores' ? 'proveedores_documentos' : 'clientes_documentos'
+  const puedeVerDoc = puede(permisos, ctxDoc, 'ver')
+  const puedeDescargarDoc = puede(permisos, ctxDoc, 'descargar')
+  const puedeSubirDoc = puede(permisos, ctxDoc, 'crear')
   const puedeEditar = puede(permisos, ctx, 'editar')
   const puedeEliminar = puede(permisos, ctx, 'eliminar')
 
@@ -995,6 +998,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
 
       {tab === 'documentos' && (
         <div className="space-y-4">
+          {puedeSubirDoc && (
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
             <h3 className="font-bold text-sm text-gray-900 mb-4">Agregar documento</h3>
             <div className="grid grid-cols-4 gap-3 mb-3">
@@ -1027,7 +1031,8 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
                 onChange={e => { const f = e.target.files?.[0]; if (f) subirDoc(f) }} />
             </label>
           </div>
-          {docs.length > 0 && (
+          )}
+          {(puedeVerDoc || puedeDescargarDoc) && docs.length > 0 && (
             <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
               <div className="divide-y divide-gray-50">
                 {docs.map((d: any) => (
@@ -1049,10 +1054,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
                       (puedeVerDoc || puedeDescargarDoc) ? (
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {puedeVerDoc && (
-                            <button onClick={async()=>{
-                              const {data} = await supabase.storage.from('terceros').createSignedUrl(d.archivo_url,3600)
-                              if(data?.signedUrl) window.open(data.signedUrl,'_blank')
-                            }} className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC]">📄 Ver</button>
+                            <button onClick={()=>abrirConMarca('terceros', d.archivo_url)} className="px-3 py-1.5 bg-[#EBF2FF] text-[#1168F8] rounded-lg text-xs font-medium hover:bg-[#93B8FC]">📄 Ver</button>
                           )}
                           {puedeDescargarDoc && (
                             <button onClick={async()=>{
