@@ -46,8 +46,17 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
       if (data) {
         setCot(data as Cotizacion)
         if ((data as any).ejecutivo_id) {
-          supabase.from('usuarios').select('*').eq('id', (data as any).ejecutivo_id).single().then(({ data: u }) => {
-            if (u) setEjecutivo(u)
+          supabase.from('usuarios').select('*').eq('id', (data as any).ejecutivo_id).single().then(async ({ data: u }) => {
+            if (u) {
+              // Firma manuscrita (bucket privado): generamos URL firmada para mostrarla en el documento.
+              if ((u as any).firma_url) {
+                try {
+                  const { data: s } = await supabase.storage.from('usuarios_privado').createSignedUrl((u as any).firma_url, 3600)
+                  if (s?.signedUrl) (u as any).firma_signed_url = s.signedUrl
+                } catch { /* sin firma visible: el documento usa la línea en blanco */ }
+              }
+              setEjecutivo(u)
+            }
           })
         }
       }
