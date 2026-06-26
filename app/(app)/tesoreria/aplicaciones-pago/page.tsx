@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { abrirConMarca } from '@/lib/documentos'
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 const fmt = (n: number) => Math.round(n || 0).toLocaleString('es-CL')
@@ -263,11 +264,10 @@ function DetalleAPT({ apt, supabase }: any) {
       setImps(data || [])
     })()
   }, [apt.id])
-  async function abrir() {
+  function abrir() {
     if (!apt.archivo_url) return
     setAbriendo(true)
-    const { data } = await supabase.storage.from('comprobantes').createSignedUrl(apt.archivo_url, 120)
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+    abrirConMarca('comprobantes', apt.archivo_url)
     setAbriendo(false)
   }
   return (
