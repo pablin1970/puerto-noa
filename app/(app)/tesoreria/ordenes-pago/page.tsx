@@ -6,6 +6,7 @@ import { imprimirComprobante } from '@/lib/comprobantePrint'
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 const fmt = (n: number) => Math.round(n || 0).toLocaleString('es-CL')
+const fmtTC = (n: number) => (n || 0).toLocaleString('es-CL', { maximumFractionDigits: 2 })
 
 function aUSD(monto: number, moneda: string, snap: any): number {
   if (!snap) return moneda === 'USD' ? monto : 0
@@ -20,6 +21,13 @@ function aCLP(monto: number, moneda: string, snap: any): number {
   return Math.round(usd * clp)
 }
 
+// Arma el número formateado que va a tomar un talonario (sin consumirlo) — para el preview del pop-up
+function previewNumero(tal: any): string {
+  if (!tal) return ''
+  const n = tal.longitud > 0 ? String(tal.proximo_numero).padStart(tal.longitud, '0') : String(tal.proximo_numero)
+  return [tal.prefijo, tal.serie, n].filter(Boolean).join('-')
+}
+
 export default function OrdenesPagoPage() {
   const supabase = createClient()
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
@@ -27,6 +35,7 @@ export default function OrdenesPagoPage() {
   const [view, setView] = useState<'lista' | 'nuevo' | 'detalle'>('lista')
   const [ops, setOps] = useState<any[]>([])
   const [talonarios, setTalonarios] = useState<any[]>([])
+  const [talDifCambio, setTalDifCambio] = useState<{ debito: any | null; credito: any | null }>({ debito: null, credito: null })
   const [proveedores, setProveedores] = useState<any[]>([])
   const [clientes, setClientes] = useState<any[]>([])
   const [operaciones, setOperaciones] = useState<any[]>([])
@@ -60,6 +69,10 @@ export default function OrdenesPagoPage() {
     ])
     setOps((rRes.data || []).filter((c: any) => c.tipo?.nombre === 'Orden de pago'))
     setTalonarios((talRes.data || []).filter((t: any) => t.tipo?.nombre === 'Orden de pago' && !t.fiscal))
+    // Talonarios internos de diferencia de cambio (para emitir la nota al confirmar)
+    const talDeb = (talRes.data || []).find((t: any) => t.tipo?.nombre === 'Nota de débito por diferencia de cambio') || null
+    const talCre = (talRes.data || []).find((t: any) => t.tipo?.nombre === 'Nota de crédito por diferencia de cambio') || null
+    setTalDifCambio({ debito: talDeb, credito: talCre })
     const ts = tRes.data || []
     setProveedores(ts.filter((t: any) => (t.tipo || []).includes('proveedor')))
     setClientes(ts.filter((t: any) => (t.tipo || []).includes('cliente')))
@@ -149,7 +162,7 @@ export default function OrdenesPagoPage() {
 
       {view === 'nuevo' && (
         <FormOrdenPago supabase={supabase} currentUser={currentUser}
-          talonarios={talonarios} proveedores={proveedores} clientes={clientes} operaciones={operaciones}
+          talonarios={talonarios} talDifCambio={talDifCambio} proveedores={proveedores} clientes={clientes} operaciones={operaciones}
           cuentasPropias={cuentasPropias} cuentasRendir={cuentasRendir} tcSnap={tcSnap}
           onSave={async () => { await loadData(); setView('lista') }} onCancel={() => setView('lista')} />
       )}
@@ -159,7 +172,7 @@ export default function OrdenesPagoPage() {
   )
 }
 
-function FormOrdenPago({ supabase, currentUser, talonarios, proveedores, clientes, operaciones, cuentasPropias, cuentasRendir, tcSnap, onSave, onCancel }: any) {
+function FormOrdenPago({ supabase, currentUser, talonarios, talDifCambio, proveedores, clientes, operaciones, cuentasPropias, cuentasRendir, tcSnap, onSave, onCancel }: any) {
   const [contexto, setContexto] = useState<'propia' | 'rendir'>('propia')
   const [modoRendir, setModoRendir] = useState<'proveedor' | 'devolucion'>('proveedor')  // solo en rendir
   const [form, setForm] = useState<any>({
@@ -173,9 +186,22 @@ function FormOrdenPago({ supabase, currentUser, talonarios, proveedores, cliente
   const [imput, setImput] = useState<Record<string, number>>({})
   const [saving, setSaving] = useState(false)
   const [compFile, setCompFile] = useState<File | null>(null)
+  const [tcFiscalDia, setTcFiscalDia] = useState<number | null>(null)  // TC fiscal (SII) de la fecha del pago
+  const [difModal, setDifModal] = useState<any | null>(null)           // datos del pop-up de diferencia de cambio
 
   const esDevolucion = contexto === 'rendir' && modoRendir === 'devolucion'
   const listaBenef = esDevolucion ? clientes : proveedores
+
+  // Trae el TC fiscal (observado SII) de la fecha de la orden — base para la diferencia de cambio
+  useEffect(() => {
+    let cancel = false
+    ;(async () => {
+      if (!form.fecha) { setTcFiscalDia(null); return }
+      const { data } = await (supabase as any).rpc('get_tc_fiscal', { p_fecha: form.fecha })
+      if (!cancel) setTcFiscalDia(Number(data) || null)
+    })()
+    return () => { cancel = true }
+  }, [form.fecha])
 
   // Facturas recibidas pendientes: en propia → del proveedor (facturada_a puerto_noa); en rendir → de la operación
   useEffect(() => {
@@ -183,7 +209,7 @@ function FormOrdenPago({ supabase, currentUser, talonarios, proveedores, cliente
     let cancel = false
     ;(async () => {
       let q = (supabase.from('facturas_recibidas') as any)
-        .select('id,folio,fecha_emision,moneda,total,estado,operacion_id,facturada_a,proveedor_razon_social')
+        .select('id,folio,fecha_emision,moneda,total,total_usd,tc_referencia,estado,operacion_id,facturada_a,proveedor_razon_social')
         .not('estado', 'in', '("anulada","pagada")')
       if (contexto === 'propia') {
         if (!form.tercero_id) { setFacturas([]); return }
@@ -219,7 +245,39 @@ function FormOrdenPago({ supabase, currentUser, talonarios, proveedores, cliente
   function selTercero(t: any) { setForm((f: any) => ({ ...f, tercero_id: t.id })); setBuscarT(t.razon_social); setShowTDD(false) }
   function setImp(fid: string, val: number, max: number) { setImput(prev => ({ ...prev, [fid]: Math.max(0, Math.min(val, max)) })) }
 
-  async function guardar() {
+  // ───────────────────────────────────────────────────────────────────────────
+  // Diferencia de cambio (PAGO): para cada factura recibida imputada en USD, compara
+  // el TC fiscal con que se registró la factura (tc_referencia) contra el TC fiscal del
+  // día del pago. Signo invertido respecto a la cobranza, porque ahora pagamos:
+  // Pago: USD × (TC_factura − TC_pago). Positivo → débito (ganancia: pagamos menos pesos);
+  // negativo → crédito (pérdida: pagamos más pesos).
+  // ───────────────────────────────────────────────────────────────────────────
+  function calcularDiferencias() {
+    const tcDia = tcFiscalDia
+    const difs: any[] = []
+    if (!tcDia) return difs
+    for (const f of facturas) {
+      const m = Number(imput[f.id]) || 0
+      if (m <= 0) continue
+      if ((f.moneda || '').toUpperCase() !== 'USD') continue       // solo facturas en USD generan dif. de cambio
+      const tcFact = Number(f.tc_referencia) || 0
+      if (!tcFact) continue                                         // sin TC de factura no se puede comparar
+      if (Math.abs(tcDia - tcFact) < 0.0001) continue               // mismo TC → sin diferencia
+      const usdImputado = m                                         // saldo/imputación de una factura USD ya está en USD
+      const difCLP = Math.round(usdImputado * (tcFact - tcDia))      // PAGO: invertido respecto a cobranza
+      const tipo = difCLP >= 0 ? 'debito' : 'credito'              // ganancia → ND ; pérdida → NC
+      const tal = tipo === 'debito' ? talDifCambio?.debito : talDifCambio?.credito
+      difs.push({
+        factura_id: f.id, factura_folio: f.folio ? String(f.folio) : '',
+        usd: usdImputado, tc_factura: tcFact, tc_pago: tcDia,
+        dif_clp: difCLP, tipo, talonario: tal, numero_preview: previewNumero(tal),
+      })
+    }
+    return difs
+  }
+
+  // Paso 1: validar y, si hay diferencias, abrir el pop-up obligatorio. Si no, guardar directo.
+  function intentarGuardar() {
     if (!form.talonario_id) { alert('No hay talonario de órdenes de pago. Cargá uno en Catálogos › Talonarios.'); return }
     if (!form.tercero_id) { alert(esDevolucion ? 'Elegí el cliente' : 'Elegí el proveedor'); return }
     if (monto <= 0) { alert('Ingresá el monto'); return }
@@ -227,6 +285,23 @@ function FormOrdenPago({ supabase, currentUser, talonarios, proveedores, cliente
     if (contexto === 'rendir' && !form.cuenta_rendir_id) { alert('Elegí la caja a rendir'); return }
     if (contexto === 'rendir' && !form.operacion_id) { alert('El pago por cuenta y orden requiere una operación'); return }
     if (totalImputado > monto + 0.5) { alert('Lo imputado supera el monto de la orden'); return }
+
+    // La diferencia de cambio solo aplica a pago de deuda propia (cuenta PN), no a "a rendir" ni devolución
+    const difs = (contexto === 'propia') ? calcularDiferencias() : []
+    if (difs.length > 0) {
+      const faltaTal = difs.some(d => !d.talonario)
+      if (faltaTal) {
+        alert('Hay diferencia de cambio pero falta el talonario interno (NDDC/NCDC) en Catálogos › Talonarios. Cargalo para poder emitir la nota.')
+        return
+      }
+      setDifModal({ difs })   // abre el pop-up obligatorio
+      return
+    }
+    guardar(false, [])
+  }
+
+  // Paso 2 (tras OK del pop-up): guarda la orden + emite las notas de diferencia de cambio.
+  async function guardar(conNotas: boolean, difs: any[]) {
     setSaving(true)
     try {
       const { data: numData, error: numErr } = await (supabase.rpc as any)('emitir_numero_talonario', { p_talonario: form.talonario_id })
@@ -268,19 +343,41 @@ function FormOrdenPago({ supabase, currentUser, talonarios, proveedores, cliente
           saldo_posterior: (Number(cuenta?.saldo_actual) || 0) - monto,
         })
         await (supabase.from('cuentas_pn') as any).update({ saldo_actual: (Number(cuenta?.saldo_actual) || 0) - monto }).eq('id', form.cuenta_propia_id)
-        // Imputaciones + cc_proveedores (debe) + marcar pagadas
+        // Imputaciones + cc_proveedores (debe) + marcar pagadas + nota de diferencia de cambio
         for (const f of facturas) {
           const m = Number(imput[f.id]) || 0
           if (m <= 0) continue
-          await (supabase.from('comprobantes_tesoreria_imputaciones') as any).insert({
+          const { data: impRow } = await (supabase.from('comprobantes_tesoreria_imputaciones') as any).insert({
             comprobante_id: comp.id, factura_recibida_id: f.id, monto: m, monto_usd: aUSD(m, form.moneda, tcSnap),
-          })
+          }).select('id').single()
           await (supabase.from('cc_proveedores') as any).insert({
             tercero_id: form.tercero_id, operacion_id: f.operacion_id || form.operacion_id || null, tipo: 'pago',
             factura_id: f.id, fecha: form.fecha, concepto: `OP ${formateado}`, moneda: form.moneda, monto: m,
             tc_referencia: tcRef, monto_usd: aUSD(m, form.moneda, tcSnap), debe: m, haber: 0, notas: form.notas || null,
             creado_por: currentUser?.nombre,
           })
+
+          // Nota de diferencia de cambio para esta factura (si corresponde y se confirmó)
+          if (conNotas) {
+            const d = difs.find(x => x.factura_id === f.id)
+            if (d) {
+              const { data: nNum } = await (supabase.rpc as any)('emitir_numero_talonario', { p_talonario: d.talonario.id })
+              const notaNum = nNum?.[0]?.formateado || null
+              await (supabase.from('notas_diferencia_cambio') as any).insert({
+                factura_tipo: 'recibida', factura_id: f.id, factura_folio: d.factura_folio,
+                tercero_id: form.tercero_id, tercero_nombre: tercero?.razon_social || f.proveedor_razon_social || null,
+                tipo: d.tipo, moneda: 'CLP', monto_clp: Math.abs(d.dif_clp),
+                tc_factura: d.tc_factura, tc_pago: d.tc_pago, fecha: form.fecha,
+                talonario_id: d.talonario.id, numero_comprobante: notaNum,
+                estado: 'confirmada', afecta_resultado: true,
+                comprobante_tesoreria_id: comp.id, imputacion_id: impRow?.id || null,
+                operacion_id: f.operacion_id || form.operacion_id || null,
+                notas: `Diferencia de cambio pago · OP ${formateado} · USD ${fmt(d.usd)} × (${fmtTC(d.tc_factura)} − ${fmtTC(d.tc_pago)})`,
+                creado_por: currentUser?.nombre, created_by: currentUser?.id,
+              })
+            }
+          }
+
           if (m >= (Number(f.saldo) || 0) - 0.5) {
             await (supabase.from('facturas_recibidas') as any).update({ estado: 'pagada', estado_pago: 'pagada', fecha_pago: form.fecha }).eq('id', f.id)
           }
@@ -316,6 +413,7 @@ function FormOrdenPago({ supabase, currentUser, talonarios, proveedores, cliente
           }
         }
       }
+      setDifModal(null)
       await onSave()
     } catch (e: any) { alert('Error inesperado: ' + (e?.message || e)); setSaving(false) }
   }
@@ -399,7 +497,7 @@ function FormOrdenPago({ supabase, currentUser, talonarios, proveedores, cliente
       {!esDevolucion && (
         <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
           <h3 className="font-bold text-sm text-gray-900 mb-1">Imputar a facturas recibidas</h3>
-          <p className="text-[11px] text-gray-400 mb-3">{contexto === 'propia' ? 'Facturas del proveedor a nombre de Puerto NOA.' : 'Facturas de la operación a pagar por cuenta y orden.'} Lo no imputado queda a cuenta.</p>
+          <p className="text-[11px] text-gray-400 mb-3">{contexto === 'propia' ? 'Facturas del proveedor a nombre de Puerto NOA.' : 'Facturas de la operación a pagar por cuenta y orden.'} Lo no imputado queda a cuenta. Las facturas en USD se valorizan al TC fiscal del día; si difiere del de la factura, se generará la nota de diferencia de cambio.</p>
           {facturas.length === 0 ? (
             <div className="text-center py-6 text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl">{(contexto === 'propia' && !form.tercero_id) ? 'Elegí el proveedor para ver sus facturas.' : (contexto === 'rendir' && !form.operacion_id) ? 'Elegí la operación para ver sus facturas.' : 'No hay facturas pendientes. La orden quedará a cuenta.'}</div>
           ) : (
@@ -407,7 +505,9 @@ function FormOrdenPago({ supabase, currentUser, talonarios, proveedores, cliente
               {facturas.map((f: any) => (
                 <div key={f.id} className="flex items-center gap-3 border border-gray-200 rounded-xl p-2.5">
                   <div className="flex-1">
-                    <div className="text-xs font-semibold">{f.folio ? `Folio ${f.folio}` : '(s/folio)'} <span className="text-gray-400">· {f.proveedor_razon_social}</span></div>
+                    <div className="text-xs font-semibold">{f.folio ? `Folio ${f.folio}` : '(s/folio)'} <span className="text-gray-400">· {f.proveedor_razon_social}</span>
+                      {(f.moneda || '').toUpperCase() === 'USD' && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-50 text-[#7C3AED] border border-violet-100">USD · TC fiscal {f.tc_referencia ? fmtTC(f.tc_referencia) : '—'}</span>}
+                    </div>
                     <div className="text-[10px] text-gray-400">{f.fecha_emision} · {f.moneda} · saldo {fmt(f.saldo)}</div>
                   </div>
                   <button onClick={() => setImp(f.id, f.saldo, f.saldo)} className="text-[10px] text-[#1168F8] hover:underline">total</button>
@@ -437,20 +537,69 @@ function FormOrdenPago({ supabase, currentUser, talonarios, proveedores, cliente
 
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="px-5 py-2.5 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50">Cancelar</button>
-        <button onClick={guardar} disabled={saving} className="px-6 py-2.5 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">{saving ? 'Emitiendo…' : 'Emitir orden de pago'}</button>
+        <button onClick={intentarGuardar} disabled={saving} className="px-6 py-2.5 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">{saving ? 'Emitiendo…' : 'Emitir orden de pago'}</button>
       </div>
+
+      {/* ── POP-UP OBLIGATORIO DE DIFERENCIA DE CAMBIO (PAGO) ──────────────────── */}
+      {difModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { if (!saving) setDifModal(null) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-gray-100" style={{ background: '#F3EEFF' }}>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">💱</span>
+                <span className="font-bold text-sm" style={{ color: '#7C3AED' }}>Diferencia de cambio</span>
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5">Al pagar a un TC fiscal distinto al de la factura, se genera{difModal.difs.length > 1 ? 'n' : ''} esta{difModal.difs.length > 1 ? 's' : ''} nota{difModal.difs.length > 1 ? 's' : ''} interna{difModal.difs.length > 1 ? 's' : ''}. Si confirmás, se emite junto con la orden; si cancelás, no se guarda nada.</p>
+            </div>
+            <div className="px-5 py-4 space-y-3 max-h-[55vh] overflow-y-auto">
+              {difModal.difs.map((d: any, i: number) => (
+                <div key={i} className="border border-gray-200 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-gray-800">Factura {d.factura_folio ? `Folio ${d.factura_folio}` : ''}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${d.tipo === 'debito' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                      {d.tipo === 'debito' ? 'Nota de débito (ganancia)' : 'Nota de crédito (pérdida)'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[11px] mb-2">
+                    <div><div className="text-gray-400">USD imputado</div><div className="font-mono font-semibold">USD {fmt(d.usd)}</div></div>
+                    <div><div className="text-gray-400">TC factura</div><div className="font-mono font-semibold">{fmtTC(d.tc_factura)}</div></div>
+                    <div><div className="text-gray-400">TC pago (fiscal)</div><div className="font-mono font-semibold">{fmtTC(d.tc_pago)}</div></div>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div className="text-[11px] text-gray-500">Diferencia: <span className={`font-mono font-bold ${d.tipo === 'debito' ? 'text-green-700' : 'text-red-700'}`}>{d.dif_clp >= 0 ? '+' : '−'} CLP {fmt(Math.abs(d.dif_clp))}</span></div>
+                    <div className="text-[11px] text-gray-500">N° a emitir: <span className="font-mono font-bold" style={{ color: '#7C3AED' }}>{d.numero_preview}</span></div>
+                  </div>
+                </div>
+              ))}
+              <div className="text-[10px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+                Las notas son internas (no fiscales), en CLP, sin IVA, e impactan Resultados/Renta. La cuenta en dólares queda saldada al 100%; la nota ajusta la diferencia en pesos.
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={() => setDifModal(null)} disabled={saving} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50 disabled:opacity-50">Cancelar (no guarda nada)</button>
+              <button onClick={() => guardar(true, difModal.difs)} disabled={saving} className="px-5 py-2 text-white rounded-xl text-xs font-bold disabled:opacity-50" style={{ background: '#7C3AED' }}>
+                {saving ? 'Emitiendo…' : 'Confirmar y emitir orden + nota'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 function DetalleOP({ op, supabase }: any) {
   const [imps, setImps] = useState<any[]>([])
+  const [notas, setNotas] = useState<any[]>([])
   const [abriendo, setAbriendo] = useState(false)
   useEffect(() => {
     (async () => {
       const { data } = await (supabase.from('comprobantes_tesoreria_imputaciones') as any)
         .select('*, factura:facturas_recibidas(folio,proveedor_razon_social,total)').eq('comprobante_id', op.id)
       setImps(data || [])
+      const { data: nd } = await (supabase.from('notas_diferencia_cambio') as any)
+        .select('*').eq('comprobante_tesoreria_id', op.id)
+      setNotas(nd || [])
     })()
   }, [op.id])
   async function abrir() {
@@ -512,6 +661,24 @@ function DetalleOP({ op, supabase }: any) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+      {notas.length > 0 && (
+        <div className="bg-white border rounded-2xl p-5 shadow-sm" style={{ borderColor: '#E5DBFB' }}>
+          <h3 className="font-bold text-sm mb-3" style={{ color: '#7C3AED' }}>💱 Notas de diferencia de cambio</h3>
+          <div className="space-y-1.5">
+            {notas.map((n: any) => (
+              <div key={n.id} className="flex justify-between items-center text-xs border-b border-gray-50 pb-1.5">
+                <span className="text-gray-700">
+                  <span className="font-mono font-semibold" style={{ color: '#7C3AED' }}>{n.numero_comprobante || '—'}</span>
+                  <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold ${n.tipo === 'debito' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{n.tipo === 'debito' ? 'Débito (ganancia)' : 'Crédito (pérdida)'}</span>
+                  {n.factura_folio && <span className="text-gray-400"> · Folio {n.factura_folio}</span>}
+                </span>
+                <span className="font-mono font-semibold">{n.tipo === 'debito' ? '+' : '−'} CLP {fmt(n.monto_clp)}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-gray-400 mt-2">Notas internas (no fiscales) que ajustan la diferencia en pesos. La cuenta en dólares quedó saldada.</p>
         </div>
       )}
       {op.a_cuenta && <div className="text-[11px] text-[#7C3AED] bg-purple-50 border border-purple-100 rounded-xl px-4 py-2.5">Parte de esta orden quedó <b>a cuenta</b> del proveedor. Lo podés imputar después desde la cuenta corriente.</div>}
