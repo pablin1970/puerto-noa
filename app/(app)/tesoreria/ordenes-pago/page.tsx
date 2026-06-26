@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { abrirConMarca } from '@/lib/documentos'
 import { imprimirComprobante } from '@/lib/comprobantePrint'
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -602,11 +603,10 @@ function DetalleOP({ op, supabase }: any) {
       setNotas(nd || [])
     })()
   }, [op.id])
-  async function abrir() {
+  function abrir() {
     if (!op.archivo_url) return
     setAbriendo(true)
-    const { data } = await supabase.storage.from('comprobantes').createSignedUrl(op.archivo_url, 120)
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+    abrirConMarca('comprobantes', op.archivo_url)
     setAbriendo(false)
   }
 
