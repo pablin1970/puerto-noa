@@ -78,6 +78,7 @@ const NAV: NavItem[] = [
 interface TCWidget {
   ARS: number | null
   CLP: number | null
+  CLPFiscal: number | null
   CNY: number | null
   fecha: string
   hora: string
