@@ -63,26 +63,33 @@ export async function GET(req: NextRequest) {
     const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true })
     const font = await pdf.embedFont(StandardFonts.HelveticaBold)
     const ahora = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Jujuy' })
-    const selloDiag = 'USO INTERNO · PROHIBIDA SU DISTRIBUCIÓN'
-    const pie = `Documento interno Puerto NOA — visto por ${quien} — ${ahora}`
+    // Sanitiza a Latin-1 (Helvetica estándar) para no romper el estampado con caracteres raros.
+    const safe = (s: string) => s.replace(/[^\x00-\xFF]/g, '?')
+    const sello = safe(`USO INTERNO · ${quien}`)
+    const pie = safe(`PROHIBIDA SU DISTRIBUCIÓN · visto por ${quien} · ${ahora}`)
+    const rojo = rgb(0.86, 0.11, 0.28)
 
     for (const page of pdf.getPages()) {
       const { width, height } = page.getSize()
-      // Marca diagonal repetida, tenue, cruzando la página.
-      for (let i = -1; i <= 2; i++) {
-        page.drawText(selloDiag, {
-          x: width * 0.06,
-          y: height * (0.25 * i + 0.2),
-          size: Math.max(12, Math.min(22, width / 28)),
-          font,
-          color: rgb(0.86, 0.11, 0.28),
-          opacity: 0.12,
-          rotate: degrees(40),
-        })
+      const size = Math.max(11, Math.min(16, width / 42))
+      const tw = font.widthOfTextAtSize(sello, size)
+      const stepX = tw + 70
+      const stepY = 95
+      // Mosaico diagonal que cubre TODA la página: el usuario queda estampado en
+      // todas partes (no se puede recortar) y con buena visibilidad.
+      let fila = 0
+      for (let y = -30; y < height + 60; y += stepY) {
+        const offset = (fila % 2) * (stepX / 2)
+        for (let x = -stepX; x < width + stepX; x += stepX) {
+          page.drawText(sello, {
+            x: x + offset, y, size, font, color: rojo, opacity: 0.16, rotate: degrees(35),
+          })
+        }
+        fila++
       }
-      // Pie con el usuario y la fecha (trazabilidad).
+      // Pie con la leyenda completa, usuario y fecha (respaldo de trazabilidad).
       page.drawText(pie, {
-        x: 18, y: 10, size: 7, font, color: rgb(0.45, 0.45, 0.45), opacity: 0.75,
+        x: 16, y: 8, size: 7, font, color: rgb(0.4, 0.4, 0.4), opacity: 0.85,
       })
     }
 
