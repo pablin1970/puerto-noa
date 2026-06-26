@@ -307,7 +307,9 @@ const [form, setForm] = useState({
     const permitidas = s.size > 0 ? Array.from(s) : ['CLP', 'USD', 'ARS', 'CNY']
     const tal = tals[0]
     setForm(f => {
-      const moneda = permitidas.includes(f.moneda) ? f.moneda : ((tal?.moneda && permitidas.includes(tal.moneda)) ? tal.moneda : permitidas[0])
+      // Prioridad: moneda por defecto del talonario → si no, la que ya estaba si sigue habilitada → si no, la primera
+      const moneda = (tal?.moneda && permitidas.includes(tal.moneda)) ? tal.moneda
+        : (permitidas.includes(f.moneda) ? f.moneda : permitidas[0])
       return { ...f, tipo_comprobante_id: id, tipo_doc: c?.nombre || f.tipo_doc, afecta_iva: !!c?.afecta_iva, moneda }
     })
   }
