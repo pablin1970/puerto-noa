@@ -93,7 +93,6 @@ export default function TiposCambioPage() {
     setLoading(false)
   }
 
-  // Ultimo evento de un dia ANTERIOR a hoy (para calcular la variacion % de cada moneda).
   async function getAnteriores() {
     const hoy = new Date().toISOString().slice(0, 10)
     const { data } = await supabase
@@ -146,7 +145,6 @@ export default function TiposCambioPage() {
       let ars: number | null = null, clp: number | null = null, cny: number | null = null, clpFiscal: number | null = null
       let apiFuente = ''
 
-      // ARS desde DolarAPI (oficial BNA)
       try {
         const r = await fetch('https://dolarapi.com/v1/dolares/oficial')
         if (r.ok) {
@@ -156,7 +154,6 @@ export default function TiposCambioPage() {
         }
       } catch {}
 
-      // CLP COMERCIAL y CNY desde Open Exchange Rates (mercado)
       try {
         const r = await fetch('https://open.er-api.com/v6/latest/USD')
         if (r.ok) {
@@ -167,7 +164,6 @@ export default function TiposCambioPage() {
         }
       } catch {}
 
-      // CLP FISCAL desde mindicador.cl (dolar observado BCCh, uso tributario SII)
       try {
         const r = await fetch('https://mindicador.cl/api/dolar')
         if (r.ok) {
@@ -239,7 +235,7 @@ export default function TiposCambioPage() {
 
   const brechaCLP = brechaPct(vigente.clp, vigente.clpFiscal)
 
- if (permListos && !puede(permisos, 'tipos_cambio', 'ver')) {
+  if (permListos && !puede(permisos, 'tipos_cambio', 'ver')) {
     return (
       <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
         <div className="text-center max-w-sm">
@@ -371,4 +367,89 @@ export default function TiposCambioPage() {
         ) : (
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-gray-50 border-b
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Fecha</th>
+                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Hora</th>
+                <th className="text-right px-4 py-3 text-[10px] font-semibold text-[#1168F8] uppercase tracking-wider">ARS</th>
+                <th className="text-right px-4 py-3 text-[10px] font-semibold text-red-600 uppercase tracking-wider">CLP comercial</th>
+                <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#7C3AED' }}>CLP fiscal</th>
+                <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#7C3AED' }}>Brecha</th>
+                <th className="text-right px-4 py-3 text-[10px] font-semibold text-amber-700 uppercase tracking-wider">CNY</th>
+                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Fuente</th>
+                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Origen</th>
+                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Usuario</th>
+              </tr>
+            </thead>
+            <tbody>
+              {eventosFiltrados.map(e => {
+                const fb = FUENTE_BADGE[e.fuente]
+                const br = brechaPct(e.clp, e.clp_fiscal)
+                return (
+                  <tr key={e.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 font-mono text-[11px] font-semibold text-gray-700">
+                      {e.fecha ? new Date(e.fecha + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-[10px] text-gray-400">
+                      {new Date(e.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {e.ars !== null ? (
+                        <div>
+                          <div className="font-mono font-bold text-[#1168F8]">{fmt(e.ars, 0)}</div>
+                          {varBadge(e.ars, e.ars_anterior)}
+                        </div>
+                      ) : <span className="text-gray-200 font-mono">-</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {e.clp !== null ? (
+                        <div>
+                          <div className="font-mono font-bold text-red-600">{fmt(e.clp, 0)}</div>
+                          {varBadge(e.clp, e.clp_anterior)}
+                        </div>
+                      ) : <span className="text-gray-200 font-mono">-</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {e.clp_fiscal !== null ? (
+                        <div>
+                          <div className="font-mono font-bold" style={{ color: '#7C3AED' }}>{fmt(e.clp_fiscal, 0)}</div>
+                          {varBadge(e.clp_fiscal, e.clp_fiscal_anterior)}
+                        </div>
+                      ) : <span className="text-gray-200 font-mono">-</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {br !== null ? (
+                        <span className="font-mono font-semibold text-[11px]" style={{ color: '#7C3AED' }}>
+                          {br > 0 ? '+' : ''}{br.toFixed(2)}%
+                        </span>
+                      ) : <span className="text-gray-200 font-mono">-</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {e.cny !== null ? (
+                        <div>
+                          <div className="font-mono font-bold text-amber-700">{e.cny.toFixed(4)}</div>
+                          {varBadge(e.cny, e.cny_anterior)}
+                        </div>
+                      ) : <span className="text-gray-200 font-mono">-</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${fb.cls}`}>
+                        {fb.icon} {fb.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-400 text-[10px] max-w-36 truncate">{e.api_fuente || '-'}</td>
+                    <td className="px-4 py-3 text-gray-600">{e.usuario_nombre || '-'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="mt-4 bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-4 py-3 text-xs text-[#052698]">
+        <strong>Comercial</strong> (mercado) = gestion interna · <strong>Fiscal</strong> (BCCh observado) = obligatorio para facturar en USD ante el SII · <strong>Brecha</strong> = diferencia % entre ambos.
+        El TC vigente se aplica automaticamente en las cotizaciones y facturas nuevas.
+      </div>
+    </div>
+  )
+}
