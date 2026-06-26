@@ -113,6 +113,7 @@ export default function UtilidadesPage() {
   const [ops, setOps] = useState<OpData[]>([])
   const [opsEnCurso, setOpsEnCurso] = useState<OpData[]>([])
   const [gastosFijosMes, setGastosFijosMes] = useState(0)
+  const [difCambioMes, setDifCambioMes] = useState(0)        // resultado por diferencia de cambio del mes (USD, +gana / −pierde)
   const [criterioElegido, setCriterioElegido] = useState<string>('costos')
   const [tab, setTab] = useState<'operaciones'|'comparativo'|'mensual'|'anual'>('operaciones')
   const [tc, setTc] = useState(908)
@@ -126,24 +127,31 @@ export default function UtilidadesPage() {
   // ── Vista anual consolidada (suma automática de los 12 meses del ejercicio) ──
   const [opsAnio, setOpsAnio] = useState<OpData[]>([])
   const [gastosFijosAnio, setGastosFijosAnio] = useState(0)
-  const [desgloseMensual, setDesgloseMensual] = useState<{mes:number; ingresos:number; mb:number; gf:number; mn:number}[]>([])
+  const [difCambioAnio, setDifCambioAnio] = useState(0)      // resultado por diferencia de cambio del ejercicio (USD)
+  const [desgloseMensual, setDesgloseMensual] = useState<{mes:number; ingresos:number; mb:number; gf:number; dc:number; mn:number}[]>([])
   const [loadingAnio, setLoadingAnio] = useState(false)
   useEffect(() => { loadAnual() }, [anio])
 
   async function loadAnual() {
     setLoadingAnio(true)
     const ini = `${anio}-01-01`, fin = `${anio}-12-31`
-    const [opRes, feRes, frRes, gfRes, tcRes] = await Promise.all([
+    const [opRes, feRes, frRes, gfRes, tcRes, dcRes] = await Promise.all([
       supabase.from('operaciones').select('id, estado, fecha_cierre, cotizacion:cotizaciones(num, cliente, tipo_contenedores, presupuesto)').order('created_at', { ascending: false }),
       supabase.from('facturas_emitidas').select('operacion_id, total_usd, neto_usd, iva_monto, moneda, tc_referencia, a_recuperar').not('operacion_id', 'is', null).gte('fecha_emision', ini).lte('fecha_emision', fin),
       supabase.from('facturas_recibidas').select('operacion_id, total_usd, neto_usd, iva_monto, moneda, tc_referencia, a_recuperar, credito_fiscal').not('operacion_id', 'is', null).gte('fecha_emision', ini).lte('fecha_emision', fin),
       (supabase.from('gastos_fijos_pn') as any).select('monto_clp_equiv, periodo_mes').eq('periodo_anio', anio),
       supabase.from('tipos_cambio_eventos').select('clp').order('created_at', { ascending: false }).limit(1),
+      (supabase.from('notas_diferencia_cambio') as any).select('tipo, monto_clp, fecha').eq('afecta_resultado', true).eq('estado', 'confirmada').gte('fecha', ini).lte('fecha', fin),
     ])
     const tcVal = (tcRes.data?.[0] as any)?.clp || 908
     const gfRows = (gfRes.data||[]) as any[]
     const gfAnioUSD = gfRows.reduce((t,g)=>t+(g.monto_clp_equiv||0),0) / tcVal
     setGastosFijosAnio(gfAnioUSD)
+    // Diferencia de cambio del ejercicio: débito suma (ganancia), crédito resta (pérdida). CLP→USD.
+    const dcRows = (dcRes.data||[]) as any[]
+    const signo = (t:string) => t === 'debito' ? 1 : -1
+    const dcAnioUSD = dcRows.reduce((t,n)=> t + signo(n.tipo) * (Number(n.monto_clp)||0), 0) / tcVal
+    setDifCambioAnio(dcAnioUSD)
     const opRows = (opRes.data||[]) as any[]
     const feAll = (feRes.data||[]) as any[]
     const frAll = (frRes.data||[]) as any[]
@@ -153,13 +161,15 @@ export default function UtilidadesPage() {
     setOpsAnio(cerradasYear)
     // Desglose mes a mes: cada operación cerrada se imputa a su mes de cierre (suma exacta al total)
     const mesNum = (d:string) => Number((d||'').slice(5,7))
-    const acc: Record<number,{ingresos:number; mb:number}> = {}
-    for(let m=1;m<=12;m++) acc[m]={ingresos:0,mb:0}
+    const acc: Record<number,{ingresos:number; mb:number; dc:number}> = {}
+    for(let m=1;m<=12;m++) acc[m]={ingresos:0,mb:0,dc:0}
     for(const o of cerradasYear){ const m=mesNum(o.fecha_cierre); if(m>=1&&m<=12){ acc[m].ingresos+=o.ingresos_usd; acc[m].mb+=o.margen_bruto } }
-    const desg = [] as {mes:number; ingresos:number; mb:number; gf:number; mn:number}[]
+    // La diferencia de cambio se imputa al mes de la nota (fecha del cobro/pago)
+    for(const n of dcRows){ const m=mesNum(n.fecha); if(m>=1&&m<=12){ acc[m].dc += signo(n.tipo)*(Number(n.monto_clp)||0)/tcVal } }
+    const desg = [] as {mes:number; ingresos:number; mb:number; gf:number; dc:number; mn:number}[]
     for(let m=1;m<=12;m++){
       const gfM = gfRows.filter(g=>(g.periodo_mes||0)===m).reduce((t,g)=>t+(g.monto_clp_equiv||0),0) / tcVal
-      desg.push({ mes:m, ingresos:acc[m].ingresos, mb:acc[m].mb, gf:gfM, mn:acc[m].mb-gfM })
+      desg.push({ mes:m, ingresos:acc[m].ingresos, mb:acc[m].mb, gf:gfM, dc:acc[m].dc, mn:acc[m].mb-gfM+acc[m].dc })
     }
     setDesgloseMensual(desg)
     setLoadingAnio(false)
@@ -171,19 +181,21 @@ export default function UtilidadesPage() {
   const totAnioMarkup   = opsAnio.reduce((t,o)=>t+o.markup_usd,0)
   const totAnioIVA      = opsAnio.reduce((t,o)=>t+o.iva_neto,0)
   const totAnioMB       = opsAnio.reduce((t,o)=>t+o.margen_bruto,0)
-  const totAnioMN       = totAnioMB - gastosFijosAnio
+  const totAnioMNop     = totAnioMB - gastosFijosAnio          // margen neto operativo (antes de dif. de cambio)
+  const totAnioMN       = totAnioMNop + difCambioAnio          // resultado del ejercicio (incluye dif. de cambio)
 
   async function load() {
     setLoading(true)
     const fechaInicio = `${anio}-${String(mes).padStart(2,'0')}-01`
     const fechaFin = `${anio}-${String(mes).padStart(2,'0')}-31`
 
-    const [opRes, feRes, frRes, gfRes, tcRes] = await Promise.all([
+    const [opRes, feRes, frRes, gfRes, tcRes, dcRes] = await Promise.all([
       supabase.from('operaciones').select('id, estado, fecha_cierre, cotizacion:cotizaciones(num, cliente, tipo_contenedores, presupuesto)').order('created_at', { ascending: false }),
       supabase.from('facturas_emitidas').select('operacion_id, total_usd, neto_usd, iva_monto, moneda, tc_referencia, a_recuperar').not('operacion_id', 'is', null).gte('fecha_emision', fechaInicio).lte('fecha_emision', fechaFin),
       supabase.from('facturas_recibidas').select('operacion_id, total_usd, neto_usd, iva_monto, moneda, tc_referencia, a_recuperar, credito_fiscal').not('operacion_id', 'is', null).gte('fecha_emision', fechaInicio).lte('fecha_emision', fechaFin),
       (supabase.from('gastos_fijos_pn') as any).select('monto_clp_equiv').eq('periodo_anio', anio).eq('periodo_mes', mes),
       supabase.from('tipos_cambio_eventos').select('clp').order('created_at', { ascending: false }).limit(1),
+      (supabase.from('notas_diferencia_cambio') as any).select('tipo, monto_clp, fecha').eq('afecta_resultado', true).eq('estado', 'confirmada').gte('fecha', fechaInicio).lte('fecha', fechaFin),
     ])
 
     const tcVal = (tcRes.data?.[0] as any)?.clp || 908
@@ -192,6 +204,11 @@ export default function UtilidadesPage() {
     const gfTotal = ((gfRes.data||[]) as any[]).reduce((t, g) => t + (g.monto_clp_equiv||0), 0)
     const gfUSD = gfTotal / tcVal
     setGastosFijosMes(gfUSD)
+
+    // Diferencia de cambio del mes: débito suma (ganancia), crédito resta (pérdida). CLP→USD.
+    const dcRows = ((dcRes.data||[]) as any[])
+    const dcMesUSD = dcRows.reduce((t,n)=> t + (n.tipo==='debito'?1:-1) * (Number(n.monto_clp)||0), 0) / tcVal
+    setDifCambioMes(dcMesUSD)
 
     // Procesar operaciones (lógica compartida con la vista anual)
     const opsData = computarOpsData((opRes.data||[]) as any[], (feRes.data||[]) as any[], (frRes.data||[]) as any[], gfUSD, tcVal)
@@ -213,7 +230,8 @@ export default function UtilidadesPage() {
   const totMarkup  = ops.reduce((t, o) => t + o.markup_usd, 0)
   const totIVA     = ops.reduce((t, o) => t + o.iva_neto, 0)
   const mnElegido  = (o: OpData) => o[`mn_${criterioElegido}` as keyof OpData] as number
-  const totMN      = ops.reduce((t, o) => t + mnElegido(o), 0)
+  const totMNop    = ops.reduce((t, o) => t + mnElegido(o), 0)   // margen neto operativo (con prorrateo de GF)
+  const totMN      = totMNop + difCambioMes                       // resultado del mes (incluye dif. de cambio)
 
   function colorMN(v: number) {
     return v > 0 ? 'text-green-700' : v < 0 ? 'text-red-700' : 'text-gray-400'
@@ -252,13 +270,14 @@ export default function UtilidadesPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-5 gap-3 mb-5">
+      <div className="grid grid-cols-6 gap-3 mb-5">
         {[
           { label:'Fee PN', val: fmtUSD(totFee), color:'text-[#052698]' },
           { label:'Markup', val: fmtUSD(totMarkup), color:'text-teal-700' },
           { label:'IVA neto (costo)', val: fmtUSD(totIVA), color:'text-orange-700' },
           { label:'Margen bruto', val: fmtUSD(totMB), color:'text-gray-900' },
-          { label:`Margen neto (${CRITERIOS.find(c=>c.key===criterioElegido)?.label})`, val: fmtUSD(totMN), color: colorMN(totMN) },
+          { label:'Dif. de cambio', val: (difCambioMes<0?'−':'')+fmtUSD(Math.abs(difCambioMes)), color: difCambioMes>0?'text-green-700':difCambioMes<0?'text-red-700':'text-gray-400' },
+          { label:`Resultado neto`, val: (totMN<0?'−':'')+fmtUSD(Math.abs(totMN)), color: colorMN(totMN) },
         ].map((k,i) => (
           <div key={i} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
             <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1">{k.label}</div>
@@ -357,7 +376,7 @@ export default function UtilidadesPage() {
                   <td className="px-3 py-3 text-right font-mono font-bold text-gray-900">{fmtN(totMB)}</td>
                   <td className="px-3 py-3 text-right font-mono font-bold text-orange-600">−{fmtN(gastosFijosMes)}</td>
                   <td className="px-3 py-3 text-right font-mono font-bold">
-                    <span className={colorMN(totMN)}>{fmtN(totMN)}</span>
+                    <span className={colorMN(totMNop)}>{fmtN(totMNop)}</span>
                   </td>
                   <td className="px-3 py-3 text-right font-semibold text-gray-600">
                     {fmtPct(ops.reduce((t,o)=>t+o.ingresos_usd,0)>0?(totMB/ops.reduce((t,o)=>t+o.ingresos_usd,0))*100:0)}
@@ -444,7 +463,9 @@ export default function UtilidadesPage() {
                 { label:'', val: 0, color:'' },
                 { label:'MARGEN BRUTO', val: totMB, color:'text-gray-900', bold: true },
                 { label:`Gastos fijos (${CRITERIOS.find(c=>c.key===criterioElegido)?.label})`, val: -gastosFijosMes, color:'text-orange-600' },
-                { label:'MARGEN NETO', val: totMN, color: colorMN(totMN), bold: true },
+                { label:'Margen neto operativo', val: totMNop, color: colorMN(totMNop) },
+                { label:'± Diferencias de cambio', val: difCambioMes, color: difCambioMes>0?'text-green-700':difCambioMes<0?'text-red-700':'text-gray-400' },
+                { label:'RESULTADO NETO', val: totMN, color: colorMN(totMN), bold: true },
               ].map((r,i) => r.label ? (
                 <div key={i} className={`flex justify-between py-1.5 border-b border-gray-50 ${r.bold?'border-t-2 border-gray-200 pt-2 mt-1':''}`}>
                   <span className={`text-xs ${r.bold?'font-bold text-gray-900':'text-gray-600'}`}>{r.label}</span>
@@ -486,6 +507,8 @@ export default function UtilidadesPage() {
                 { label: 'IVA neto pagado SII', val: -totAnioIVA, indent: true, bold: false },
                 { label: 'RESULTADO BRUTO DE EXPLOTACIÓN', val: totAnioMB, indent: false, bold: true },
                 { label: 'Gastos de administración y operación (12 meses)', val: -gastosFijosAnio, indent: true, bold: false },
+                { label: 'Resultado neto operativo', val: totAnioMNop, indent: false, bold: false },
+                { label: '± Diferencias de cambio (resultado financiero)', val: difCambioAnio, indent: true, bold: false },
                 { label: `RESULTADO NETO DEL EJERCICIO`, val: totAnioMN, indent: false, bold: true },
               ].map((r,i) => (
                 <div key={i} className={`flex justify-between py-2 border-b border-gray-50 ${r.bold?'border-t border-gray-200 mt-2 pt-3':''} ${r.indent?'pl-4':''}`}>
@@ -508,15 +531,17 @@ export default function UtilidadesPage() {
                 <th className="text-right py-2">Ingresos</th>
                 <th className="text-right py-2">Margen bruto</th>
                 <th className="text-right py-2">Gastos fijos</th>
+                <th className="text-right py-2">Dif. cambio</th>
                 <th className="text-right py-2">Margen neto</th>
               </tr></thead>
               <tbody>
-                {desgloseMensual.filter(d=>d.ingresos!==0||d.mb!==0||d.gf!==0).map(d => (
+                {desgloseMensual.filter(d=>d.ingresos!==0||d.mb!==0||d.gf!==0||d.dc!==0).map(d => (
                   <tr key={d.mes} className="border-b border-gray-50">
                     <td className="py-1.5 text-gray-700">{MESES[d.mes]}</td>
                     <td className="py-1.5 text-right font-mono text-gray-600">{fmtN(d.ingresos)}</td>
                     <td className="py-1.5 text-right font-mono text-gray-600">{fmtN(d.mb)}</td>
                     <td className="py-1.5 text-right font-mono text-orange-600">{d.gf>0?`−${fmtN(d.gf)}`:'—'}</td>
+                    <td className={`py-1.5 text-right font-mono ${d.dc>0?'text-green-700':d.dc<0?'text-red-700':'text-gray-400'}`}>{d.dc===0?'—':(d.dc<0?`−${fmtN(Math.abs(d.dc))}`:`+${fmtN(d.dc)}`)}</td>
                     <td className={`py-1.5 text-right font-mono font-bold ${colorMN(d.mn)}`}>{d.mn<0?`−${fmtN(Math.abs(d.mn))}`:fmtN(d.mn)}</td>
                   </tr>
                 ))}
@@ -527,11 +552,12 @@ export default function UtilidadesPage() {
                   <td className="py-2 text-right font-mono text-gray-900">{fmtN(totAnioIngresos)}</td>
                   <td className="py-2 text-right font-mono text-gray-900">{fmtN(totAnioMB)}</td>
                   <td className="py-2 text-right font-mono text-orange-700">{gastosFijosAnio>0?`−${fmtN(gastosFijosAnio)}`:'—'}</td>
+                  <td className={`py-2 text-right font-mono ${difCambioAnio>0?'text-green-700':difCambioAnio<0?'text-red-700':'text-gray-400'}`}>{difCambioAnio===0?'—':(difCambioAnio<0?`−${fmtN(Math.abs(difCambioAnio))}`:`+${fmtN(difCambioAnio)}`)}</td>
                   <td className={`py-2 text-right font-mono ${colorMN(totAnioMN)}`}>{totAnioMN<0?`−${fmtN(Math.abs(totAnioMN))}`:fmtN(totAnioMN)}</td>
                 </tr>
               </tfoot>
             </table>
-            <div className="mt-3 text-[10px] text-gray-400">El margen neto total del ejercicio es independiente del criterio de prorrateo (bruto − gastos fijos). El criterio solo redistribuye los gastos fijos entre operaciones.</div>
+            <div className="mt-3 text-[10px] text-gray-400">El resultado neto del ejercicio = margen bruto − gastos fijos ± diferencias de cambio. El criterio de prorrateo solo redistribuye los gastos fijos entre operaciones; no altera el resultado total. Las diferencias de cambio son resultado financiero (notas internas NDDC/NCDC) e impactan la Renta.</div>
           </div>
           )}
 
