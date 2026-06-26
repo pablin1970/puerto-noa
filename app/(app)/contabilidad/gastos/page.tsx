@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { urlVerConMarca } from '@/lib/documentos'
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 const fmtN = (n: number) => (n||0).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -57,12 +58,10 @@ export default function GastosFijosPage() {
     return monto
   }
 
-  // Genera la signed URL al vuelo desde el PATH guardado y abre el modal de preview
-  async function verComprobante(g: any) {
+  // El comprobante es un respaldo SUBIDO: el preview pasa por el motor de marca de agua.
+  function verComprobante(g: any) {
     if (!g.archivo_url) return
-    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(g.archivo_url, 3600)
-    if (error || !data?.signedUrl) { alert('No se pudo abrir el comprobante'); return }
-    setPreviewModal({ url: data.signedUrl, nombre: g.archivo_nombre || 'comprobante', tipo: g.archivo_nombre?.endsWith('.pdf') ? 'pdf' : 'img' })
+    setPreviewModal({ url: urlVerConMarca('comprobantes', g.archivo_url), nombre: g.archivo_nombre || 'comprobante', tipo: g.archivo_nombre?.endsWith('.pdf') ? 'pdf' : 'img' })
   }
 
   // Descarga el comprobante generando una signed URL con opción download
@@ -133,7 +132,7 @@ export default function GastosFijosPage() {
           <select value={anio} onChange={e => setAnio(Number(e.target.value))} className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white">
             {[2024,2025,2026,2027].map(a => <option key={a}>{a}</option>)}
           </select>
-          <button onClick={() => setShowForm(true)} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">+ Agregar gasto</button>
+          {puede(permisos,'gastos_fijos','crear') && <button onClick={() => setShowForm(true)} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">+ Agregar gasto</button>}
         </div>
       </div>
 
@@ -270,7 +269,7 @@ export default function GastosFijosPage() {
                     ) : <span className="text-gray-300 text-[10px]">—</span>}
                   </td>
                   <td className="px-4 py-3.5">
-                    <button onClick={() => eliminar(g.id)} className="text-gray-400 hover:text-red-500 text-xs">✕</button>
+                    {puede(permisos,'gastos_fijos','eliminar') && <button onClick={() => eliminar(g.id)} className="text-gray-400 hover:text-red-500 text-xs">✕</button>}
                   </td>
                 </tr>
               ))}
