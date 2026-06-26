@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt } from '@/lib/utils'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { urlVerConMarca } from '@/lib/documentos'
 
 type Tab = 'arqueo' | 'movimientos' | 'por_operacion' | 'conciliacion'
 
@@ -297,6 +298,7 @@ export default function FondosCustodiaPage() {
           movimientos={movimientos}
           saldoCuenta={saldoCuenta}
           reload={loadAll}
+          permisos={permisos}
         />
       )}
     </div>
@@ -402,12 +404,10 @@ function MovimientosTab({ supabase, cuentas, movimientos, operaciones, facturasE
     reload()
   }
 
-  // Abre el comprobante en el modal generando una signed URL al vuelo desde el PATH
-  async function verComprobante(m: any) {
+  // El comprobante es un respaldo SUBIDO: el preview pasa por el motor de marca de agua.
+  function verComprobante(m: any) {
     if (!m.comprobante_url) return
-    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(m.comprobante_url, 3600)
-    if (error || !data?.signedUrl) { alert('No se pudo abrir el comprobante'); return }
-    setPreviewModal({ url: data.signedUrl, nombre: m.comprobante_nombre || 'comprobante', tipo: m.comprobante_nombre?.endsWith('.pdf') ? 'pdf' : 'img' })
+    setPreviewModal({ url: urlVerConMarca('comprobantes', m.comprobante_url), nombre: m.comprobante_nombre || 'comprobante', tipo: m.comprobante_nombre?.endsWith('.pdf') ? 'pdf' : 'img' })
   }
 
   // Descarga el comprobante generando una signed URL con opción download
@@ -526,7 +526,7 @@ function MovimientosTab({ supabase, cuentas, movimientos, operaciones, facturasE
                       ) : <span className="text-gray-300 text-[10px]">—</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <button onClick={() => eliminar(m.id)} className="text-gray-300 hover:text-red-500 text-[10px] transition-colors">🗑</button>
+                      {puede(permisos,'fondos_custodia','eliminar') && <button onClick={() => eliminar(m.id)} className="text-gray-300 hover:text-red-500 text-[10px] transition-colors">🗑</button>}
                     </td>
                   </tr>
                 )
@@ -654,7 +654,7 @@ function PorOperacionTab({ movimientos, operaciones, cuentas, saldoPorOperacion 
 }
 
 // ── CONCILIACIÓN TAB ───────────────────────────────────────────
-function ConciliacionTab({ supabase, cuentas, movimientos, saldoCuenta, reload }: any) {
+function ConciliacionTab({ supabase, cuentas, movimientos, saldoCuenta, reload, permisos }: any) {
   const [selCuenta, setSelCuenta] = useState('')
   const [fecha, setFecha] = useState(nowDate())
   const [saldoReal, setSaldoReal] = useState('')
@@ -743,10 +743,10 @@ function ConciliacionTab({ supabase, cuentas, movimientos, saldoCuenta, reload }
           <input value={notas} onChange={e => setNotas(e.target.value)} className={inp} placeholder="Observaciones de la conciliación"/>
         </div>
         <div className="flex justify-end">
-          <button onClick={guardar} disabled={saving}
+          {puede(permisos,'fondos_custodia','crear') && <button onClick={guardar} disabled={saving}
             className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
             {saving ? 'Guardando...' : 'Registrar conciliación'}
-          </button>
+          </button>}
         </div>
       </div>
 
