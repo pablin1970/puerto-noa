@@ -1399,7 +1399,15 @@ const clientesFiltrados=terceros.filter(t=>
       const {data:user}=await supabase.auth.getUser()
       if(user.user){
         const {data:uDB}=await supabase.from('usuarios').select('*').eq('auth_id',user.user.id).single()
-        if(uDB) setPreviewEjecutivo(uDB)
+        if(uDB){
+          if((uDB as any).firma_url){
+            try{
+              const {data:s}=await supabase.storage.from('usuarios_privado').createSignedUrl((uDB as any).firma_url,3600)
+              if(s?.signedUrl) (uDB as any).firma_signed_url=s.signedUrl
+            }catch{}
+          }
+          setPreviewEjecutivo(uDB)
+        }
       }
     }catch(e){/* sin ejecutivo, el doc usa placeholder */}
     setPreviewCondGen(condicionesGenerales.map((c:any)=>c.texto))
