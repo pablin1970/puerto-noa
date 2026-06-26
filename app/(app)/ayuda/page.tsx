@@ -1,5 +1,6 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { createClient } from '@/lib/supabase'
 import { cargarPermisos, puede } from '@/lib/permisos'
 
 interface Mensaje { rol: 'user' | 'assistant'; texto: string }
@@ -69,6 +70,26 @@ export default function AyudaPage() {
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
   const [permListos, setPermListos] = useState(false)
   useEffect(() => { cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
+
+  const supabase = useMemo(() => createClient(), [])
+  const [abriendo, setAbriendo] = useState<string | null>(null)
+
+  // Los manuales viven en el bucket privado "manuales" (gobernado por permiso 'ayuda').
+  // Se sirven con enlace firmado generado al vuelo; no hay URL pública.
+  async function verManual(file: string) {
+    setAbriendo(file)
+    const { data, error } = await supabase.storage.from('manuales').createSignedUrl(file, 300)
+    setAbriendo(null)
+    if (error || !data) { alert('No tenés permiso para ver este documento o no está disponible.'); return }
+    window.open(data.signedUrl, '_blank', 'noreferrer')
+  }
+  async function descargarManual(file: string) {
+    setAbriendo(file + ':dl')
+    const { data, error } = await supabase.storage.from('manuales').createSignedUrl(file, 300, { download: file })
+    setAbriendo(null)
+    if (error || !data) { alert('No tenés permiso para descargar este documento o no está disponible.'); return }
+    window.open(data.signedUrl, '_blank', 'noreferrer')
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -226,31 +247,31 @@ export default function AyudaPage() {
                 icon: '📖', bg: 'bg-[#EBF2FF]', btnColor: 'bg-[#1168F8] hover:bg-[#052698]',
                 titulo: 'Manual de Usuario',
                 desc: 'Guía práctica paso a paso para operar cada módulo del sistema, con avisos, novedades y recomendaciones de uso.',
-                url: '/01_Manual_de_Usuario_PuertoNOA_v3.pdf', btnLabel: '📖 Ver manual',
+                file: '01_Manual_de_Usuario_PuertoNOA_v3.pdf', btnLabel: '📖 Ver manual',
               },
               {
                 icon: '🗂', bg: 'bg-green-50', btnColor: 'bg-[#0a9e6e] hover:bg-[#087a54]',
                 titulo: 'Fichas de módulos',
                 desc: 'Una ficha por módulo con sus partes internas, acciones disponibles e integraciones con otros módulos del sistema.',
-                url: '/02_Fichas_de_Modulos_PuertoNOA_v3.pdf', btnLabel: '🗂 Ver fichas',
+                file: '02_Fichas_de_Modulos_PuertoNOA_v3.pdf', btnLabel: '🗂 Ver fichas',
               },
               {
                 icon: '📋', bg: 'bg-blue-50', btnColor: 'bg-[#052698] hover:bg-[#1168F8]',
                 titulo: 'Descripción del sistema',
                 desc: 'Visión general del sistema: qué hace, la ruta logística, las áreas funcionales, el flujo de trabajo, las integraciones automáticas y los roles.',
-                url: '/03_Descripcion_del_Sistema_PuertoNOA_v3.pdf', btnLabel: '📋 Ver PDF',
+                file: '03_Descripcion_del_Sistema_PuertoNOA_v3.pdf', btnLabel: '📋 Ver PDF',
               },
               {
                 icon: '🗺', bg: 'bg-purple-50', btnColor: 'bg-[#7C3AED] hover:bg-[#6D28D9]',
                 titulo: 'Diagrama de interacciones',
                 desc: 'Mapa esquemático de cómo se vinculan los módulos del sistema y sus integraciones automáticas entre ellos.',
-                url: '/04_Diagrama_de_Interacciones_PuertoNOA_v3.pdf', btnLabel: '🗺 Ver diagrama',
+                file: '04_Diagrama_de_Interacciones_PuertoNOA_v3.pdf', btnLabel: '🗺 Ver diagrama',
               },
               {
                 icon: '🎓', bg: 'bg-amber-50', btnColor: 'bg-[#ef9f27] hover:bg-[#d98917]',
                 titulo: 'Clase magistral del sistema',
                 desc: 'Recorrido completo por la arquitectura, el flujo de trabajo y la propuesta de valor del sistema, con doble lente: técnica (para programadores) y de negocio (para clientes potenciales).',
-                url: '/05_Clase_Magistral_PuertoNOA_v3.pdf', btnLabel: '🎓 Ver clase magistral',
+                file: '05_Clase_Magistral_PuertoNOA_v3.pdf', btnLabel: '🎓 Ver clase magistral',
               },
             ].map((doc, i) => (
               <div key={i} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
@@ -260,14 +281,21 @@ export default function AyudaPage() {
                     <h3 className="font-bold text-gray-900 mb-1">{doc.titulo}</h3>
                     <p className="text-xs text-gray-500 mb-3 leading-relaxed">{doc.desc}</p>
                     <div className="flex gap-2">
-                      <a href={doc.url} target="_blank" rel="noreferrer"
-                        className={`px-4 py-2 ${doc.btnColor} text-white rounded-xl text-xs font-bold transition-colors`}>
-                        {doc.btnLabel}
-                      </a>
-                      <a href={doc.url} download
-                        className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-semibold hover:bg-gray-50 transition-colors">
-                        ⬇ Descargar
-                      </a>
+                      {puede(permisos, 'ayuda', 'ver') && (
+                        <button onClick={() => verManual(doc.file)} disabled={abriendo === doc.file}
+                          className={`px-4 py-2 ${doc.btnColor} text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-50`}>
+                          {abriendo === doc.file ? 'Abriendo…' : doc.btnLabel}
+                        </button>
+                      )}
+                      {puede(permisos, 'ayuda', 'descargar') && (
+                        <button onClick={() => descargarManual(doc.file)} disabled={abriendo === doc.file + ':dl'}
+                          className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50">
+                          {abriendo === doc.file + ':dl' ? '…' : '⬇ Descargar'}
+                        </button>
+                      )}
+                      {!puede(permisos, 'ayuda', 'ver') && !puede(permisos, 'ayuda', 'descargar') && (
+                        <span className="text-[11px] text-gray-400 italic">Sin permiso para este documento</span>
+                      )}
                     </div>
                   </div>
                 </div>
