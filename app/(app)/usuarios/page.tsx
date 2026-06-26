@@ -15,9 +15,15 @@ interface Usuario {
   iniciales: string
   activo: boolean
   foto_url?: string
+  firma_url?: string
+  cargo?: string
+  telefono?: string
+  pais_operacion?: string
+  provincia_operacion?: string
   last_login_at?: string
   last_login_ip?: string
   last_login_ciudad?: string
+  last_login_region?: string
   last_login_pais?: string
   created_at: string
 }
@@ -43,8 +49,10 @@ interface LoginLog {
   id: string
   ip: string
   ciudad: string
+  region?: string
   pais: string
   pais_codigo: string
+  fuera_de_zona?: boolean
   user_agent: string
   metodo?: string
   created_at: string
@@ -53,6 +61,8 @@ interface LoginLog {
 // ── Definición completa de módulos y permisos ──────────────────────
 import { ACCIONES, MODULOS_PERMISOS, modulosPendientesSet, ACCIONES_POR_MODULO } from '@/lib/modulos'
 import type { Accion } from '@/lib/modulos'
+import { PAISES_OPERACION, terminoRegion, regionesDe } from '@/lib/geografiaPaises'
+import { abrirConMarca } from '@/lib/documentos'
 
 const COLORES_ROL = ['#1168F8', '#052698', '#0a9e6e', '#b45309', '#6b21a8', '#dc2626', '#0891b2']
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -69,10 +79,14 @@ export default function UsuariosPage() {
   const [modalUsuario, setModalUsuario] = useState<{ type: 'nuevo' | 'editar' | 'historial'; usuario?: Usuario } | null>(null)
   const [modalRol, setModalRol] = useState<{ type: 'nuevo' | 'editar'; rol?: Role } | null>(null)
   const [historialLogs, setHistorialLogs] = useState<LoginLog[]>([])
-  const [formU, setFormU] = useState({ nombre: '', email: '', iniciales: '', roles_ids: [] as string[], activo: true })
+  const [formU, setFormU] = useState({ nombre: '', email: '', iniciales: '', roles_ids: [] as string[], activo: true, cargo: '', telefono: '', pais_operacion: '', provincia_operacion: '' })
+  // URLs firmadas para previsualizar foto/firma del bucket privado en el modal
+  const [previewFoto, setPreviewFoto] = useState<string>('')
+  const [previewFirma, setPreviewFirma] = useState<string>('')
+  const [imgPaths, setImgPaths] = useState<{ foto: string; firma: string }>({ foto: '', firma: '' })
+  const [subiendoImg, setSubiendoImg] = useState<'foto' | 'firma' | null>(null)
   const [formR, setFormR] = useState({ nombre: '', descripcion: '', color: '#1168F8' })
   const [saving, setSaving] = useState(false)
-  const [uploadingFoto, setUploadingFoto] = useState<string | null>(null)
   const [permisosModificados, setPermisosModificados] = useState<Record<string, boolean>>({})
   const [savingPermisos, setSavingPermisos] = useState(false)
   // Módulos ya confirmados con "Guardar" (tabla modulos_revisados) + los marcados en esta sesión sin guardar aún
@@ -245,12 +259,16 @@ export default function UsuariosPage() {
         auth_id: null,
         nombre: formU.nombre, email: formU.email.trim().toLowerCase(), iniciales,
         rol: 'ejecutivo', roles_ids: formU.roles_ids, activo: formU.activo,
+        cargo: formU.cargo || null, telefono: formU.telefono || null,
+        pais_operacion: formU.pais_operacion || null, provincia_operacion: formU.provincia_operacion || null,
       })
       if (error) { alert('Error al crear el usuario: ' + error.message); setSaving(false); return }
       setModalUsuario(null)
     } else if (modalUsuario?.usuario) {
       await (supabase.from('usuarios') as any).update({
         nombre: formU.nombre, email: formU.email, iniciales, roles_ids: formU.roles_ids, activo: formU.activo,
+        cargo: formU.cargo || null, telefono: formU.telefono || null,
+        pais_operacion: formU.pais_operacion || null, provincia_operacion: formU.provincia_operacion || null,
       }).eq('id', modalUsuario.usuario.id)
       setModalUsuario(null)
     }
@@ -269,17 +287,48 @@ export default function UsuariosPage() {
     setModalUsuario({ type: 'historial', usuario: u })
   }
 
-  async function subirFoto(usuario: Usuario, file: File) {
-    setUploadingFoto(usuario.id)
-    const ext = file.name.split('.').pop()
-    const path = `${usuario.id}.${ext}`
-    await supabase.storage.from('avatares').upload(path, file, { upsert: true })
-    const { data } = supabase.storage.from('avatares').getPublicUrl(path)
-    if (data?.publicUrl) {
-      await (supabase.from('usuarios') as any).update({ foto_url: data.publicUrl }).eq('id', usuario.id)
-      await loadAll()
+  // Sube foto o firma al bucket PRIVADO usuarios_privado. Guarda el PATH (no URL pública).
+  // Requiere permiso usuarios_imagenes.crear (o ser el propio usuario / super admin, vía RLS).
+  async function subirImagen(usuario: Usuario, tipo: 'foto' | 'firma', file: File) {
+    setSubiendoImg(tipo)
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase()
+    const path = `${usuario.id}/${tipo}.${ext}`
+    const { error } = await supabase.storage.from('usuarios_privado').upload(path, file, { upsert: true })
+    if (error) { alert('No se pudo subir la imagen: ' + error.message); setSubiendoImg(null); return }
+    const campo = tipo === 'foto' ? 'foto_url' : 'firma_url'
+    await (supabase.from('usuarios') as any).update({ [campo]: path }).eq('id', usuario.id)
+    setImgPaths(prev => ({ ...prev, [tipo]: path }))
+    // Refrescar la previsualización con URL firmada
+    try {
+      const { data: s } = await supabase.storage.from('usuarios_privado').createSignedUrl(path, 3600)
+      if (s?.signedUrl) { tipo === 'foto' ? setPreviewFoto(s.signedUrl) : setPreviewFirma(s.signedUrl) }
+    } catch {}
+    await loadAll()
+    setSubiendoImg(null)
+  }
+
+  // Descarga el ORIGINAL limpio (sin marca). Gobernado por usuarios_imagenes.descargar (RLS).
+  async function descargarImagen(path: string) {
+    try {
+      const { data } = await supabase.storage.from('usuarios_privado').createSignedUrl(path, 60, { download: true })
+      if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noreferrer')
+      else alert('No tenés permiso para descargar esta imagen.')
+    } catch { alert('No tenés permiso para descargar esta imagen.') }
+  }
+
+  // Genera URLs firmadas para previsualizar foto/firma al abrir la edición.
+  async function cargarPreviewImagenes(u: Usuario) {
+    setPreviewFoto(''); setPreviewFirma('')
+    setImgPaths({ foto: (u as any).foto_url && !(u as any).foto_url.startsWith('http') ? (u as any).foto_url : '', firma: (u as any).firma_url || '' })
+    for (const [campo, set] of [['foto_url', setPreviewFoto], ['firma_url', setPreviewFirma]] as const) {
+      const p = (u as any)[campo]
+      if (p && !p.startsWith('http')) {
+        try {
+          const { data: s } = await supabase.storage.from('usuarios_privado').createSignedUrl(p, 3600)
+          if (s?.signedUrl) set(s.signedUrl)
+        } catch {}
+      } else if (p) { set(p) }
     }
-    setUploadingFoto(null)
   }
 
   async function guardarRol() {
@@ -325,6 +374,9 @@ export default function UsuariosPage() {
   const puedeEditarR = puedeAccion(permUser,'roles','editar')
   const puedeEliminarR = puedeAccion(permUser,'roles','eliminar')
   const puedeVerHistorial = puedeAccion(permUser,'usuarios_historial','ver')
+  const puedeVerImg = puedeAccion(permUser,'usuarios_imagenes','ver')
+  const puedeCrearImg = puedeAccion(permUser,'usuarios_imagenes','crear')
+  const puedeDescargarImg = puedeAccion(permUser,'usuarios_imagenes','descargar')
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -335,7 +387,7 @@ export default function UsuariosPage() {
         </div>
         <div className="flex gap-2">
           {tab === 'usuarios' && puedeCrearU && (
-            <button onClick={() => { setFormU({ nombre: '', email: '', iniciales: '', roles_ids: [], activo: true }); setModalUsuario({ type: 'nuevo' }) }}
+            <button onClick={() => { setFormU({ nombre: '', email: '', iniciales: '', roles_ids: [], activo: true, cargo: '', telefono: '', pais_operacion: '', provincia_operacion: '' }); setPreviewFoto(''); setPreviewFirma(''); setImgPaths({ foto: '', firma: '' }); setModalUsuario({ type: 'nuevo' }) }}
               className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">
               + Nuevo usuario
             </button>
@@ -380,15 +432,7 @@ export default function UsuariosPage() {
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className="relative flex-shrink-0">
-                            {u.foto_url
-                              ? <img src={u.foto_url} alt={u.nombre} className="w-9 h-9 rounded-xl object-cover"/>
-                              : <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-[11px] font-bold" style={{ background: '#1168F8' }}>{u.iniciales}</div>
-                            }
-                            <label className="absolute -bottom-1 -right-1 w-4 h-4 bg-white border border-gray-200 rounded-full flex items-center justify-center cursor-pointer hover:bg-gray-50">
-                              <span className="text-[8px] text-gray-500">📷</span>
-                              <input type="file" accept="image/*" className="hidden" disabled={uploadingFoto === u.id}
-                                onChange={e => { const f = e.target.files?.[0]; if (f) subirFoto(u, f) }}/>
-                            </label>
+                            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-[11px] font-bold" style={{ background: '#1168F8' }}>{u.iniciales}</div>
                           </div>
                           <div>
                             <div className="font-semibold text-gray-900 flex items-center gap-1.5">
@@ -410,7 +454,7 @@ export default function UsuariosPage() {
                         {u.last_login_ip && <div className="text-[10px] text-gray-400 font-mono">{u.last_login_ip}</div>}
                       </td>
                       <td className="px-4 py-3.5">
-                        {u.last_login_ciudad ? <div className="text-xs text-gray-600">{u.last_login_ciudad}, {u.last_login_pais}</div> : <span className="text-gray-300">—</span>}
+                        {u.last_login_ciudad ? <div className="text-xs text-gray-600">{[u.last_login_ciudad, u.last_login_region, u.last_login_pais].filter(Boolean).join(', ')}</div> : <span className="text-gray-300">—</span>}
                       </td>
                       <td className="px-4 py-3.5">
                         {puedeEditarU ? (
@@ -422,7 +466,7 @@ export default function UsuariosPage() {
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex gap-1.5">
-                          {puedeEditarU && <button onClick={() => { setFormU({ nombre: u.nombre, email: u.email, iniciales: u.iniciales, roles_ids: u.roles_ids || [], activo: u.activo }); setModalUsuario({ type: 'editar', usuario: u }) }}
+                          {puedeEditarU && <button onClick={() => { setFormU({ nombre: u.nombre, email: u.email, iniciales: u.iniciales, roles_ids: u.roles_ids || [], activo: u.activo, cargo: u.cargo || '', telefono: u.telefono || '', pais_operacion: u.pais_operacion || '', provincia_operacion: u.provincia_operacion || '' }); cargarPreviewImagenes(u); setModalUsuario({ type: 'editar', usuario: u }) }}
                             className="p-1.5 border border-gray-200 rounded-lg hover:bg-[#EBF2FF] hover:border-[#93B8FC] text-gray-500 hover:text-[#1168F8] transition-colors" title="Editar">✏</button>}
                           {puedeVerHistorial && <button onClick={() => verHistorial(u)}
                             className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors" title="Historial">📋</button>}
@@ -658,15 +702,23 @@ export default function UsuariosPage() {
               <span className="font-bold text-sm text-gray-900">{modalUsuario.type === 'nuevo' ? 'Nuevo usuario' : 'Editar usuario'}</span>
               <button onClick={() => setModalUsuario(null)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
             </div>
-            <div className="px-5 py-4 space-y-3">
+            <div className="px-5 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre completo</label>
                   <input value={formU.nombre} onChange={e => setFormU(f => ({ ...f, nombre: e.target.value }))} className={inp} placeholder="Nombre Apellido"/>
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Email</label>
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Email <span className="text-[#1168F8] normal-case font-medium">· va a la firma</span></label>
                   <input type="email" value={formU.email} onChange={e => setFormU(f => ({ ...f, email: e.target.value }))} className={inp} placeholder="correo@empresa.com"/>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cargo <span className="text-[#1168F8] normal-case font-medium">· va a la firma</span></label>
+                  <input value={formU.cargo} onChange={e => setFormU(f => ({ ...f, cargo: e.target.value }))} className={inp} placeholder="Ej: Ejecutivo de Comercio Exterior"/>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Teléfono <span className="text-[#1168F8] normal-case font-medium">· va a la firma</span></label>
+                  <input value={formU.telefono} onChange={e => setFormU(f => ({ ...f, telefono: e.target.value }))} className={inp} placeholder="+54 388 ..."/>
                 </div>
                 <div>
                   <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Iniciales (máx. 3)</label>
@@ -679,6 +731,107 @@ export default function UsuariosPage() {
                   </label>
                 </div>
               </div>
+              {/* ── Lugar de operación (control de seguridad del login) ── */}
+              <div className="border-t border-gray-100 pt-3">
+                <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Lugar de operación <span className="text-gray-400 normal-case font-normal">· avisa si entra desde otra zona</span></label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-1">País</label>
+                    <select value={formU.pais_operacion}
+                      onChange={e => setFormU(f => ({ ...f, pais_operacion: e.target.value, provincia_operacion: '' }))}
+                      className={inp}>
+                      <option value="">—</option>
+                      {PAISES_OPERACION.map(p => <option key={p.codigo} value={p.nombre}>{p.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-1">{terminoRegion(formU.pais_operacion)}</label>
+                    <select value={formU.provincia_operacion}
+                      onChange={e => setFormU(f => ({ ...f, provincia_operacion: e.target.value }))}
+                      disabled={!formU.pais_operacion}
+                      className={inp + (!formU.pais_operacion ? ' opacity-50' : '')}>
+                      <option value="">—</option>
+                      {regionesDe(formU.pais_operacion).map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Foto y firma (bucket privado, permiso usuarios_imagenes) ── */}
+              <div className="border-t border-gray-100 pt-3">
+                <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Foto y firma <span className="text-gray-400 normal-case font-normal">· datos sensibles, protegidos por permiso</span></label>
+                {modalUsuario.type === 'nuevo' ? (
+                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[11px] text-amber-700">
+                    Guardá primero el usuario para poder cargar la foto y la firma.
+                  </div>
+                ) : !puedeCrearImg ? (
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-[11px] text-gray-500">
+                    No tenés permiso para cargar imágenes de usuario.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] text-gray-400 mb-1">Foto</label>
+                      <div className="flex items-center gap-2">
+                        <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                          {previewFoto ? <img src={previewFoto} alt="Foto" className="w-full h-full object-cover"/> : <span className="text-[9px] text-gray-400">sin foto</span>}
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] cursor-pointer hover:bg-gray-50 text-center">
+                            {subiendoImg === 'foto' ? 'Subiendo…' : 'Subir'}
+                            <input type="file" accept="image/png,image/jpeg" className="hidden"
+                              onChange={e => { const f = e.target.files?.[0]; if (f && modalUsuario.usuario) subirImagen(modalUsuario.usuario, 'foto', f) }}/>
+                          </label>
+                          {imgPaths.foto && (
+                            <div className="flex gap-1">
+                              {puedeVerImg && <button onClick={() => abrirConMarca('usuarios_privado', imgPaths.foto)} className="text-[10px] text-[#1168F8] hover:underline">Ver</button>}
+                              {puedeDescargarImg && <button onClick={() => descargarImagen(imgPaths.foto)} className="text-[10px] text-gray-500 hover:underline">Descargar</button>}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-gray-400 mb-1">Firma manuscrita</label>
+                      <div className="flex items-center gap-2">
+                        <div className="w-20 h-12 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                          {previewFirma ? <img src={previewFirma} alt="Firma" className="w-full h-full object-contain"/> : <span className="text-[9px] text-gray-400">sin firma</span>}
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] cursor-pointer hover:bg-gray-50 text-center">
+                            {subiendoImg === 'firma' ? 'Subiendo…' : 'Subir'}
+                            <input type="file" accept="image/png,image/jpeg" className="hidden"
+                              onChange={e => { const f = e.target.files?.[0]; if (f && modalUsuario.usuario) subirImagen(modalUsuario.usuario, 'firma', f) }}/>
+                          </label>
+                          {imgPaths.firma && (
+                            <div className="flex gap-1">
+                              {puedeVerImg && <button onClick={() => abrirConMarca('usuarios_privado', imgPaths.firma)} className="text-[10px] text-[#1168F8] hover:underline">Ver</button>}
+                              {puedeDescargarImg && <button onClick={() => descargarImagen(imgPaths.firma)} className="text-[10px] text-gray-500 hover:underline">Descargar</button>}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Vista previa en vivo de la firma del documento ── */}
+              <div className="border-t border-gray-100 pt-3">
+                <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Vista previa de la firma</label>
+                <div className="border border-gray-200 rounded-xl p-3 inline-block min-w-[200px]">
+                  <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wide mb-1">Por Puerto NOA SpA</div>
+                  {previewFirma
+                    ? <img src={previewFirma} alt="Firma" style={{ display: 'block', maxHeight: '40px', maxWidth: '160px', objectFit: 'contain', marginBottom: '2px' }}/>
+                    : <div style={{ height: '22px' }}/>}
+                  <div className="border-b border-gray-300 mb-1"/>
+                  <div className="text-[11px] font-bold text-gray-900">{formU.nombre || '—'}</div>
+                  {formU.cargo && <div className="text-[10px] text-gray-500">{formU.cargo}</div>}
+                  {formU.email && <div className="text-[10px] text-[#1168F8]">{formU.email}</div>}
+                  {formU.telefono && <div className="text-[10px] text-gray-500">{formU.telefono}</div>}
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Roles asignados</label>
                 <div className="flex flex-wrap gap-2">
@@ -729,7 +882,7 @@ export default function UsuariosPage() {
                 <table className="w-full text-xs">
                   <thead className="sticky top-0">
                     <tr className="bg-gray-50 border-b border-gray-100">
-                      {['Fecha y hora', 'Método', 'IP', 'Ciudad', 'País', 'Navegador'].map(h => (
+                      {['Fecha y hora', 'Método', 'IP', 'Ciudad', 'Región', 'País', 'Zona', 'Navegador'].map(h => (
                         <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
@@ -748,7 +901,13 @@ export default function UsuariosPage() {
                         </td>
                         <td className="px-4 py-3 font-mono text-[11px] text-gray-500">{log.ip || '—'}</td>
                         <td className="px-4 py-3 text-gray-600">{log.ciudad || '—'}</td>
+                        <td className="px-4 py-3 text-gray-600">{log.region || '—'}</td>
                         <td className="px-4 py-3 text-gray-600">{log.pais || '—'}</td>
+                        <td className="px-4 py-3">
+                          {log.fuera_de_zona
+                            ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-200">⚠ Fuera de zona</span>
+                            : <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-600 border border-green-200">En zona</span>}
+                        </td>
                         <td className="px-4 py-3 text-gray-400 text-[10px] max-w-40 truncate">{log.user_agent?.split(' ')[0] || '—'}</td>
                       </tr>
                     ))}
