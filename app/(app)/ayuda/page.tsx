@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { abrirConMarca } from '@/lib/documentos'
 
 interface Mensaje { rol: 'user' | 'assistant'; texto: string }
 
@@ -75,13 +76,9 @@ export default function AyudaPage() {
   const [abriendo, setAbriendo] = useState<string | null>(null)
 
   // Los manuales viven en el bucket privado "manuales" (gobernado por permiso 'ayuda').
-  // Se sirven con enlace firmado generado al vuelo; no hay URL pública.
-  async function verManual(file: string) {
-    setAbriendo(file)
-    const { data, error } = await supabase.storage.from('manuales').createSignedUrl(file, 300)
-    setAbriendo(null)
-    if (error || !data) { alert('No tenés permiso para ver este documento o no está disponible.'); return }
-    window.open(data.signedUrl, '_blank', 'noreferrer')
+  // "Ver" pasa por el motor de marca de agua (estampa usuario + fecha). "Descargar" da el original.
+  function verManual(file: string) {
+    abrirConMarca('manuales', file)
   }
   async function descargarManual(file: string) {
     setAbriendo(file + ':dl')
