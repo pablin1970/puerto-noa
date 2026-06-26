@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { urlVerConMarca } from '@/lib/documentos'
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 const fmtN = (n: number) => (n||0).toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -88,12 +89,10 @@ export default function FlujoCuentasPage() {
     return monto * calcTCaplicado()
   }
 
-  // Genera la signed URL al vuelo desde el PATH guardado y abre el modal de preview
-  async function verComprobante(m: any) {
+  // El comprobante es un respaldo SUBIDO: el preview pasa por el motor de marca de agua.
+  function verComprobante(m: any) {
     if (!m.archivo_url) return
-    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(m.archivo_url, 3600)
-    if (error || !data?.signedUrl) { alert('No se pudo abrir el comprobante'); return }
-    setPreviewModal({ url: data.signedUrl, nombre: m.archivo_nombre || 'comprobante', tipo: m.archivo_nombre?.endsWith('.pdf') ? 'pdf' : 'img' })
+    setPreviewModal({ url: urlVerConMarca('comprobantes', m.archivo_url), nombre: m.archivo_nombre || 'comprobante', tipo: m.archivo_nombre?.endsWith('.pdf') ? 'pdf' : 'img' })
   }
 
   // Descarga el comprobante generando una signed URL con opción download
@@ -162,7 +161,7 @@ export default function FlujoCuentasPage() {
           <h1 className="text-xl font-bold text-gray-900">Flujo de cuentas</h1>
           <p className="text-xs text-gray-400 mt-0.5">Movimientos entre cuentas Argentina ↔ Chile</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">+ Registrar movimiento</button>
+        {puede(permisos,'flujo_cuentas','crear') && <button onClick={() => setShowForm(true)} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">+ Registrar movimiento</button>}
       </div>
 
       {/* Panel de saldos */}
