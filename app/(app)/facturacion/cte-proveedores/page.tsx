@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt } from '@/lib/utils'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { abrirConMarca } from '@/lib/documentos'
 import ModalImputacion from '../ModalImputacion'
 
 const TIPO_L: Record<string, string> = {
@@ -65,9 +66,9 @@ export default function CteProveedoresPage() {
     setUploadingComp(true)
     const ext = file.name.split('.').pop()
     const path = `cc/${Date.now()}.${ext}`
-    await supabase.storage.from('facturas').upload(path, file, { upsert: true })
-    const { data } = supabase.storage.from('facturas').getPublicUrl(path)
-    if (data?.publicUrl) setCompUrl(data.publicUrl)
+    const { error } = await supabase.storage.from('facturas').upload(path, file, { upsert: true })
+    if (error) { alert('No se pudo subir el comprobante'); setUploadingComp(false); return }
+    setCompUrl(path) // guardamos el PATH (el bucket es privado); el "Ver" pasa por el motor de marca
     setUploadingComp(false)
   }
 
@@ -189,7 +190,7 @@ export default function CteProveedoresPage() {
                   <td className="px-4 py-3 text-right font-mono font-bold text-green-700">{m.debe > 0 ? fmtCLP(m.debe) : '—'}</td>
                   <td className="px-4 py-3 text-right font-mono font-bold text-[#1168F8]">{m.haber > 0 ? fmtCLP(m.haber) : '—'}</td>
                   <td className="px-4 py-3">
-                    {m.comprobante_url ? <a href={m.comprobante_url} target="_blank" className="text-[#1168F8] text-[10px] hover:underline">📎 Ver</a> : <span className="text-gray-300">—</span>}
+                    {m.comprobante_url ? <button onClick={() => abrirConMarca('facturas', m.comprobante_url!)} className="text-[#1168F8] text-[10px] hover:underline">📎 Ver</button> : <span className="text-gray-300">—</span>}
                   </td>
                 </tr>
               ))}
