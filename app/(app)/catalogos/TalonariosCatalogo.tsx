@@ -278,7 +278,22 @@ export default function TalonariosCatalogo() {
                     <div className="text-[11px] text-gray-400 mt-0.5">{t.tipo?.nombre || 'tipo'}</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[10px] text-gray-400 uppercase">Próximo número{t.monedas_habilitadas?.length ? ` · ${t.monedas_habilitadas.join(' · ')}` : (t.moneda ? ` · ${t.moneda}` : '')}</div>
+                    {/* Monedas: la por defecto resaltada; el resto en gris */}
+                    {(t.monedas_habilitadas?.length || t.moneda) && (
+                      <div className="flex items-center justify-end gap-1 mb-1">
+                        {(t.monedas_habilitadas?.length ? t.monedas_habilitadas : [t.moneda!]).map(m => {
+                          const esDefecto = m === t.moneda
+                          return (
+                            <span key={m}
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${esDefecto ? 'bg-[#EBF2FF] text-[#1168F8] border-[#93B8FC]' : 'bg-gray-50 text-gray-400 border-gray-200'}`}
+                              title={esDefecto ? 'Moneda por defecto al emitir' : 'Moneda habilitada'}>
+                              {esDefecto ? `★ ${m}` : m}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
+                    <div className="text-[10px] text-gray-400 uppercase">Próximo a emitir</div>
                     <div className="font-mono font-bold text-sm text-[#1168F8]">{previewNumero(t)}</div>
                   </div>
                   <div className="flex gap-2">
