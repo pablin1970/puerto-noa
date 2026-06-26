@@ -239,8 +239,8 @@ export default function TiposCambioPage() {
 
   const brechaCLP = brechaPct(vigente.clp, vigente.clpFiscal)
 
-  if (permListos && !puede(permisos, 'tipos_cambio', 'ver')) {
-  return (
+ if (permListos && !puede(permisos, 'tipos_cambio', 'ver')) {
+    return (
       <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
         <div className="text-center max-w-sm">
           <div className="text-5xl mb-3">🔒</div>
