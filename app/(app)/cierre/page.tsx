@@ -297,12 +297,12 @@ export default function CierrePage() {
           `}</style>
 
           <div className="no-print flex justify-end mb-3">
-            <button onClick={() => {
+            {puede(permisos,'cierre','descargar') && <button onClick={() => {
             const t = document.title
             document.title = `Rendicion_${cot?.num}_${cot?.cliente?.replace(/\s+/g,'-')}`
             window.print()
             document.title = t
-          }} className="flex items-center gap-1.5 px-4 py-2 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF] transition-colors">🖨 Imprimir / PDF</button>
+          }} className="flex items-center gap-1.5 px-4 py-2 border-2 border-[#1168F8] text-[#1168F8] rounded-lg text-xs font-semibold hover:bg-[#EBF2FF] transition-colors">🖨 Imprimir / PDF</button>}
           </div>
 
           <div id="rend-print" className="bg-white border border-gray-200 rounded-xl overflow-hidden">
