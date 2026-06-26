@@ -448,10 +448,13 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
           {/* Firma */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '14px' }}>
             <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '16px' }}>
-              <div style={{ fontWeight: 700, fontSize: '10px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '32px' }}>Por Puerto NOA SpA</div>
+              <div style={{ fontWeight: 700, fontSize: '10px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Por Puerto NOA SpA</div>
+              {(ejecutivo as any)?.firma_signed_url
+                ? <img src={(ejecutivo as any).firma_signed_url} alt="Firma" style={{ display: 'block', maxHeight: '46px', maxWidth: '180px', objectFit: 'contain', marginBottom: '2px' }} />
+                : <div style={{ height: '24px' }} />}
               <div style={{ borderBottom: '1px solid #9ca3af', marginBottom: '8px' }}></div>
               <div style={{ fontWeight: 700, fontSize: '12px', color: '#111827' }}>{ejecutivo?.nombre || '_____________________________'}</div>
-              <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '2px' }}>{ejecutivo ? (ejecutivo.rol === 'admin' ? 'Dirección' : 'Ejecutivo de operaciones') : 'Cargo'}</div>
+              {(ejecutivo as any)?.cargo && <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '2px' }}>{(ejecutivo as any).cargo}</div>}
               {ejecutivo?.email && <div style={{ fontSize: '10px', color: '#1168F8', marginTop: '3px' }}>{ejecutivo.email}</div>}
               {(ejecutivo as any)?.telefono && <div style={{ fontSize: '10px', color: '#6b7280' }}>{(ejecutivo as any).telefono}</div>}
             </div>
