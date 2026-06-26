@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { urlVerConMarca } from '@/lib/documentos'
 
 // Colores por código — se combina con rubros dinámicos de DB
 const RUBRO_COLORS: Record<string, { color: string; bg: string }> = {
@@ -2123,9 +2124,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             </div>
             {compFile && <button onClick={()=>setCompFile(null)} className="text-[10px] text-red-500 hover:underline mt-1">✕ Quitar archivo</button>}
             {cotizacionInicial?.archivo_url && !compFile && (
-              <button onClick={async()=>{
-                  const {data}=await supabase.storage.from('comprobantes').createSignedUrl(cotizacionInicial.archivo_url,3600)
-                  if(data?.signedUrl) setPreviewModal({url:data.signedUrl,nombre:cotizacionInicial.archivo_nombre||'comprobante',tipo:cotizacionInicial.archivo_nombre?.endsWith('.pdf')?'pdf':'img'})
+              <button onClick={()=>{
+                  setPreviewModal({url:urlVerConMarca('comprobantes', cotizacionInicial.archivo_url),nombre:cotizacionInicial.archivo_nombre||'comprobante',tipo:cotizacionInicial.archivo_nombre?.endsWith('.pdf')?'pdf':'img'})
                 }}
                 className="mt-2 text-[10px] text-[#1168F8] hover:underline">📄 Ver archivo actual</button>
             )}
