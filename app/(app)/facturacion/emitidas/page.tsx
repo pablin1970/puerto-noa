@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { fmt, ETAPAS_L, ETAPAS_ORD } from '@/lib/utils'
 import Link from 'next/link'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { abrirConMarca } from '@/lib/documentos'
 import ModalAgregarItemCatalogo from '@/components/ModalAgregarItemCatalogo'
 
 // Caracterización tributaria de la venta (RV / SII). Define el tipo de transacción.
@@ -226,7 +227,7 @@ export default function FacturasEmitidasPage() {
 
       {view === 'nueva' && <FormFactura supabase={supabase} currentUser={currentUser} terceros={terceros} operaciones={operaciones} catalogo={catalogo} rubrosCat={rubrosCat} tiposComp={tiposComp} talonarios={talonarios} tcSnap={tcSnap} permisos={permisos} onSave={async () => { await loadData(); setView('lista') }} onCancel={() => setView('lista')} />}
       {view === 'detalle' && sel && <DetalleFactura factura={sel} supabase={supabase} permisos={permisos} currentUser={currentUser} onReload={loadData} onImprimir={() => setView('impresion')} onBack={() => setView('lista')} />}
-      {view === 'impresion' && sel && <ImpresionFactura factura={sel} onBack={() => setView('detalle')} />}
+      {view === 'impresion' && sel && <ImpresionFactura factura={sel} onBack={() => setView('detalle')} permisos={permisos} />}
     </div>
   )
 }
@@ -883,14 +884,14 @@ function DetalleFactura({ factura, supabase, permisos, currentUser, onReload, on
     await onReload(); setProcesando(false)
   }
 
-  // Genera la signed URL al vuelo desde el PATH guardado (las firmadas expiran a 1h, por eso no se guardan).
+  // El adjunto es el PDF que devuelve el SII (subido): ver pasa por el motor de marca; descargar da el original limpio.
   async function abrirArchivo(descargar: boolean) {
     if (!factura.archivo_url || abriendo) return
+    if (!descargar) { abrirConMarca('comprobantes', factura.archivo_url); return }
     setAbriendo(true)
     try {
-      const opts = descargar ? { download: factura.archivo_nombre || 'factura' } : undefined
-      const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(factura.archivo_url, 3600, opts)
-      if (error || !data?.signedUrl) { alert('No se pudo abrir el archivo'); return }
+      const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(factura.archivo_url, 3600, { download: factura.archivo_nombre || 'factura' })
+      if (error || !data?.signedUrl) { alert('No se pudo descargar el archivo'); return }
       window.open(data.signedUrl, '_blank')
     } finally { setAbriendo(false) }
   }
@@ -1064,7 +1065,7 @@ function DetalleFactura({ factura, supabase, permisos, currentUser, onReload, on
   )
 }
 
-function ImpresionFactura({ factura, onBack }: any) {
+function ImpresionFactura({ factura, onBack, permisos }: any) {
   const items = Array.isArray(factura.items) ? factura.items : []
   const fmtCLP = (n: number) => Math.round(n).toLocaleString('es-CL')
 
@@ -1083,8 +1084,8 @@ function ImpresionFactura({ factura, onBack }: any) {
       `}</style>
       <div className="no-print flex items-center justify-between mb-4">
         <button onClick={onBack} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50">← Volver</button>
-        <button onClick={() => { const t = document.title; document.title = `Factura_${factura.folio || 'borrador'}`; window.print(); document.title = t }}
-          className="px-5 py-2.5 bg-[#052698] text-white rounded-xl text-sm font-bold hover:bg-[#1168F8]">🖨 Imprimir / Guardar PDF</button>
+        {puede(permisos,'facturas_emitidas','descargar') && <button onClick={() => { const t = document.title; document.title = `Factura_${factura.folio || 'borrador'}`; window.print(); document.title = t }}
+          className="px-5 py-2.5 bg-[#052698] text-white rounded-xl text-sm font-bold hover:bg-[#1168F8]">🖨 Imprimir / Guardar PDF</button>}
       </div>
       <div id="factura-print">
         <div className="factura-page bg-white">
