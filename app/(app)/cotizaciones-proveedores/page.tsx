@@ -1811,26 +1811,6 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           </div>
           <div className="px-5 py-4 space-y-3">
             {renderTramos(tramos, esExpoA, setTramo, addTramo, removeTramo)}
-
-            {/* Seguro terrestre — opcional (común a la cotización) */}
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={form.seguro_terrestre} onChange={e=>setF('seguro_terrestre',e.target.checked)} className="w-4 h-4"/>
-                <span className="text-xs font-semibold text-amber-800">Incluye seguro tramo terrestre</span>
-              </label>
-              {form.seguro_terrestre && (
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  <div>
-                    {lbl('% sobre valor mercadería')}
-                    <input type="text" inputMode="decimal" value={form.seguro_terrestre_pct} onChange={e=>setF('seguro_terrestre_pct',e.target.value)} className={inp} placeholder="ej. 0.3"/>
-                  </div>
-                  <div>
-                    {lbl('Mínimo USD')}
-                    <input type="text" inputMode="decimal" value={form.seguro_terrestre_min} onChange={e=>setF('seguro_terrestre_min',e.target.value)} className={inp} placeholder="ej. 100"/>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         </div>
       )})()}
