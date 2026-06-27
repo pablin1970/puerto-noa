@@ -1697,24 +1697,26 @@ const clientesFiltrados=terceros.filter(t=>
                 onFocus={()=>setShowClienteDropdown(true)} onClick={e=>e.stopPropagation()}
                 className={inp} placeholder="Buscar por nombre, CUIT/RUT o fantasía..."/>
               {showClienteDropdown&&(
-                <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto overscroll-contain mt-1" onClick={e=>e.stopPropagation()}>
-                  {clientesFiltrados.length>0?clientesFiltrados.map(t=>(
-                    <button key={t.id} onMouseDown={()=>selectCliente(t)} className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] transition-colors border-b border-gray-50 last:border-0">
-                      <div className="font-semibold text-sm text-gray-900">{t.razon_social}</div>
-                      <div className="text-[10px] text-gray-400 flex gap-2 mt-0.5">
-                        {t.nro_doc&&<span className="font-mono">{t.tipo_doc}: {t.nro_doc}</span>}
-                        {t.dir_fiscal_ciudad&&<span>{t.dir_fiscal_ciudad}, {t.pais}</span>}
+                <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 overflow-hidden" onClick={e=>e.stopPropagation()}>
+                  <div className="max-h-52 overflow-y-auto overscroll-contain">
+                    {clientesFiltrados.length>0?clientesFiltrados.map(t=>(
+                      <button key={t.id} onMouseDown={()=>selectCliente(t)} className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] transition-colors border-b border-gray-50 last:border-0">
+                        <div className="font-semibold text-sm text-gray-900">{t.razon_social}</div>
+                        <div className="text-[10px] text-gray-400 flex gap-2 mt-0.5">
+                          {t.nro_doc&&<span className="font-mono">{t.tipo_doc}: {t.nro_doc}</span>}
+                          {t.dir_fiscal_ciudad&&<span>{t.dir_fiscal_ciudad}, {t.pais}</span>}
+                        </div>
+                      </button>
+                    )):(
+                      <div className="px-4 py-3 text-xs text-gray-400">
+                        {terceros.length===0?'Cargando clientes...':'Sin coincidencias'}
                       </div>
-                    </button>
-                  )):(
-                    <div className="px-4 py-3 text-xs text-gray-400">
-                      {terceros.length===0?'Cargando clientes...':'Sin coincidencias'}
-                    </div>
-                  )}
-                  {/* Si no hay coincidencia exacta y hay texto, ofrecer crear el cliente */}
+                    )}
+                  </div>
+                  {/* Pie fijo: si no hay coincidencia exacta y hay texto, ofrecer crear el cliente (siempre visible) */}
                   {terceros.length>0 && (buscarCliente||s.cliente).length>0 && !clientesFiltrados.some(t=>t.razon_social.toLowerCase()===(buscarCliente||s.cliente).toLowerCase()) && (
                     <button onMouseDown={abrirAltaCliente}
-                      className="w-full text-left px-4 py-2.5 hover:bg-green-50 text-xs border-t border-gray-100 bg-green-50/40">
+                      className="w-full text-left px-4 py-2.5 hover:bg-green-100 text-xs border-t border-gray-200 bg-green-50">
                       <span className="font-semibold text-green-700">+ Crear cliente «{buscarCliente||s.cliente}»</span>
                       <span className="block text-[10px] text-gray-400 mt-0.5">No está registrado — cargalo ahora para vincularlo</span>
                     </button>
