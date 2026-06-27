@@ -10,13 +10,61 @@ import { useState, useMemo } from 'react'
 interface Punto { created_at: string; [k: string]: any }
 interface Props { tcHistorico: Punto[]; utmHistorico: Punto[] }
 
+// Cada serie se dibuja como una "banderita larga": 3 trazos paralelos con los
+// colores de la bandera del país (cols). El blanco va en gris perla (PALE) para
+// que se vea sobre la tarjeta blanca. UTM no es un par contra el dólar → verde.
+const PALE = '#E9EEF4'
 const TC_DEFS = [
-  { key: 'ars',  col: 'ars',         label: 'ARS/USD',          flag: '🇦🇷', color: '#2a78d6', dec: 0, fuente: 'tc' as const },
-  { key: 'clp',  col: 'clp',         label: 'CLP/USD',          flag: '🇨🇱', color: '#1baf7a', dec: 0, fuente: 'tc' as const },
-  { key: 'clpf', col: 'clp_fiscal',  label: 'CLP fiscal (SII)', flag: '🇨🇱', color: '#eda100', dec: 0, fuente: 'tc' as const },
-  { key: 'cny',  col: 'cny',         label: 'CNY/USD',          flag: '🇨🇳', color: '#4a3aa7', dec: 3, fuente: 'tc' as const },
-  { key: 'utm',  col: 'utm',         label: 'UTM (CLP)',        flag: '🇨🇱', color: '#e34948', dec: 0, fuente: 'utm' as const },
+  { key: 'ars',  col: 'ars',         label: 'ARS/USD',          flag: '🇦🇷', color: '#2E6FA8', cols: ['#5FA3DC', PALE, '#5FA3DC'], dash: false, step: false, dec: 0, fuente: 'tc' as const },
+  { key: 'clp',  col: 'clp',         label: 'CLP/USD',          flag: '🇨🇱', color: '#0F3A8C', cols: ['#D52B1E', PALE, '#1A4FB0'], dash: false, step: false, dec: 0, fuente: 'tc' as const },
+  { key: 'clpf', col: 'clp_fiscal',  label: 'CLP fiscal (SII)', flag: '🇨🇱', color: '#8E1A12', cols: ['#D52B1E', PALE, '#1A4FB0'], dash: true,  step: false, dec: 0, fuente: 'tc' as const },
+  { key: 'cny',  col: 'cny',         label: 'CNY/USD',          flag: '🇨🇳', color: '#B11E0C', cols: ['#DE2910', '#DE2910', '#DE2910'], dash: false, step: false, dec: 3, fuente: 'tc' as const },
+  { key: 'utm',  col: 'utm',         label: 'UTM (CLP)',        flag: '',     color: '#0a7d57', cols: ['#0a9e6e'], dash: false, step: true, dec: 0, fuente: 'utm' as const },
 ]
+
+// Convierte una serie a puntos de pantalla (con escalón para UTM).
+function aPuntos(arr: { t: number; v: number; i?: number }[], xOf: (t: number) => number, yOf: (n: number) => number, valKey: 'v' | 'i', step: boolean) {
+  const P: { x: number; y: number }[] = []
+  for (let k = 0; k < arr.length; k++) {
+    const x = xOf(arr[k].t)
+    if (step && k > 0) P.push({ x, y: yOf(arr[k - 1][valKey] as number) })
+    P.push({ x, y: yOf(arr[k][valKey] as number) })
+  }
+  return P
+}
+
+// Dibuja la línea como N trazos paralelos (offset sobre la normal local).
+function Ribbon({ P, cols, w, dash, idp }: { P: { x: number; y: number }[]; cols: string[]; w: number; dash: boolean; idp: string }) {
+  const n = cols.length, spread = (n - 1) / 2
+  return (
+    <>
+      {cols.map((c, j) => {
+        const off = (j - spread) * (w * 0.92)
+        let d = ''
+        for (let i = 0; i < P.length; i++) {
+          const p = P[Math.max(0, i - 1)], q = P[Math.min(P.length - 1, i + 1)]
+          let tx = q.x - p.x, ty = q.y - p.y; const l = Math.hypot(tx, ty) || 1
+          const nx = -ty / l, ny = tx / l
+          const x = P[i].x + nx * off, y = P[i].y + ny * off
+          d += (i ? ' L ' : 'M ') + x.toFixed(2) + ' ' + y.toFixed(2)
+        }
+        return <path key={idp + j} d={d} fill="none" stroke={c} strokeWidth={w} strokeLinejoin="round" strokeLinecap="round" strokeDasharray={dash ? '8 5' : undefined} />
+      })}
+    </>
+  )
+}
+
+// Muestra de referencia (mini banderita) para la leyenda.
+function SwatchRibbon({ cols, dash }: { cols: string[]; dash: boolean }) {
+  const ys = cols.length === 1 ? [6] : cols.map((_, j) => 3 + j * 3)
+  return (
+    <svg width="22" height="12" className="shrink-0">
+      {cols.map((c, j) => (
+        <line key={j} x1="1" y1={ys[j]} x2="21" y2={ys[j]} stroke={c} strokeWidth="2" strokeLinecap="round" strokeDasharray={dash ? '5 3' : undefined} />
+      ))}
+    </svg>
+  )
+}
 
 function fmtVal(v: number, dec: number): string {
   return dec ? v.toFixed(dec) : Math.round(v).toLocaleString('es-AR')
@@ -247,9 +295,7 @@ function GraficoIndexado({ series, hov, setHov }: {
           <text key={i} x={xOf(t)} y={H - 8} textAnchor="middle" fontSize="9" fill="#9ca3af">{fmtDM(t)}</text>
         ))}
         {all.map(s => (
-          <path key={s.def.key}
-            d={s.pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xOf(p.t)} ${yOf(p.i)}`).join(' ')}
-            fill="none" stroke={s.def.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          <Ribbon key={s.def.key} idp={s.def.key} P={aPuntos(s.pts, xOf, yOf, 'i', s.def.step)} cols={s.def.cols} w={2.1} dash={s.def.dash} />
         ))}
         {all.map(s => s.pts.map((p, i) => (
           <circle key={s.def.key + i} cx={xOf(p.t)} cy={yOf(p.i)} r="6" fill="transparent"
@@ -265,10 +311,10 @@ function GraficoIndexado({ series, hov, setHov }: {
           </g>
         )}
       </svg>
-      <div className="flex flex-wrap gap-4 mt-3 justify-center">
+      <div className="flex flex-wrap gap-x-4 gap-y-2 mt-3 justify-center">
         {all.map(s => (
-          <div key={s.def.key} className="flex items-center gap-1.5 text-xs text-gray-600">
-            <span className="w-3 h-3 rounded-sm" style={{ background: s.def.color }} />{s.def.flag} {s.def.label}
+          <div key={s.def.key} className="flex items-center gap-2 text-xs text-gray-600">
+            <SwatchRibbon cols={s.def.cols} dash={s.def.dash} />{s.def.flag} {s.def.label}
           </div>
         ))}
       </div>
@@ -294,7 +340,7 @@ function MiniAbsoluto({ serie }: { serie: { def: typeof TC_DEFS[number]; puntos:
   return (
     <div className="border border-gray-100 rounded-xl p-3">
       <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mb-0.5">
-        <span className="w-2 h-2 rounded-sm" style={{ background: def.color }} />{def.flag} {def.label}
+        <SwatchRibbon cols={def.cols} dash={def.dash} />{def.flag} {def.label}
       </div>
       <div className="flex items-baseline gap-2 mb-1">
         <span className="font-mono font-bold text-lg text-gray-900">{fmtVal(last, def.dec)}</span>
@@ -314,8 +360,8 @@ function MiniAbsoluto({ serie }: { serie: { def: typeof TC_DEFS[number]; puntos:
         })}
         <text x={padL} y={H - 4} textAnchor="start" fontSize="8" fill="#9ca3af">{fmtDM(tMin)}</text>
         <text x={W - padR} y={H - 4} textAnchor="end" fontSize="8" fill="#9ca3af">{fmtDM(tMax)}</text>
-        {puntos.length > 1 && <path d={areaPath} fill={def.color} fillOpacity="0.10" />}
-        {puntos.length > 1 && <path d={linePath} fill="none" stroke={def.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />}
+        {puntos.length > 1 && <path d={areaPath} fill={def.color} fillOpacity="0.07" />}
+        {puntos.length > 1 && <Ribbon idp={def.key} P={aPuntos(puntos.map(p => ({ ...p })), xOf, yOf, 'v', def.step)} cols={def.cols} w={1.7} dash={def.dash} />}
         {puntos.length === 1 && <circle cx={xOf(tMin)} cy={yOf(last)} r="3" fill={def.color} />}
       </svg>
       <div className="flex justify-between text-[10px] text-gray-400 mt-1">
