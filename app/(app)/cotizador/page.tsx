@@ -1713,12 +1713,12 @@ const clientesFiltrados=terceros.filter(t=>
                       </div>
                     )}
                   </div>
-                  {/* Pie fijo: si no hay coincidencia exacta y hay texto, ofrecer crear el cliente (siempre visible) */}
-                  {terceros.length>0 && (buscarCliente||s.cliente).length>0 && !clientesFiltrados.some(t=>t.razon_social.toLowerCase()===(buscarCliente||s.cliente).toLowerCase()) && (
+                  {/* Pie fijo: crear cliente — SIEMPRE visible al fondo del desplegable */}
+                  {terceros.length>0 && !clientesFiltrados.some(t=>t.razon_social.toLowerCase()===(buscarCliente||s.cliente||'').toLowerCase()) && (
                     <button onMouseDown={abrirAltaCliente}
                       className="w-full text-left px-4 py-2.5 hover:bg-green-100 text-xs border-t border-gray-200 bg-green-50">
-                      <span className="font-semibold text-green-700">+ Crear cliente «{buscarCliente||s.cliente}»</span>
-                      <span className="block text-[10px] text-gray-400 mt-0.5">No está registrado — cargalo ahora para vincularlo</span>
+                      <span className="font-semibold text-green-700">+ {(buscarCliente||s.cliente).trim().length>0 ? `Crear cliente «${buscarCliente||s.cliente}»` : 'Crear nuevo cliente'}</span>
+                      <span className="block text-[10px] text-gray-400 mt-0.5">No está en la lista — cargalo ahora para vincularlo</span>
                     </button>
                   )}
                 </div>
