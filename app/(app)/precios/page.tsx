@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import TCEvolucion from '@/components/TCEvolucion'
 
 const CATEGORIAS: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   mercaderia:            { label: 'Mercadería',             color: '#052698', bg: '#E8EEFF', icon: '📦' },
@@ -114,9 +115,7 @@ export default function InteligenciaPreciosPage() {
   const [filtCiudad2, setFiltCiudad2] = useState('')
   const [filtTramo2, setFiltTramo2] = useState('')
 
-  // Filtros Tab 3
-  const [filtTC, setFiltTC] = useState<'ars'|'clp'|'cny'|'utm'>('ars')
-  const [filtMesesTC, setFiltMesesTC] = useState(12)
+  // Filtros Tab 3: la pestaña TC ahora vive en <TCEvolucion/> con su propio estado
 
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
   const [permListos, setPermListos] = useState(false)
@@ -134,7 +133,7 @@ export default function InteligenciaPreciosPage() {
         .select('id,proveedor_nombre,fecha,rubro,estado,referencia')
         .order('fecha', { ascending: false }),
       supabase.from('tipos_cambio_eventos')
-        .select('ars,clp,cny,fecha,created_at')
+        .select('ars,clp,clp_fiscal,cny,fecha,created_at')
         .order('created_at', { ascending: true })
         .limit(500),
       supabase.from('servicios_catalogo')
@@ -334,33 +333,8 @@ export default function InteligenciaPreciosPage() {
   const minComp = ultimasPorProv.length ? convertirUSD(ultimasPorProv[0], tcHistorico) : 0
 
   // ── Datos para Tab 3 ──────────────────────────────────────────────
-  const tcFiltrado = useMemo(() => {
-    const cutoff = new Date()
-    cutoff.setMonth(cutoff.getMonth() - filtMesesTC)
-    const fuente = filtTC === 'utm' ? utmHistorico : tcHistorico
-    return fuente.filter(t => new Date(t.created_at) >= cutoff && t[filtTC] != null)
-  }, [tcHistorico, utmHistorico, filtTC, filtMesesTC])
+  // (movido a components/TCEvolucion.tsx)
 
-  const tcValores = tcFiltrado.map(t => t[filtTC] as number)
-  const tcMin = tcValores.length ? Math.min(...tcValores) * 0.98 : 0
-  const tcMax = tcValores.length ? Math.max(...tcValores) * 1.02 : 1
-
-  const tcFechas = tcFiltrado.map(t => t.created_at)
-  const tcMinF = tcFechas[0] || ''
-  const tcMaxF = tcFechas[tcFechas.length - 1] || ''
-
-  function tcX(fecha: string, w: number): number {
-    if (!tcMinF || !tcMaxF || tcMinF === tcMaxF) return w / 2
-    const total = new Date(tcMaxF).getTime() - new Date(tcMinF).getTime()
-    const pos = new Date(fecha).getTime() - new Date(tcMinF).getTime()
-    return 60 + (pos / total) * (w - 80)
-  }
-  function tcY(valor: number, h: number): number {
-    if (tcMax === tcMin) return h / 2
-    return h - 30 - ((valor - tcMin) / (tcMax - tcMin)) * (h - 50)
-  }
-
-  const [hovTc, setHovTc] = useState<{ x: number; y: number; val: number; fecha: string } | null>(null)
   const [hovGraf, setHovGraf] = useState<{ x: number; y: number; val: number; fecha: string; prov: string } | null>(null)
 
   if (loading) return (
@@ -808,179 +782,7 @@ export default function InteligenciaPreciosPage() {
 
       {/* ══ TAB 3: TIPOS DE CAMBIO ════════════════════════════════════ */}
       {tab === 'tc' && (
-        <div className="space-y-4">
-          {/* Filtros */}
-          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex gap-4 items-end flex-wrap">
-            <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Moneda</label>
-              <div className="flex gap-2">
-                {([
-                  { key: 'ars', label: '🇦🇷 ARS/USD' },
-                  { key: 'clp', label: '🇨🇱 CLP/USD' },
-                  { key: 'cny', label: '🇨🇳 CNY/USD' },
-                  { key: 'utm', label: '🇨🇱 UTM' },
-                ] as const).map(m => (
-                  <button key={m.key} onClick={() => setFiltTC(m.key)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                      filtTC === m.key ? 'bg-[#052698] text-white border-[#052698]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                    }`}>
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Período</label>
-              <select value={filtMesesTC} onChange={e => setFiltMesesTC(Number(e.target.value))}
-                className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
-                <option value={1}>Último mes</option>
-                <option value={3}>Últimos 3 meses</option>
-                <option value={6}>Últimos 6 meses</option>
-                <option value={12}>Último año</option>
-                <option value={120}>Todo el historial</option>
-              </select>
-            </div>
-            {tcFiltrado.length > 0 && (
-              <div className="ml-auto flex gap-6">
-                <div className="text-center">
-                  <div className="text-[10px] text-gray-400">Mínimo</div>
-                  <div className="font-mono font-bold text-gray-700">{Math.min(...tcValores).toLocaleString('es-AR', {maximumFractionDigits: filtTC==='cny'?4:0})}</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-[10px] text-gray-400">Máximo</div>
-                  <div className="font-mono font-bold text-gray-700">{Math.max(...tcValores).toLocaleString('es-AR', {maximumFractionDigits: filtTC==='cny'?4:0})}</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-[10px] text-gray-400">Último</div>
-                  <div className="font-mono font-bold text-[#052698]">{tcValores[tcValores.length-1]?.toLocaleString('es-AR', {maximumFractionDigits: filtTC==='cny'?4:0})}</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-[10px] text-gray-400">Variación</div>
-                  <div className={`font-mono font-bold ${tcValores.length > 1 && tcValores[tcValores.length-1] > tcValores[0] ? 'text-red-500' : 'text-green-600'}`}>
-                    {tcValores.length > 1 ? `${((tcValores[tcValores.length-1]/tcValores[0]-1)*100).toFixed(1)}%` : '—'}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Gráfico TC */}
-          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-            <div className="text-sm font-semibold text-gray-900 mb-4">
-              {filtTC === 'ars' ? '🇦🇷 Peso argentino / USD' : filtTC === 'clp' ? '🇨🇱 Peso chileno / USD' : filtTC === 'cny' ? '🇨🇳 Yuan chino / USD' : '🇨🇱 UTM · inflación chilena (CLP)'}
-              <span className="text-xs font-normal text-gray-400 ml-2">· {tcFiltrado.length} registros</span>
-            </div>
-            {tcFiltrado.length === 0 ? (
-              <div className="h-64 flex items-center justify-center text-gray-300">
-                <div className="text-center">
-                  <div className="text-4xl mb-2">📭</div>
-                  <div className="text-sm text-gray-400">Sin datos de tipo de cambio</div>
-                </div>
-              </div>
-            ) : (
-              <svg width="100%" height="300" className="overflow-visible"
-                onMouseLeave={() => setHovTc(null)}>
-                {/* Área bajo la curva */}
-                {tcFiltrado.length > 1 && (
-                  <path
-                    d={[
-                      `M ${tcX(tcFiltrado[0].created_at, 900)} ${tcY(tcFiltrado[0][filtTC], 300)}`,
-                      ...tcFiltrado.map(t => `L ${tcX(t.created_at, 900)} ${tcY(t[filtTC], 300)}`),
-                      `L ${tcX(tcFiltrado[tcFiltrado.length-1].created_at, 900)} 275`,
-                      `L ${tcX(tcFiltrado[0].created_at, 900)} 275`,
-                      'Z'
-                    ].join(' ')}
-                    fill="#1168F8" fillOpacity="0.06"/>
-                )}
-                {/* Grid */}
-                {[0, 0.25, 0.5, 0.75, 1].map(p => {
-                  const val = tcMin + p * (tcMax - tcMin)
-                  const y = tcY(val, 300)
-                  return (
-                    <g key={p}>
-                      <line x1="60" y1={y} x2="98%" y2={y} stroke="#f1f5f9" strokeWidth="1"/>
-                      <text x="55" y={y + 4} textAnchor="end" fontSize="9" fill="#9ca3af">
-                        {val >= 1000 ? `${(val/1000).toFixed(0)}k` : val.toFixed(filtTC==='cny'?2:0)}
-                      </text>
-                    </g>
-                  )
-                })}
-                {/* Etiquetas X */}
-                {tcFiltrado.filter((_, i) => i % Math.max(1, Math.floor(tcFiltrado.length / 7)) === 0).map((t, i) => (
-                  <text key={i} x={tcX(t.created_at, 900)} y={295} textAnchor="middle" fontSize="9" fill="#9ca3af">
-                    {new Date(t.created_at).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit' })}
-                  </text>
-                ))}
-                {/* Línea principal */}
-                {tcFiltrado.length > 1 && (
-                  <path
-                    d={tcFiltrado.map((t, i) =>
-                      `${i===0?'M':'L'} ${tcX(t.created_at, 900)} ${tcY(t[filtTC], 300)}`
-                    ).join(' ')}
-                    fill="none" stroke="#1168F8" strokeWidth="2.5" strokeLinejoin="round"/>
-                )}
-                {/* Puntos interactivos invisibles */}
-                {tcFiltrado.map((t, i) => (
-                  <circle key={i}
-                    cx={tcX(t.created_at, 900)} cy={tcY(t[filtTC], 300)} r="8"
-                    fill="transparent"
-                    onMouseEnter={() => setHovTc({
-                      x: tcX(t.created_at, 900),
-                      y: tcY(t[filtTC], 300),
-                      val: t[filtTC],
-                      fecha: t.created_at,
-                    })}
-                  />
-                ))}
-                {/* Tooltip */}
-                {hovTc && (
-                  <g>
-                    <line x1={hovTc.x} y1="0" x2={hovTc.x} y2="275" stroke="#1168F8" strokeWidth="1" strokeDasharray="3,3"/>
-                    <circle cx={hovTc.x} cy={hovTc.y} r="5" fill="#1168F8" stroke="white" strokeWidth="2"/>
-                    <rect x={hovTc.x - 65} y={hovTc.y - 48} width="130" height="38" rx="6"
-                      fill="white" stroke="#e5e7eb" strokeWidth="1" filter="drop-shadow(0 2px 4px rgba(0,0,0,0.1))"/>
-                    <text x={hovTc.x} y={hovTc.y - 30} textAnchor="middle" fontSize="12" fontWeight="700" fill="#052698">
-                      {hovTc.val?.toLocaleString('es-AR', { maximumFractionDigits: filtTC==='cny'?4:0 })}
-                    </text>
-                    <text x={hovTc.x} y={hovTc.y - 16} textAnchor="middle" fontSize="9" fill="#6b7280">
-                      {new Date(hovTc.fecha).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })}
-                    </text>
-                  </g>
-                )}
-              </svg>
-            )}
-          </div>
-
-          {/* Tabla últimos registros */}
-          {tcFiltrado.length > 0 && (
-            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-              <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-                <span className="font-semibold text-sm text-gray-900">Últimos 10 registros</span>
-              </div>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
-                    {['Fecha','ARS/USD','CLP/USD','CNY/USD'].map(h => (
-                      <th key={h} className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...tcHistorico].reverse().slice(0, 10).map((t, i) => (
-                    <tr key={i} className="border-b border-gray-50 hover:bg-blue-50/20">
-                      <td className="px-4 py-2.5 font-mono text-[11px] text-gray-500">
-                        {new Date(t.created_at).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}
-                      </td>
-                      <td className="px-4 py-2.5 font-mono font-semibold text-gray-800">{t.ars ? Math.round(t.ars).toLocaleString('es-AR') : '—'}</td>
-                      <td className="px-4 py-2.5 font-mono font-semibold text-gray-800">{t.clp ? Math.round(t.clp).toLocaleString('es-AR') : '—'}</td>
-                      <td className="px-4 py-2.5 font-mono font-semibold text-gray-800">{t.cny ? t.cny.toFixed(4) : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <TCEvolucion tcHistorico={tcHistorico} utmHistorico={utmHistorico} />
       )}
 
       {/* ══ TAB 4: MERCADO FBX ════════════════════════════════════════ */}
