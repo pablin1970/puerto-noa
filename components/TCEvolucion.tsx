@@ -15,12 +15,26 @@ interface Props { tcHistorico: Punto[]; utmHistorico: Punto[] }
 // que se vea sobre la tarjeta blanca. UTM no es un par contra el dólar → verde.
 const PALE = '#E9EEF4'
 const TC_DEFS = [
-  { key: 'ars',  col: 'ars',         label: 'ARS/USD',          flag: '🇦🇷', color: '#2E6FA8', cols: ['#5FA3DC', PALE, '#5FA3DC'], dash: false, step: false, dec: 0, fuente: 'tc' as const },
-  { key: 'clp',  col: 'clp',         label: 'CLP/USD',          flag: '🇨🇱', color: '#0F3A8C', cols: ['#D52B1E', PALE, '#1A4FB0'], dash: false, step: false, dec: 0, fuente: 'tc' as const },
-  { key: 'clpf', col: 'clp_fiscal',  label: 'CLP fiscal (SII)', flag: '🇨🇱', color: '#8E1A12', cols: ['#D52B1E', PALE, '#1A4FB0'], dash: true,  step: false, dec: 0, fuente: 'tc' as const },
-  { key: 'cny',  col: 'cny',         label: 'CNY/USD',          flag: '🇨🇳', color: '#B11E0C', cols: ['#DE2910', '#DE2910', '#DE2910'], dash: false, step: false, dec: 3, fuente: 'tc' as const },
-  { key: 'utm',  col: 'utm',         label: 'UTM (CLP)',        flag: '',     color: '#0a7d57', cols: ['#0a9e6e'], dash: false, step: true, dec: 0, fuente: 'utm' as const },
+  { key: 'ars',  col: 'ars',         label: 'ARS/USD',          flag: '🇦🇷', bandera: 'ar' as const,   color: '#2E6FA8', cols: ['#5FA3DC', PALE, '#5FA3DC'], dash: false, step: false, dec: 0, fuente: 'tc' as const },
+  { key: 'clp',  col: 'clp',         label: 'CLP/USD',          flag: '🇨🇱', bandera: 'cl' as const,   color: '#0F3A8C', cols: ['#D52B1E', PALE, '#1A4FB0'], dash: false, step: false, dec: 0, fuente: 'tc' as const },
+  { key: 'clpf', col: 'clp_fiscal',  label: 'CLP fiscal (SII)', flag: '🇨🇱', bandera: 'cl' as const,   color: '#8E1A12', cols: ['#D52B1E', PALE, '#1A4FB0'], dash: true,  step: false, dec: 0, fuente: 'tc' as const },
+  { key: 'cny',  col: 'cny',         label: 'CNY/USD',          flag: '🇨🇳', bandera: 'cn' as const,   color: '#B11E0C', cols: ['#DE2910', '#DE2910', '#DE2910'], dash: false, step: false, dec: 3, fuente: 'tc' as const },
+  { key: 'utm',  col: 'utm',         label: 'UTM (CLP)',        flag: '',     bandera: 'none' as const, color: '#0a7d57', cols: ['#0a9e6e'], dash: false, step: true, dec: 0, fuente: 'utm' as const },
 ]
+
+// Banderita dibujada del país (o swatch verde para la UTM, que no es par USD).
+function MiniFlag({ pais }: { pais: 'ar' | 'cl' | 'cn' | 'none' }) {
+  if (pais === 'ar') return (
+    <svg width="20" height="14" viewBox="0 0 22 15" className="shrink-0"><rect width="22" height="15" rx="2.5" fill="#5FA3DC" /><rect y="5" width="22" height="5" fill="#fff" /><circle cx="11" cy="7.5" r="1.7" fill="#F4B400" /></svg>
+  )
+  if (pais === 'cl') return (
+    <svg width="20" height="14" viewBox="0 0 22 15" className="shrink-0"><rect width="22" height="15" rx="2.5" fill="#fff" /><rect y="7.5" width="22" height="7.5" fill="#D52B1E" /><rect width="8.5" height="7.5" fill="#1A4FB0" /><circle cx="4.25" cy="3.75" r="1.5" fill="#fff" /></svg>
+  )
+  if (pais === 'cn') return (
+    <svg width="20" height="14" viewBox="0 0 22 15" className="shrink-0"><rect width="22" height="15" rx="2.5" fill="#DE2910" /><circle cx="5" cy="5" r="2" fill="#FFDE00" /><circle cx="9.5" cy="3.5" r="0.8" fill="#FFDE00" /><circle cx="10" cy="7" r="0.8" fill="#FFDE00" /></svg>
+  )
+  return <span className="inline-block rounded-[3px]" style={{ width: 20, height: 14, background: '#0a9e6e' }} />
+}
 
 // Convierte una serie a puntos de pantalla (con escalón para UTM).
 function aPuntos(arr: { t: number; v: number; i?: number }[], xOf: (t: number) => number, yOf: (n: number) => number, valKey: 'v' | 'i', step: boolean) {
@@ -130,8 +144,8 @@ export default function TCEvolucion({ tcHistorico, utmHistorico }: Props) {
                   style={on
                     ? { background: d.color + '1a', borderColor: d.color, color: d.color }
                     : { background: 'white', borderColor: '#e5e7eb', color: '#6b7280' }}>
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: d.color, opacity: on ? 1 : 0.3 }} />
-                  {d.flag} {d.label}
+                  <span style={{ opacity: on ? 1 : 0.4 }}><MiniFlag pais={d.bandera} /></span>
+                  {d.label}
                 </button>
               )
             })}
@@ -184,7 +198,7 @@ export default function TCEvolucion({ tcHistorico, utmHistorico }: Props) {
           {resumen.map(r => (
             <div key={r.def.key} className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm">
               <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mb-1">
-                <span className="w-2 h-2 rounded-sm" style={{ background: r.def.color }} />{r.def.flag} {r.def.label}
+                <MiniFlag pais={r.def.bandera} />{r.def.label}
               </div>
               <div className="font-mono font-bold text-lg text-gray-900">{fmtVal(r.last, r.def.dec)}</div>
               <div className="text-[11px]" style={{ color: r.chg >= 0 ? '#16a34a' : '#dc2626' }}>
@@ -340,7 +354,7 @@ function MiniAbsoluto({ serie }: { serie: { def: typeof TC_DEFS[number]; puntos:
   return (
     <div className="border border-gray-100 rounded-xl p-3">
       <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mb-0.5">
-        <SwatchRibbon cols={def.cols} dash={def.dash} />{def.flag} {def.label}
+        <MiniFlag pais={def.bandera} />{def.label}
       </div>
       <div className="flex items-baseline gap-2 mb-1">
         <span className="font-mono font-bold text-lg text-gray-900">{fmtVal(last, def.dec)}</span>
