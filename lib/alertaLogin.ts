@@ -6,6 +6,7 @@
 
 export async function enviarAlertaFueraDeZona(opts: {
   nombreUsuario: string
+  ip: string
   pais: string
   region: string
   ciudad: string
@@ -31,6 +32,7 @@ export async function enviarAlertaFueraDeZona(opts: {
       <table style="font-size:14px;color:#111827;border-collapse:collapse">
         <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Usuario</td><td style="padding:4px 0"><strong>${opts.nombreUsuario}</strong></td></tr>
         <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Conexión desde</td><td style="padding:4px 0">${lugarLogin}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#6b7280">IP</td><td style="padding:4px 0;font-family:monospace">${opts.ip || '—'}</td></tr>
         <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Lugar de operación</td><td style="padding:4px 0">${lugarOperacion}</td></tr>
         <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Fecha</td><td style="padding:4px 0">${opts.fecha}</td></tr>
       </table>
