@@ -1547,8 +1547,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       </div>
 
       {/* ── BLOQUE 1b: Proveedor y condiciones ── */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
+        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 rounded-t-2xl">
           <span className="font-semibold text-sm text-gray-900">Proveedor y condiciones</span>
         </div>
         <div className="px-5 py-4 space-y-4">
@@ -1568,24 +1568,26 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                   onBlur={()=>setTimeout(()=>setShowProvDropdown(false),200)}
                   className={inp} placeholder="Buscar por nombre, CUIT/RUT o fantasía..." />
                 {showProvDropdown && form.proveedor_nombre.length>0 && (
-                  <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 max-h-44 overflow-y-auto">
-                    {provsFiltrados.map((t:any)=>(
-                      <button key={t.id} onMouseDown={()=>{setF('proveedor_nombre',t.razon_social);setF('tercero_id',t.id);setShowProvDropdown(false)}}
-                        className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
-                        <span className="font-semibold text-gray-900">{t.razon_social}</span>
-                        {(t.nro_doc||t.nombre_fantasia)&&(
-                          <span className="block text-[10px] text-gray-400 mt-0.5">
-                            {t.nro_doc&&<span className="font-mono">{t.tipo_doc?`${t.tipo_doc}: `:''}{t.nro_doc}</span>}
-                            {t.nro_doc&&t.nombre_fantasia&&<span> · </span>}
-                            {t.nombre_fantasia&&<span>{t.nombre_fantasia}</span>}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                    {/* Si no hay coincidencia exacta, ofrecer crear el proveedor */}
+                  <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 overflow-hidden">
+                    <div className="max-h-44 overflow-y-auto overscroll-contain">
+                      {provsFiltrados.map((t:any)=>(
+                        <button key={t.id} onMouseDown={()=>{setF('proveedor_nombre',t.razon_social);setF('tercero_id',t.id);setShowProvDropdown(false)}}
+                          className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] text-xs border-b border-gray-50 last:border-0">
+                          <span className="font-semibold text-gray-900">{t.razon_social}</span>
+                          {(t.nro_doc||t.nombre_fantasia)&&(
+                            <span className="block text-[10px] text-gray-400 mt-0.5">
+                              {t.nro_doc&&<span className="font-mono">{t.tipo_doc?`${t.tipo_doc}: `:''}{t.nro_doc}</span>}
+                              {t.nro_doc&&t.nombre_fantasia&&<span> · </span>}
+                              {t.nombre_fantasia&&<span>{t.nombre_fantasia}</span>}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Pie fijo: crear proveedor — SIEMPRE visible al fondo del desplegable */}
                     {!provsFiltrados.some((t:any)=>t.razon_social.toLowerCase()===form.proveedor_nombre.toLowerCase()) && (
                       <button onMouseDown={abrirAltaProveedor}
-                        className="w-full text-left px-4 py-2.5 hover:bg-green-50 text-xs border-t border-gray-100 bg-green-50/40">
+                        className="w-full text-left px-4 py-2.5 hover:bg-green-100 text-xs border-t border-gray-200 bg-green-50">
                         <span className="font-semibold text-green-700">+ Crear proveedor «{form.proveedor_nombre}»</span>
                         <span className="block text-[10px] text-gray-400 mt-0.5">No está registrado — cargalo ahora con razón social y rubro</span>
                       </button>
