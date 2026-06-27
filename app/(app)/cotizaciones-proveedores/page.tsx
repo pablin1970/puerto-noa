@@ -1563,11 +1563,11 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             ) : (
               <>
                 <input value={form.proveedor_nombre}
-                  onChange={e=>{setF('proveedor_nombre',e.target.value);setBuscarProv(e.target.value);setShowProvDropdown(e.target.value.length>0)}}
-                  onFocus={()=>setShowProvDropdown(form.proveedor_nombre.length>0)}
+                  onChange={e=>{setF('proveedor_nombre',e.target.value);setBuscarProv(e.target.value);setShowProvDropdown(true)}}
+                  onFocus={()=>setShowProvDropdown(true)}
                   onBlur={()=>setTimeout(()=>setShowProvDropdown(false),200)}
                   className={inp} placeholder="Buscar por nombre, CUIT/RUT o fantasía..." />
-                {showProvDropdown && form.proveedor_nombre.length>0 && (
+                {showProvDropdown && (
                   <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl mt-1 overflow-hidden">
                     <div className="max-h-44 overflow-y-auto overscroll-contain">
                       {provsFiltrados.map((t:any)=>(
@@ -1588,7 +1588,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                     {!provsFiltrados.some((t:any)=>t.razon_social.toLowerCase()===form.proveedor_nombre.toLowerCase()) && (
                       <button onMouseDown={abrirAltaProveedor}
                         className="w-full text-left px-4 py-2.5 hover:bg-green-100 text-xs border-t border-gray-200 bg-green-50">
-                        <span className="font-semibold text-green-700">+ Crear proveedor «{form.proveedor_nombre}»</span>
+                        <span className="font-semibold text-green-700">+ {form.proveedor_nombre.trim().length>0 ? `Crear proveedor «${form.proveedor_nombre}»` : 'Crear nuevo proveedor'}</span>
                         <span className="block text-[10px] text-gray-400 mt-0.5">No está registrado — cargalo ahora con razón social y rubro</span>
                       </button>
                     )}
