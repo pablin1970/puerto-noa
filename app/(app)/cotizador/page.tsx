@@ -3735,15 +3735,9 @@ const clientesFiltrados=terceros.filter(t=>
               className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
             <div className="flex gap-2">
               <button onClick={abrirPreview}
-                className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50">
+                className="bg-[#1168F8] text-white px-6 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">
                 👁 Vista previa
               </button>
-              {puedeCrearCot ? (
-              <button onClick={guardar} disabled={saving}
-                className="bg-[#1168F8] text-white px-6 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] disabled:opacity-60">
-                {saving?'Guardando...':'Guardar cotización'}
-              </button>
-              ) : <span className="text-xs text-gray-400 px-3 py-2">Sin permiso para guardar cotizaciones</span>}
             </div>
           </div>
         </div>
