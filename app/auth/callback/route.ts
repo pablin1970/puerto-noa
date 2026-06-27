@@ -91,6 +91,7 @@ export async function GET(request: NextRequest) {
       if (fueraDeZona) {
         await enviarAlertaFueraDeZona({
           nombreUsuario: (u as any).nombre || user.email || 'usuario',
+          ip,
           pais, region, ciudad,
           paisOperacion: (u as any).pais_operacion || '',
           provinciaOperacion: (u as any).provincia_operacion || '',
