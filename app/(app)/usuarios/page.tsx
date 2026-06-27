@@ -85,6 +85,11 @@ export default function UsuariosPage() {
   const [previewFirma, setPreviewFirma] = useState<string>('')
   const [imgPaths, setImgPaths] = useState<{ foto: string; firma: string }>({ foto: '', firma: '' })
   const [subiendoImg, setSubiendoImg] = useState<'foto' | 'firma' | null>(null)
+  // Lugares de operación (varios por usuario; provincia '' = todo el país)
+  const [lugares, setLugares] = useState<{ pais: string; provincia: string }[]>([])
+  const [nlPais, setNlPais] = useState('')
+  const [nlProv, setNlProv] = useState('')
+  const [lugaresMsg, setLugaresMsg] = useState('')
   const [formR, setFormR] = useState({ nombre: '', descripcion: '', color: '#1168F8' })
   const [saving, setSaving] = useState(false)
   const [permisosModificados, setPermisosModificados] = useState<Record<string, boolean>>({})
@@ -251,27 +256,38 @@ export default function UsuariosPage() {
     if (!formU.nombre || !formU.email) return
     setSaving(true)
     const iniciales = formU.iniciales || formU.nombre.split(' ').map((x: string) => x[0]).join('').slice(0, 3).toUpperCase()
+    let usuarioId: string | null = null
     if (modalUsuario?.type === 'nuevo') {
       // Acceso solo con Google: la cuenta de autenticación se crea automáticamente la
       // primera vez que el usuario entra con su cuenta @puertonoa.com. Acá solo
       // registramos el usuario; el auth_id se vincula por email en /auth/callback.
-      const { error } = await (supabase.from('usuarios') as any).insert({
+      const { data, error } = await (supabase.from('usuarios') as any).insert({
         auth_id: null,
         nombre: formU.nombre, email: formU.email.trim().toLowerCase(), iniciales,
         rol: 'ejecutivo', roles_ids: formU.roles_ids, activo: formU.activo,
         cargo: formU.cargo || null, telefono: formU.telefono || null,
-        pais_operacion: formU.pais_operacion || null, provincia_operacion: formU.provincia_operacion || null,
-      })
+      }).select('id').single()
       if (error) { alert('Error al crear el usuario: ' + error.message); setSaving(false); return }
-      setModalUsuario(null)
+      usuarioId = (data as any)?.id || null
     } else if (modalUsuario?.usuario) {
       await (supabase.from('usuarios') as any).update({
         nombre: formU.nombre, email: formU.email, iniciales, roles_ids: formU.roles_ids, activo: formU.activo,
         cargo: formU.cargo || null, telefono: formU.telefono || null,
-        pais_operacion: formU.pais_operacion || null, provincia_operacion: formU.provincia_operacion || null,
       }).eq('id', modalUsuario.usuario.id)
-      setModalUsuario(null)
+      usuarioId = modalUsuario.usuario.id
     }
+
+    // Sincronizar lugares de operación (reemplazo completo de la lista del usuario)
+    if (usuarioId) {
+      await supabase.from('usuario_lugares').delete().eq('usuario_id', usuarioId)
+      if (lugares.length) {
+        await (supabase.from('usuario_lugares') as any).insert(
+          lugares.map(l => ({ usuario_id: usuarioId, pais: l.pais, provincia: l.provincia || null }))
+        )
+      }
+    }
+
+    setModalUsuario(null)
     await loadAll()
     setSaving(false)
   }
@@ -331,6 +347,39 @@ export default function UsuariosPage() {
     }
   }
 
+  // ── Lugares de operación ──
+  async function cargarLugares(usuarioId: string) {
+    setLugares([]); setNlPais(''); setNlProv(''); setLugaresMsg('')
+    const { data } = await supabase.from('usuario_lugares').select('pais, provincia').eq('usuario_id', usuarioId).order('pais')
+    if (data) setLugares((data as any[]).map(l => ({ pais: l.pais, provincia: l.provincia || '' })))
+  }
+
+  // Regla por país: país entero XOR provincias. Agregar una provincia saca el "país entero";
+  // no se permite "país entero" si ya hay provincias de ese país.
+  function agregarLugar() {
+    setLugaresMsg('')
+    const p = nlPais, r = nlProv
+    if (!p) { setLugaresMsg('Elegí un país.'); return }
+    if (!r) {
+      if (lugares.some(l => l.pais === p && l.provincia)) {
+        setLugaresMsg(`${p} ya tiene provincias cargadas. Quitalas si querés tomar el país entero.`); return
+      }
+      if (!lugares.some(l => l.pais === p && !l.provincia)) setLugares(prev => [...prev, { pais: p, provincia: '' }])
+    } else {
+      setLugares(prev => {
+        const base = prev.filter(l => !(l.pais === p && !l.provincia))  // saca "país entero" de ese país
+        if (base.some(l => l.pais === p && l.provincia === r)) return base  // ya existe, no duplica
+        return [...base, { pais: p, provincia: r }]
+      })
+      setNlProv('')
+    }
+  }
+
+  function quitarLugar(i: number) {
+    setLugares(prev => prev.filter((_, idx) => idx !== i))
+    setLugaresMsg('')
+  }
+
   async function guardarRol() {
     if (!formR.nombre) return
     setSaving(true)
@@ -387,7 +436,7 @@ export default function UsuariosPage() {
         </div>
         <div className="flex gap-2">
           {tab === 'usuarios' && puedeCrearU && (
-            <button onClick={() => { setFormU({ nombre: '', email: '', iniciales: '', roles_ids: [], activo: true, cargo: '', telefono: '', pais_operacion: '', provincia_operacion: '' }); setPreviewFoto(''); setPreviewFirma(''); setImgPaths({ foto: '', firma: '' }); setModalUsuario({ type: 'nuevo' }) }}
+            <button onClick={() => { setFormU({ nombre: '', email: '', iniciales: '', roles_ids: [], activo: true, cargo: '', telefono: '', pais_operacion: '', provincia_operacion: '' }); setPreviewFoto(''); setPreviewFirma(''); setImgPaths({ foto: '', firma: '' }); setLugares([]); setNlPais(''); setNlProv(''); setLugaresMsg(''); setModalUsuario({ type: 'nuevo' }) }}
               className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">
               + Nuevo usuario
             </button>
@@ -466,7 +515,7 @@ export default function UsuariosPage() {
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex gap-1.5">
-                          {puedeEditarU && <button onClick={() => { setFormU({ nombre: u.nombre, email: u.email, iniciales: u.iniciales, roles_ids: u.roles_ids || [], activo: u.activo, cargo: u.cargo || '', telefono: u.telefono || '', pais_operacion: u.pais_operacion || '', provincia_operacion: u.provincia_operacion || '' }); cargarPreviewImagenes(u); setModalUsuario({ type: 'editar', usuario: u }) }}
+                          {puedeEditarU && <button onClick={() => { setFormU({ nombre: u.nombre, email: u.email, iniciales: u.iniciales, roles_ids: u.roles_ids || [], activo: u.activo, cargo: u.cargo || '', telefono: u.telefono || '', pais_operacion: u.pais_operacion || '', provincia_operacion: u.provincia_operacion || '' }); cargarPreviewImagenes(u); cargarLugares(u.id); setModalUsuario({ type: 'editar', usuario: u }) }}
                             className="p-1.5 border border-gray-200 rounded-lg hover:bg-[#EBF2FF] hover:border-[#93B8FC] text-gray-500 hover:text-[#1168F8] transition-colors" title="Editar">✏</button>}
                           {puedeVerHistorial && <button onClick={() => verHistorial(u)}
                             className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors" title="Historial">📋</button>}
@@ -731,29 +780,44 @@ export default function UsuariosPage() {
                   </label>
                 </div>
               </div>
-              {/* ── Lugar de operación (control de seguridad del login) ── */}
+              {/* ── Lugares de operación (control de seguridad del login) ── */}
               <div className="border-t border-gray-100 pt-3">
-                <label className="block text-[10px] font-semibold text-gray-500 mb-2 uppercase">Lugar de operación <span className="text-gray-400 normal-case font-normal">· avisa si entra desde otra zona</span></label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] text-gray-400 mb-1">País</label>
-                    <select value={formU.pais_operacion}
-                      onChange={e => setFormU(f => ({ ...f, pais_operacion: e.target.value, provincia_operacion: '' }))}
-                      className={inp}>
-                      <option value="">—</option>
-                      {PAISES_OPERACION.map(p => <option key={p.codigo} value={p.nombre}>{p.nombre}</option>)}
-                    </select>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Lugares de operación <span className="text-gray-400 normal-case font-normal">· avisa si entra fuera de zona</span></label>
+                <p className="text-[11px] text-gray-400 mb-2 leading-snug">En zona si coincide con alguno. Por país: país entero o provincias, no las dos.</p>
+
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {lugares.length === 0
+                    ? <span className="text-[11px] text-gray-400 italic">Sin lugares: no se evalúa zona para este usuario.</span>
+                    : lugares.map((l, i) => (
+                      <span key={i} className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-[#1168F8] rounded-full pl-3 pr-1.5 py-1 text-[11px]">
+                        <span><span className="font-semibold">{l.pais}</span> · {l.provincia || <span className="opacity-75">todo el país</span>}</span>
+                        <button type="button" onClick={() => quitarLugar(i)} aria-label="Quitar lugar" className="w-4 h-4 inline-flex items-center justify-center rounded-full hover:bg-blue-100 text-sm leading-none">×</button>
+                      </span>
+                    ))}
+                </div>
+
+                <div className="bg-gray-50 rounded-xl p-2.5 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-gray-400 mb-1">País</label>
+                      <select value={nlPais} onChange={e => { setNlPais(e.target.value); setNlProv(''); setLugaresMsg('') }} className={inp}>
+                        <option value="">—</option>
+                        {PAISES_OPERACION.map(p => <option key={p.codigo} value={p.nombre}>{p.nombre}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-gray-400 mb-1">{terminoRegion(nlPais)}</label>
+                      <select value={nlProv} onChange={e => setNlProv(e.target.value)} disabled={!nlPais} className={inp + (!nlPais ? ' opacity-50' : '')}>
+                        <option value="">— Todo el país —</option>
+                        {regionesDe(nlPais).map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-[10px] text-gray-400 mb-1">{terminoRegion(formU.pais_operacion)}</label>
-                    <select value={formU.provincia_operacion}
-                      onChange={e => setFormU(f => ({ ...f, provincia_operacion: e.target.value }))}
-                      disabled={!formU.pais_operacion}
-                      className={inp + (!formU.pais_operacion ? ' opacity-50' : '')}>
-                      <option value="">—</option>
-                      {regionesDe(formU.pais_operacion).map(r => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                  </div>
+                  <button type="button" onClick={agregarLugar} disabled={!nlPais}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1168F8] border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 disabled:opacity-40">
+                    + Agregar lugar
+                  </button>
+                  {lugaresMsg && <div className="text-[11px] text-amber-600">{lugaresMsg}</div>}
                 </div>
               </div>
 
