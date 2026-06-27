@@ -2,7 +2,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { esFueraDeZona } from '@/lib/geografiaPaises'
+import { esFueraDeZonaMulti } from '@/lib/geografiaPaises'
 import { enviarAlertaFueraDeZona } from '@/lib/alertaLogin'
 
 export const dynamic = 'force-dynamic'
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
 
       const { data: u } = await supabase
         .from('usuarios')
-        .select('id, nombre, activo, pais_operacion, provincia_operacion')
+        .select('id, nombre, activo')
         .eq('email', user.email)
         .single()
 
@@ -61,6 +61,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(new URL('/?error=usuario_inactivo', requestUrl.origin))
       }
 
+      // Vinculamos auth_id temprano para que el RLS de usuario_lugares reconozca al dueño
+      // (en el primer login todavía podría estar en null) y pueda leer sus propios lugares.
+      await supabase.from('usuarios').update({ auth_id: user.id }).eq('id', (u as any).id)
+
       // Ubicación e historial de ingreso (IP real del usuario desde los headers de la request)
       const ip = (request.headers.get('x-forwarded-for')?.split(',')[0].trim())
         || request.headers.get('x-real-ip') || 'desconocida'
@@ -68,8 +72,14 @@ export async function GET(request: NextRequest) {
       const { ciudad, region, pais, paisCodigo } = await geolocalizar(ip)
       const now = new Date().toISOString()
 
-      // ¿Conexión fuera del lugar de operación declarado?
-      const fueraDeZona = esFueraDeZona((u as any).pais_operacion, (u as any).provincia_operacion, pais, region)
+      // Lugares de operación del usuario (varios). En zona si coincide con alguno.
+      const { data: lugares } = await supabase
+        .from('usuario_lugares')
+        .select('pais, provincia')
+        .eq('usuario_id', (u as any).id)
+
+      // ¿Conexión fuera de TODOS los lugares declarados?
+      const fueraDeZona = esFueraDeZonaMulti((lugares as any) || [], pais, region)
 
       try {
         await supabase.from('login_historial').insert({
@@ -89,12 +99,15 @@ export async function GET(request: NextRequest) {
 
       // Aviso al super admin si corresponde (no traba el login si falla o no hay mail configurado)
       if (fueraDeZona) {
+        const lugaresStr = (((lugares as any[]) || [])
+          .map(l => l.provincia ? `${l.pais} · ${l.provincia}` : `${l.pais} (todo el país)`)
+          .join('; ')) || '—'
         await enviarAlertaFueraDeZona({
           nombreUsuario: (u as any).nombre || user.email || 'usuario',
           ip,
           pais, region, ciudad,
-          paisOperacion: (u as any).pais_operacion || '',
-          provinciaOperacion: (u as any).provincia_operacion || '',
+          paisOperacion: '',
+          provinciaOperacion: lugaresStr,
           fecha: new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Jujuy' }),
         })
       }
