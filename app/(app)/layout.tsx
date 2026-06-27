@@ -7,6 +7,7 @@ import Image from 'next/image'
 import type { Usuario } from '@/types'
 import { modulosPendientesSet } from '@/lib/modulos'
 import { cargarPermisos, esSuperAdmin } from '@/lib/permisos'
+import AlertaFueraDeZona from '@/components/AlertaFueraDeZona'
 import type { LucideIcon } from 'lucide-react'
 import {
   LayoutDashboard, LineChart, Sparkles, List, Building2,
@@ -409,6 +410,9 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       <main className="flex-1 overflow-y-auto bg-gray-50">
         {children}
       </main>
+
+      {/* Aviso in-app de login fuera de zona (solo super admin) */}
+      <AlertaFueraDeZona />
     </div>
   )
 }
