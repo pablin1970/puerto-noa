@@ -94,3 +94,37 @@ export function esFueraDeZona(
   }
   return false
 }
+
+export interface LugarOperacion { pais: string; provincia?: string | null }
+
+// Versión multi-lugar: el usuario puede tener varios lugares habilitados.
+// EN ZONA si la conexión coincide con ALGUNA línea:
+//   - mismo país (por nombre o código ISO) Y
+//   - línea sin provincia -> matchea todo el país
+//   - línea con provincia -> matchea si coincide la región del login
+//     (si la región del login es desconocida, se da por buena: la región por IP
+//      es best-effort y no queremos falsas alarmas; el país sí es confiable).
+// Sin lugares cargados -> no se evalúa (false). País del login desconocido -> false.
+export function esFueraDeZonaMulti(
+  lugares?: LugarOperacion[] | null,
+  paisLogin?: string | null,
+  regionLogin?: string | null,
+): boolean {
+  if (!lugares || !lugares.length) return false
+  const pLog = normalizarGeo(paisLogin)
+  if (!pLog) return false
+  const rLog = normalizarGeo(regionLogin)
+
+  const matchPais = (paisOp: string): boolean => {
+    if (normalizarGeo(paisOp) === pLog) return true
+    const geo = paisGeoPorNombre(paisOp)
+    return !!geo && normalizarGeo(geo.codigo) === pLog
+  }
+
+  for (const l of lugares) {
+    if (!l || !l.pais || !matchPais(l.pais)) continue
+    const prov = normalizarGeo(l.provincia)
+    if (!prov || !rLog || prov === rLog) return false  // alguna línea coincide -> en zona
+  }
+  return true  // ninguna línea coincidió -> fuera de zona
+}
