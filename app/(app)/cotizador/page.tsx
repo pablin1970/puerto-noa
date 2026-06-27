@@ -170,8 +170,8 @@ const uid2 = () => Math.random().toString(36).slice(2)
 function Field({label,children}:{label:string;children:React.ReactNode}){
   return <div><label className="block text-[10px] font-medium text-gray-500 mb-1">{label}</label>{children}</div>
 }
-function Card({title,children}:{title:string;children:React.ReactNode}){
-  return <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm"><div className="px-5 py-3 border-b border-gray-100 bg-gray-50 font-medium text-sm text-gray-900">{title}</div><div className="px-5 py-4">{children}</div></div>
+function Card({title,children,noClip}:{title:string;children:React.ReactNode;noClip?:boolean}){
+  return <div className={`bg-white border border-gray-100 rounded-2xl shadow-sm ${noClip?'':'overflow-hidden'}`}><div className={`px-5 py-3 border-b border-gray-100 bg-gray-50 font-medium text-sm text-gray-900 ${noClip?'rounded-t-2xl':''}`}>{title}</div><div className={`px-5 py-4 ${noClip?'rounded-b-2xl':''}`}>{children}</div></div>
 }
 
 function DesconRows({rows,onChange,totalM3}:{rows:ItemLog[];onChange:(r:ItemLog[])=>void;totalM3:number}){
@@ -1688,7 +1688,7 @@ const clientesFiltrados=terceros.filter(t=>
             </div>
           </div>
 
-          <Card title="Cliente">
+          <Card title="Cliente" noClip>
             {/* Buscador */}
             <div className="relative mb-3">
               <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Buscá por nombre, CUIT/RUT o fantasía</label>
@@ -1697,7 +1697,7 @@ const clientesFiltrados=terceros.filter(t=>
                 onFocus={()=>setShowClienteDropdown(true)} onClick={e=>e.stopPropagation()}
                 className={inp} placeholder="Buscar por nombre, CUIT/RUT o fantasía..."/>
               {showClienteDropdown&&(
-                <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto mt-1" onClick={e=>e.stopPropagation()}>
+                <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto overscroll-contain mt-1" onClick={e=>e.stopPropagation()}>
                   {clientesFiltrados.length>0?clientesFiltrados.map(t=>(
                     <button key={t.id} onMouseDown={()=>selectCliente(t)} className="w-full text-left px-4 py-2.5 hover:bg-[#EBF2FF] transition-colors border-b border-gray-50 last:border-0">
                       <div className="font-semibold text-sm text-gray-900">{t.razon_social}</div>
