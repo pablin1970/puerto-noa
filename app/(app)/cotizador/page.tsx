@@ -101,6 +101,8 @@ interface CotState {
   gastosChile: GastoChile[]
   // Bloque 0 - Mercadería (proformas del proveedor)
   cotsProvMerc: CotProvSel[]
+  // Bloque 5 - Origen / Puesta a FOB (forwarder o agente de origen)
+  cotsProvOrigen: CotProvSel[]
   // Bloque 3 - Transporte terrestre
   cotsProvTransp: CotProvSel[]
   // Bloque 3 - Transporte terrestre (igual que antes)
@@ -146,6 +148,7 @@ const INIT: CotState = {
   gastosChile:[],
   cotsProvTransp:[],
   cotsProvMerc:[],
+  cotsProvOrigen:[],
   optTransp:'A',rowsDescon:[],
   almModoVol:'auto',almVolM3:0,almCostoDia:0,almDias:0,
   cargaModo:'fijo',cargaValor:0,
@@ -269,12 +272,14 @@ const [cotsMercDisponibles,setCotsMercDisponibles]=useState<any[]>([])
 const [condicionesGenerales,setCondicionesGenerales]=useState<any[]>([])
 const [cotsArgDisponibles,setCotsArgDisponibles]=useState<any[]>([])
 const [cotsChileDisponibles,setCotsChileDisponibles]=useState<any[]>([])
+const [cotsOrigenDisponibles,setCotsOrigenDisponibles]=useState<any[]>([])
 // Cotizaciones de operaciones usadas (para detectar "ya usada en X")
 const [cotsSistemaUsadas,setCotsSistemaUsadas]=useState<Record<string,string[]>>({})
 // Rubros por bloque (desde cotizador_bloque_rubros)
 const [rubrosBloque,setRubrosBloque]=useState<Record<number,string[]>>({1:[],2:[],3:[],4:[]})
 const [bloques,setBloques]=useState<any[]>([])
 const [bloqueMerc,setBloqueMerc]=useState<any>(null)
+const [bloqueOrigen,setBloqueOrigen]=useState<any>(null)
 const [cotNumActual,setCotNumActual]=useState<string>('')
 // Terceros proveedores por rubro (para búsqueda en carga manual)
 const [tercerosProv,setTercerosProv]=useState<any[]>([])
@@ -282,7 +287,7 @@ const [tercerosProv,setTercerosProv]=useState<any[]>([])
 
 
 // Cotizaciones de proveedores seleccionadas por bloque
-const [provUsado,setProvUsado]=useState<Record<number,string|null>>({0:null,1:null,2:null,3:null,4:null})
+const [provUsado,setProvUsado]=useState<Record<number,string|null>>({0:null,1:null,2:null,3:null,4:null,5:null})
 const [terceros,setTerceros]=useState<any[]>([])
 const [lugaresProvMap,setLugaresProvMap]=useState<Map<string,Set<string>>>(new Map())  // terceroId → claves "lugar_tipo:lugar_id" donde presta
 const [despachantes,setDespachantes]=useState<any[]>([])
@@ -369,6 +374,8 @@ useEffect(()=>{
       .map(t => todos.find(b => (b.codigo ? b.codigo===t.codigo : b.numero===t.numero)))
       .filter((b:any):b is any => !!b)
     if(bloqueMercaderia) setBloqueMerc(bloqueMercaderia)
+    const bloqueOrig = todos.find((b:any)=>(b.codigo==='origen')|| /origen/i.test(b.nombre||''))
+    if(bloqueOrig) setBloqueOrigen(bloqueOrig)
     // Guardar nombres de bloques para UI (rubros por bloque sigue usando numero original)
     const rb:Record<number,string[]>={1:[],2:[],3:[],4:[]}
     for(const b of logisticos) rb[b.numero]=[b.nombre]
@@ -404,6 +411,7 @@ useEffect(()=>{
       setCotsTranspDisponibles(cots.filter(c=>c.bloque_id===idPorNum[3]))
       setCotsArgDisponibles(cots.filter(c=>c.bloque_id===idPorNum[4]))
       setCotsMercDisponibles(cots.filter(c=>c.bloque_id===idPorNum[0]))
+      setCotsOrigenDisponibles(cots.filter(c=>c.bloque_id===idPorNum[5]))
     }
   })
   // Catálogos geográficos y tipos de camión
@@ -467,9 +475,20 @@ const fobProforma = mercElegida
   ? mercItems.reduce((t,it)=>t + (it.cantUsar||it.cantCotizada||0)*(it.valorUnit||0), 0)
   : 0
 // Si hay proforma elegida, el FOB sale de ella; si no, del modelo viejo (s.productos) por compatibilidad
-const totalFOB = mercElegida
+// Bloque 5 (Origen / Puesta a FOB): cotización de forwarder/agente de origen elegida.
+// Se anula si el bloque Origen está desactivado desde sus pills (igual que el resto de bloques).
+const origenActivoCalc = !bloqueOrigen ? false : (s.bloquesActivos.length===0 ? true : s.bloquesActivos.includes(bloqueOrigen.id))
+const origenElegida = s.cotsProvOrigen.find(c=>c.elegida)
+const subOrigen = (origenActivoCalc && origenElegida)
+  ? origenElegida.esManual
+    ? (origenElegida.manualMonto||0)
+    : origenElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
+  : 0
+// El valor FOB punta a punta = mercadería + gastos de origen (puesta a FOB). El origen se suma siempre que esté cargado y activo.
+const baseFOB = mercElegida
   ? fobProforma
   : s.productos.reduce((t,p)=>t+p.subtotal,0)+(s.incoterm==='EXW'?s.exwTransp+s.exwAgente+s.exwOtros:0)
+const totalFOB = baseFOB + subOrigen
 const totalM3 = mercElegida
   ? mercItems.reduce((t,it)=>t + (it.cantUsar||it.cantCotizada||0)*((it as any).volUnit||0), 0)
   : s.productos.reduce((t,p)=>t+p.vol_unit*p.cantidad,0)
@@ -1017,11 +1036,11 @@ function agregarSegDesdeSistema(cotId:string){
   setS(p=>({...p, cotsProvSeg:[...p.cotsProvSeg, nueva]}))
 }
 
-function elegirCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg', uid:string){
+function elegirCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg'|'cotsProvOrigen', uid:string){
   setS(p=>({...p, [campo]:p[campo].map((c:CotProvSel)=>({...c,elegida:c.uid===uid}))}))
 }
 
-function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg', uid:string){
+function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg'|'cotsProvOrigen', uid:string){
   setS(p=>{
     const nuevas = (p[campo] as CotProvSel[]).filter(c=>c.uid!==uid)
     if(nuevas.length>0&&!nuevas.some(c=>c.elegida)) nuevas[0].elegida=true
@@ -1029,7 +1048,7 @@ function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'co
   })
 }
 
-function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg', cotUid:string, itemId:string){
+function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg'|'cotsProvOrigen', cotUid:string, itemId:string){
   setS(p=>({...p,[campo]:(p[campo] as CotProvSel[]).map(c=>{
     if(c.uid!==cotUid) return c
     return {...c,items:c.items.map(i=>{
@@ -1040,7 +1059,7 @@ function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'
   })}))
 }
 
-function setCantUsarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg', cotUid:string, itemId:string, cant:number){
+function setCantUsarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg'|'cotsProvOrigen', cotUid:string, itemId:string, cant:number){
   setS(p=>({...p,[campo]:(p[campo] as CotProvSel[]).map(c=>{
     if(c.uid!==cotUid) return c
     return {...c,items:c.items.map(i=>{
@@ -1103,6 +1122,17 @@ function agregarMercDesdeSistema(cotId:string){
   // Al elegir una proforma, las demás dejan de estar elegidas
   setS(p=>({...p, cotsProvMerc:[...p.cotsProvMerc.map(c=>({...c,elegida:false})), nueva]}))
   setProvUsado(pv=>({...pv,0:cotId}))
+}
+
+// Origen / Puesta a FOB: agregar cotización (forwarder o agente de origen) desde el sistema
+function agregarOrigenDesdeSistema(cotId:string){
+  const cot = cotsOrigenDisponibles.find(c=>c.id===cotId)
+  if(!cot) return
+  const usadas = cotsSistemaUsadas[cotId]||[]
+  const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
+  nueva.elegida = s.cotsProvOrigen.length===0
+  setS(p=>({...p, cotsProvOrigen:[...p.cotsProvOrigen, nueva]}))
+  setProvUsado(pv=>({...pv,5:cotId}))
 }
 
 // Buscar terceros proveedores por rubros del bloque
@@ -1643,7 +1673,7 @@ const clientesFiltrados=terceros.filter(t=>
                 <div className="flex flex-wrap gap-1.5">
                   {/* Pill MERCADERÍA — primero. Al desactivarlo, se apaga ARCA en cascada. */}
                   {bloqueMerc && (()=>{
-                    const idsTodos = [bloqueMerc.id, ...bloques.map((x:any)=>x.id)]
+                    const idsTodos = [bloqueMerc.id, ...(bloqueOrigen?[bloqueOrigen.id]:[]), ...bloques.map((x:any)=>x.id)]
                     const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(bloqueMerc.id)
                     return (
                       <button key={bloqueMerc.id} onClick={()=>{
@@ -1664,11 +1694,32 @@ const clientesFiltrados=terceros.filter(t=>
                       </button>
                     )
                   })()}
+                  {/* Pill ORIGEN / DESTINO — entre Mercadería y los tramos. Se controla por toggle; el incoterm es informativo. */}
+                  {bloqueOrigen && (()=>{
+                    const idsTodos = [...(bloqueMerc?[bloqueMerc.id]:[]), bloqueOrigen.id, ...bloques.map((x:any)=>x.id)]
+                    const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(bloqueOrigen.id)
+                    const rotulo = s.sentido==='exportacion' ? 'Destino' : (bloqueOrigen.nombre||'Origen')
+                    return (
+                      <button key={bloqueOrigen.id} onClick={()=>{
+                        if (s.bloquesActivos.length === 0) {
+                          u('bloquesActivos', idsTodos.filter((id:string)=>id!==bloqueOrigen.id))
+                        } else if (activo) {
+                          u('bloquesActivos', s.bloquesActivos.filter((id:string)=>id!==bloqueOrigen.id))
+                        } else {
+                          u('bloquesActivos', [...s.bloquesActivos, bloqueOrigen.id])
+                        }
+                      }}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all ${activo?'bg-[#EF9F27] border-[#EF9F27] text-white':'bg-gray-100 border-gray-200 text-gray-400 line-through'}`}>
+                        {activo && <span className="w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0"/>}
+                        {rotulo}
+                      </button>
+                    )
+                  })()}
                   {(s.sentido==='exportacion'?[...bloques].reverse():bloques).map((b:any) => {
                     const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(b.id)
                     return (
                       <button key={b.id} onClick={()=>{
-                        const idsTodos = bloqueMerc ? [bloqueMerc.id, ...bloques.map((x:any)=>x.id)] : bloques.map((x:any)=>x.id)
+                        const idsTodos = [...(bloqueMerc?[bloqueMerc.id]:[]), ...(bloqueOrigen?[bloqueOrigen.id]:[]), ...bloques.map((x:any)=>x.id)]
                         if (s.bloquesActivos.length === 0) {
                           u('bloquesActivos', idsTodos.filter((id:string)=>id!==b.id))
                         } else if (activo) {
@@ -2291,6 +2342,123 @@ const clientesFiltrados=terceros.filter(t=>
 
           {/* Bloques 1-4: orden normal en impo, invertido en expo */}
           <div className={`flex flex-col gap-4 ${s.sentido==='exportacion'?'flex-col-reverse':''}`}>
+          {/* ── BLOQUE 5: ORIGEN / PUESTA A FOB (forwarder o agente de origen) ── */}
+          <div className={`bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm ${!origenActivoCalc?'hidden':''}`}>
+            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#EF9F27] text-white text-[10px] font-bold">↗</span>
+              <span className="font-medium text-sm text-gray-900">{s.sentido==='exportacion'?'Destino':(bloqueOrigen?.nombre||'Origen · Puesta a FOB')}</span>
+              <span className="text-[10px] text-gray-400">flete interno · honorarios agente origen · gastos de exportación · handling</span>
+              <span className="text-[9px] text-amber-700 bg-amber-50 border border-amber-100 rounded-full px-2 py-0.5">se suma al valor FOB</span>
+              <div className="ml-auto flex items-center gap-2 flex-wrap">
+                <select onChange={e=>{if(e.target.value){agregarOrigenDesdeSistema(e.target.value);e.target.value=''}}}
+                    className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
+                    <option value="">+ Cargar del sistema</option>
+                    {(()=>{
+                      const cotsOrig=cotsOrigenDisponibles.filter(coincideSentido)
+                      const esp=cotsOrig.filter((c:any)=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                      const gen=cotsOrig.filter((c:any)=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                      return(<>
+                        {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}{!isVigente(c.fecha_vencimiento||'')?'  (VENCIDA)':''}</option>)})}</optgroup>)}
+                        <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
+                      </>)
+                    })()}
+                  </select>
+                <button onClick={()=>{
+                  window.open(`/cotizaciones-proveedores?nuevo=1&bloque=5&rubro=forwarder&cliente_id=${clienteSelId||''}&cliente_nombre=${encodeURIComponent(s.cliente||'')}`, '_blank')
+                }} className="px-3 py-1 bg-[#EF9F27] text-white rounded-lg text-[10px] font-bold hover:bg-[#d88f1f] whitespace-nowrap">+ Manual</button>
+              </div>
+            </div>
+            <div className="px-5 py-4">
+              {s.cotsProvOrigen.length===0?(
+                <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 text-center">
+                  Sin cotizaciones de origen. Cargá la del forwarder o agente con el selector, o ingresala con + Manual.
+                </div>
+              ):(
+                <div>
+                  {s.cotsProvOrigen.map(oc=>{
+                    const vigente=isVigente(oc.fechaVencimiento)
+                    const totalSel=oc.esManual?(oc.manualMonto||0):oc.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
+                    return (
+                      <div key={oc.uid} className={`border-2 rounded-xl overflow-hidden mb-2 ${oc.elegida?'border-[#EF9F27]':'border-gray-200'}`}>
+                        <div className={`flex items-center gap-0 ${oc.elegida?'bg-amber-50':'bg-gray-50'}`}>
+                          <button onClick={()=>elegirCotProv('cotsProvOrigen',oc.uid)} className="w-10 flex-shrink-0 flex items-center justify-center self-stretch hover:bg-black/5">
+                            <div className={`w-4 h-4 rounded-full border-2 ${oc.elegida?'border-[#EF9F27] bg-[#EF9F27]':'border-gray-300 bg-white'}`}>{oc.elegida&&<div className="w-1.5 h-1.5 bg-white rounded-full mx-auto mt-0.5"/>}</div>
+                          </button>
+                          <div className="flex-1 px-3 py-2.5">
+                            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                              <span className="font-semibold text-sm text-gray-900">{oc.proveedorNombre}</span>
+                              {oc.tipo==='especifica'?<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEEDFE] text-[#3C3489]">⭐ Específica</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500">Genérica</span>}
+                              {vigente?<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700">vigente</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700">vencida {fmtFecha(oc.fechaVencimiento)}</span>}
+                              {oc.usadaEnCots.length>0&&<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">⚠ Usada en {oc.usadaEnCots.join(', ')}</span>}
+                              {oc.elegida&&<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EF9F27] text-white">ELEGIDA</span>}
+                            </div>
+                            <div className="flex gap-4 text-[10px] text-gray-500">
+                              {oc.referencia&&<span className="font-mono">Ref: {oc.referencia}</span>}
+                              {oc.fechaEmision&&<span>Emitida: {fmtFecha(oc.fechaEmision)}</span>}
+                              {oc.fechaVencimiento&&<span>Vence: {fmtFecha(oc.fechaVencimiento)}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 px-3">
+                            {oc.elegida&&totalSel>0&&<span className="font-mono font-bold text-[#EF9F27] text-sm">USD {fmt(totalSel)}</span>}
+                            <button onClick={()=>eliminarCotProv('cotsProvOrigen',oc.uid)} className="text-gray-300 hover:text-red-500 text-xs">✕</button>
+                          </div>
+                        </div>
+                        {!oc.esManual&&(
+                        <table className="w-full text-xs border-t border-gray-100">
+                          <thead><tr className="bg-gray-50 border-b border-gray-100">
+                            <th className="w-8 px-2 py-2"></th>
+                            <th className="text-left px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase">Ítem</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Precio unit.</th>
+                            <th className="text-center px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-24">Cant. cot.</th>
+                            <th className="text-center px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Cant. a usar</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Subtotal</th>
+                          </tr></thead>
+                          <tbody>
+                            {oc.items.map(it=>(
+                              <tr key={it.itemId} className={`border-b border-gray-50 ${it.seleccionado?'bg-amber-50/40':''}`}>
+                                <td className="px-2 py-2 text-center">
+                                  <button onClick={()=>toggleItemCotProv('cotsProvOrigen',oc.uid,it.itemId)}>
+                                    <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${it.seleccionado?'bg-[#EF9F27] border-[#EF9F27]':'border-gray-300 hover:border-[#EF9F27]'}`}>
+                                      {it.seleccionado&&<div className="w-2 h-1.5 border-l-2 border-b-2 border-white" style={{transform:'rotate(-45deg) translate(1px,-1px)'}}/>}
+                                    </div>
+                                  </button>
+                                </td>
+                                <td className="px-3 py-2"><div className="font-medium text-gray-800">{it.descripcion}</div></td>
+                                <td className="px-3 py-2 text-right font-mono text-gray-700">USD {fmt(it.valorUnit)}</td>
+                                <td className="px-3 py-2 text-center text-gray-400 font-mono">{it.cantCotizada>0?it.cantCotizada:'—'}</td>
+                                <td className="px-3 py-2 text-center">
+                                  {it.seleccionado?(
+                                    <input type="text" inputMode="decimal" value={it.cantUsar} onFocus={e=>e.target.select()}
+                                      onChange={e=>setCantUsarCotProv('cotsProvOrigen',oc.uid,it.itemId,parseNum(e.target.value)||1)}
+                                      className="w-16 px-2 py-1 border border-amber-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#EF9F27]"/>
+                                  ):<span className="text-gray-300">—</span>}
+                                </td>
+                                <td className="px-3 py-2 text-right">
+                                  {it.seleccionado?<span className="font-mono font-semibold text-[#EF9F27]">USD {fmt(it.subtotal)}</span>:<span className="text-gray-300">—</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        )}
+                        {oc.esManual&&(
+                          <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-2">
+                            <label className="text-[10px] text-gray-500">Monto manual (USD)</label>
+                            <input type="text" inputMode="decimal" value={oc.manualMonto||0} onFocus={e=>e.target.select()}
+                              onChange={e=>setS(p=>({...p,cotsProvOrigen:p.cotsProvOrigen.map(c=>c.uid===oc.uid?{...c,manualMonto:parseNum(e.target.value)}:c)}))}
+                              className="w-32 px-2 py-1 border border-amber-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#EF9F27]"/>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                  <div className="flex justify-end mt-1 text-xs text-gray-500">
+                    Subtotal origen: <strong className="font-mono text-gray-800 ml-1">USD {fmt(subOrigen)}</strong> <span className="text-gray-400 ml-1">· se suma al FOB</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
           {/* ── BLOQUE 1: COTIZACIONES FORWARDER ── */}
           <div className={`bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm ${!bloqueActivo(0)?'hidden':''}`}>
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
