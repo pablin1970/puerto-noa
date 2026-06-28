@@ -593,6 +593,7 @@ function FondosCuentasABM() {
   const [showNew, setShowNew] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [empresaNombre, setEmpresaNombre] = useState<string>('PUERTO NOA SPA')
 
   const vacio = {
     nombre: '', tipo: 'banco', moneda: 'USD', pais: 'Argentina',
@@ -606,8 +607,12 @@ function FondosCuentasABM() {
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase.from('fondos_cuentas').select('*').order('orden', { ascending: true })
-    if (data) setCuentas(data)
+    const [cRes, eRes] = await Promise.all([
+      supabase.from('fondos_cuentas').select('*').order('orden', { ascending: true }),
+      (supabase.from('empresa_config') as any).select('razon_social').limit(1).maybeSingle(),
+    ])
+    if (cRes.data) setCuentas(cRes.data)
+    if (eRes?.data?.razon_social) setEmpresaNombre(eRes.data.razon_social)
     setLoading(false)
   }
 
@@ -628,7 +633,7 @@ function FondosCuentasABM() {
       nombre: form.nombre, tipo: form.tipo, moneda: form.moneda, pais: form.pais,
       banco: form.banco || null, nro_cuenta: form.nro_cuenta || null,
       cbu_iban: form.cbu_iban || null, swift: form.swift || null,
-      titular: form.titular || null, responsable: form.responsable || null,
+      titular: empresaNombre, responsable: form.responsable || null,
       firmantes: form.firmantes || null, notas: form.notas || null,
       activo: form.activo, orden: parseInt(form.orden) || 0,
     }
@@ -697,18 +702,18 @@ function FondosCuentasABM() {
         </div>
       </div>
 
+      <div className="mb-3">
+        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Titular de la cuenta</label>
+        <div className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-gray-50 text-gray-600 flex items-center gap-1">{empresaNombre}<span className="text-gray-400">· titular legal</span></div>
+      </div>
+
       {/* Datos bancarios — solo si es banco */}
       {form.tipo === 'banco' && (
         <>
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 gap-3 mb-3">
             <div>
               <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco</label>
               <SelectorBanco pais={form.pais} value={form.banco || ''} onChange={(n) => setForm((f: any) => ({ ...f, banco: n }))} className={inp} />
-            </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Titular de la cuenta</label>
-              <input value={form.titular || ''} onChange={e => setForm((f: any) => ({ ...f, titular: e.target.value }))}
-                className={inp} placeholder="ej. Puerto NOA SpA"/>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3 mb-3">
