@@ -1664,7 +1664,7 @@ const clientesFiltrados=terceros.filter(t=>
                       </button>
                     )
                   })()}
-                  {bloques.map((b:any) => {
+                  {(s.sentido==='exportacion'?[...bloques].reverse():bloques).map((b:any) => {
                     const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(b.id)
                     return (
                       <button key={b.id} onClick={()=>{
