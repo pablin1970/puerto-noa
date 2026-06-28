@@ -513,19 +513,50 @@ export default function CatalogosPage() {
         />
       )}
 
-      {/* ── TIPOS DE CAMIÓN ── */}
+      {/* ── CAMIONES: configuración de vehículo (legal) + carrocería (caja) ── */}
       {tab === 'camiones' && (
-        <CatalogoABM
-          modulo="cat_logistica"
-          tabla="tipos_camion"
-          titulo="Tipos de camión"
-          orden="orden"
-          cols={[
-            { key: 'orden',  label: 'Orden',  type: 'number', placeholder: '1' },
-            { key: 'icono',  label: 'Ícono',  type: 'emoji',  placeholder: '🚛' },
-            { key: 'nombre', label: 'Nombre', placeholder: 'Semi con acoplado' },
-          ]}
-        />
+        <div className="space-y-6">
+          <CatalogoABM
+            modulo="cat_logistica"
+            tabla="config_vehiculo"
+            titulo="Configuración de vehículo"
+            orden="orden"
+            cols={[
+              { key: 'orden',           label: 'Orden',         type: 'number', placeholder: '1' },
+              { key: 'codigo',          label: 'Código',        placeholder: 'TS' },
+              { key: 'nombre',          label: 'Nombre',        placeholder: 'Tractor + semirremolque' },
+              { key: 'categoria',       label: 'Categoría',     placeholder: 'N3 + O4' },
+              { key: 'ejes',            label: 'Ejes',          placeholder: '5 a 6' },
+              { key: 'pbt_max',         label: 'PBT/PBTC máx',  placeholder: 'hasta 45 t' },
+              { key: 'largo_max',       label: 'Largo máx',     placeholder: '18,60 m' },
+              { key: 'apto_contenedor', label: 'Contenedor',    placeholder: '1×40 o 2×20' },
+              { key: 'circulacion',     label: 'Circulación',   placeholder: 'Libre' },
+            ]}
+            extra={
+              <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-[11px] text-amber-800">
+                ⚖️ Datos según legislación vigente (Ley 24.449 · Decreto 779/95 · Decreto 32/2018). La <strong>configuración es obligatoria</strong> al cargar un flete terrestre. El resto de las características (ancho, alto, peso por eje) se consultan con el botón “Ver características” del formulario.
+              </div>
+            }
+          />
+          <CatalogoABM
+            modulo="cat_logistica"
+            tabla="tipos_camion"
+            titulo="Carrocería (tipo de caja)"
+            orden="orden"
+            cols={[
+              { key: 'orden',     label: 'Orden',     type: 'number', placeholder: '1' },
+              { key: 'icono',     label: 'Ícono',     type: 'emoji',  placeholder: '🚛' },
+              { key: 'codigo',    label: 'Código',    placeholder: 'PORTA' },
+              { key: 'nombre',    label: 'Nombre',    placeholder: 'Portacontenedor' },
+              { key: 'apto_para', label: 'Apta para', placeholder: 'Contenedores 20 / 40' },
+            ]}
+            extra={
+              <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700">
+                💡 La <strong>carrocería es opcional</strong>: define el tipo de caja (portacontenedor, plataforma, semibaja…). No cambies el <strong>código</strong> si ya hay cotizaciones que lo referencian.
+              </div>
+            }
+          />
+        </div>
       )}
 
       {/* ── FONDOS EN CUSTODIA ── */}
