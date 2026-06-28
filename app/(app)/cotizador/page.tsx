@@ -103,6 +103,7 @@ interface CotState {
   cotsProvMerc: CotProvSel[]
   // Bloque 5 - Origen / Puesta a FOB (forwarder o agente de origen)
   cotsProvOrigen: CotProvSel[]
+  origenAlCif: boolean   // ¿los gastos de origen engrosan el CIF? Forzado true si incoterm EXW.
   // Bloque 3 - Transporte terrestre
   cotsProvTransp: CotProvSel[]
   // Bloque 3 - Transporte terrestre (igual que antes)
@@ -149,6 +150,7 @@ const INIT: CotState = {
   cotsProvTransp:[],
   cotsProvMerc:[],
   cotsProvOrigen:[],
+  origenAlCif:true,
   optTransp:'A',rowsDescon:[],
   almModoVol:'auto',almVolM3:0,almCostoDia:0,almDias:0,
   cargaModo:'fijo',cargaValor:0,
@@ -484,11 +486,16 @@ const subOrigen = (origenActivoCalc && origenElegida)
     ? (origenElegida.manualMonto||0)
     : origenElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
   : 0
-// El valor FOB punta a punta = mercadería + gastos de origen (puesta a FOB). El origen se suma siempre que esté cargado y activo.
+// Regla de formación del FOB:
+//  · EXW → los gastos de origen SIEMPRE forman el FOB (sin ellos no hay FOB). Forzado.
+//  · FOB → entran al CIF solo si el cliente tildó la opción (s.origenAlCif). Si no, igual los paga, pero no engrosan la base.
+const origenAlFob = (s.incoterm==='EXW') || s.origenAlCif
+const subOrigenFob = origenAlFob ? subOrigen : 0       // entra al FOB imponible (base de CIF y seguro %)
+const subOrigenFuera = origenAlFob ? 0 : subOrigen     // costo del cliente que NO engrosa la base imponible
 const baseFOB = mercElegida
   ? fobProforma
   : s.productos.reduce((t,p)=>t+p.subtotal,0)+(s.incoterm==='EXW'?s.exwTransp+s.exwAgente+s.exwOtros:0)
-const totalFOB = baseFOB + subOrigen
+const totalFOB = baseFOB + subOrigenFob
 const totalM3 = mercElegida
   ? mercItems.reduce((t,it)=>t + (it.cantUsar||it.cantCotizada||0)*((it as any).volUnit||0), 0)
   : s.productos.reduce((t,p)=>t+p.vol_unit*p.cantidad,0)
@@ -650,7 +657,7 @@ const hayMercaderia = mercaderiaActiva() && totalFOB > 0
 const arcaActivo = hayMercaderia && s.incluirArca
 const totalTribUSD = arcaActivo ? totalTribARS/s.tcTrib : 0
 const totalLog=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+subE+subGastosArg+fee
-const totalLanded=totalFOB+totalLog+totalTribUSD
+const totalLanded=totalFOB+totalLog+totalTribUSD+subOrigenFuera
 const productosParaCap = mercElegida
   ? mercItems.map(it=>({vol_unit:(it as any).volUnit||0, cantidad:it.cantUsar||0, peso_unit:(it as any).pesoUnit||0} as any))
   : s.productos
@@ -2364,7 +2371,14 @@ const clientesFiltrados=terceros.filter(t=>
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#EF9F27] text-white text-[10px] font-bold">↗</span>
               <span className="font-medium text-sm text-gray-900">{s.sentido==='exportacion'?'Gastos en destino':(bloqueOrigen?.nombre||'Gastos de origen')}</span>
               <span className="text-[10px] text-gray-400">flete interno · honorarios agente origen · gastos de exportación · handling</span>
-              <span className="text-[9px] text-amber-700 bg-amber-50 border border-amber-100 rounded-full px-2 py-0.5">se suma al valor FOB</span>
+              {s.incoterm==='EXW' ? (
+                <span className="text-[9px] text-amber-800 bg-amber-100 border border-amber-200 rounded-full px-2 py-0.5">EXW · obligatorio, forma el FOB</span>
+              ) : (
+                <label className="flex items-center gap-1 text-[9px] text-gray-500 cursor-pointer select-none">
+                  <input type="checkbox" checked={s.origenAlCif} onChange={e=>u('origenAlCif',e.target.checked)} className="w-3 h-3 accent-[#EF9F27]"/>
+                  Sumar al CIF <span className="text-gray-400">(el cliente lo paga igual)</span>
+                </label>
+              )}
               <div className="ml-auto flex items-center gap-2 flex-wrap">
                 <select onChange={e=>{if(e.target.value){agregarOrigenDesdeSistema(e.target.value);e.target.value=''}}}
                     className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#1168F8]" defaultValue="">
@@ -3679,7 +3693,7 @@ const clientesFiltrados=terceros.filter(t=>
                 {/* Mercadería — fila principal destacada */}
                 {hayMercaderia&&(
                   <tr className="border-t-2 border-gray-300">
-                    <td className="px-5 py-3 font-semibold text-sm text-gray-900">Mercadería</td>
+                    <td className="px-5 py-3 font-semibold text-sm text-gray-900">Mercadería {s.incoterm}</td>
                     <td className="px-3 py-3 text-gray-500 text-[11px]">Valor {s.incoterm} · precio en origen</td>
                     <td className="px-5 py-3 text-right font-semibold text-sm font-mono text-gray-900">{fmt(totalFOB)}</td>
                     <td className="px-5 py-3 text-right font-semibold text-gray-500">{fmt(totalFOB/totalReal*100,1)}%</td>
