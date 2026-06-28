@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { cargarPermisos, puede } from '@/lib/permisos'
 import { abrirConMarca } from '@/lib/documentos'
@@ -107,8 +107,13 @@ function TercerosContent() {
   const tipoCtx = ctx === 'proveedores' ? 'proveedor' : 'cliente'
   const [terceros, setTerceros] = useState<Tercero[]>([])
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<'lista' | 'nuevo' | 'detalle'>('lista')
-  const [selId, setSelId] = useState<string | null>(null)
+  const router = useRouter()
+  const listHref = ctx === 'proveedores' ? '/clientes?ver=proveedores' : '/clientes'
+  const navSep = ctx === 'proveedores' ? '&' : '?'
+  // El detalle abierto y el alta viven en la URL (?id=… / ?nuevo=1). Así, cualquier
+  // navegación del sidebar (que va a la URL de la lista) cierra el detalle por sí sola.
+  const selId = searchParams.get('id')
+  const creando = searchParams.get('nuevo') === '1'
   const [buscar, setBuscar] = useState('')
   const [filtroPais, setFiltroPais] = useState('')
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -135,6 +140,10 @@ function TercerosContent() {
   }
 
   const sel = terceros.find(t => t.id === selId)
+  const view: 'lista' | 'nuevo' | 'detalle' = creando ? 'nuevo' : (selId && sel ? 'detalle' : 'lista')
+  function abrirDetalle(id: string) { router.push(`${listHref}${navSep}id=${id}`) }
+  function irNuevo() { router.push(`${listHref}${navSep}nuevo=1`) }
+  function volverLista() { router.push(listHref) }
   const filtrados = terceros.filter(t => {
     // Universo del contexto: los marcados como "ambos" aparecen en las dos vistas
     if (!t.tipo?.includes(tipoCtx)) return false
@@ -168,10 +177,10 @@ function TercerosContent() {
         </div>
         <div className="flex gap-2">
           {view !== 'lista' && (
-            <button onClick={() => setView('lista')} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-100 transition-colors">Volver</button>
+            <button onClick={volverLista} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-100 transition-colors">Volver</button>
           )}
           {view === 'lista' && puede(permisos, ctx, 'crear') && (
-            <button onClick={() => setView('nuevo')} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] transition-colors shadow-sm">+ Nuevo</button>
+            <button onClick={irNuevo} className="px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] transition-colors shadow-sm">+ Nuevo</button>
           )}
         </div>
       </div>
@@ -205,7 +214,7 @@ function TercerosContent() {
                 <div className="text-4xl mb-3">🏢</div>
                 <div className="text-gray-500 text-sm mb-1">{terceros.length === 0 ? 'Sin clientes ni proveedores aun' : 'Sin resultados'}</div>
                 {terceros.length === 0 && puede(permisos, ctx, 'crear') && (
-                  <button onClick={() => setView('nuevo')} className="mt-3 px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold">+ Agregar primero</button>
+                  <button onClick={irNuevo} className="mt-3 px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold">+ Agregar primero</button>
                 )}
               </div>
             ) : (
@@ -222,7 +231,7 @@ function TercerosContent() {
                     const contactoPpal = t.contactos?.find(c => c.principal) || t.contactos?.[0]
                     return (
                       <tr key={t.id} className="border-b border-gray-50 hover:bg-blue-50/20 transition-colors group cursor-pointer"
-                        onClick={() => { setSelId(t.id); setView('detalle') }}>
+                        onClick={() => abrirDetalle(t.id)}>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 rounded-xl bg-[#EBF2FF] flex items-center justify-center text-[#052698] text-[10px] font-bold flex-shrink-0">
@@ -255,7 +264,7 @@ function TercerosContent() {
                         <td className="px-4 py-3.5 text-gray-500">{t.dir_fiscal_ciudad || '-'}</td>
                         <td className="px-4 py-3.5">
                           <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                            <button onClick={e => { e.stopPropagation(); setSelId(t.id); setView('detalle') }}
+                            <button onClick={e => { e.stopPropagation(); abrirDetalle(t.id) }}
                               className="p-1.5 border border-gray-200 rounded-lg hover:bg-[#EBF2FF] text-gray-500 hover:text-[#1168F8] transition-colors">✏</button>
                           </div>
                         </td>
@@ -272,8 +281,8 @@ function TercerosContent() {
       {view === 'nuevo' && (
         <FormTercero
           supabase={supabase} currentUser={currentUser} ctxTipo={tipoCtx}
-          onSave={async () => { await loadData(); setView('lista') }}
-          onCancel={() => setView('lista')}
+          onSave={async () => { await loadData(); router.push(listHref) }}
+          onCancel={volverLista}
         />
       )}
 
@@ -281,7 +290,7 @@ function TercerosContent() {
         <DetalleTercero
           tercero={sel} supabase={supabase} currentUser={currentUser} ctx={ctx}
           onReload={async () => { await loadData() }}
-          onBack={() => setView('lista')}
+          onBack={volverLista}
         />
       )}
     </div>
@@ -358,7 +367,7 @@ function FormTercero({ supabase, currentUser, onSave, onCancel, ctxTipo }: any) 
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Pais *</label>
-            <select value={form.pais} onChange={e => setForm(f => ({ ...f, pais: e.target.value, tipo_doc: (TIPO_DOC_POR_PAIS[e.target.value] || TIPO_DOC_POR_PAIS.default)[0] }))} className={inp}>
+            <select value={form.pais} onChange={e => setForm(f => ({ ...f, pais: e.target.value, tipo_doc: (TIPO_DOC_POR_PAIS[e.target.value] || TIPO_DOC_POR_PAIS.default)[0], dir_comercial_pais: e.target.value, dir_fiscal_pais: e.target.value }))} className={inp}>
               {PAISES.map(p => <option key={p}>{p}</option>)}
             </select>
           </div>
@@ -746,12 +755,6 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
               )}
             </div>
           </div>
-          {puedeEditar && tab === 'datos' && (
-          <button onClick={() => { if (editando) { setEditando(false) } else { iniciarEdicion(); setEditando(true) } }}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-colors ${editando ? 'bg-gray-100 border-gray-200 text-gray-600' : 'border-[#1168F8] text-[#1168F8] hover:bg-[#EBF2FF]'}`}>
-            {editando ? 'Cancelar' : 'Editar'}
-          </button>
-          )}
         </div>
       </div>
 
@@ -773,6 +776,14 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
 
       {tab === 'datos' && (
         <div className="space-y-4">
+          {!editando && puedeEditar && (
+            <div className="flex justify-end">
+              <button onClick={() => { iniciarEdicion(); setEditando(true) }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold border border-[#1168F8] text-[#1168F8] hover:bg-[#EBF2FF] transition-colors">
+                Editar datos generales
+              </button>
+            </div>
+          )}
           {editando ? (
             <>
               <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
@@ -981,6 +992,10 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
 
       {tab === 'contactos' && (
         <div className="space-y-4">
+          <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-4 py-2.5 text-[11px] text-[#052698] flex items-center gap-2">
+            <span>💾</span>
+            <span>Acá no hace falta apretar «Editar»: lo que agregás o eliminás se guarda solo, al instante.</span>
+          </div>
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
             <h3 className="font-bold text-sm text-gray-900 mb-4">Agregar contacto</h3>
             <div className="grid grid-cols-3 gap-3 mb-3">
@@ -1033,6 +1048,10 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
 
       {tab === 'bancario' && (
         <div className="space-y-4">
+          <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-4 py-2.5 text-[11px] text-[#052698] flex items-center gap-2">
+            <span>💾</span>
+            <span>Acá no hace falta apretar «Editar»: lo que agregás o eliminás se guarda solo, al instante.</span>
+          </div>
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
             <h3 className="font-bold text-sm text-gray-900 mb-4">Agregar cuenta bancaria</h3>
             <div className="grid grid-cols-2 gap-3 mb-3">
@@ -1089,6 +1108,10 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
 
       {tab === 'documentos' && (
         <div className="space-y-4">
+          <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-4 py-2.5 text-[11px] text-[#052698] flex items-center gap-2">
+            <span>💾</span>
+            <span>Acá no hace falta apretar «Editar»: lo que subís o eliminás se guarda solo, al instante.</span>
+          </div>
           {puedeSubirDoc && (
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
             <h3 className="font-bold text-sm text-gray-900 mb-4">Agregar documento</h3>
@@ -1169,7 +1192,12 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
       )}
 
       {tab === 'operaciones' && (
-        <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 text-[11px] text-[#052698] bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-3.5 py-2.5">
+            <span className="text-sm">🔗</span>
+            <span>Las operaciones se vinculan <strong>solas</strong> desde las cotizaciones. Esta vista es de solo lectura.</span>
+          </div>
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
           {ops.length === 0 ? (
             <div className="p-8 text-center text-gray-400 text-sm">Sin operaciones vinculadas.</div>
           ) : (
@@ -1191,6 +1219,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
               </tbody>
             </table>
           )}
+          </div>
         </div>
       )}
 
