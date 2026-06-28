@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { Fragment, useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt, calcCapacidad, CONT_CAPS, PUERTOS_L, nextCotNum } from '@/lib/utils'
 import type { ContenedorCot, ProductoCot } from '@/types'
@@ -1119,8 +1119,10 @@ function agregarMercDesdeSistema(cotId:string){
   const usadas = cotsSistemaUsadas[cotId]||[]
   const nueva = cotMercDesdeSistema(cot, usadas)
   nueva.elegida = true
+  // El incoterm de la operación se toma de la proforma elegida (primer ítem con incoterm); luego es ajustable a mano.
+  const incoProforma = ((cot.items||[]) as any[]).map((it:any)=>it.incoterm).find((x:any)=>!!x)
   // Al elegir una proforma, las demás dejan de estar elegidas
-  setS(p=>({...p, cotsProvMerc:[...p.cotsProvMerc.map(c=>({...c,elegida:false})), nueva]}))
+  setS(p=>({...p, cotsProvMerc:[...p.cotsProvMerc.map(c=>({...c,elegida:false})), nueva], ...(incoProforma?{incoterm:incoProforma}:{})}))
   setProvUsado(pv=>({...pv,0:cotId}))
 }
 
@@ -1140,7 +1142,7 @@ function renderPillOrigen(){
   if(!bloqueOrigen) return null
   const idsTodos = [...(bloqueMerc?[bloqueMerc.id]:[]), bloqueOrigen.id, ...bloques.map((x:any)=>x.id)]
   const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(bloqueOrigen.id)
-  const rotulo = s.sentido==='exportacion' ? 'Destino' : (bloqueOrigen.nombre||'Origen')
+  const rotulo = s.sentido==='exportacion' ? 'Destino' : 'Origen'
   return (
     <button key={bloqueOrigen.id} onClick={()=>{
       if (s.bloquesActivos.length === 0) u('bloquesActivos', idsTodos.filter((id:string)=>id!==bloqueOrigen.id))
@@ -1663,7 +1665,7 @@ const clientesFiltrados=terceros.filter(t=>
       </div>
 
       <div className="flex gap-2 mb-5 flex-wrap items-center">
-        {([{key:'embarque',label:'Embarque'},{key:'mercaderia',label:'Mercadería'},{key:'logistica',label:'Logistica'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as {key:string,label:string}[]).map(t=>(
+        {([{key:'embarque',label:'General'},{key:'mercaderia',label:'Mercadería'},{key:'logistica',label:'Logistica'},{key:'tributos',label:'Tributos ARCA'},{key:'resumen',label:'Resumen'}] as {key:string,label:string}[]).map(t=>(
           <button key={t.key} onClick={()=>{setTab(t.key as Tab);setTimeout(()=>{topRef.current?.scrollIntoView({behavior:'smooth',block:'start'})},50)}} className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm ${tab===t.key?'bg-[#1168F8] text-white shadow-md':'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{t.label}</button>
         ))}
         <div className="ml-auto">
@@ -1728,15 +1730,13 @@ const clientesFiltrados=terceros.filter(t=>
                       </button>
                     )
                   })()}
-                  {/* ARCA pegada a Mercadería en ambos sentidos (es su base de cálculo). */}
-                  <div className="h-5 w-px bg-gray-200 mx-1 flex-shrink-0"/>
-                  {renderPillArca()}
-                  {/* IMPO: Origen tras ARCA, antes de los tramos. */}
+                  {/* IMPO: Origen segundo (tras Mercadería). */}
                   {s.sentido!=='exportacion' && renderPillOrigen()}
-                  {(s.sentido==='exportacion'?[...bloques].reverse():bloques).map((b:any) => {
+                  {(s.sentido==='exportacion'?[...bloques].reverse():bloques).map((b:any, idx:number) => {
                     const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(b.id)
                     return (
-                      <button key={b.id} onClick={()=>{
+                      <Fragment key={b.id}>
+                      <button onClick={()=>{
                         const idsTodos = [...(bloqueMerc?[bloqueMerc.id]:[]), ...(bloqueOrigen?[bloqueOrigen.id]:[]), ...bloques.map((x:any)=>x.id)]
                         if (s.bloquesActivos.length === 0) {
                           u('bloquesActivos', idsTodos.filter((id:string)=>id!==b.id))
@@ -1750,9 +1750,13 @@ const clientesFiltrados=terceros.filter(t=>
                         {activo && <span className="w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0"/>}
                         {b.nombre}
                       </button>
+                      {/* EXPO: ARCA justo después del primer tramo (Argentina) — recién ahí se pagan los tributos para sacar la carga. */}
+                      {s.sentido==='exportacion' && idx===0 && (<><div className="h-5 w-px bg-gray-200 mx-1 flex-shrink-0"/>{renderPillArca()}</>)}
+                      </Fragment>
                     )
                   })}
-                  {/* EXPO: Destino al final, a la derecha del todo */}
+                  {/* IMPO: ARCA al final (los tributos se pagan al ingresar la carga). EXPO: Destino al final. */}
+                  {s.sentido!=='exportacion' && (<><div className="h-5 w-px bg-gray-200 mx-1 flex-shrink-0"/>{renderPillArca()}</>)}
                   {s.sentido==='exportacion' && renderPillOrigen()}
                 </div>
               )}
@@ -2234,6 +2238,14 @@ const clientesFiltrados=terceros.filter(t=>
               <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-white text-[11px] font-bold" style={{background:'#ca8a04'}}>📦</span>
               <span className="font-semibold text-sm text-gray-900">{bloqueMerc?.nombre || 'Mercadería'}</span>
               <span className="text-[10px] text-gray-400">Proforma del proveedor · base imponible CIF</span>
+              <div className="flex items-center gap-1.5 ml-1">
+                <label className="text-[10px] font-semibold text-gray-500 uppercase">Incoterm</label>
+                <select value={s.incoterm} onChange={e=>u('incoterm',e.target.value)}
+                  className="px-2 py-1 border border-gray-200 rounded-lg text-[11px] bg-white font-semibold focus:outline-none focus:border-[#ca8a04]">
+                  {['EXW','FCA','FAS','FOB','CFR','CIF','CPT','CIP','DAP','DPU','DDP'].map(ic=><option key={ic} value={ic}>{ic}</option>)}
+                </select>
+                <span className="text-[9px] text-gray-400">se toma de la proforma · ajustable · informativo</span>
+              </div>
               <div className="ml-auto flex items-center gap-2 flex-wrap">
                 <select onChange={e=>{if(e.target.value){agregarMercDesdeSistema(e.target.value);e.target.value=''}}}
                   className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#ca8a04]" defaultValue="">
@@ -2323,8 +2335,8 @@ const clientesFiltrados=terceros.filter(t=>
             <div className="bg-white border border-gray-100 rounded-2xl p-10 shadow-sm text-center">
               <div className="text-4xl mb-3">📦</div>
               <div className="font-semibold text-gray-700 mb-1">El bloque Mercadería está desactivado</div>
-              <div className="text-xs text-gray-400 mb-4">Activalo desde los pills de la pestaña Embarque para cargar la proforma del proveedor.</div>
-              <button onClick={()=>cambiarTab('embarque')} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">Ir a Embarque</button>
+              <div className="text-xs text-gray-400 mb-4">Activalo desde los pills de la pestaña General para cargar la proforma del proveedor.</div>
+              <button onClick={()=>cambiarTab('embarque')} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">Ir a General</button>
             </div>
           )}
           <div className="flex justify-between">
@@ -3591,8 +3603,8 @@ const clientesFiltrados=terceros.filter(t=>
           <div className="bg-white border border-gray-100 rounded-2xl p-10 shadow-sm text-center">
             <div className="text-4xl mb-3">§</div>
             <div className="font-semibold text-gray-700 mb-1">Los tributos ARCA están desactivados</div>
-            <div className="text-xs text-gray-400 mb-4">Activá el toggle "Tributos ARCA" desde los pills de la pestaña Embarque. Requiere tener el bloque Mercadería activo.</div>
-            <button onClick={()=>cambiarTab('embarque')} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">Ir a Embarque</button>
+            <div className="text-xs text-gray-400 mb-4">Activá el toggle "Tributos ARCA" desde los pills de la pestaña General. Requiere tener el bloque Mercadería activo.</div>
+            <button onClick={()=>cambiarTab('embarque')} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">Ir a General</button>
           </div>
           <div className="flex justify-between">
             <button onClick={()=>cambiarTab('logistica')} className="px-4 py-2 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Anterior</button>
