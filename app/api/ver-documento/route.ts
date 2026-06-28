@@ -65,7 +65,11 @@ export async function GET(req: NextRequest) {
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer())
-  const ext = path.split('.').pop()?.toLowerCase() || ''
+  // La extensión se toma del nombre original (el path en storage puede no tenerla);
+  // si no viene o no tiene punto, cae al path.
+  const nombreOrig = req.nextUrl.searchParams.get('nombre') || ''
+  const fuenteExt = nombreOrig.includes('.') ? nombreOrig : path
+  const ext = fuenteExt.split('.').pop()?.toLowerCase() || ''
   const esPdf = ext === 'pdf'
   const esPng = ext === 'png'
   const esJpg = ext === 'jpg' || ext === 'jpeg'
