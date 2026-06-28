@@ -1728,9 +1728,11 @@ const clientesFiltrados=terceros.filter(t=>
                       </button>
                     )
                   })()}
-                  {/* IMPO: Origen segundo (tras Mercadería). EXPO: ARCA pegada a Mercadería. */}
+                  {/* ARCA pegada a Mercadería en ambos sentidos (es su base de cálculo). */}
+                  <div className="h-5 w-px bg-gray-200 mx-1 flex-shrink-0"/>
+                  {renderPillArca()}
+                  {/* IMPO: Origen tras ARCA, antes de los tramos. */}
                   {s.sentido!=='exportacion' && renderPillOrigen()}
-                  {s.sentido==='exportacion' && (<><div className="h-5 w-px bg-gray-200 mx-1 flex-shrink-0"/>{renderPillArca()}</>)}
                   {(s.sentido==='exportacion'?[...bloques].reverse():bloques).map((b:any) => {
                     const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(b.id)
                     return (
@@ -1754,8 +1756,6 @@ const clientesFiltrados=terceros.filter(t=>
                   {s.sentido==='exportacion' && renderPillOrigen()}
                 </div>
               )}
-              {/* IMPO: ARCA al final de la fila (en expo va pegada a Mercadería, arriba) */}
-              {s.sentido!=='exportacion' && (<><div className="h-5 w-px bg-gray-200 mx-1 flex-shrink-0"/>{renderPillArca()}</>)}
             </div>
           </div>
 
