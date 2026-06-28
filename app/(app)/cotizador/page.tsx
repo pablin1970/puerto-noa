@@ -33,6 +33,7 @@ interface ItemSelProv {
   cantUsar: number
   tipoContenedor: string
   tipoCamionId?: string
+  configVehId?: string
   subtotal: number
   seleccionado: boolean
   origen_id?: string|null
@@ -259,6 +260,8 @@ const [pasosFront,setPasosFront]=useState<any[]>([])
 const [ciudadesArg,setCiudadesArg]=useState<any[]>([])
 const [tiposCont,setTiposCont]=useState<any[]>([])
 const [tiposCamion,setTiposCamion]=useState<any[]>([])
+const [configVeh,setConfigVeh]=useState<any[]>([])
+const [verCaract,setVerCaract]=useState<{cfg:string;car:string}|null>(null)
 const [cotsFWDisponibles,setCotsFWDisponibles]=useState<any[]>([])
 const [cotsSegDisponibles,setCotsSegDisponibles]=useState<any[]>([])
 const [cotsTranspDisponibles,setCotsTranspDisponibles]=useState<any[]>([])
@@ -402,14 +405,16 @@ useEffect(()=>{
     supabase.from('pasos_fronterizos').select('id,nombre,provincia_argentina,restriccion_invierno').eq('activo','true').order('orden'),
     supabase.from('ciudades_destino_arg').select('id,ciudad,provincia').eq('activo','true').order('orden'),
     supabase.from('tipos_contenedor').select('id,codigo,nombre').eq('activo','true').order('orden'),
-    supabase.from('tipos_camion').select('id,nombre,icono').eq('activo','true').order('orden'),
-  ]).then(([ch,cl,ps,ci,tc,tca])=>{
+    supabase.from('tipos_camion').select('id,nombre,icono,codigo,apto_para').eq('activo','true').order('orden'),
+    supabase.from('config_vehiculo').select('*').eq('activo','true').order('orden'),
+  ]).then(([ch,cl,ps,ci,tc,tca,cveh])=>{
     if(ch.data) setPuertosChi(ch.data)
     if(cl.data) setPuertosChile(cl.data)
     if(ps.data) setPasosFront(ps.data)
     if(ci.data) setCiudadesArg(ci.data)
     if(tc.data) setTiposCont(tc.data)
     if(tca.data) setTiposCamion(tca.data)
+    if(cveh.data) setConfigVeh(cveh.data)
   })
   // Lugares de prestación de los proveedores (frente ①): terceroId → claves "lugar_tipo:lugar_id"
   // (referencia directa a las tablas estables puertos_chile/puertos_china/ciudades_destino_arg).
@@ -707,12 +712,14 @@ const criteriosTerrestre = (it:any): CritCoincidencia[] => {
   const opPaso    = s.pasoId
   const contsOp   = s.contenedores.map((c:any)=>c.tipo).filter(Boolean)
   const camsOp    = s.contenedores.map((c:any)=>(c as any).tipoCamionId).filter(Boolean)
+  const configsOp = s.contenedores.map((c:any)=>(c as any).configVehId).filter(Boolean)
   return [
-    { label:'Origen',     aplica: !!opOrigen,        ok: !!opOrigen  && it.origen_id===opOrigen },
-    { label:'Destino',    aplica: !!opDestino,       ok: !!opDestino && it.destino_id===opDestino },
-    { label:'Paso',       aplica: !!opPaso,          ok: !!opPaso    && it.paso_id===opPaso },
-    { label:'Contenedor', aplica: contsOp.length>0,  ok: !!it.tipoContenedor && contsOp.includes(it.tipoContenedor) },
-    { label:'Camión',     aplica: camsOp.length>0,   ok: !!it.tipoCamionId   && camsOp.includes(it.tipoCamionId) },
+    { label:'Origen',        aplica: !!opOrigen,         ok: !!opOrigen  && it.origen_id===opOrigen },
+    { label:'Destino',       aplica: !!opDestino,        ok: !!opDestino && it.destino_id===opDestino },
+    { label:'Paso',          aplica: !!opPaso,           ok: !!opPaso    && it.paso_id===opPaso },
+    { label:'Contenedor',    aplica: contsOp.length>0,   ok: !!it.tipoContenedor && contsOp.includes(it.tipoContenedor) },
+    { label:'Configuración', aplica: configsOp.length>0, ok: !!it.configVehId    && configsOp.includes(it.configVehId) },
+    { label:'Carrocería',    aplica: camsOp.length>0,    ok: !!it.tipoCamionId   && camsOp.includes(it.tipoCamionId) },
   ]
 }
 
@@ -913,6 +920,7 @@ function cotProvDesdeSistema(cot:any, contenedoresH1:{tipo:string;cantidad:numbe
       cantUsar: cantSug,
       tipoContenedor: it.tipo_contenedor||'',
       tipoCamionId: it.tipo_camion_id||'',
+      configVehId: it.config_vehiculo_id||'',
       subtotal: valorUnit * cantSug,
       seleccionado: false,
       origen_id: it.origen_id||null,
@@ -2025,11 +2033,11 @@ const clientesFiltrados=terceros.filter(t=>
                   {s.modalidadCarga==='mixta'&&(
                     <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Parte contenedorizada</div>
                   )}
-                  <div className="grid text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-2 gap-3" style={{gridTemplateColumns:'1fr 60px 1.5fr auto'}}>
-                    <div>Tipo contenedor</div><div>Cant.</div><div>Tipo de camion</div><div></div>
+                  <div className="grid text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-2 gap-3" style={{gridTemplateColumns:'1fr 52px 1.25fr 1.25fr auto'}}>
+                    <div>Tipo contenedor</div><div>Cant.</div><div>Configuración *</div><div>Carrocería</div><div></div>
                   </div>
                   {s.contenedores.map((c,i)=>(
-                    <div key={i} className="grid gap-3 mb-2 items-center" style={{gridTemplateColumns:'1fr 60px 1.5fr auto'}}>
+                    <div key={i} className="grid gap-3 mb-2 items-center" style={{gridTemplateColumns:'1fr 52px 1.25fr 1.25fr auto'}}>
                       <select value={c.tipo} onChange={e=>{const n=[...s.contenedores];(n[i] as any).tipo=e.target.value;u('contenedores',n)}}
                         className="px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white">
                         {tiposCont.length>0
@@ -2039,15 +2047,28 @@ const clientesFiltrados=terceros.filter(t=>
                       <input type="text" inputMode="decimal" value={c.cantidad} min={1} onFocus={e=>e.target.select()}
                         onChange={e=>{const n=[...s.contenedores];n[i]={...n[i],cantidad:parseInt2(e.target.value)||1};u('contenedores',n)}}
                         className="px-3 py-2 border border-gray-200 rounded-xl text-xs text-center focus:outline-none focus:border-[#1168F8] bg-white font-bold"/>
+                      <select value={(c as any).configVehId||''} onChange={e=>{const n=[...s.contenedores];(n[i] as any).configVehId=e.target.value;u('contenedores',n)}}
+                        className="px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white">
+                        <option value="">— Configuración —</option>
+                        {configVeh.map((t:any)=><option key={t.id} value={t.id}>{t.codigo} — {t.nombre}</option>)}
+                      </select>
                       <select value={(c as any).tipoCamionId||''} onChange={e=>{const n=[...s.contenedores];(n[i] as any).tipoCamionId=e.target.value;u('contenedores',n)}}
                         className="px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white">
-                        <option value="">— Tipo de camion —</option>
+                        <option value="">— Sin especificar —</option>
                         {tiposCamion.map((t:any)=><option key={t.id} value={t.id}>{t.icono} {t.nombre}</option>)}
                       </select>
-                      {s.contenedores.length>1&&(
-                        <button onClick={()=>u('contenedores',s.contenedores.filter((_,j)=>j!==i))}
-                          className="text-gray-400 hover:text-red-500 text-xs p-1">X</button>
-                      )}
+                      <div className="flex items-center gap-1">
+                        <button type="button" title="Ver características (pesos y dimensiones)"
+                          onClick={()=>(c as any).configVehId && setVerCaract({cfg:(c as any).configVehId, car:(c as any).tipoCamionId||''})}
+                          disabled={!(c as any).configVehId}
+                          className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-[#1168F8] text-[#1168F8] text-[10px] font-semibold hover:bg-blue-50 disabled:border-gray-200 disabled:text-gray-300 whitespace-nowrap">
+                          📋 Ver
+                        </button>
+                        {s.contenedores.length>1&&(
+                          <button onClick={()=>u('contenedores',s.contenedores.filter((_,j)=>j!==i))}
+                            className="text-gray-400 hover:text-red-500 text-xs p-1">X</button>
+                        )}
+                      </div>
                     </div>
                   ))}
                   <button onClick={()=>u('contenedores',[...s.contenedores,{tipo:'40HC',cantidad:1} as any])}
@@ -3746,6 +3767,51 @@ const clientesFiltrados=terceros.filter(t=>
       )}
 
       {/* Modal alta rápida de cliente */}
+      {/* Modal: características del vehículo (pesos y dimensiones) */}
+      {verCaract && (()=>{ const cfg = configVeh.find((c:any)=>c.id===verCaract.cfg); const car = tiposCamion.find((c:any)=>c.id===verCaract.car); if(!cfg) return null;
+        const Row = (l:string, v:any, acc?:boolean) => (
+          <div className="flex items-center justify-between py-1.5 border-t border-gray-100">
+            <span className="text-gray-500">{l}</span>
+            <span className={'font-semibold '+(acc?'text-[#1168F8]':'text-gray-800')}>{v||'—'}</span>
+          </div>
+        );
+        return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70] p-4 print:hidden" onClick={()=>setVerCaract(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e=>e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2" style={{background:'#FDF3E2'}}>
+              <span className="text-lg">🚛</span>
+              <div className="flex-1">
+                <div className="font-semibold text-sm text-[#92610C]">{cfg.nombre}</div>
+                <div className="text-[10px] font-mono text-amber-700">Configuración {cfg.codigo}</div>
+              </div>
+              <button onClick={()=>setVerCaract(null)} className="text-gray-400 text-xl px-1 leading-none">×</button>
+            </div>
+            <div className="px-5 py-4 text-xs">
+              <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Pesos y dimensiones</div>
+              {Row('Categoría legal', cfg.categoria, true)}
+              {Row('Ejes', cfg.ejes)}
+              {Row('PBT / PBTC máx.', cfg.pbt_max)}
+              {Row('Peso por eje', cfg.peso_eje)}
+              {Row('Largo máx.', cfg.largo_max)}
+              {Row('Ancho máx.', cfg.ancho_max)}
+              {Row('Alto máx.', cfg.alto_max)}
+              {Row('Apto contenedor', cfg.apto_contenedor)}
+              {Row('Circulación', cfg.circulacion)}
+              <div className="mt-3 pt-2 border-t border-gray-100">
+                {car ? (
+                  <div className="text-gray-600"><span className="font-semibold text-gray-800">Carrocería: {car.nombre}</span><br/>Apta para: {car.apto_para||'—'}</div>
+                ) : (
+                  <div className="text-gray-400">Sin carrocería especificada — solo configuración.</div>
+                )}
+              </div>
+              <div className="mt-3 px-3 py-2 bg-gray-50 rounded-lg text-[10px] text-gray-400 leading-relaxed">
+                Fuente: Ley 24.449 · Decreto 779/95 (Anexos A y R) · Decreto 32/2018. Valores máximos de referencia; la circulación puede variar según corredor y permisos.
+              </div>
+            </div>
+          </div>
+        </div>
+      )})()}
+
       {showAltaCli && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4 print:hidden" onClick={()=>!altaCliSaving&&setShowAltaCli(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e=>e.stopPropagation()}>
