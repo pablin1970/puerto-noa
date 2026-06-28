@@ -861,13 +861,7 @@ function FondosCuentasABM() {
   )
 }
 
-// ── Configuración de rubros por bloque del cotizador ─────────────────────────
-const BLOQUES_COTIZADOR = [
-  { num: 1, label: 'Bloque 1 — ForWarder',            color: '#1168F8', bg: '#EBF2FF', desc: 'Flete marítimo, handling, gastos naviero' },
-  { num: 2, label: 'Bloque 2 — Transporte Chile-NOA', color: '#0a9e6e', bg: '#E1F5EE', desc: 'Transporte de carga Chile a Argentina' },
-  { num: 3, label: 'Bloque 3 — Flete terrestre',      color: '#b45309', bg: '#FEF3C7', desc: 'Camiones, contenedores, estadías' },
-  { num: 4, label: 'Bloque 4 — Gastos Argentina',     color: '#6b21a8', bg: '#F3E8FF', desc: 'Despachante, gastos aduaneros, otros ARG' },
-]
+// (El mapeo rubro→bloque se administra ahora desde el ABM de bloques: tabla cotizador_bloque_rubros.)
 
 
 // ── ABM Categorías de Gastos Fijos ────────────────────────────────
@@ -1274,13 +1268,23 @@ function BloquesCotizacionABM() {
   const [saving, setSaving] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [newForm, setNewForm] = useState({numero:'',nombre:'',descripcion:''})
+  const [rubros, setRubros] = useState<any[]>([])
+  const [mapa, setMapa] = useState<Record<number,string[]>>({})
 
   useEffect(()=>{ load() },[])
 
   async function load(){
     setLoading(true)
-    const {data}=await supabase.from('cotizador_bloques').select('*').order('numero')
-    if(data) setBloques(data)
+    const [bRes, rRes, mRes] = await Promise.all([
+      supabase.from('cotizador_bloques').select('*').order('numero'),
+      supabase.from('proveedor_rubros').select('id,nombre,codigo,color,icono,orden,activo').order('orden'),
+      supabase.from('cotizador_bloque_rubros').select('bloque,rubro_id'),
+    ])
+    if(bRes.data) setBloques(bRes.data)
+    if(rRes.data) setRubros((rRes.data as any[]).filter((r:any)=>r.activo!==false))
+    const m:Record<number,string[]>={}
+    if(mRes.data){ for(const row of mRes.data as any[]){ if(m[row.bloque]) m[row.bloque].push(row.rubro_id); else m[row.bloque]=[row.rubro_id] } }
+    setMapa(m)
     setLoading(false)
   }
 
@@ -1324,6 +1328,19 @@ function BloquesCotizacionABM() {
     if(!confirm('¿Eliminar este bloque? Las cotizaciones vinculadas perderán su bloque asignado.')) return
     await supabase.from('cotizador_bloques').delete().eq('id',id)
     setBloques(prev=>prev.filter(b=>b.id!==id))
+  }
+
+  async function toggleRubro(bloqueNum:number, bloqueNombre:string, rubroId:string){
+    if(!pEditar) return
+    const on=(mapa[bloqueNum]||[]).includes(rubroId)
+    setMapa(prev=>({...prev,[bloqueNum]: on ? (prev[bloqueNum]||[]).filter(x=>x!==rubroId) : [...(prev[bloqueNum]||[]),rubroId]}))
+    if(on){
+      const {error}=await supabase.from('cotizador_bloque_rubros').delete().eq('bloque',bloqueNum).eq('rubro_id',rubroId)
+      if(error){ setMapa(prev=>({...prev,[bloqueNum]:[...(prev[bloqueNum]||[]),rubroId]})); alert('No se pudo quitar el rubro: '+error.message) }
+    } else {
+      const {error}=await (supabase.from('cotizador_bloque_rubros') as any).insert({bloque:bloqueNum, bloque_nombre:bloqueNombre, rubro_id:rubroId, activo:true})
+      if(error){ setMapa(prev=>({...prev,[bloqueNum]:(prev[bloqueNum]||[]).filter(x=>x!==rubroId)})); alert('No se pudo agregar el rubro: '+error.message) }
+    }
   }
 
   if(loading) return <div className="p-8 text-center text-gray-400 text-sm">Cargando...</div>
@@ -1407,27 +1424,55 @@ function BloquesCotizacionABM() {
               </div>
             </div>
           ):(
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-[#EBF2FF] flex items-center justify-center text-[#052698] text-sm font-black flex-shrink-0">
-                {b.numero}
+            <div>
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-[#EBF2FF] flex items-center justify-center text-[#052698] text-sm font-black flex-shrink-0">
+                  {b.numero}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm text-gray-900">{b.nombre}</div>
+                  {b.descripcion&&<div className="text-[11px] text-gray-400 mt-0.5">{b.descripcion}</div>}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button onClick={()=>toggleActivo(b.id,b.activo)}
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border transition-all ${b.activo?'bg-green-50 text-green-700 border-green-200':'bg-gray-100 text-gray-400 border-gray-200'}`}>
+                    {b.activo?'Activo':'Inactivo'}
+                  </button>
+                  <button onClick={()=>{setEditId(b.id);setForm({numero:String(b.numero),nombre:b.nombre,descripcion:b.descripcion||''})}}
+                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:border-[#1168F8] hover:text-[#1168F8] transition-all">
+                    Editar
+                  </button>
+                  <button onClick={()=>eliminar(b.id)}
+                    className="px-3 py-1.5 border border-red-100 rounded-lg text-xs text-red-400 hover:bg-red-50 transition-all">
+                    Eliminar
+                  </button>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm text-gray-900">{b.nombre}</div>
-                {b.descripcion&&<div className="text-[11px] text-gray-400 mt-0.5">{b.descripcion}</div>}
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button onClick={()=>toggleActivo(b.id,b.activo)}
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border transition-all ${b.activo?'bg-green-50 text-green-700 border-green-200':'bg-gray-100 text-gray-400 border-gray-200'}`}>
-                  {b.activo?'Activo':'Inactivo'}
-                </button>
-                <button onClick={()=>{setEditId(b.id);setForm({numero:String(b.numero),nombre:b.nombre,descripcion:b.descripcion||''})}}
-                  className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:border-[#1168F8] hover:text-[#1168F8] transition-all">
-                  Editar
-                </button>
-                <button onClick={()=>eliminar(b.id)}
-                  className="px-3 py-1.5 border border-red-100 rounded-lg text-xs text-red-400 hover:bg-red-50 transition-all">
-                  Eliminar
-                </button>
+
+              {/* Rubros que cotizan este tramo — se guarda solo (cotizador_bloque_rubros) */}
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Rubros que cotizan este tramo</div>
+                {rubros.length===0 ? (
+                  <div className="text-[11px] text-gray-300">No hay rubros cargados. Cargalos en la pestaña «Rubros de proveedores».</div>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {rubros.map(r=>{
+                      const on=(mapa[b.numero]||[]).includes(r.id)
+                      const col=r.color||'#6b7280'
+                      return (
+                        <button key={r.id}
+                          onClick={()=>toggleRubro(b.numero,b.nombre,r.id)}
+                          disabled={!pEditar}
+                          title={!pEditar?'Sin permiso para editar':(on?'Quitar de este tramo':'Sumar a este tramo')}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all flex items-center gap-1 ${pEditar?'cursor-pointer':'cursor-default'} ${on?'':'bg-white border-gray-200 text-gray-400 hover:border-gray-300'}`}
+                          style={on?{background:col+'1f',color:col,borderColor:col+'55'}:undefined}>
+                          {on&&<span className="text-[10px]">✓</span>}
+                          {r.icono?r.icono+' ':''}{r.nombre}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1639,7 +1684,7 @@ function RubrosProveedorABM() {
 
       <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700">
         💡 Asignás estos rubros a cada proveedor en <strong>Clientes y Proveedores</strong>.
-        Luego en <strong>Rubros por bloque</strong> configurás en qué bloque del cotizador aparece cada rubro.
+        Y en <strong>Bloques cotización</strong> elegís qué rubros cotizan cada tramo del cotizador.
       </div>
 
       {(showNew || editId) && (
