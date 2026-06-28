@@ -574,7 +574,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [sentido, setSentido] = useState<'importacion'|'exportacion'|'ambos'>(snapshotInicial?.sentido || 'importacion')
   // ── Multi-tramo terrestre (sentido simple) ──
   // Cada tramo = un ítem con ruta estructurada + tarifas. Permite cargar varias rutas en una cotización.
-  const TRAMO_VACIO = { origen_id:'', origen_tipo:'', destino_id:'', destino_tipo:'', paso_id:'', tipo_camion:'', tipo_contenedor:'', flete_ida:'', flete_vuelta:'', flete_rt:'', seguro_modo:'pct', seguro_monto:'' }
+  const TRAMO_VACIO = { origen_id:'', origen_tipo:'', destino_id:'', destino_tipo:'', paso_id:'', tipo_camion:'', config_vehiculo:'', tipo_contenedor:'', flete_ida:'', flete_vuelta:'', flete_rt:'', seguro_modo:'pct', seguro_monto:'' }
   // tramosA: sentido simple (impo o expo) Y versión A del modo "ambos" (importación)
   // tramosB: versión B del modo "ambos" (exportación)
   const [tramos, setTramos] = useState<any[]>(snapshotInicial?.tramos || [{ ...TRAMO_VACIO }])
@@ -636,6 +636,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [ciudades, setCiudades] = useState<any[]>([])
   const [tiposCont, setTiposCont] = useState<any[]>([])
   const [tiposCamion, setTiposCamion] = useState<any[]>([])
+  const [configVeh, setConfigVeh] = useState<any[]>([])
+  const [verCaract, setVerCaract] = useState<{cfg:string;car:string}|null>(null)
   const [rubrosCatalogo, setRubrosCatalogo] = useState<any[]>([])
   // Catálogo de servicios de depósito (Fase 2) + servicios cargados en esta cotización
   const [depServiciosCat, setDepServiciosCat] = useState<any[]>([])
@@ -741,7 +743,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       supabase.from('servicios_metricas').select('*').eq('activo',true).order('orden'),
       supabase.from('servicios_metricas_habilitadas').select('servicio_id,metrica_id,usa_minimo'),
       supabase.from('tipos_camion').select('id,nombre,icono').eq('activo','true').order('orden'),
-    ]).then(([bl,ch,cl,ps,ci,tc,ru,dsv,dmt,dhb,tcam]) => {
+      supabase.from('config_vehiculo').select('*').eq('activo','true').order('orden'),
+    ]).then(([bl,ch,cl,ps,ci,tc,ru,dsv,dmt,dhb,tcam,cveh]) => {
       if(bl.data) setBloques(bl.data)
       if(ch.data) setPuertosCh(ch.data)
       if(cl.data) setPuertosChile(cl.data)
@@ -752,6 +755,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       if(dmt.data) setDepMetricas(dmt.data)
       if(dhb.data) { setDepHab(new Set((dhb.data as any[]).map(h=>h.servicio_id+'|'+h.metrica_id))); setDepHabMin(new Set((dhb.data as any[]).filter(h=>h.usa_minimo).map(h=>h.servicio_id+'|'+h.metrica_id))) }
       if(tcam.data) setTiposCamion(tcam.data)
+      if(cveh.data) setConfigVeh(cveh.data)
       if(ru.data){
         // Normalizar: cada rubro con su código (fallback al nombre normalizado)
         const lista = (ru.data as any[]).map(r=>({
@@ -983,6 +987,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           moneda: form.moneda,
           tipo_contenedor: t.tipo_contenedor||null,
           tipo_camion_id: t.tipo_camion||null,
+          config_vehiculo_id: t.config_vehiculo||null,
           categoria: 'flete_terrestre',
           origen_id: t.origen_id||null, origen_tipo: t.origen_tipo||null,
           destino_id: t.destino_id||null, destino_tipo: t.destino_tipo||null,
@@ -1362,19 +1367,33 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           </div>
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
-              <span className="text-[10px] text-gray-400 mb-1 block">Tipo de camión</span>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] text-gray-400">Configuración <span className="text-rose-500">*</span></span>
+                <button type="button" onClick={()=>t.config_vehiculo && setVerCaract({cfg:t.config_vehiculo, car:t.tipo_camion})}
+                  disabled={!t.config_vehiculo}
+                  className="text-[10px] font-semibold text-[#1168F8] hover:underline disabled:text-gray-300 disabled:no-underline disabled:cursor-default">
+                  Ver características
+                </button>
+              </div>
+              <select value={t.config_vehiculo||''} onChange={e=>fnSet(i,'config_vehiculo',e.target.value)} className={sel}>
+                <option value="">— Elegí configuración —</option>
+                {configVeh.map((cv:any)=><option key={cv.id} value={cv.id}>{cv.codigo} — {cv.nombre}</option>)}
+              </select>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-400 mb-1 block">Carrocería <span className="text-gray-300">(opcional)</span></span>
               <select value={t.tipo_camion} onChange={e=>fnSet(i,'tipo_camion',e.target.value)} className={sel}>
                 <option value="">— Sin especificar —</option>
                 {tiposCamion.map((cam:any)=><option key={cam.id} value={cam.id}>{cam.icono?cam.icono+' ':''}{cam.nombre}</option>)}
               </select>
             </div>
-            <div>
-              <span className="text-[10px] text-gray-400 mb-1 block">Tipo de contenedor</span>
-              <select value={t.tipo_contenedor} onChange={e=>fnSet(i,'tipo_contenedor',e.target.value)} className={sel}>
-                <option value="">— Todos —</option>
-                {tiposCont.map((tc:any)=><option key={tc.id} value={tc.codigo}>{tc.codigo} — {tc.nombre}</option>)}
-              </select>
-            </div>
+          </div>
+          <div className="mb-3">
+            <span className="text-[10px] text-gray-400 mb-1 block">Tipo de contenedor</span>
+            <select value={t.tipo_contenedor} onChange={e=>fnSet(i,'tipo_contenedor',e.target.value)} className={sel}>
+              <option value="">— Todos —</option>
+              {tiposCont.map((tc:any)=><option key={tc.id} value={tc.codigo}>{tc.codigo} — {tc.nombre}</option>)}
+            </select>
           </div>
           <div className="border border-gray-100 rounded-xl overflow-hidden bg-white">
             <div className="grid grid-cols-3 divide-x divide-gray-100">
@@ -2161,6 +2180,51 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           </div>
         </div>
       )}
+
+      {/* Modal: características del vehículo (pesos y dimensiones) */}
+      {verCaract && (()=>{ const cfg = configVeh.find((c:any)=>c.id===verCaract.cfg); const car = tiposCamion.find((c:any)=>c.id===verCaract.car); if(!cfg) return null;
+        const Row = (l:string, v:any, acc?:boolean) => (
+          <div className="flex items-center justify-between py-1.5 border-t border-gray-100">
+            <span className="text-gray-500">{l}</span>
+            <span className={'font-semibold '+(acc?'text-[#1168F8]':'text-gray-800')}>{v||'—'}</span>
+          </div>
+        );
+        return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70] p-4" onClick={()=>setVerCaract(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e=>e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2" style={{background:'#FDF3E2'}}>
+              <span className="text-lg">🚛</span>
+              <div className="flex-1">
+                <div className="font-semibold text-sm text-[#92610C]">{cfg.nombre}</div>
+                <div className="text-[10px] font-mono text-amber-700">Configuración {cfg.codigo}</div>
+              </div>
+              <button onClick={()=>setVerCaract(null)} className="text-gray-400 text-xl px-1 leading-none">×</button>
+            </div>
+            <div className="px-5 py-4 text-xs">
+              <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Pesos y dimensiones</div>
+              {Row('Categoría legal', cfg.categoria, true)}
+              {Row('Ejes', cfg.ejes)}
+              {Row('PBT / PBTC máx.', cfg.pbt_max)}
+              {Row('Peso por eje', cfg.peso_eje)}
+              {Row('Largo máx.', cfg.largo_max)}
+              {Row('Ancho máx.', cfg.ancho_max)}
+              {Row('Alto máx.', cfg.alto_max)}
+              {Row('Apto contenedor', cfg.apto_contenedor)}
+              {Row('Circulación', cfg.circulacion)}
+              <div className="mt-3 pt-2 border-t border-gray-100">
+                {car ? (
+                  <div className="text-gray-600"><span className="font-semibold text-gray-800">Carrocería: {car.nombre}</span><br/>Apta para: {car.apto_para||'—'}</div>
+                ) : (
+                  <div className="text-gray-400">Sin carrocería especificada — solo configuración.</div>
+                )}
+              </div>
+              <div className="mt-3 px-3 py-2 bg-gray-50 rounded-lg text-[10px] text-gray-400 leading-relaxed">
+                Fuente: Ley 24.449 · Decreto 779/95 (Anexos A y R) · Decreto 32/2018. Valores máximos de referencia; la circulación puede variar según corredor y permisos.
+              </div>
+            </div>
+          </div>
+        </div>
+      )})()}
 
       {/* Modal preview */}
       {previewModal && (
