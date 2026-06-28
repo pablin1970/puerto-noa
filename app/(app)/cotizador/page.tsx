@@ -2362,7 +2362,7 @@ const clientesFiltrados=terceros.filter(t=>
           <div className={`bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm ${!origenActivoCalc?'hidden':''}`}>
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#EF9F27] text-white text-[10px] font-bold">↗</span>
-              <span className="font-medium text-sm text-gray-900">{s.sentido==='exportacion'?'Destino':(bloqueOrigen?.nombre||'Origen · Puesta a FOB')}</span>
+              <span className="font-medium text-sm text-gray-900">{s.sentido==='exportacion'?'Gastos en destino':(bloqueOrigen?.nombre||'Gastos de origen')}</span>
               <span className="text-[10px] text-gray-400">flete interno · honorarios agente origen · gastos de exportación · handling</span>
               <span className="text-[9px] text-amber-700 bg-amber-50 border border-amber-100 rounded-full px-2 py-0.5">se suma al valor FOB</span>
               <div className="ml-auto flex items-center gap-2 flex-wrap">
@@ -3532,7 +3532,7 @@ const clientesFiltrados=terceros.filter(t=>
               <div className="flex-1 px-5 py-3.5">
                 <div className="text-[10px] text-gray-400 mb-0.5">FOB origen</div>
                 <div className="text-lg font-bold font-mono text-gray-800">USD {fmt(totalFOB,0)}</div>
-                <div className="text-[9px] text-gray-400 mt-0.5">Mercadería + puesta a FOB</div>
+                <div className="text-[9px] text-gray-400 mt-0.5">Mercadería + gastos de origen</div>
               </div>
               <div className="flex items-center justify-center px-2 text-gray-300 text-lg font-light">+</div>
               <div className="flex-1 px-5 py-3.5">
