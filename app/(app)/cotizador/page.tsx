@@ -1135,6 +1135,40 @@ function agregarOrigenDesdeSistema(cotId:string){
   setProvUsado(pv=>({...pv,5:cotId}))
 }
 
+// Pastilla Origen / Destino (bloque 5). En impo rotula "Origen", en expo "Destino".
+function renderPillOrigen(){
+  if(!bloqueOrigen) return null
+  const idsTodos = [...(bloqueMerc?[bloqueMerc.id]:[]), bloqueOrigen.id, ...bloques.map((x:any)=>x.id)]
+  const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(bloqueOrigen.id)
+  const rotulo = s.sentido==='exportacion' ? 'Destino' : (bloqueOrigen.nombre||'Origen')
+  return (
+    <button key={bloqueOrigen.id} onClick={()=>{
+      if (s.bloquesActivos.length === 0) u('bloquesActivos', idsTodos.filter((id:string)=>id!==bloqueOrigen.id))
+      else if (activo) u('bloquesActivos', s.bloquesActivos.filter((id:string)=>id!==bloqueOrigen.id))
+      else u('bloquesActivos', [...s.bloquesActivos, bloqueOrigen.id])
+    }}
+      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all flex-shrink-0 ${activo?'bg-[#EF9F27] border-[#EF9F27] text-white':'bg-gray-100 border-gray-200 text-gray-400 line-through'}`}>
+      {activo && <span className="w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0"/>}
+      {rotulo}
+    </button>
+  )
+}
+
+// Pastilla Tributos ARCA. Deshabilitada si no hay bloque mercadería activo (sin mercadería no hay tributos).
+function renderPillArca(){
+  const mercOn = mercaderiaActiva()
+  return (
+    <button onClick={()=>{ if(mercOn) u('incluirArca',!s.incluirArca) }}
+      disabled={!mercOn}
+      title={mercOn?'':'Requiere el bloque Mercadería activo'}
+      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all flex-shrink-0 ${!mercOn?'bg-gray-50 border-gray-200 text-gray-300 cursor-not-allowed':s.incluirArca?'bg-amber-500 border-amber-500 text-white':'bg-gray-100 border-gray-200 text-gray-400 line-through'}`}>
+      {mercOn && s.incluirArca && <span className="w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0"/>}
+      Tributos ARCA
+      {!mercOn && <span className="text-[9px] font-normal ml-0.5">(requiere mercadería)</span>}
+    </button>
+  )
+}
+
 // Buscar terceros proveedores por rubros del bloque
 function tercerosPorBloque(bloque:number){
   const rubros=rubrosBloque[bloque]||[]
@@ -1670,7 +1704,7 @@ const clientesFiltrados=terceros.filter(t=>
               {bloques.length === 0 ? (
                 <span className="text-[10px] text-gray-300">Cargando...</span>
               ) : (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1.5 items-center">
                   {/* Pill MERCADERÍA — primero. Al desactivarlo, se apaga ARCA en cascada. */}
                   {bloqueMerc && (()=>{
                     const idsTodos = [bloqueMerc.id, ...(bloqueOrigen?[bloqueOrigen.id]:[]), ...bloques.map((x:any)=>x.id)]
@@ -1694,27 +1728,9 @@ const clientesFiltrados=terceros.filter(t=>
                       </button>
                     )
                   })()}
-                  {/* Pill ORIGEN / DESTINO — entre Mercadería y los tramos. Se controla por toggle; el incoterm es informativo. */}
-                  {bloqueOrigen && (()=>{
-                    const idsTodos = [...(bloqueMerc?[bloqueMerc.id]:[]), bloqueOrigen.id, ...bloques.map((x:any)=>x.id)]
-                    const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(bloqueOrigen.id)
-                    const rotulo = s.sentido==='exportacion' ? 'Destino' : (bloqueOrigen.nombre||'Origen')
-                    return (
-                      <button key={bloqueOrigen.id} onClick={()=>{
-                        if (s.bloquesActivos.length === 0) {
-                          u('bloquesActivos', idsTodos.filter((id:string)=>id!==bloqueOrigen.id))
-                        } else if (activo) {
-                          u('bloquesActivos', s.bloquesActivos.filter((id:string)=>id!==bloqueOrigen.id))
-                        } else {
-                          u('bloquesActivos', [...s.bloquesActivos, bloqueOrigen.id])
-                        }
-                      }}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all ${activo?'bg-[#EF9F27] border-[#EF9F27] text-white':'bg-gray-100 border-gray-200 text-gray-400 line-through'}`}>
-                        {activo && <span className="w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0"/>}
-                        {rotulo}
-                      </button>
-                    )
-                  })()}
+                  {/* IMPO: Origen segundo (tras Mercadería). EXPO: ARCA pegada a Mercadería. */}
+                  {s.sentido!=='exportacion' && renderPillOrigen()}
+                  {s.sentido==='exportacion' && (<><div className="h-5 w-px bg-gray-200 mx-1 flex-shrink-0"/>{renderPillArca()}</>)}
                   {(s.sentido==='exportacion'?[...bloques].reverse():bloques).map((b:any) => {
                     const activo = s.bloquesActivos.length === 0 || s.bloquesActivos.includes(b.id)
                     return (
@@ -1734,24 +1750,12 @@ const clientesFiltrados=terceros.filter(t=>
                       </button>
                     )
                   })}
+                  {/* EXPO: Destino al final, a la derecha del todo */}
+                  {s.sentido==='exportacion' && renderPillOrigen()}
                 </div>
               )}
-              {/* Separador */}
-              <div className="h-5 w-px bg-gray-200 mx-1 flex-shrink-0"/>
-              {/* ARCA como pill — deshabilitado si no hay bloque mercadería activo (sin mercadería no hay tributos) */}
-              {(()=>{
-                const mercOn = mercaderiaActiva()
-                return (
-                  <button onClick={()=>{ if(mercOn) u('incluirArca',!s.incluirArca) }}
-                    disabled={!mercOn}
-                    title={mercOn?'':'Requiere el bloque Mercadería activo'}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all flex-shrink-0 ${!mercOn?'bg-gray-50 border-gray-200 text-gray-300 cursor-not-allowed':s.incluirArca?'bg-amber-500 border-amber-500 text-white':'bg-gray-100 border-gray-200 text-gray-400 line-through'}`}>
-                    {mercOn && s.incluirArca && <span className="w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0"/>}
-                    Tributos ARCA
-                    {!mercOn && <span className="text-[9px] font-normal ml-0.5">(requiere mercadería)</span>}
-                  </button>
-                )
-              })()}
+              {/* IMPO: ARCA al final de la fila (en expo va pegada a Mercadería, arriba) */}
+              {s.sentido!=='exportacion' && (<><div className="h-5 w-px bg-gray-200 mx-1 flex-shrink-0"/>{renderPillArca()}</>)}
             </div>
           </div>
 
