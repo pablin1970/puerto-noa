@@ -63,6 +63,31 @@ const TIPO_DOC_POR_PAIS: Record<string, string[]> = {
 const CONDICION_IVA = ['Responsable Inscripto', 'Exento', 'Monotributo', 'No inscripto', 'Consumidor Final', 'No aplica']
 const MONEDAS = ['USD', 'ARS', 'CLP', 'CNY', 'EUR']
 
+// ── Domicilios ───────────────────────────────────────────────────────────────
+// Hay dos domicilios en `terceros`: comercial (estatutario) y fiscal (ARCA/SII).
+// No siempre difieren, así que el form usa un toggle "el fiscal es igual al comercial".
+// Estos helpers detectan vacíos / igualdad y dan compatibilidad con registros viejos
+// que solo cargaron la dirección fiscal.
+const DIR_CAMPOS = ['calle', 'ciudad', 'provincia', 'pais', 'cp']
+function dirVacia(o: any, pref: string): boolean {
+  return DIR_CAMPOS.every(c => !((o?.[`${pref}_${c}`] || '').toString().trim()))
+}
+function dirIguales(o: any, a: string, b: string): boolean {
+  return DIR_CAMPOS.every(c => ((o?.[`${a}_${c}`] || '').toString().trim()) === ((o?.[`${b}_${c}`] || '').toString().trim()))
+}
+// Prepara un tercero para edición: si el comercial está vacío pero hay fiscal (registro
+// viejo), toma el fiscal como comercial. Devuelve la base ya normalizada y si son iguales.
+function prepararDomicilios(t: any): { base: any; igual: boolean } {
+  const base: any = { ...t }
+  const comVacio = dirVacia(base, 'dir_comercial')
+  const fisVacio = dirVacia(base, 'dir_fiscal')
+  if (comVacio && !fisVacio) {
+    DIR_CAMPOS.forEach(c => { base[`dir_comercial_${c}`] = base[`dir_fiscal_${c}`] })
+  }
+  const igual = dirVacia(base, 'dir_fiscal') || dirIguales(base, 'dir_comercial', 'dir_fiscal')
+  return { base, igual }
+}
+
 // La pantalla de terceros es una sola, pero se comporta según el contexto de entrada:
 // /clientes => vista Clientes ; /clientes?ver=proveedores => vista Proveedores.
 // Los permisos (ver/crear/editar/eliminar) se evalúan contra el módulo del contexto,
@@ -268,11 +293,12 @@ function FormTercero({ supabase, currentUser, onSave, onCancel, ctxTipo }: any) 
     razon_social: '', nombre_fantasia: '', pais: 'Argentina',
     tipo_doc: 'CUIT', nro_doc: '', condicion_iva: 'Responsable Inscripto',
     actividad: '', nro_importador: '',
+    dir_comercial_calle: '', dir_comercial_ciudad: '', dir_comercial_provincia: '', dir_comercial_pais: 'Argentina', dir_comercial_cp: '',
     dir_fiscal_calle: '', dir_fiscal_ciudad: '', dir_fiscal_provincia: '', dir_fiscal_pais: 'Argentina', dir_fiscal_cp: '',
     notas: '', activo: true,
     tipo: [ctxTipo || 'cliente'] as string[],
   })
-  const [cuentas, setCuentas] = useState<any[]>([{ banco: '', cuenta: '', cbu_iban: '', swift: '', moneda: 'USD', principal: true, notas: '' }])
+  const [fiscalIgual, setFiscalIgual] = useState(true)
   const [saving, setSaving] = useState(false)
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
   const tiposDocs = TIPO_DOC_POR_PAIS[form.pais] || TIPO_DOC_POR_PAIS.default
@@ -281,25 +307,21 @@ function FormTercero({ supabase, currentUser, onSave, onCancel, ctxTipo }: any) 
     setForm(f => ({ ...f, tipo: f.tipo.includes(t) ? f.tipo.filter(x => x !== t) : [...f.tipo, t] }))
   }
 
-  function addCuenta() { setCuentas(c => [...c, { banco: '', cuenta: '', cbu_iban: '', swift: '', moneda: 'USD', principal: false, notas: '' }]) }
-  function removeCuenta(i: number) { setCuentas(c => c.filter((_, idx) => idx !== i)) }
-  function updateCuenta(i: number, field: string, value: any) {
-    setCuentas(c => c.map((ct, idx) => idx === i ? { ...ct, [field]: value } : ct))
-  }
-
   async function handleSave() {
     if (!form.razon_social) { alert('La razon social es obligatoria'); return }
     if (form.tipo.length === 0) { alert('Selecciona al menos un tipo'); return }
     setSaving(true)
-    const { data: tercero } = await (supabase.from('terceros') as any).insert({
-      ...form, creado_por: currentUser?.nombre, creado_por_id: currentUser?.id
-    }).select().single()
-    if (tercero) {
-      const cuentasValidas = cuentas.filter(c => c.banco || c.cuenta || c.cbu_iban)
-      if (cuentasValidas.length > 0) {
-        await (supabase.from('tercero_cuentas_bancarias') as any).insert(cuentasValidas.map((c: any) => ({ ...c, tercero_id: tercero.id })))
-      }
+    const esChile = form.pais === 'Chile'
+    const payload: any = { ...form, creado_por: currentUser?.nombre, creado_por_id: currentUser?.id }
+    // Chile: no aplica condición de IVA ni N importador/exportador (van con el RUT).
+    if (esChile) { payload.condicion_iva = null; payload.nro_importador = null }
+    // Si el domicilio fiscal es igual al comercial, se copia del comercial.
+    if (fiscalIgual) {
+      DIR_CAMPOS.forEach(c => { payload[`dir_fiscal_${c}`] = (form as any)[`dir_comercial_${c}`] })
     }
+    // Los datos bancarios NO se cargan en el alta: se agregan después desde el tab
+    // "Cuentas bancarias" de la ficha (igual que los documentos).
+    await (supabase.from('terceros') as any).insert(payload).select().single()
     await onSave()
     setSaving(false)
   }
@@ -360,91 +382,86 @@ function FormTercero({ supabase, currentUser, onSave, onCancel, ctxTipo }: any) 
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Numero</label>
             <input value={form.nro_doc} onChange={e => setForm(f => ({ ...f, nro_doc: e.target.value }))} className={inp} placeholder="ej. 20-12345678-9" />
           </div>
+          {form.pais !== 'Chile' && (
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Condicion IVA</label>
             <select value={form.condicion_iva} onChange={e => setForm(f => ({ ...f, condicion_iva: e.target.value }))} className={inp}>
               {CONDICION_IVA.map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
+          )}
+          {form.pais !== 'Chile' && (
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">N importador / exportador</label>
             <input value={form.nro_importador} onChange={e => setForm(f => ({ ...f, nro_importador: e.target.value }))} className={inp} placeholder="Registro aduanero" />
           </div>
+          )}
         </div>
       </div>
 
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-        <h3 className="font-bold text-sm text-gray-900 mb-4">Direccion fiscal</h3>
+        <h3 className="font-bold text-sm text-gray-900 mb-1">Domicilio comercial</h3>
+        <p className="text-[11px] text-gray-400 mb-4">El fijado por el estatuto / contrato social.</p>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Calle y numero</label>
-            <input value={form.dir_fiscal_calle} onChange={e => setForm(f => ({ ...f, dir_fiscal_calle: e.target.value }))} className={inp} placeholder="ej. Av. Corrientes 1234" />
+            <input value={form.dir_comercial_calle} onChange={e => setForm(f => ({ ...f, dir_comercial_calle: e.target.value }))} className={inp} placeholder="ej. Av. Corrientes 1234" />
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Ciudad</label>
-            <input value={form.dir_fiscal_ciudad} onChange={e => setForm(f => ({ ...f, dir_fiscal_ciudad: e.target.value }))} className={inp} />
+            <input value={form.dir_comercial_ciudad} onChange={e => setForm(f => ({ ...f, dir_comercial_ciudad: e.target.value }))} className={inp} />
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Provincia / Estado / Region</label>
-            <input value={form.dir_fiscal_provincia} onChange={e => setForm(f => ({ ...f, dir_fiscal_provincia: e.target.value }))} className={inp} />
+            <input value={form.dir_comercial_provincia} onChange={e => setForm(f => ({ ...f, dir_comercial_provincia: e.target.value }))} className={inp} />
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Pais</label>
-            <select value={form.dir_fiscal_pais} onChange={e => setForm(f => ({ ...f, dir_fiscal_pais: e.target.value }))} className={inp}>
+            <select value={form.dir_comercial_pais} onChange={e => setForm(f => ({ ...f, dir_comercial_pais: e.target.value }))} className={inp}>
               {PAISES.map(p => <option key={p}>{p}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Codigo postal</label>
-            <input value={form.dir_fiscal_cp} onChange={e => setForm(f => ({ ...f, dir_fiscal_cp: e.target.value }))} className={inp} />
+            <input value={form.dir_comercial_cp} onChange={e => setForm(f => ({ ...f, dir_comercial_cp: e.target.value }))} className={inp} />
           </div>
         </div>
-      </div>
 
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-sm text-gray-900">Cuentas bancarias</h3>
-          <button onClick={addCuenta} className="px-3 py-1.5 border border-[#1168F8] text-[#1168F8] rounded-xl text-xs font-bold hover:bg-[#EBF2FF]">+ Agregar cuenta</button>
-        </div>
-        <div className="space-y-4">
-          {cuentas.map((c, i) => (
-            <div key={i} className="border border-gray-100 rounded-xl p-4 bg-gray-50 relative">
-              {cuentas.length > 1 && (
-                <button onClick={() => removeCuenta(i)} className="absolute top-3 right-3 text-gray-400 hover:text-red-500 text-xs">X</button>
-              )}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco</label>
-                  <input value={c.banco} onChange={e => updateCuenta(i, 'banco', e.target.value)} className={inp} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
-                  <select value={c.moneda} onChange={e => updateCuenta(i, 'moneda', e.target.value)} className={inp}>
-                    {MONEDAS.map(m => <option key={m}>{m}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N cuenta</label>
-                  <input value={c.cuenta} onChange={e => updateCuenta(i, 'cuenta', e.target.value)} className={inp} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">CBU / IBAN</label>
-                  <input value={c.cbu_iban} onChange={e => updateCuenta(i, 'cbu_iban', e.target.value)} className={inp} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">SWIFT / BIC</label>
-                  <input value={c.swift} onChange={e => updateCuenta(i, 'swift', e.target.value)} className={inp} />
-                </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-2 cursor-pointer pb-2">
-                    <input type="checkbox" checked={c.principal} onChange={e => updateCuenta(i, 'principal', e.target.checked)} className="w-4 h-4 rounded" />
-                    <span className="text-xs text-gray-600 font-medium">Cuenta principal</span>
-                  </label>
-                </div>
+        <label className="flex items-center gap-2 cursor-pointer mt-4 pt-4 border-t border-gray-100">
+          <input type="checkbox" checked={fiscalIgual} onChange={e => setFiscalIgual(e.target.checked)} className="w-4 h-4 rounded" />
+          <span className="text-xs text-gray-700 font-medium">El domicilio fiscal es igual al comercial</span>
+        </label>
+
+        {!fiscalIgual && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <h3 className="font-bold text-sm text-gray-900 mb-1">Domicilio fiscal</h3>
+            <p className="text-[11px] text-gray-400 mb-4">{form.pais === 'Chile' ? 'El registrado en el SII.' : 'El registrado en ARCA / AFIP.'}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Calle y numero</label>
+                <input value={form.dir_fiscal_calle} onChange={e => setForm(f => ({ ...f, dir_fiscal_calle: e.target.value }))} className={inp} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Ciudad</label>
+                <input value={form.dir_fiscal_ciudad} onChange={e => setForm(f => ({ ...f, dir_fiscal_ciudad: e.target.value }))} className={inp} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Provincia / Estado / Region</label>
+                <input value={form.dir_fiscal_provincia} onChange={e => setForm(f => ({ ...f, dir_fiscal_provincia: e.target.value }))} className={inp} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Pais</label>
+                <select value={form.dir_fiscal_pais} onChange={e => setForm(f => ({ ...f, dir_fiscal_pais: e.target.value }))} className={inp}>
+                  {PAISES.map(p => <option key={p}>{p}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Codigo postal</label>
+                <input value={form.dir_fiscal_cp} onChange={e => setForm(f => ({ ...f, dir_fiscal_cp: e.target.value }))} className={inp} />
               </div>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
@@ -454,7 +471,7 @@ function FormTercero({ supabase, currentUser, onSave, onCancel, ctxTipo }: any) 
       </div>
 
       <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-4 py-3 text-[11px] text-[#052698]">
-        📎 Podés adjuntar documentación (estatuto, poderes, AFIP, etc.) una vez guardado el tercero, desde el tab <strong>Documentos</strong> en su ficha.
+        📎 Las <strong>cuentas bancarias</strong> y la <strong>documentación</strong> (estatuto, poderes, AFIP/SII, etc.) se cargan una vez guardado el tercero, desde los tabs <strong>Cuentas bancarias</strong> y <strong>Documentos</strong> de su ficha.
       </div>
       <div className="flex justify-between">
         <button onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50">Cancelar</button>
@@ -482,10 +499,11 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
   const [lugares, setLugares] = useState<Set<string>>(new Set())  // "rubro_id|ciudad_id" donde el proveedor presta
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
   const [editando, setEditando] = useState(false)
-  const [form, setForm] = useState<any>({
-    ...tercero,
+  const [fiscalIgual, setFiscalIgual] = useState<boolean>(() => prepararDomicilios(tercero).igual)
+  const [form, setForm] = useState<any>(() => ({
+    ...prepararDomicilios(tercero).base,
     tipo: Array.isArray(tercero.tipo) ? [...tercero.tipo] : [tercero.tipo].filter(Boolean),
-  })
+  }))
   const [newContacto, setNewContacto] = useState({ nombre: '', cargo: '', email: '', telefono: '', whatsapp: '', principal: false })
   const [newCuenta, setNewCuenta] = useState({ banco: '', cuenta: '', cbu_iban: '', swift: '', moneda: 'USD', principal: false, notas: '' })
   const [saving, setSaving] = useState(false)
@@ -570,10 +588,20 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
     if (data) setOps(data)
   }
 
+  function iniciarEdicion() {
+    const { base, igual } = prepararDomicilios(tercero)
+    setForm({ ...base, tipo: Array.isArray(tercero.tipo) ? [...tercero.tipo] : [tercero.tipo].filter(Boolean) })
+    setFiscalIgual(igual)
+  }
+
   // ── FIX: guardar tipo como array explícito ──
   async function saveData() {
     setSaving(true)
     const tipoArray = Array.isArray(form.tipo) ? form.tipo : [form.tipo].filter(Boolean)
+    const esChile = form.pais === 'Chile'
+    // Domicilio fiscal: si está marcado "igual al comercial", se copia del comercial.
+    const fis: any = {}
+    DIR_CAMPOS.forEach(c => { fis[c] = fiscalIgual ? (form[`dir_comercial_${c}`] || null) : (form[`dir_fiscal_${c}`] || null) })
     const { error } = await (supabase.from('terceros') as any).update({
       razon_social:        form.razon_social,
       nombre_fantasia:     form.nombre_fantasia    || null,
@@ -581,14 +609,20 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
       tipo:                tipoArray,
       tipo_doc:            form.tipo_doc            || null,
       nro_doc:             form.nro_doc             || null,
-      condicion_iva:       form.condicion_iva       || null,
+      // Chile no usa condición de IVA ni N importador/exportador (van con el RUT).
+      condicion_iva:       esChile ? null : (form.condicion_iva || null),
       actividad:           form.actividad           || null,
-      nro_importador:      form.nro_importador      || null,
-      dir_fiscal_calle:    form.dir_fiscal_calle    || null,
-      dir_fiscal_ciudad:   form.dir_fiscal_ciudad   || null,
-      dir_fiscal_provincia:form.dir_fiscal_provincia|| null,
-      dir_fiscal_pais:     form.dir_fiscal_pais     || null,
-      dir_fiscal_cp:       form.dir_fiscal_cp       || null,
+      nro_importador:      esChile ? null : (form.nro_importador || null),
+      dir_comercial_calle:    form.dir_comercial_calle    || null,
+      dir_comercial_ciudad:   form.dir_comercial_ciudad   || null,
+      dir_comercial_provincia:form.dir_comercial_provincia|| null,
+      dir_comercial_pais:     form.dir_comercial_pais     || null,
+      dir_comercial_cp:       form.dir_comercial_cp       || null,
+      dir_fiscal_calle:    fis.calle,
+      dir_fiscal_ciudad:   fis.ciudad,
+      dir_fiscal_provincia:fis.provincia,
+      dir_fiscal_pais:     fis.pais,
+      dir_fiscal_cp:       fis.cp,
       notas:               form.notas               || null,
       activo:              form.activo,
     }).eq('id', tercero.id)
@@ -712,8 +746,8 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
               )}
             </div>
           </div>
-          {puedeEditar && (
-          <button onClick={() => { setForm({ ...tercero, tipo: Array.isArray(tercero.tipo) ? [...tercero.tipo] : [tercero.tipo].filter(Boolean) }); setEditando(!editando) }}
+          {puedeEditar && tab === 'datos' && (
+          <button onClick={() => { if (editando) { setEditando(false) } else { iniciarEdicion(); setEditando(true) } }}
             className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-colors ${editando ? 'bg-gray-100 border-gray-200 text-gray-600' : 'border-[#1168F8] text-[#1168F8] hover:bg-[#EBF2FF]'}`}>
             {editando ? 'Cancelar' : 'Editar'}
           </button>
@@ -730,7 +764,7 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
           { key: 'operaciones', label: `Operaciones (${ops.length})` },
           ...(tercero.tipo?.includes('proveedor') ? [{ key: 'rubros', label: `Rubros (${rubros.length})` }] : []),
         ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key as any)}
+          <button key={t.key} onClick={() => { setTab(t.key as any); if (t.key !== 'datos') setEditando(false) }}
             className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm ${tab === t.key ? 'bg-[#1168F8] text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
             {t.label}
           </button>
@@ -798,16 +832,20 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
                     <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Numero</label>
                     <input value={form.nro_doc || ''} onChange={e => setForm((f: any) => ({ ...f, nro_doc: e.target.value }))} className={inp} />
                   </div>
+                  {form.pais !== 'Chile' && (
                   <div>
                     <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Condicion IVA</label>
                     <select value={form.condicion_iva || ''} onChange={e => setForm((f: any) => ({ ...f, condicion_iva: e.target.value }))} className={inp}>
                       {CONDICION_IVA.map(c => <option key={c}>{c}</option>)}
                     </select>
                   </div>
+                  )}
+                  {form.pais !== 'Chile' && (
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N importador</label>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N importador / exportador</label>
                     <input value={form.nro_importador || ''} onChange={e => setForm((f: any) => ({ ...f, nro_importador: e.target.value }))} className={inp} />
                   </div>
+                  )}
                   <div>
                     <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{form.pais === 'Chile' ? 'Actividad principal según SII' : 'Actividad principal según ARCA'}</label>
                     <input value={form.actividad || ''} onChange={e => setForm((f: any) => ({ ...f, actividad: e.target.value }))} className={inp} />
@@ -816,31 +854,68 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
               </div>
 
               <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-                <h3 className="font-bold text-sm text-gray-900 mb-4">Direccion fiscal</h3>
+                <h3 className="font-bold text-sm text-gray-900 mb-1">Domicilio comercial</h3>
+                <p className="text-[11px] text-gray-400 mb-4">El fijado por el estatuto / contrato social.</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="col-span-2">
                     <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Calle y numero</label>
-                    <input value={form.dir_fiscal_calle || ''} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_calle: e.target.value }))} className={inp} />
+                    <input value={form.dir_comercial_calle || ''} onChange={e => setForm((f: any) => ({ ...f, dir_comercial_calle: e.target.value }))} className={inp} />
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Ciudad</label>
-                    <input value={form.dir_fiscal_ciudad || ''} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_ciudad: e.target.value }))} className={inp} />
+                    <input value={form.dir_comercial_ciudad || ''} onChange={e => setForm((f: any) => ({ ...f, dir_comercial_ciudad: e.target.value }))} className={inp} />
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Provincia / Region</label>
-                    <input value={form.dir_fiscal_provincia || ''} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_provincia: e.target.value }))} className={inp} />
+                    <input value={form.dir_comercial_provincia || ''} onChange={e => setForm((f: any) => ({ ...f, dir_comercial_provincia: e.target.value }))} className={inp} />
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Pais</label>
-                    <select value={form.dir_fiscal_pais || form.pais} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_pais: e.target.value }))} className={inp}>
+                    <select value={form.dir_comercial_pais || form.pais} onChange={e => setForm((f: any) => ({ ...f, dir_comercial_pais: e.target.value }))} className={inp}>
                       {PAISES.map(p => <option key={p}>{p}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Codigo postal</label>
-                    <input value={form.dir_fiscal_cp || ''} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_cp: e.target.value }))} className={inp} />
+                    <input value={form.dir_comercial_cp || ''} onChange={e => setForm((f: any) => ({ ...f, dir_comercial_cp: e.target.value }))} className={inp} />
                   </div>
                 </div>
+
+                <label className="flex items-center gap-2 cursor-pointer mt-4 pt-4 border-t border-gray-100">
+                  <input type="checkbox" checked={fiscalIgual} onChange={e => setFiscalIgual(e.target.checked)} className="w-4 h-4 rounded" />
+                  <span className="text-xs text-gray-700 font-medium">El domicilio fiscal es igual al comercial</span>
+                </label>
+
+                {!fiscalIgual && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <h3 className="font-bold text-sm text-gray-900 mb-1">Domicilio fiscal</h3>
+                    <p className="text-[11px] text-gray-400 mb-4">{form.pais === 'Chile' ? 'El registrado en el SII.' : 'El registrado en ARCA / AFIP.'}</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2">
+                        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Calle y numero</label>
+                        <input value={form.dir_fiscal_calle || ''} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_calle: e.target.value }))} className={inp} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Ciudad</label>
+                        <input value={form.dir_fiscal_ciudad || ''} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_ciudad: e.target.value }))} className={inp} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Provincia / Region</label>
+                        <input value={form.dir_fiscal_provincia || ''} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_provincia: e.target.value }))} className={inp} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Pais</label>
+                        <select value={form.dir_fiscal_pais || form.pais} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_pais: e.target.value }))} className={inp}>
+                          {PAISES.map(p => <option key={p}>{p}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Codigo postal</label>
+                        <input value={form.dir_fiscal_cp || ''} onChange={e => setForm((f: any) => ({ ...f, dir_fiscal_cp: e.target.value }))} className={inp} />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
@@ -859,18 +934,34 @@ function DetalleTercero({ tercero, supabase, currentUser, onReload, onBack, ctx 
           ) : (
             <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
               <div className="grid grid-cols-3 gap-x-8 gap-y-4">
-                {[
-                  { l: 'Pais', v: tercero.pais },
-                  { l: tercero.pais === 'Chile' ? 'Actividad principal según SII' : 'Actividad principal según ARCA', v: tercero.actividad },
-                  { l: 'Condicion IVA', v: tercero.condicion_iva },
-                  { l: tercero.tipo_doc || 'Documento', v: tercero.nro_doc },
-                  { l: 'N importador', v: tercero.nro_importador },
-                  { l: 'Calle fiscal', v: tercero.dir_fiscal_calle },
-                  { l: 'Ciudad', v: tercero.dir_fiscal_ciudad },
-                  { l: 'Provincia / Region', v: tercero.dir_fiscal_provincia },
-                  { l: 'Pais fiscal', v: tercero.dir_fiscal_pais },
-                  { l: 'Codigo postal', v: tercero.dir_fiscal_cp },
-                ].filter(r => r.v).map(r => (
+                {(() => {
+                  const comVacio = dirVacia(tercero, 'dir_comercial')
+                  const fisVacio = dirVacia(tercero, 'dir_fiscal')
+                  const distintos = !comVacio && !fisVacio && !dirIguales(tercero, 'dir_comercial', 'dir_fiscal')
+                  // Registros viejos sin comercial: se muestra el fiscal como domicilio.
+                  const cp = comVacio && !fisVacio ? 'dir_fiscal' : 'dir_comercial'
+                  return [
+                    { l: 'Pais', v: tercero.pais },
+                    { l: tercero.pais === 'Chile' ? 'Actividad principal según SII' : 'Actividad principal según ARCA', v: tercero.actividad },
+                    ...(tercero.pais !== 'Chile' ? [
+                      { l: 'Condicion IVA', v: tercero.condicion_iva },
+                      { l: 'N importador / exportador', v: tercero.nro_importador },
+                    ] : []),
+                    { l: tercero.tipo_doc || 'Documento', v: tercero.nro_doc },
+                    { l: 'Domicilio comercial', v: tercero[`${cp}_calle`] },
+                    { l: 'Ciudad', v: tercero[`${cp}_ciudad`] },
+                    { l: 'Provincia / Region', v: tercero[`${cp}_provincia`] },
+                    { l: 'Pais domicilio', v: tercero[`${cp}_pais`] },
+                    { l: 'Codigo postal', v: tercero[`${cp}_cp`] },
+                    ...(distintos ? [
+                      { l: 'Domicilio fiscal', v: tercero.dir_fiscal_calle },
+                      { l: 'Ciudad fiscal', v: tercero.dir_fiscal_ciudad },
+                      { l: 'Provincia fiscal', v: tercero.dir_fiscal_provincia },
+                      { l: 'Pais fiscal', v: tercero.dir_fiscal_pais },
+                      { l: 'CP fiscal', v: tercero.dir_fiscal_cp },
+                    ] : []),
+                  ]
+                })().filter(r => r.v).map(r => (
                   <div key={r.l}>
                     <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-0.5">{r.l}</div>
                     <div className="text-sm text-gray-800 font-medium">{r.v}</div>
