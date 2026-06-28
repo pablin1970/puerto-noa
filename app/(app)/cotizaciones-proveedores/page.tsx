@@ -742,7 +742,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       supabase.from('servicios_catalogo').select('*').eq('activo',true).order('rubro').order('orden'),
       supabase.from('servicios_metricas').select('*').eq('activo',true).order('orden'),
       supabase.from('servicios_metricas_habilitadas').select('servicio_id,metrica_id,usa_minimo'),
-      supabase.from('tipos_camion').select('id,nombre,icono').eq('activo','true').order('orden'),
+      supabase.from('tipos_camion').select('id,nombre,icono,codigo,apto_para').eq('activo','true').order('orden'),
       supabase.from('config_vehiculo').select('*').eq('activo','true').order('orden'),
     ]).then(([bl,ch,cl,ps,ci,tc,ru,dsv,dmt,dhb,tcam,cveh]) => {
       if(bl.data) setBloques(bl.data)
@@ -1365,16 +1365,9 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               )}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-2 gap-3 mb-2">
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] text-gray-400">Configuración <span className="text-rose-500">*</span></span>
-                <button type="button" onClick={()=>t.config_vehiculo && setVerCaract({cfg:t.config_vehiculo, car:t.tipo_camion})}
-                  disabled={!t.config_vehiculo}
-                  className="text-[10px] font-semibold text-[#1168F8] hover:underline disabled:text-gray-300 disabled:no-underline disabled:cursor-default">
-                  Ver características
-                </button>
-              </div>
+              <span className="text-[10px] text-gray-400 mb-1 block">Configuración del camión <span className="text-rose-500">*</span></span>
               <select value={t.config_vehiculo||''} onChange={e=>fnSet(i,'config_vehiculo',e.target.value)} className={sel}>
                 <option value="">— Elegí configuración —</option>
                 {configVeh.map((cv:any)=><option key={cv.id} value={cv.id}>{cv.codigo} — {cv.nombre}</option>)}
@@ -1387,6 +1380,14 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 {tiposCamion.map((cam:any)=><option key={cam.id} value={cam.id}>{cam.icono?cam.icono+' ':''}{cam.nombre}</option>)}
               </select>
             </div>
+          </div>
+          <div className="mb-3 flex items-center gap-2 flex-wrap">
+            <button type="button" onClick={()=>t.config_vehiculo && setVerCaract({cfg:t.config_vehiculo, car:t.tipo_camion})}
+              disabled={!t.config_vehiculo}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#1168F8] text-[#1168F8] text-[11px] font-semibold hover:bg-blue-50 transition-colors disabled:border-gray-200 disabled:text-gray-300 disabled:cursor-default">
+              <span>📋</span> Ver características (pesos y dimensiones)
+            </button>
+            {!t.config_vehiculo && <span className="text-[10px] text-gray-400">Elegí una configuración para verlas</span>}
           </div>
           <div className="mb-3">
             <span className="text-[10px] text-gray-400 mb-1 block">Tipo de contenedor</span>
