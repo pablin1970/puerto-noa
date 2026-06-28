@@ -17,7 +17,7 @@ const TABS = [
   { key: 'ciudades',      label: 'Ciudades Argentina',   icon: '🇦🇷' },
   { key: 'contenedores',  label: 'Tipos de contenedor',  icon: '📦' },
   { key: 'camiones',      label: 'Tipos de camión',      icon: '🚛' },
-  { key: 'fondos',        label: 'Fondos en custodia',   icon: '🏦' },
+  { key: 'fondos',        label: 'Fondos en custodia de clientes',   icon: '🏦' },
   { key: 'bloques_cotizacion', label: 'Bloques cotización',   icon: '📋' },
   { key: 'rubros_proveedor',   label: 'Rubros de proveedor',  icon: '🏷️' },
   { key: 'servicios_deposito', label: 'Catálogo de servicios',   icon: '📋' },
@@ -776,7 +776,7 @@ function FondosCuentasABM() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-bold text-base text-gray-900">Cuentas y cajas — Fondos en custodia</h2>
+          <h2 className="font-bold text-base text-gray-900">Fondos en custodia de clientes</h2>
           <p className="text-xs text-gray-400 mt-0.5">{cuentas.length} cuenta(s) · {cuentas.filter(c => c.activo).length} activas</p>
         </div>
         {!showNew && !editId && pCrear && (
@@ -867,7 +867,7 @@ const BLOQUES_COTIZADOR = [
 
 // ── ABM Categorías de Gastos Fijos ────────────────────────────────
 
-// ── ABM Cuentas bancarias (propias PN + custodia terceros) ───────
+// ── ABM Cuentas bancarias y cajas PROPIAS de Puerto NOA (la custodia vive en FondosCuentasABM) ───────
 function CuentasABM() {
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
   useEffect(() => { cargarPermisos().then(setPermisos) }, [])
@@ -876,13 +876,11 @@ function CuentasABM() {
   const pEliminar = puede(permisos, 'cat_finanzas', 'eliminar')
   const supabase = useMemo(() => createClient(), [])
   const [propias, setPropias] = useState<any[]>([])
-  const [custodia, setCustodia] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [editId, setEditId] = useState<string|null>(null)
   const [editTipo, setEditTipo] = useState<'propia'|'custodia'>('propia')
   const [editData, setEditData] = useState<any>({})
   const [showNew, setShowNew] = useState(false)
-  const [tipoCuenta, setTipoCuenta] = useState<'propia'|'custodia'>('propia')
   const [newData, setNewData] = useState<any>({ nombre:'', tipo:'banco', pais:'CL', moneda:'CLP', banco:'', nro_cuenta:'', firmante:'', notas:'' })
   const [saving, setSaving] = useState(false)
   const [empresaNombre, setEmpresaNombre] = useState<string>('PUERTO NOA SPA')
@@ -891,13 +889,11 @@ function CuentasABM() {
 
   async function load() {
     setLoading(true)
-    const [pRes, cRes, eRes] = await Promise.all([
+    const [pRes, eRes] = await Promise.all([
       (supabase.from('cuentas_pn') as any).select('*').order('pais').order('moneda'),
-      (supabase.from('fondos_cuentas') as any).select('*').order('pais').order('nombre'),
       (supabase.from('empresa_config') as any).select('razon_social').limit(1).maybeSingle(),
     ])
     if (pRes.data) setPropias(pRes.data)
-    if (cRes.data) setCustodia(cRes.data)
     if (eRes?.data?.razon_social) setEmpresaNombre(eRes.data.razon_social)
     setLoading(false)
   }
@@ -906,22 +902,13 @@ function CuentasABM() {
     if (!pCrear) return
     if (!newData.nombre || !newData.moneda) { alert('Nombre y moneda son obligatorios'); return }
     setSaving(true)
-    if (tipoCuenta === 'propia') {
-      await (supabase.from('cuentas_pn') as any).insert({
-        nombre: newData.nombre, tipo: newData.tipo||'banco',
-        pais: newData.pais, moneda: newData.moneda,
-        banco: newData.banco||null, nro_cuenta: newData.nro_cuenta||null,
-        firmante: newData.firmante||null,
-        notas: newData.notas||null, saldo_inicial: 0, saldo_actual: 0, activo: true,
-      })
-    } else {
-      await (supabase.from('fondos_cuentas') as any).insert({
-        nombre: newData.nombre, tipo: newData.tipo||'banco',
-        pais: newData.pais, moneda: newData.moneda,
-        banco: newData.banco||null, nro_cuenta: newData.nro_cuenta||null,
-        firmante: newData.firmante||null, notas: newData.notas||null, activo: true,
-      })
-    }
+    await (supabase.from('cuentas_pn') as any).insert({
+      nombre: newData.nombre, tipo: newData.tipo||'banco',
+      pais: newData.pais, moneda: newData.moneda,
+      banco: newData.banco||null, nro_cuenta: newData.nro_cuenta||null,
+      firmante: newData.firmante||null,
+      notas: newData.notas||null, saldo_inicial: 0, saldo_actual: 0, activo: true,
+    })
     setShowNew(false)
     setNewData({ nombre:'', tipo:'banco', pais:'CL', moneda:'CLP', banco:'', nro_cuenta:'', firmante:'', notas:'' })
     await load()
@@ -1066,7 +1053,7 @@ function CuentasABM() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="font-bold text-base text-gray-900">Cuentas (caja y bancos)</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Cuentas propias de Puerto NOA y cuentas de custodia de clientes</p>
+          <p className="text-xs text-gray-400 mt-0.5">Cuentas propias de Puerto NOA (caja, bancos e inversiones)</p>
         </div>
         {pCrear && <button onClick={() => setShowNew(true)} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Nueva cuenta</button>}
       </div>
@@ -1074,13 +1061,7 @@ function CuentasABM() {
       {showNew && (
         <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-4 mb-4">
           <div className="flex gap-3 mb-4">
-            <h3 className="font-bold text-sm text-gray-900 mr-2">Nueva cuenta —</h3>
-            {[['propia','Propia Puerto NOA'],['custodia','Custodia de cliente']].map(([k,l]) => (
-              <button key={k} onClick={() => setTipoCuenta(k as any)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition-all ${tipoCuenta===k?'border-[#1168F8] bg-[#1168F8] text-white':'border-gray-200 text-gray-600'}`}>
-                {l}
-              </button>
-            ))}
+            <h3 className="font-bold text-sm text-gray-900 mr-2">Nueva cuenta propia</h3>
           </div>
           <FormCuenta data={newData} setData={setNewData} onSave={saveNew} onCancel={() => setShowNew(false)} />
         </div>
@@ -1102,29 +1083,6 @@ function CuentasABM() {
                 <div key={subtipo} className="mb-3">
                   <div className="text-[10px] font-semibold text-gray-500 mb-1.5 pl-1">{labels[subtipo]}</div>
                   {grupo.map(r => <RowCuenta key={r.id} row={r} tipo="propia" />)}
-                </div>
-              )
-            })}
-          </>
-        )}
-      </div>
-
-      {/* Cuentas custodia — agrupadas por subtipo */}
-      <div>
-        <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3 flex items-center gap-2">
-          <span>Cuentas de custodia (clientes)</span>
-          <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full font-bold">{custodia.length}</span>
-        </div>
-        {custodia.length === 0 ? <div className="text-xs text-gray-400 py-3">Sin cuentas de custodia registradas</div> : (
-          <>
-            {(['banco','caja','inversion'] as const).map(subtipo => {
-              const grupo = custodia.filter(r => r.tipo === subtipo)
-              if (grupo.length === 0) return null
-              const labels: Record<string,string> = { banco:'🏛 Cuentas bancarias', caja:'💵 Cajas / efectivo', inversion:'📈 Inversiones' }
-              return (
-                <div key={subtipo} className="mb-3">
-                  <div className="text-[10px] font-semibold text-gray-500 mb-1.5 pl-1">{labels[subtipo]}</div>
-                  {grupo.map(r => <RowCuenta key={r.id} row={r} tipo="custodia" />)}
                 </div>
               )
             })}
