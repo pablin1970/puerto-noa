@@ -342,7 +342,7 @@ useEffect(()=>{
     })
   // Cargar cotizaciones por bloque_id + usadas + terceros
   Promise.all([
-    supabase.from('cotizador_bloques').select('id,numero,nombre').eq('activo',true).order('numero'),
+    supabase.from('cotizador_bloques').select('id,numero,nombre,codigo,orden').eq('activo',true).order('orden'),
     supabase.from('cotizaciones_proveedor_v2')
       .select('*, items:cotizaciones_proveedor_v2_items(*)')
       .eq('estado','vigente')
@@ -358,8 +358,16 @@ useEffect(()=>{
     // Los logísticos mantienen sus números 1-4 y los MISMOS índices de array de siempre
     // (0=Marítimo...3=Argentina), para no romper bloqueActivo(N)/bloques[N]/idPorNum existentes.
     const todos = (bloqRes.data || []) as any[]
-    const bloqueMercaderia = todos.find(b=>b.numero===0 || /mercader/i.test(b.nombre||''))
-    const logisticos = todos.filter(b=>!(b.numero===0 || /mercader/i.test(b.nombre||'')))
+    const bloqueMercaderia = todos.find(b=>(b.codigo==='mercaderia')||b.numero===0 || /mercader/i.test(b.nombre||''))
+    // B3.1: array de tramos POSICIONAL FIJO por codigo (0=marítimo, 1=Chile, 2=terrestre, 3=Argentina).
+    // Blinda los índices que usa todo el cotizador y deja 'origen' (y cualquier bloque nuevo) FUERA de
+    // esta lista, para que activarlo no descoloque las posiciones existentes. Fallback por numero legacy.
+    const ORDEN_TRAMOS:Array<{codigo:string;numero:number}> = [
+      {codigo:'maritimo',numero:1},{codigo:'chile',numero:2},{codigo:'terrestre',numero:3},{codigo:'argentina',numero:4},
+    ]
+    const logisticos = ORDEN_TRAMOS
+      .map(t => todos.find(b => (b.codigo ? b.codigo===t.codigo : b.numero===t.numero)))
+      .filter((b:any):b is any => !!b)
     if(bloqueMercaderia) setBloqueMerc(bloqueMercaderia)
     // Guardar nombres de bloques para UI (rubros por bloque sigue usando numero original)
     const rb:Record<number,string[]>={1:[],2:[],3:[],4:[]}
