@@ -124,7 +124,7 @@ interface CotState {
   feeCont: number
   feePct: number
   // TC y tributos
-  tcClp: number; regimen: 'A'|'B'|'C'|'D'; tcTrib: number; derPct: number
+  tcClp: number; tcCny: number; regimen: 'A'|'B'|'C'|'D'; tcTrib: number; derPct: number; chileAlCif: boolean
 }
 
 const INIT: CotState = {
@@ -157,7 +157,7 @@ const INIT: CotState = {
   ftCamion:0,nCamiones:1,ftIda:0,ftDev:0,ftRt:0,
   estadiaCargaVal:0,estadiaCargaDias:0,estadiaDescargaVal:0,estadiaDescargaDias:0,
   rowsE:[],gastosDesp:[],honTipo:'fijo_usd',honValor:0,honPiso:0,honTecho:0,feeModo:'cont',feeCont:0,feePct:0,
-  tcClp:950,regimen:'A',tcTrib:1000,derPct:18,
+  tcClp:950,tcCny:7,regimen:'A',tcTrib:1000,derPct:18,chileAlCif:false,
 }
 
 const REG_L: Record<string,string> = {
@@ -619,7 +619,8 @@ const calcGastoArg=(g:GastoArg,cifUsd:number,tcTrib:number):number=>{
   return usd
 }
 // CIF (Cost, Insurance & Freight) hasta el paso: FOB + fletes·%intl + seguros·%intl. Base de tributos ARCA.
-const cif=totalFOB + subFW + subTranspIntl + segMarEff + segTerrEff*fIntlTerr
+const subChileCif = s.chileAlCif ? (subGastosChile+subD) : 0   // gastos en Chile al CIF (opcional; el cliente los paga igual)
+const cif=totalFOB + subFW + subTranspIntl + segMarEff + segTerrEff*fIntlTerr + subChileCif
 const cifARS=cif*s.tcTrib
 // Honorario + gastos adicionales despachante (sección A)
 const subHon=calcGastoArg({id:'hon',desc:'',tipoCalc:s.honTipo,moneda:'USD',valor:s.honValor,pisoUsd:s.honPiso,techoUsd:s.honTecho,usd:0,ars:0},cif,s.tcTrib)
@@ -2356,12 +2357,7 @@ const clientesFiltrados=terceros.filter(t=>
       {/* ── LOGÍSTICA REDISEÑADA ── */}
       {tab==='logistica'&&(
         <div className="space-y-4">
-          {/* TC */}
-          <div className="flex gap-4 items-center px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-xs flex-wrap">
-            <span className="font-medium text-gray-700">Tipos de cambio:</span>
-            <div className="flex items-center gap-2"><label className="text-gray-500">USD/ARS</label><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.tcTrib} onChange={e=>u('tcTrib',parseNum(e.target.value)||1000)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]"/></div>
-            <div className="flex items-center gap-2"><label className="text-gray-500">USD/CLP</label><input type="text" inputMode="decimal" onFocus={e=>e.target.select()} value={s.tcClp} onChange={e=>u('tcClp',parseNum(e.target.value)||950)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8]"/></div>
-          </div>
+          {/* TC: el visor vive en el sidebar (permanente). Acá los TC se usan solo por detrás: cálculo en USD y sellado en tc_snapshot. */}
 
           {/* Bloques 1-4: orden normal en impo, invertido en expo */}
           <div className={`flex flex-col gap-4 ${s.sentido==='exportacion'?'flex-col-reverse':''}`}>
@@ -2808,6 +2804,12 @@ const clientesFiltrados=terceros.filter(t=>
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#0a9e6e] text-white text-[10px] font-bold">2</span>
               <span className="font-medium text-sm text-gray-900">{bloques[1]?.nombre || 'Bloque 2'}</span>
+              {s.sentido!=='exportacion' && (
+                <label className="ml-auto flex items-center gap-1 text-[9px] text-gray-500 cursor-pointer select-none">
+                  <input type="checkbox" checked={s.chileAlCif} onChange={e=>u('chileAlCif',e.target.checked)} className="w-3 h-3 accent-[#0a9e6e]"/>
+                  Sumar al CIF <span className="text-gray-400">(el cliente lo paga igual)</span>
+                </label>
+              )}
             </div>
             <div className="px-5 py-4">
               {/* Opciones A / B1 / B2 */}
