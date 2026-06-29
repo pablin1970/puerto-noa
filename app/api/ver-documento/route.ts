@@ -39,7 +39,9 @@ function estamparPagina(page: PDFPage, font: PDFFont, sello: string, pie: string
 
 export async function GET(req: NextRequest) {
   const bucket = req.nextUrl.searchParams.get('bucket')
-  const path = req.nextUrl.searchParams.get('path')
+  // Sanitizar: algunos registros viejos guardaron la URL firmada completa (con ?token=...).
+  // Nos quedamos solo con el path real para no romper la descarga ni la detección de extensión.
+  const path = (req.nextUrl.searchParams.get('path') || '').split('?')[0]
   if (!bucket || !path) {
     return new NextResponse('Faltan parámetros (bucket, path).', { status: 400 })
   }
@@ -65,14 +67,23 @@ export async function GET(req: NextRequest) {
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer())
-  // La extensión se toma del nombre original (el path en storage puede no tenerla);
-  // si no viene o no tiene punto, cae al path.
+  // Detección de tipo robusta. Primero por los bytes mágicos del archivo (la verdad del contenido),
+  // y solo si no se reconoce, por la extensión del nombre original o del path. Así un PDF o imagen
+  // se muestra inline aunque el path no tenga extensión o el registro esté sucio.
   const nombreOrig = req.nextUrl.searchParams.get('nombre') || ''
   const fuenteExt = nombreOrig.includes('.') ? nombreOrig : path
   const ext = fuenteExt.split('.').pop()?.toLowerCase() || ''
-  const esPdf = ext === 'pdf'
-  const esPng = ext === 'png'
-  const esJpg = ext === 'jpg' || ext === 'jpeg'
+  const sniff = (() => {
+    if (bytes.length >= 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) return 'pdf'  // %PDF
+    if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) return 'png'  // ‰PNG
+    if (bytes.length >= 3 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'jpg'  // JPEG
+    if (bytes.length >= 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'webp'  // RIFF…WEBP
+    return ''
+  })()
+  const tipo = sniff || ext
+  const esPdf = tipo === 'pdf'
+  const esPng = tipo === 'png'
+  const esJpg = tipo === 'jpg' || tipo === 'jpeg'
 
   const ahora = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Jujuy' })
   const safe = (s: string) => s.replace(/[^\x00-\xFF]/g, '?')
@@ -121,7 +132,7 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Otros tipos: servir sin marca ──
-  const mime = ext === 'webp' ? 'image/webp' : 'application/octet-stream'
+  const mime = tipo === 'webp' ? 'image/webp' : 'application/octet-stream'
   return new NextResponse(Buffer.from(bytes), {
     headers: { 'Content-Type': mime, 'Content-Disposition': 'inline', 'Cache-Control': 'no-store' },
   })
