@@ -284,6 +284,11 @@ const [bloques,setBloques]=useState<any[]>([])
 const [bloqueMerc,setBloqueMerc]=useState<any>(null)
 const [bloqueOrigen,setBloqueOrigen]=useState<any>(null)
 const [cotNumActual,setCotNumActual]=useState<string>('')
+// Recotización: de qué cotización viene, su linaje completo y el estado original (para el diff)
+const [recotizaDeId,setRecotizaDeId]=useState<string|null>(null)
+const [recotizaDeNum,setRecotizaDeNum]=useState<string>('')
+const [recotizaLinaje,setRecotizaLinaje]=useState<string[]>([])
+const [recotizaSnapOrig,setRecotizaSnapOrig]=useState<CotState|null>(null)
 // Terceros proveedores por rubro (para búsqueda en carga manual)
 const [tercerosProv,setTercerosProv]=useState<any[]>([])
 
@@ -1265,7 +1270,7 @@ async function selectCliente(t:any){
   u('cliente',t.razon_social);u('cuit',t.nro_doc||'');u('email',contactoPpal?.email||'');u('telefono',contactoPpal?.telefono||'')
   u('ivaCondicion',t.condicion_iva||'Responsable Inscripto')
   setClienteSelId(t.id);setBuscarCliente(t.razon_social);setShowClienteDropdown(false)
-  const {data}=await supabase.from('cotizaciones').select('id,num,estado,total_landed,created_at').eq('tercero_id',t.id).order('created_at',{ascending:false}).limit(5)
+  const {data}=await supabase.from('cotizaciones').select('id,num,estado,total_landed,created_at,recotiza_de_id,recotiza_de_num,recotiza_linaje').eq('tercero_id',t.id).order('created_at',{ascending:false}).limit(20)
   if(data) setHistCliente(data)
   setShowHist(true)
 }
@@ -1307,57 +1312,128 @@ async function crearClienteRapido(){
   }
 }
 
-async function duplicarCotizacion(cotId:string){
+async function recotizarCotizacion(cotId:string){
   const {data:orig}=await supabase.from('cotizaciones').select('*').eq('id',cotId).single()
   if(!orig) return
   const {data:tcData}=await supabase.from('tipos_cambio_eventos').select('ars,clp').order('created_at',{ascending:false}).limit(1).single()
   const tcArs=(tcData as any)?.ars
   const tcClp=(tcData as any)?.clp
   const snap=(orig as any).estado_cotizador
+  let nuevoEstado: CotState
   if(snap && typeof snap==='object'){
     // Extraer campos extra que no son parte de CotState (van fuera de s)
     const {_despachanteSelId, _cotDesp, _provUsado, ...snapState}=snap
-    // Duplicación completa: cargamos el estado entero y solo pisamos TC actualizado + limpiamos notas
-    setS(p=>({
-      ...p,           // base por si el snapshot viejo no tiene algún campo nuevo
+    // Recotización: cargamos el estado entero desde INIT (determinista, para poder comparar) y solo pisamos el TC del día + limpiamos notas
+    nuevoEstado={
+      ...INIT,
       ...snapState,
-      tcTrib: tcArs || snapState.tcTrib || p.tcTrib,
-      tcClp:  tcClp || snapState.tcClp  || p.tcClp,
+      tcTrib: tcArs || snapState.tcTrib || INIT.tcTrib,
+      tcClp:  tcClp || snapState.tcClp  || INIT.tcClp,
       notas:'',
-    }))
+    } as CotState
+    setS(nuevoEstado)
     // Restaurar despachante elegido y cotización de proveedor usada
     if(_despachanteSelId) setDespachanteSelId(_despachanteSelId)
     if(_cotDesp) setCotDesp(_cotDesp)
     if(_provUsado) setProvUsado(_provUsado)
   } else {
     // Cotización vieja sin snapshot: copiamos lo básico que está persistido (fallback)
-    setS(p=>({...p,
+    nuevoEstado={
+      ...INIT,
       cliente:(orig as any).cliente,cuit:(orig as any).cuit||'',
-      productos:(orig as any).productos||p.productos,
-      contenedores:(orig as any).tipo_contenedores||p.contenedores,
-      origen:(orig as any).origen||p.origen,ptoChile:(orig as any).puerto_chile||p.ptoChile,
-      destinoNoa:(orig as any).destino_noa||p.destinoNoa,incoterm:(orig as any).incoterm||p.incoterm,
-      transito:(orig as any).transito||p.transito,
-      puertoChiId:(orig as any).puerto_china_id||p.puertoChiId,
-      puertoChileId:(orig as any).puerto_chile_id||p.puertoChileId,
-      pasoId:(orig as any).paso_id||p.pasoId,
-      ciudadDestinoId:(orig as any).ciudad_destino_id||p.ciudadDestinoId,
-      regimen:(orig as any).regimen||p.regimen,derPct:(orig as any).derechos_pct||p.derPct,
-      optTransp:(orig as any).opcion_transporte||p.optTransp,validez:(orig as any).validez||p.validez,
-      observaciones:Array.isArray((orig as any).condiciones_particulares)?(orig as any).condiciones_particulares:p.observaciones,
-      tcTrib:tcArs||p.tcTrib,tcClp:tcClp||p.tcClp,notas:'',
-    }))
+      productos:(orig as any).productos||INIT.productos,
+      contenedores:(orig as any).tipo_contenedores||INIT.contenedores,
+      origen:(orig as any).origen||INIT.origen,ptoChile:(orig as any).puerto_chile||INIT.ptoChile,
+      destinoNoa:(orig as any).destino_noa||INIT.destinoNoa,incoterm:(orig as any).incoterm||INIT.incoterm,
+      transito:(orig as any).transito||INIT.transito,
+      puertoChiId:(orig as any).puerto_china_id||INIT.puertoChiId,
+      puertoChileId:(orig as any).puerto_chile_id||INIT.puertoChileId,
+      pasoId:(orig as any).paso_id||INIT.pasoId,
+      ciudadDestinoId:(orig as any).ciudad_destino_id||INIT.ciudadDestinoId,
+      regimen:(orig as any).regimen||INIT.regimen,derPct:(orig as any).derechos_pct||INIT.derPct,
+      optTransp:(orig as any).opcion_transporte||INIT.optTransp,validez:(orig as any).validez||INIT.validez,
+      observaciones:Array.isArray((orig as any).condiciones_particulares)?(orig as any).condiciones_particulares:INIT.observaciones,
+      tcTrib:tcArs||INIT.tcTrib,tcClp:tcClp||INIT.tcClp,notas:'',
+    } as CotState
+    setS(nuevoEstado)
   }
+  // Sellar el linaje (cadena completa de la madre + la madre) y el estado original para el diff
+  const linajePadre = Array.isArray((orig as any).recotiza_linaje)?(orig as any).recotiza_linaje:[]
+  setRecotizaDeId((orig as any).id)
+  setRecotizaDeNum((orig as any).num||'')
+  setRecotizaLinaje([...linajePadre, (orig as any).num].filter(Boolean))
+  setRecotizaSnapOrig(nuevoEstado)
   // Re-vincular el cliente (preselección + historial)
   if((orig as any).tercero_id){
     setClienteSelId((orig as any).tercero_id)
     setBuscarCliente((orig as any).cliente||'')
-    const {data:hist}=await supabase.from('cotizaciones').select('id,num,estado,total_landed,created_at').eq('tercero_id',(orig as any).tercero_id).order('created_at',{ascending:false}).limit(5)
+    const {data:hist}=await supabase.from('cotizaciones').select('id,num,estado,total_landed,created_at,recotiza_de_id,recotiza_de_num,recotiza_linaje').eq('tercero_id',(orig as any).tercero_id).order('created_at',{ascending:false}).limit(20)
     if(hist) setHistCliente(hist)
   }
   setCotNumActual('')  // será una cotización nueva
   cambiarTab('embarque')
-  alert('Cotización duplicada con la fecha y el tipo de cambio actualizados. Revisá los valores, ajustá lo que necesites y guardá.')
+  alert(`Recotización de ${(orig as any).num}: traje todo y actualicé el tipo de cambio al de hoy. Editá lo que necesites; al confirmar se genera una cotización nueva.`)
+}
+
+// Compara el estado original traído (snapshot, ya con el TC del día) contra el estado editado actual.
+// Devuelve la lista de modificaciones para mostrar en la vista previa y guardarla para el seguimiento.
+// El TC NO entra en la comparación: como el snapshot ya tiene el TC de hoy, un cambio de TC nunca cuenta como modificación del usuario.
+function calcularCambios(orig: CotState | null, act: CotState): {concepto:string;antes:string;despues:string}[] {
+  if(!orig) return []
+  const out: {concepto:string;antes:string;despues:string}[] = []
+  const n = (v:any)=> (v===null||v===undefined||v==='') ? '—' : (typeof v==='number' ? (Math.round(v*100)/100).toLocaleString('es-AR') : String(v))
+  const cmp = (concepto:string, a:any, b:any)=>{ if(n(a)!==n(b)) out.push({concepto, antes:n(a), despues:n(b)}) }
+  // Cabecera / condiciones
+  cmp('Validez', orig.validez, act.validez)
+  cmp('Incoterm', orig.incoterm, act.incoterm)
+  cmp('Tránsito', orig.transito, act.transito)
+  cmp('Régimen', orig.regimen, act.regimen)
+  cmp('Derechos %', orig.derPct, act.derPct)
+  cmp('Origen', orig.origen, act.origen)
+  cmp('Puerto Chile', orig.ptoChile, act.ptoChile)
+  cmp('Destino NOA', orig.destinoNoa, act.destinoNoa)
+  cmp('Opción transporte', orig.optTransp, act.optTransp)
+  cmp('% internacional terrestre', orig.pctIntlTerr, act.pctIntlTerr)
+  // Honorario despachante / fee
+  cmp('Honorario despachante', orig.honValor, act.honValor)
+  cmp('Tipo honorario', orig.honTipo, act.honTipo)
+  cmp('Fee (contenedor)', orig.feeCont, act.feeCont)
+  cmp('Fee (%)', orig.feePct, act.feePct)
+  // Productos: precio FOB y cantidad por producto
+  const po=orig.productos||[], pa=act.productos||[]
+  const maxP=Math.max(po.length, pa.length)
+  for(let i=0;i<maxP;i++){
+    const a=po[i], b=pa[i]
+    const etq=(b?.descripcion||a?.descripcion||`Producto ${i+1}`)
+    if(!a && b){ out.push({concepto:`Producto agregado · ${etq}`, antes:'—', despues:`${n(b.cantidad)} × ${n(b.precio_unit)} USD`}); continue }
+    if(a && !b){ out.push({concepto:`Producto quitado · ${a.descripcion||`Producto ${i+1}`}`, antes:`${n(a.cantidad)} × ${n(a.precio_unit)} USD`, despues:'—'}); continue }
+    cmp(`FOB · ${etq}`, a.precio_unit, b.precio_unit)
+    cmp(`Cantidad · ${etq}`, a.cantidad, b.cantidad)
+    if((a.descripcion||'')!==(b.descripcion||'')) out.push({concepto:`Descripción producto ${i+1}`, antes:n(a.descripcion), despues:n(b.descripcion)})
+  }
+  // Contenedores: tipo y cantidad
+  const co=orig.contenedores||[], ca=act.contenedores||[]
+  const maxC=Math.max(co.length, ca.length)
+  for(let i=0;i<maxC;i++){
+    const a:any=co[i], b:any=ca[i]
+    if(!a && b){ out.push({concepto:`Contenedor agregado · ${b.tipo}`, antes:'—', despues:n(b.cantidad)}); continue }
+    if(a && !b){ out.push({concepto:`Contenedor quitado · ${a.tipo}`, antes:n(a.cantidad), despues:'—'}); continue }
+    if((a.tipo||'')!==(b.tipo||'')) out.push({concepto:`Contenedor ${i+1} · tipo`, antes:n(a.tipo), despues:n(b.tipo)})
+    cmp(`Contenedor ${b.tipo||a.tipo} · cantidad`, a.cantidad, b.cantidad)
+  }
+  // Gastos manuales (Chile, despachante adicionales, otros Argentina): por índice, monto
+  const diffGastos=(label:string, ao:any[], aa:any[])=>{
+    const o=ao||[], a=aa||[]; const m=Math.max(o.length,a.length)
+    for(let i=0;i<m;i++){ const x=o[i], y=a[i]
+      if(!x && y){ out.push({concepto:`${label} agregado · ${y.desc||i+1}`, antes:'—', despues:n(y.valor)}); continue }
+      if(x && !y){ out.push({concepto:`${label} quitado · ${x.desc||i+1}`, antes:n(x.valor), despues:'—'}); continue }
+      cmp(`${label} · ${y.desc||x.desc||i+1}`, x.valor, y.valor)
+    }
+  }
+  diffGastos('Gasto Chile', orig.gastosChile, act.gastosChile)
+  diffGastos('Gasto despachante', orig.gastosDesp, act.gastosDesp)
+  diffGastos('Otro gasto Argentina', orig.rowsE, act.rowsE)
+  return out
 }
 
 // Filtra cotizaciones por bloque: especificas del cliente primero, luego genericas
@@ -1423,6 +1499,7 @@ async function guardar(){
     const {data:uDB}=await supabase.from('usuarios').select('id').eq('auth_id',user.user.id).single()
     const uid=(uDB as any)?.id||''
     const presupuesto = armarPresupuesto()
+    const cambiosRecot = recotizaDeId ? calcularCambios(recotizaSnapOrig, s) : []
     const {error}=await (supabase.from('cotizaciones') as any).insert({
       num,version:1,talonario_id:(talCot as any).id,
       cliente:s.cliente,cuit:s.cuit,email_cliente:s.email,telefono_cliente:s.telefono,
@@ -1439,8 +1516,9 @@ async function guardar(){
       total_tributos_usd:totalTribUSD,total_tributos_ars:totalTribARS,
       total_landed:totalLanded,precio_arg_equiv:s.precioArgEquiv||null,
       regimen:s.regimen,tc_ars:s.tcTrib,derechos_pct:s.derPct,
-      opcion_transporte:s.optTransp,validez:s.validez,estado:'borrador',
+      opcion_transporte:s.optTransp,validez:s.validez,estado:recotizaDeId?'enviada':'borrador',
       sentido:s.sentido,
+      recotiza_de_id:recotizaDeId,recotiza_de_num:recotizaDeNum||null,recotiza_linaje:recotizaLinaje,recotiza_cambios:cambiosRecot,
       estado_cotizador:{...s, _despachanteSelId:despachanteSelId, _cotDesp:cotDesp, _provUsado:provUsado},
       ejecutivo_id:uid,creado_por:uid,modificado_por:uid,presupuesto,
     })
@@ -1459,6 +1537,7 @@ async function guardar(){
         await (supabase.from('cotizacion_proveedores_usados') as any).insert(provUsados)
       }
     }
+    setRecotizaDeId(null);setRecotizaDeNum('');setRecotizaLinaje([]);setRecotizaSnapOrig(null)
     router.push('/registro')
   } catch(e:any){alert('Error inesperado: '+e.message);setSaving(false)}
 }
@@ -1714,28 +1793,40 @@ const clientesFiltrados=terceros.filter(t=>
             )}
 
             {/* Historial */}
-            {showHist&&histCliente.length>0&&(
+            {showHist&&histCliente.length>0&&(()=>{
+              // Una cotización fue "superada" si otra del set la tiene como padre (recotiza_de_id).
+              const idsConHija = new Set(histCliente.map((x:any)=>x.recotiza_de_id).filter(Boolean))
+              return (
               <div className="mb-3 bg-[#EBF2FF] border border-[#93B8FC] rounded-xl p-3">
                 <div className="text-[10px] font-bold text-[#052698] mb-2">Cotizaciones anteriores</div>
                 <div className="space-y-1">
-                  {histCliente.map(c=>(
+                  {histCliente.map(c=>{
+                    const tieneHija = idsConHija.has(c.id)
+                    // Recotizable: enviada, rechazada o vencida, y siendo la última de su cadena (sin recotización posterior).
+                    const recotizable = ['enviada','rechazada','vencida'].includes(c.estado) && !tieneHija
+                    return (
                     <div key={c.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-1.5">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         <span className="font-mono text-[11px] font-bold text-[#1168F8]">{c.num}</span>
-                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${c.estado==='aceptada'?'bg-green-50 text-green-700':c.estado==='enviada'?'bg-blue-50 text-[#1168F8]':'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
+                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${c.estado==='aceptada'?'bg-green-50 text-green-700':c.estado==='enviada'?'bg-blue-50 text-[#1168F8]':c.estado==='rechazada'?'bg-red-50 text-red-600':c.estado==='vencida'?'bg-amber-50 text-amber-700':'bg-gray-100 text-gray-500'}`}>{c.estado}</span>
                         <span className="text-[10px] text-gray-400">{c.created_at?.slice(0,10)}</span>
+                        {c.recotiza_de_num && <span className="text-[9px] text-[#7C3AED] font-semibold truncate" title={`Recotización de ${(c.recotiza_linaje||[]).join(', ')||c.recotiza_de_num}`}>↺ de {c.recotiza_de_num}</span>}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <span className="font-mono text-xs font-semibold text-gray-700">USD {Math.round(c.total_landed||0).toLocaleString('es-AR')}</span>
-                        {puede(permisos, 'cotizaciones_duplicar', 'crear') && (
-                        <button onMouseDown={()=>duplicarCotizacion(c.id)} className="px-2 py-0.5 bg-[#1168F8] text-white rounded text-[9px] font-bold hover:bg-[#052698]">Duplicar</button>
-                        )}
+                        {tieneHija ? (
+                          <span className="text-[9px] text-gray-400 font-semibold px-2 py-0.5">recotizada</span>
+                        ) : recotizable && puede(permisos, 'cotizaciones_duplicar', 'crear') ? (
+                          <button onMouseDown={()=>recotizarCotizacion(c.id)} className="px-2 py-0.5 bg-[#7C3AED] text-white rounded text-[9px] font-bold hover:bg-[#6024c0]">Recotizar</button>
+                        ) : null}
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
-            )}
+              )
+            })()}
 
             {/* Solo validez editable */}
             <div className="grid grid-cols-3 gap-3">
@@ -4001,6 +4092,43 @@ const clientesFiltrados=terceros.filter(t=>
               ) : <span className="text-xs text-gray-400 px-3 py-2">Sin permiso para guardar cotizaciones</span>}
             </div>
           </div>
+          {recotizaDeId && (()=>{
+            const cambios = calcularCambios(recotizaSnapOrig, s)
+            const f = (v:number)=> (Math.round((v||0)*100)/100).toLocaleString('es-AR')
+            return (
+              <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-5 py-3 overflow-y-auto" style={{maxHeight:'42%'}}>
+                <div className="flex items-start gap-2 max-w-3xl mx-auto">
+                  <span className="text-base flex-shrink-0">🔄</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-amber-800">Recotización de {recotizaDeNum}</div>
+                    <div className="text-[11px] text-amber-700 mt-0.5">Al confirmar se genera una cotización nueva, con su propio número, usando el tipo de cambio de hoy. La original no se modifica.</div>
+                    <div className="flex gap-2 mt-2 flex-wrap">
+                      <span className="bg-white border border-amber-300 rounded px-2 py-0.5 text-[10px] text-gray-700">ARS {f(s.tcTrib)}</span>
+                      <span className="bg-white border border-amber-300 rounded px-2 py-0.5 text-[10px] text-gray-700">CLP {f(s.tcClp)}</span>
+                      <span className="bg-white border border-amber-300 rounded px-2 py-0.5 text-[10px] text-gray-700">CNY {f(s.tcCny)}</span>
+                    </div>
+                    {cambios.length>0 ? (
+                      <div className="mt-2">
+                        <div className="text-[11px] font-semibold text-amber-800 mb-1">Modificaste {cambios.length} {cambios.length===1?'concepto':'conceptos'} respecto del original</div>
+                        <div className="space-y-1">
+                          {cambios.map((ch,i)=>(
+                            <div key={i} className="bg-white border border-gray-200 rounded px-2 py-1 text-[10px] flex items-center gap-2 flex-wrap">
+                              <span className="text-gray-500">{ch.concepto}</span>
+                              <span className="text-gray-400 line-through">{ch.antes}</span>
+                              <span className="text-gray-400">→</span>
+                              <span className="text-[#1168F8] font-semibold">{ch.despues}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-amber-700 mt-2 italic">No modificaste ningún ítem; solo se actualiza el tipo de cambio.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
           {/* Documento con scroll */}
           <div className="flex-1 overflow-y-auto">
             <CotizacionDoc cot={previewCot} ejecutivo={previewEjecutivo} condGenerales={previewCondGen} />
