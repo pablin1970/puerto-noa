@@ -1,4 +1,5 @@
 'use client'
+import { Fragment } from 'react'
 import { fmt, ESTADOS_L, PUERTOS_L } from '@/lib/utils'
 import Image from 'next/image'
 
@@ -99,7 +100,16 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
   const origenItems = presup.filter((it: any) => it.etapa === 'origen')
   const subOrigenDoc = origenItems.reduce((t: number, it: any) => t + (it.usd || 0), 0)
   const baseFOBDoc = totalFOB - subOrigenDoc
-  const presupLog = presup.filter((it: any) => it.etapa !== 'origen' && it.tipo !== 'tributos')
+  const presupLog = presup.filter((it: any) => it.etapa !== 'origen' && it.etapa !== 'mercaderia' && it.tipo !== 'tributos')
+  // Fase C — reparto de pagos por moneda. Cada línea del presupuesto lleva su moneda y el monto sellado (con TC del momento).
+  const ORD_MON = ['USD', 'ARS', 'CLP', 'CNY']
+  const MON_LBL: Record<string, string> = { USD: 'Dólares', ARS: 'Pesos argentinos', CLP: 'Pesos chilenos', CNY: 'Yuanes' }
+  const fmtMon = (x: number, m: string): string => m === 'USD' ? ('US$ ' + fmt(x, 2)) : m === 'CNY' ? ('¥ ' + fmt(x, 2)) : (Math.round(x).toLocaleString('es-AR') + ' ' + m)
+  const lineasPago = presup.map((it: any) => ({ concepto: it.concepto, moneda: it.moneda || 'USD', montoPago: typeof it.montoPago === 'number' ? it.montoPago : (it.usd || 0) }))
+  const gruposPago = ORD_MON
+    .map((m) => ({ moneda: m, lineas: lineasPago.filter((l: any) => l.moneda === m), total: lineasPago.filter((l: any) => l.moneda === m).reduce((t: number, l: any) => t + l.montoPago, 0) }))
+    .filter((g) => g.lineas.length > 0)
+  const mostrarReparto = lineasPago.some((l: any) => l.moneda !== 'USD')
   const tcRef = cot.tc_ars || 0
   const regimen = (cot as any).regimen || 'A'
   const precioArg = (cot as any).precio_arg_equiv || 0
@@ -412,6 +422,39 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
                     {ahorro > 0 ? `${fmt(ahorro / precioArg * 100, 1)}% más económico` : 'Por encima del precio local'}
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reparto de pagos por moneda (Fase C) */}
+          {mostrarReparto && (
+            <div style={{ border: '1px solid #ddd6fe', borderRadius: '10px', overflow: 'hidden', marginBottom: '16px' }}>
+              <div style={{ padding: '7px 16px', background: '#f3eefe', borderBottom: '1px solid #ddd6fe', fontWeight: 700, fontSize: '10px', color: '#4c1d95', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Reparto de pagos por moneda
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                <tbody>
+                  {gruposPago.map((g) => (
+                    <Fragment key={g.moneda}>
+                      <tr style={{ background: '#faf8ff' }}>
+                        <td colSpan={2} style={{ padding: '5px 16px', fontWeight: 800, fontSize: '9px', color: '#4c1d95', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{MON_LBL[g.moneda] || g.moneda} · {g.moneda}</td>
+                      </tr>
+                      {g.lineas.map((l: any, i: number) => (
+                        <tr key={g.moneda + i} style={{ borderTop: '1px solid #f1f1f1' }}>
+                          <td style={{ padding: '5px 16px', color: '#374151' }}>{l.concepto}</td>
+                          <td style={{ padding: '5px 16px', textAlign: 'right', fontFamily: 'monospace', color: '#111827' }}>{fmtMon(l.montoPago, g.moneda)}</td>
+                        </tr>
+                      ))}
+                      <tr style={{ borderTop: '2px solid #ddd6fe', background: '#f3eefe' }}>
+                        <td style={{ padding: '6px 16px', fontWeight: 800, fontSize: '10px', color: '#4c1d95' }}>Total a pagar en {g.moneda}</td>
+                        <td style={{ padding: '6px 16px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, fontSize: '11px', color: '#4c1d95' }}>{fmtMon(g.total, g.moneda)}</td>
+                      </tr>
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ padding: '6px 16px', background: '#fafafa', borderTop: '1px solid #f1f1f1', fontSize: '9px', color: '#9ca3af' }}>
+                Cada concepto se abona en la moneda definida en la cotización del proveedor correspondiente. Importes convertidos con el tipo de cambio sellado al momento de la cotización.
               </div>
             </div>
           )}
