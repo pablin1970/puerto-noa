@@ -1503,6 +1503,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const abrirPreview = ()=>{
     if(!String(form.proveedor_nombre||'').trim()){ alert('Ingresá el nombre del proveedor antes de mostrar.'); return }
     if(form.origen!=='estimada' && !String(form.referencia||'').trim()){ alert('Falta el número de referencia del proveedor.\n\nLa cotización es «Recibida», así que cargá el N° de cotización que te pasó el proveedor. Si no lo tenés, marcala como «Estimada».'); return }
+    const idsBloque = Array.isArray(form.bloque_ids)?form.bloque_ids:(form.bloque_id?[form.bloque_id]:[])
+    if(idsBloque.length===0){ alert('Marcá el bloque correspondiente.\n\nToda cotización tiene que afectar al menos a un bloque. Seleccioná en «Bloques que cubre esta cotización» a cuál corresponde, así después el cotizador puede traerla.'); return }
     setPreview(true)
   }
 
@@ -1512,6 +1514,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     const rubLabel = (RUBRO_ITEMS.find((r:any)=>r.key===form.rubro)?.label) || form.rubro
     const sentLabel = sentido==='importacion'?'Importación':sentido==='exportacion'?'Exportación':'Ambos sentidos'
     const esEst = form.origen==='estimada'
+    const idsSel = Array.isArray(form.bloque_ids)?form.bloque_ids:(form.bloque_id?[form.bloque_id]:[])
+    const bloquesSel = bloquesEnOrden.filter((b:any)=>idsSel.includes(b.id))
     return (
       <div className="max-w-3xl space-y-4">
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
@@ -1549,6 +1553,19 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               <div><div className="text-gray-400">Fecha</div><div className="text-gray-900 mt-0.5">{fmtFecha(form.fecha)}</div></div>
               <div><div className="text-gray-400">Vigencia</div><div className="text-gray-900 mt-0.5">{form.fecha_vencimiento?'hasta '+fmtFecha(form.fecha_vencimiento):'—'}</div></div>
               <div><div className="text-gray-400">Moneda de pago</div><div className="text-gray-900 mt-0.5">{form.moneda}</div></div>
+            </div>
+
+            <div>
+              <div className="text-[11px] text-gray-400 mb-1.5">Bloques cotizados{sentido==='ambos' && <span className="text-gray-300"> · orden de importación</span>}</div>
+              {bloquesSel.length===0 ? (
+                <div className="text-xs text-gray-400 italic">Ninguno seleccionado.</div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {bloquesSel.map((b:any)=>(
+                    <span key={b.id} className="bg-[#EBF2FF] text-[#052698] text-[11px] px-2.5 py-1 rounded-full font-semibold">{(b.numero===5 && sentido==='exportacion')?'Gastos en destino':b.nombre}</span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
@@ -1706,6 +1723,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                 })}
               </div>
             )}
+            {sentido==='ambos' && <p className="text-[10px] text-gray-400 mt-1.5">ℹ️ En «ambos sentidos» las pastillas se muestran en orden de importación; en exportación el orden se invierte.</p>}
           </div>
         </div>
       </div>
