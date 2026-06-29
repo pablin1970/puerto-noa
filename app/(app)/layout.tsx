@@ -15,7 +15,7 @@ import {
   FileText, FileDown, Users, Handshake,
   Receipt, Send, Link2, Repeat, ArrowLeftRight, Landmark, DollarSign,
   BookOpen, TrendingDown, TrendingUp,
-  Library, UserCog,
+  Library, UserCog, GitBranch,
   ChevronLeft, ChevronRight, AlertTriangle, HelpCircle, LogOut,
 } from 'lucide-react'
 
@@ -38,6 +38,7 @@ const NAV: NavItem[] = [
   { label: 'Comercial', section: true },
   { href: '/cotizador', label: 'Nueva cotización a clientes', icon: Sparkles, modulo: 'cotizaciones' },
   { href: '/registro',  label: 'Cotizaciones a clientes',     icon: List, modulo: 'cotizaciones' },
+  { href: '/recotizaciones', label: 'Análisis de recotizaciones', icon: GitBranch, modulo: 'cotizaciones_recotizaciones' },
   { href: '/clientes',  label: 'Clientes',         icon: Building2, modulo: 'clientes' },
 
   // ── OPERACIONES ────────────────────────────────────
