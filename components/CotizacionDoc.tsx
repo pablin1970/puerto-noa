@@ -3,6 +3,7 @@ import { fmt, ESTADOS_L, PUERTOS_L } from '@/lib/utils'
 import Image from 'next/image'
 
 const ETAPA_L: Record<string, string> = {
+  origen: 'Gastos de origen', forwarder: 'Flete marítimo',
   maritimo: 'Flete marítimo', chile: 'Gastos Chile', terrestre: 'Transporte',
   argentina: 'Gastos Argentina', tributos: 'Tributos ARCA', fee: 'Fee Puerto NOA',
 }
@@ -90,6 +91,8 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
   const totalTribUSD = cot.total_tributos_usd || 0
   const totalTribARS = cot.total_tributos_ars || 0
   const totalLanded = cot.total_landed || 0
+  const esExpo = (cot as any).sentido === 'exportacion'
+  const ciudadPuesta = esExpo ? (cot.origen ? String(cot.origen).split(' (')[0] : 'destino') : (cot.destino_noa || 'destino')
   const tcRef = cot.tc_ars || 0
   const regimen = (cot as any).regimen || 'A'
   const precioArg = (cot as any).precio_arg_equiv || 0
@@ -193,7 +196,7 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
               </div>
             </div>
             <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
-              <div style={{ padding: '7px 14px', background: '#052698', color: 'white', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase' }}>Ruta de importación</div>
+              <div style={{ padding: '7px 14px', background: '#052698', color: 'white', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase' }}>Ruta de {esExpo ? 'exportación' : 'importación'}</div>
               <div style={{ padding: '8px 12px' }}>
                 {[
                   { l: 'Origen', v: cot.origen },
@@ -247,7 +250,7 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
               </tbody>
               <tfoot>
                 <tr style={{ background: '#EBF2FF', borderTop: '2px solid #1168F8' }}>
-                  <td colSpan={4} style={{ padding: '8px 10px', fontWeight: 700, color: '#052698', fontSize: '11px' }}>VALOR {cot.incoterm} CHINA</td>
+                  <td colSpan={4} style={{ padding: '8px 10px', fontWeight: 700, color: '#052698', fontSize: '11px' }}>VALOR {cot.incoterm}</td>
                   <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 900, color: '#052698', fontSize: '13px', fontFamily: 'monospace' }}>USD {fmt(totalFOB, 0)}</td>
                 </tr>
               </tfoot>
@@ -257,7 +260,7 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
           {/* Estructura de costos */}
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden', marginBottom: '8px' }}>
             <div style={{ padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-              <div style={{ fontWeight: 700, fontSize: '12px', color: '#111827' }}>Estructura de costos hasta {cot.destino_noa}</div>
+              <div style={{ fontWeight: 700, fontSize: '12px', color: '#111827' }}>Estructura de costos hasta {ciudadPuesta}</div>
               <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '2px' }}>Valores en USD a tipo de cambio de referencia · Régimen {regimen}</div>
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -266,19 +269,19 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
                   <th style={{ ...th, textAlign: 'left', width: '130px' }}>Sección</th>
                   <th style={{ ...th, textAlign: 'left' }}>Concepto</th>
                   <th style={{ ...th, textAlign: 'right', width: '90px' }}>USD</th>
-                  <th style={{ ...th, textAlign: 'right', width: '75px' }}>% s/landed</th>
+                  <th style={{ ...th, textAlign: 'right', width: '75px' }}>% s/total</th>
                 </tr>
               </thead>
               <tbody>
                 <tr style={{ background: '#dbeafe', borderBottom: '2px solid #93c5fd', borderLeft: '4px solid #1168F8' }}>
                   <td style={{ ...td, fontWeight: 900, color: '#052698', fontSize: '11px' }}>Mercadería</td>
-                  <td style={{ ...td, color: '#1e3a5f', fontWeight: 600 }}>Valor {cot.incoterm} China · {productos.length} producto(s)</td>
+                  <td style={{ ...td, color: '#1e3a5f', fontWeight: 600 }}>Valor {cot.incoterm} · {productos.length} producto(s)</td>
                   <td style={{ ...td, textAlign: 'right', fontWeight: 900, fontFamily: 'monospace', color: '#052698', fontSize: '12px' }}>{fmt(totalFOB, 0)}</td>
                   <td style={{ ...td, textAlign: 'right', color: '#1168F8', fontSize: '10px', fontWeight: 700 }}>{totalLanded > 0 ? fmt(totalFOB / totalLanded * 100, 1) : '0'}%</td>
                 </tr>
                 {presup.filter((it: any) => it.tipo !== 'tributos').map((it: any, i: number) => (
                   <tr key={i} style={{ borderBottom: '1px solid #f8fafc' }}>
-                    <td style={{ ...tdGray, fontSize: '10px' }}>{ETAPA_L[it.etapa] || it.etapa}</td>
+                    <td style={{ ...tdGray, fontSize: '10px' }}>{it.etapa==='origen' ? (esExpo?'Gastos en destino':'Gastos de origen') : (ETAPA_L[it.etapa] || it.etapa)}</td>
                     <td style={{ ...td, color: '#374151' }}>{it.concepto}</td>
                     <td style={{ ...td, textAlign: 'right', fontFamily: 'monospace', color: '#6b7280' }}>{fmt(it.usd, 0)}</td>
                     <td style={{ ...td, textAlign: 'right', color: '#d1d5db', fontSize: '10px' }}>{totalLanded > 0 ? fmt(it.usd / totalLanded * 100, 1) : '0'}%</td>
@@ -289,16 +292,25 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
                   <td style={{ ...td, textAlign: 'right', fontWeight: 900, fontFamily: 'monospace', color: '#1f2937', fontSize: '12px' }}>{fmt(totalLog, 0)}</td>
                   <td style={{ ...td, textAlign: 'right', color: '#4b5563', fontSize: '10px', fontWeight: 700 }}>{totalLanded > 0 ? fmt(totalLog / totalLanded * 100, 1) : '0'}%</td>
                 </tr>
+                {esExpo ? (
+                <tr style={{ background: '#f8fafc', borderTop: '2px solid #cbd5e1', borderBottom: '2px solid #cbd5e1', borderLeft: '4px solid #94a3b8' }}>
+                  <td style={{ ...td, fontWeight: 900, color: '#64748b', fontSize: '11px' }}>Tributos de exportación</td>
+                  <td style={{ ...td, color: '#94a3b8', fontWeight: 600 }}>Módulo a definir</td>
+                  <td style={{ ...td, textAlign: 'right', fontWeight: 900, fontFamily: 'monospace', color: '#cbd5e1', fontSize: '12px' }}>—</td>
+                  <td style={{ ...td, textAlign: 'right', color: '#cbd5e1', fontSize: '10px', fontWeight: 700 }}>—</td>
+                </tr>
+                ) : (
                 <tr style={{ background: '#fef3c7', borderTop: '2px solid #fbbf24', borderBottom: '2px solid #fbbf24', borderLeft: '4px solid #ef9f27' }}>
                   <td style={{ ...td, fontWeight: 900, color: '#92400e', fontSize: '11px' }}>Tributos ARCA</td>
                   <td style={{ ...td, color: '#78350f', fontWeight: 600 }}>Régimen {regimen} · Aduana Jujuy · Base CIF Jama{tcRef > 0 ? ` (TC ref. ARS ${fmt(tcRef, 0)})` : ''}</td>
                   <td style={{ ...td, textAlign: 'right', fontWeight: 900, fontFamily: 'monospace', color: '#92400e', fontSize: '12px' }}>{fmt(totalTribUSD, 0)}</td>
                   <td style={{ ...td, textAlign: 'right', color: '#b45309', fontSize: '10px', fontWeight: 700 }}>{totalLanded > 0 ? fmt(totalTribUSD / totalLanded * 100, 1) : '0'}%</td>
                 </tr>
+                )}
               </tbody>
               <tfoot>
                 <tr style={{ background: '#052698' }}>
-                  <td colSpan={2} style={{ padding: '7px 8px', fontWeight: 900, color: 'white', fontSize: '11px' }}>TOTAL LANDED EN {(cot.destino_noa || 'DESTINO').toUpperCase()}</td>
+                  <td colSpan={2} style={{ padding: '7px 8px', fontWeight: 900, color: 'white', fontSize: '11px' }}>COSTO TOTAL PUESTO EN {String(ciudadPuesta || 'DESTINO').toUpperCase()}</td>
                   <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 900, color: 'white', fontSize: '13px', fontFamily: 'monospace' }}>USD {fmt(totalLanded, 0)}</td>
                   <td style={{ padding: '7px 8px', textAlign: 'right', color: '#93c5fd', fontSize: '11px', fontWeight: 700 }}>100%</td>
                 </tr>
@@ -338,7 +350,7 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
                   </div>
                 ))}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '2px solid #1168F8', marginTop: '4px' }}>
-                  <span style={{ fontWeight: 900, color: '#052698', fontSize: '13px' }}>TOTAL LANDED</span>
+                  <span style={{ fontWeight: 900, color: '#052698', fontSize: '13px' }}>COSTO TOTAL</span>
                   <span style={{ fontFamily: 'monospace', fontWeight: 900, color: '#1168F8', fontSize: '18px' }}>USD {fmt(totalLanded, 0)}</span>
                 </div>
                 {nc > 1 && <div style={{ textAlign: 'right', fontSize: '10px', color: '#1168F8', fontFamily: 'monospace', marginTop: '4px' }}>USD {fmt(totalLanded / nc, 0)} por contenedor</div>}
