@@ -57,6 +57,7 @@ interface CotProvSel {
   tipo: 'generica'|'especifica'
   clienteId: string|null
   estado: string
+  monedaPago: string
   usadaEnCots: string[]
   items: ItemSelProv[]
   elegida: boolean
@@ -922,6 +923,7 @@ function cotMercDesdeSistema(cot:any, usadas:string[]): CotProvSel {
     usadaEnCots: usadas,
     items,
     elegida: false,
+    monedaPago: cot.moneda||'USD',
     seguroIncluido: false, seguroModo: 'pct', seguroMonto: 0, segAlcance: 'no',
   }
 }
@@ -965,6 +967,7 @@ function cotProvDesdeSistema(cot:any, contenedoresH1:{tipo:string;cantidad:numbe
     usadaEnCots: usadas,
     items,
     elegida: false,
+    monedaPago: cot.moneda||'USD',
     seguroIncluido: cot.seguro_incluido||false,
     seguroModo: (cot.seguro_modo||'pct') as 'pct'|'fijo',
     seguroMonto: parseNum(String(cot.seguro_monto||0)),
@@ -992,7 +995,7 @@ function agregarFWManual(){
   const nueva: CotProvSel = {
     uid:uid2(), cotProvId:'', proveedorNombre:'', referencia:'',
     fechaEmision:new Date().toISOString().slice(0,10), fechaVencimiento:'',
-    tipo:'generica', clienteId:null, estado:'vigente', usadaEnCots:[],
+    tipo:'generica', clienteId:null, estado:'vigente', monedaPago:'USD', usadaEnCots:[],
     items:[{itemId:uid2(),descripcion:'Flete marítimo',tipo_calculo:'fijo_usd',valorUnit:0,cantCotizada:nc,cantUsar:nc,tipoContenedor:'',subtotal:0,seleccionado:true}],
     elegida:s.cotsProvFW.length===0,
     seguroIncluido:false, seguroModo:'pct', seguroMonto:0, segAlcance:'no',
@@ -3819,12 +3822,30 @@ const clientesFiltrados=terceros.filter(t=>
             </table>
           </div>
 
-          {/* Cuadro 2: Pagos en ARS — solo si hay algo que pagar en pesos */}
-          {(arcaActivo||bloqueActivo(3)||bloqueActivo(2))&&(subGastosArg>0||subE>0||subTransp>0||totalTribUSD>0)&&(
-            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm" style={{borderLeft:'3px solid #ef9f27'}}>
-              <div className="px-5 py-3.5 border-b flex items-center gap-2" style={{borderColor:'#ef9f27',background:'#faeeda'}}>
-                <span className="text-base">💵</span>
-                <span className="font-semibold text-sm" style={{color:'#633806'}}>Pagos estimados en pesos argentinos</span>
+          {/* Cuadro 2: Reparto de pagos por moneda (Fase C) — cada bloque en la moneda de su cotización de proveedor */}
+          {(()=>{
+            const tcMon = (m:string):number => m==='ARS'?s.tcTrib : m==='CLP'?s.tcClp : m==='CNY'?s.tcCny : 1
+            const segEl = s.cotsProvSeg.find(c=>c.elegida)
+            const lineas: {concepto:string; quien:string; usd:number; moneda:string}[] = [
+              ...(hayMercaderia&&baseFOB>0 ? [{concepto:'Mercadería', quien: mercElegida?.proveedorNombre||'Proveedor de mercadería', usd: baseFOB, moneda: mercElegida?.monedaPago||'USD'}] : []),
+              ...(origenActivoCalc&&subOrigen>0 ? [{concepto:'Gastos de origen', quien: origenElegida?.proveedorNombre||'Agente de origen', usd: subOrigen, moneda: origenElegida?.monedaPago||'USD'}] : []),
+              ...(subFW>0 ? [{concepto:'Flete internacional', quien: fwElegida?.proveedorNombre||'Forwarder / agente de carga', usd: subFW, moneda: fwElegida?.monedaPago||'USD'}] : []),
+              ...(totalSeg>0 ? [{concepto:'Seguro', quien: segEl?.proveedorNombre||'Compañía aseguradora', usd: totalSeg, moneda: segEl?.monedaPago||'USD'}] : []),
+              ...((subGastosChile+subD)>0 ? [{concepto:'Gastos en Chile', quien: transpChileElegida?.proveedorNombre||'Depósito / agente Chile', usd: subGastosChile+subD, moneda: transpChileElegida?.monedaPago||'USD'}] : []),
+              ...(bloqueActivo(2)&&subTransp>0 ? [{concepto:'Flete terrestre', quien: transpTerrElegida?.proveedorNombre||(s.sentido==='exportacion'?'NOA → Puerto Chile':'Puerto Chile → destino NOA'), usd: subTransp, moneda: transpTerrElegida?.monedaPago||'ARS'}] : []),
+              ...(bloqueActivo(3)&&(subGastosArg+subE)>0 ? [{concepto:'Despachante + gastos Argentina', quien:'Honorarios + gastos despacho', usd: subGastosArg+subE, moneda:'ARS'}] : []),
+              ...(fee>0 ? [{concepto:'Servicio Puerto NOA', quien:'Puerto NOA SpA', usd: fee, moneda:'USD'}] : []),
+              ...(arcaActivo&&totalTribUSD>0 ? [{concepto:'Tributos ARCA', quien:'AFIP / aduana argentina', usd: totalTribUSD, moneda:'ARS'}] : []),
+            ]
+            if(lineas.length===0) return null
+            const ORD=['USD','ARS','CLP','CNY']
+            const MONLBL:Record<string,string>={USD:'Dólares',ARS:'Pesos argentinos',CLP:'Pesos chilenos',CNY:'Yuanes'}
+            const grupos = ORD.map(m=>({moneda:m, lineas:lineas.filter(l=>l.moneda===m)})).filter(g=>g.lineas.length>0)
+            return (
+            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm" style={{borderLeft:'3px solid #7C3AED'}}>
+              <div className="px-5 py-3.5 border-b flex items-center gap-2" style={{borderColor:'#7C3AED',background:'#f3eefe'}}>
+                <span className="text-base">💱</span>
+                <span className="font-semibold text-sm" style={{color:'#4c1d95'}}>Reparto de pagos por moneda</span>
               </div>
               <table className="w-full text-xs">
                 <thead>
@@ -3832,48 +3853,43 @@ const clientesFiltrados=terceros.filter(t=>
                     <th className="text-left px-5 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Concepto</th>
                     <th className="text-left px-3 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wider">A quién se paga</th>
                     <th className="text-right px-5 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Importe</th>
-                    <th className="text-right px-5 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Moneda</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {arcaActivo&&totalTribUSD>0&&(
-                    <tr className="border-t border-gray-50">
-                      <td className="px-5 py-3 text-gray-800 font-semibold">Tributos ARCA</td>
-                      <td className="px-3 py-3 text-gray-400">AFIP / aduana argentina</td>
-                      <td className="px-5 py-3 text-right font-mono font-semibold text-gray-900">{Math.round(totalTribARS).toLocaleString('es-AR')}</td>
-                      <td className="px-5 py-3 text-right"><span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-bold">ARS</span></td>
-                    </tr>
-                  )}
-                  {bloqueActivo(3)&&subGastosArg>0&&(
-                    <tr className="border-t border-gray-50">
-                      <td className="px-5 py-3 text-gray-800 font-semibold">Despachante de aduana</td>
-                      <td className="px-3 py-3 text-gray-400">Honorarios + gastos despacho</td>
-                      <td className="px-5 py-3 text-right font-mono font-semibold text-gray-900">{Math.round(subGastosArg*s.tcTrib).toLocaleString('es-AR')}</td>
-                      <td className="px-5 py-3 text-right"><span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-bold">ARS</span></td>
-                    </tr>
-                  )}
-                  {bloqueActivo(2)&&subTransp>0&&(
-                    <tr className="border-t border-gray-50">
-                      <td className="px-5 py-3 text-gray-800 font-semibold">Flete terrestre</td>
-                      <td className="px-3 py-3 text-gray-400">{s.sentido==='exportacion'?'NOA → Puerto Chile':'Puerto Chile → destino NOA'}</td>
-                      <td className="px-5 py-3 text-right font-mono font-semibold text-gray-900">{Math.round(subTransp*s.tcTrib).toLocaleString('es-AR')}</td>
-                      <td className="px-5 py-3 text-right"><span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-bold">ARS</span></td>
-                    </tr>
-                  )}
-                  <tr className="border-t-2" style={{borderColor:'#ef9f27',background:'#faeeda'}}>
-                    <td colSpan={2} className="px-5 py-3.5 font-bold text-sm" style={{color:'#412402'}}>Total a desembolsar en ARS</td>
-                    <td className="px-5 py-3.5 text-right font-bold text-sm font-mono" style={{color:'#412402'}}>
-                      {Math.round((arcaActivo?totalTribARS:0)+(bloqueActivo(3)&&subGastosArg>0?subGastosArg*s.tcTrib:0)+(bloqueActivo(2)&&subTransp>0?subTransp*s.tcTrib:0)).toLocaleString('es-AR')}
-                    </td>
-                    <td className="px-5 py-3.5 text-right"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{background:'#ef9f27',color:'#412402'}}>ARS</span></td>
-                  </tr>
+                  {grupos.map((g)=>{
+                    const totalUsd = g.lineas.reduce((t,l)=>t+l.usd,0)
+                    const totalMon = totalUsd * tcMon(g.moneda)
+                    return (
+                      <Fragment key={g.moneda}>
+                        <tr style={{background:'#f3eefe'}}>
+                          <td colSpan={3} className="px-5 py-2 text-[11px] font-bold uppercase tracking-wide" style={{color:'#4c1d95'}}>{MONLBL[g.moneda]||g.moneda} · {g.moneda}</td>
+                        </tr>
+                        {g.lineas.map((l,li)=>(
+                          <tr key={g.moneda+li} className="border-t border-gray-50">
+                            <td className="px-5 py-3 text-gray-800 font-semibold">{l.concepto}</td>
+                            <td className="px-3 py-3 text-gray-400">{l.quien}</td>
+                            <td className="px-5 py-3 text-right font-mono font-semibold text-gray-900">
+                              {g.moneda==='USD' ? ('US$ '+fmt(l.usd,2)) : (l.usd*tcMon(g.moneda)).toLocaleString('es-AR',{maximumFractionDigits:0})}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="border-t-2" style={{borderColor:'#7C3AED',background:'#f3eefe'}}>
+                          <td colSpan={2} className="px-5 py-3 font-bold text-sm" style={{color:'#4c1d95'}}>Total a pagar en {g.moneda}</td>
+                          <td className="px-5 py-3 text-right font-bold text-sm font-mono" style={{color:'#4c1d95'}}>
+                            {g.moneda==='USD' ? ('US$ '+fmt(totalUsd,2)) : (totalMon.toLocaleString('es-AR',{maximumFractionDigits:0})+' '+g.moneda)}
+                          </td>
+                        </tr>
+                      </Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
               <div className="px-5 py-2.5 bg-gray-50 border-t border-gray-100 text-[10px] text-gray-400">
-                TC aplicado: ARS {fmt(s.tcTrib,0)} · Los importes son estimativos y pueden variar según TC vigente al momento del despacho.
+                Cada bloque se paga en la moneda definida en su cotización de proveedor. Conversión con TC sellado: ARS {fmt(s.tcTrib,0)} · CLP {fmt(s.tcClp,0)} · CNY {fmt(s.tcCny,2)} por USD. Importes estimativos.
               </div>
             </div>
-          )}
+            )
+          })()}
 
           {/* Composición + TC */}
           <div className="grid grid-cols-2 gap-3">
