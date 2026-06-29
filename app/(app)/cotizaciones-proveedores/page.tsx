@@ -1109,7 +1109,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               servicio_id: svc.servicio_id,
               metrica_id: fr.metrica_id,
               valor: v,
-              moneda: esPct ? 'USD' : (fr.moneda||form.moneda||'USD'),
+              moneda: esPct ? 'USD' : (fr.moneda||'USD'),
               piso_usd: esPct ? (pctPiso && min>0 ? min : null) : (tieneMin && min>0 ? min : null),
               techo_usd: esPct && pctTecho && techoVal>0 ? techoVal : null,
               dias_libres: diasSvc,
@@ -1289,7 +1289,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                       {esPorcentaje ? (
                         <span className="text-center text-[10px] font-semibold text-[#052698]">% CIF</span>
                       ) : (
-                        <select value={f.moneda || form.moneda} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'moneda',e.target.value)} className="w-full px-1 py-1.5 border border-gray-200 rounded-lg text-[11px] bg-white font-semibold text-[#1168F8] focus:outline-none focus:border-[#1168F8]">
+                        <select value={f.moneda || 'USD'} onChange={e=>depSetForma(svc.servicio_id,f.metrica_id,'moneda',e.target.value)} className="w-full px-1 py-1.5 border border-gray-200 rounded-lg text-[11px] bg-white font-semibold text-[#1168F8] focus:outline-none focus:border-[#1168F8]">
                           <option>USD</option><option>ARS</option><option>CLP</option><option>CNY</option>
                         </select>
                       )}
@@ -1618,17 +1618,11 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             )}
           </div>
 
-          {/* Ref + Moneda + Fechas */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Ref + Fechas */}
+          <div className="grid grid-cols-3 gap-3">
             <div>
               {lbl('Referencia proveedor')}
               <input value={form.referencia} onChange={e=>setF('referencia',e.target.value)} className={inp} placeholder="N° cotización del proveedor"/>
-            </div>
-            <div>
-              {lbl('Moneda')}
-              <select value={form.moneda} onChange={e=>setF('moneda',e.target.value)} className={sel}>
-                {['USD','ARS','CLP','CNY'].map(m=><option key={m}>{m}</option>)}
-              </select>
             </div>
             <div>
               {lbl('Fecha')}
@@ -1638,6 +1632,14 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
               {lbl('Vigencia hasta')}
               <input type="date" value={form.fecha_vencimiento} onChange={e=>setF('fecha_vencimiento',e.target.value)} className={inp}/>
             </div>
+          </div>
+          {/* Moneda de pago — genérico de cabecera; ya NO predefine las líneas de abajo */}
+          <div className="pt-1">
+            <label className="block text-[11px] font-semibold text-gray-600 mb-1">Moneda en la cual deberá abonarse la presente cotización</label>
+            <select value={form.moneda} onChange={e=>setF('moneda',e.target.value)} className={sel} style={{maxWidth:'240px'}}>
+              {['USD','ARS','CLP','CNY'].map(m=><option key={m}>{m}</option>)}
+            </select>
+            <p className="text-[10px] text-gray-400 mt-1">Es la moneda de pago de toda la cotización. Cada ítem de abajo se carga por defecto en USD y puede cambiarse individualmente.</p>
           </div>
 
           {/* Datos del lugar de prestación — depósito y agente (almacenaje) y despachante */}
