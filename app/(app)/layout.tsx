@@ -342,6 +342,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
                   </div>
                 ) : (
                   <Link href={item.href}
+                    onClick={() => { if (pathname === hrefPath) window.dispatchEvent(new CustomEvent('nav-reclick', { detail: hrefPath })) }}
                     className={`flex items-center gap-2 mx-2 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all mb-0.5 ${collapsed ? 'justify-center' : ''} ${
                       active
                         ? 'bg-white/20 text-white shadow-sm'
