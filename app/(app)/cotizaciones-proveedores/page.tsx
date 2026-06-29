@@ -254,6 +254,18 @@ function CotizacionesProveedoresInner() {
     }
   }, [])
 
+  // Al re-clickear el ítem del sidebar estando ya en esta sección, volver a la lista
+  // (mismo comportamiento que la cotización a clientes). El layout emite 'nav-reclick'.
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e?.detail === '/cotizaciones-proveedores') {
+        setView('lista'); setSelId(null); setDupSnapshot(null); setInitParams(null)
+      }
+    }
+    window.addEventListener('nav-reclick', handler)
+    return () => window.removeEventListener('nav-reclick', handler)
+  }, [])
+
   async function loadAll() {
     setLoading(true)
     // Queries separadas para evitar joins que pueden fallar por RLS
