@@ -104,7 +104,6 @@ interface CotState {
   cotsProvMerc: CotProvSel[]
   // Bloque 5 - Origen / Puesta a FOB (forwarder o agente de origen)
   cotsProvOrigen: CotProvSel[]
-  origenAlCif: boolean   // ¿los gastos de origen engrosan el CIF? Forzado true si incoterm EXW.
   // Bloque 3 - Transporte terrestre
   cotsProvTransp: CotProvSel[]
   // Bloque 3 - Transporte terrestre (igual que antes)
@@ -125,7 +124,7 @@ interface CotState {
   feeCont: number
   feePct: number
   // TC y tributos
-  tcClp: number; tcCny: number; regimen: 'A'|'B'|'C'|'D'; tcTrib: number; derPct: number; chileAlCif: boolean
+  tcClp: number; tcCny: number; regimen: 'A'|'B'|'C'|'D'; tcTrib: number; derPct: number
 }
 
 const INIT: CotState = {
@@ -151,14 +150,13 @@ const INIT: CotState = {
   cotsProvTransp:[],
   cotsProvMerc:[],
   cotsProvOrigen:[],
-  origenAlCif:true,
   optTransp:'A',rowsDescon:[],
   almModoVol:'auto',almVolM3:0,almCostoDia:0,almDias:0,
   cargaModo:'fijo',cargaValor:0,
   ftCamion:0,nCamiones:1,ftIda:0,ftDev:0,ftRt:0,
   estadiaCargaVal:0,estadiaCargaDias:0,estadiaDescargaVal:0,estadiaDescargaDias:0,
   rowsE:[],gastosDesp:[],honTipo:'fijo_usd',honValor:0,honPiso:0,honTecho:0,feeModo:'cont',feeCont:0,feePct:0,
-  tcClp:950,tcCny:7,regimen:'A',tcTrib:1000,derPct:18,chileAlCif:false,
+  tcClp:950,tcCny:7,regimen:'A',tcTrib:1000,derPct:18,
 }
 
 const REG_L: Record<string,string> = {
@@ -500,9 +498,8 @@ const subOrigen = (origenActivoCalc && origenElegida)
     ? (origenElegida.manualMonto||0)
     : origenElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
   : 0
-// En la COTIZACIÓN, los gastos de origen SIEMPRE forman el FOB (estén tildados o no).
-// El tilde s.origenAlCif NO afecta la cotización: es un dato que viaja a la operación,
-// donde recién ahí se decide si computa al CIF a efectos de ARCA (para comparar estimado vs real).
+// En la COTIZACIÓN, los gastos de origen SIEMPRE forman el FOB.
+// Qué computa a la base imponible ante ARCA se ajusta recién en la operación (liquidación real).
 const baseFOB = mercElegida
   ? fobProforma
   : s.productos.reduce((t,p)=>t+p.subtotal,0)+(s.incoterm==='EXW'?s.exwTransp+s.exwAgente+s.exwOtros:0)
@@ -624,8 +621,8 @@ const calcGastoArg=(g:GastoArg,cifUsd:number,tcTrib:number):number=>{
   return usd
 }
 // CIF (Cost, Insurance & Freight) hasta el paso: FOB + fletes·%intl + seguros·%intl. Base de tributos ARCA.
-// En la COTIZACIÓN los gastos de Chile SIEMPRE van al CIF (si el bloque está activo), estén tildados o no.
-// El tilde s.chileAlCif NO afecta la cotización: viaja a la operación, donde recién ahí se aplica ante ARCA.
+// En la COTIZACIÓN los gastos de Chile SIEMPRE van al CIF si el bloque está activo.
+// La base imponible real ante ARCA se ajusta recién en la operación (liquidación real).
 const chileActivoCif = s.bloquesActivos.length===0 ? true : (bloques[1] ? s.bloquesActivos.includes(bloques[1].id) : true)
 const subChileCif = chileActivoCif ? (subGastosChile+subD) : 0
 const cif=totalFOB + subFW + subTranspIntl + segMarEff + segTerrEff*fIntlTerr + subChileCif
@@ -2334,13 +2331,8 @@ const clientesFiltrados=terceros.filter(t=>
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#EF9F27] text-white text-[10px] font-bold">↗</span>
               <span className="font-medium text-sm text-gray-900">{s.sentido==='exportacion'?'Gastos en destino':(bloqueOrigen?.nombre||'Gastos de origen')}</span>
               <span className="text-[10px] text-gray-400">flete interno · honorarios agente origen · gastos de exportación · handling</span>
-              {s.incoterm==='EXW' ? (
+              {s.incoterm==='EXW' && (
                 <span className="text-[9px] text-amber-800 bg-amber-100 border border-amber-200 rounded-full px-2 py-0.5">EXW · obligatorio, forma el FOB</span>
-              ) : (
-                <label className="flex items-center gap-1.5 text-[10px] text-gray-600 cursor-pointer select-none bg-white border border-gray-200 rounded-full px-2.5 py-1" title="En la cotización siempre se computa al CIF. Este tilde se aplica recién en la operación, para comparar lo estimado con lo real ante ARCA.">
-                  <input type="checkbox" checked={s.origenAlCif} onChange={e=>u('origenAlCif',e.target.checked)} className="w-3 h-3 accent-[#EF9F27]"/>
-                  Computa al CIF en la operación
-                </label>
               )}
               <div className="ml-auto flex items-center gap-2 flex-wrap">
                 <select onChange={e=>{if(e.target.value){agregarOrigenDesdeSistema(e.target.value);e.target.value=''}}}
@@ -2771,12 +2763,6 @@ const clientesFiltrados=terceros.filter(t=>
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#0a9e6e] text-white text-[10px] font-bold">2</span>
               <span className="font-medium text-sm text-gray-900">{bloques[1]?.nombre || 'Bloque 2'}</span>
-              {s.sentido!=='exportacion' && (
-                <label className="ml-auto flex items-center gap-1.5 text-[10px] text-gray-600 cursor-pointer select-none bg-white border border-gray-200 rounded-full px-2.5 py-1" title="En la cotización siempre se computa al CIF. Este tilde se aplica recién en la operación, para comparar lo estimado con lo real ante ARCA.">
-                  <input type="checkbox" checked={s.chileAlCif} onChange={e=>u('chileAlCif',e.target.checked)} className="w-3 h-3 accent-[#0a9e6e]"/>
-                  Computa al CIF en la operación
-                </label>
-              )}
             </div>
             <div className="px-5 py-4">
               {/* Opciones A / B1 / B2 */}
