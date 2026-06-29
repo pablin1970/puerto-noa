@@ -120,12 +120,12 @@ export default function RegistroPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Cotizaciones</h1>
+          <h1 className="text-xl font-bold text-gray-900">Cotizaciones a clientes</h1>
           <p className="text-xs text-gray-400 mt-0.5">Módulo 2 — Historial y gestión de cotizaciones</p>
         </div>
         <Link href="/cotizador"
           className="flex items-center gap-2 px-5 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-semibold hover:bg-[#0a4fc4] transition-colors shadow-sm">
-          + Nueva cotización
+          + Nueva cotización a clientes
         </Link>
       </div>
 
