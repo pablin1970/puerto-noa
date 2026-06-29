@@ -675,8 +675,11 @@ const bloqueActivoCalc = (idx:number):boolean => {
 // Subtotales por bloque (ya con su condición de bloque activo)
 // Denominador para los porcentajes: el total REAL de lo que se cotiza
 const totalReal = totalLanded
-// Ciudad donde queda puesta la carga: en impo la ciudad NOA de destino; en expo el lugar de destino exterior.
-const ciudadPuesta = s.sentido==='exportacion' ? (s.origen?s.origen.split(' (')[0]:'destino') : (s.destinoNoa||'destino')
+// Ciudad donde queda puesta la carga: en impo la ciudad NOA de destino; en expo el puerto/lugar de destino exterior,
+// pero SOLO si realmente se eligió (puertoChiId). Si no, se muestra genérico (no el default "Dalian").
+const ciudadPuesta = s.sentido==='exportacion'
+  ? (s.puertoChiId && s.origen ? s.origen.split(' (')[0] : 'destino exterior')
+  : (s.destinoNoa || 'destino')
 const etiquetaTotal = `Costo total puesto en ${ciudadPuesta}`
 
 
@@ -1463,6 +1466,7 @@ const clientesFiltrados=terceros.filter(t=>
       cliente:s.cliente, cuit:s.cuit, email_cliente:s.email, telefono_cliente:s.telefono,
       despachante:s.despachante,
       origen:s.origen, puerto_chile:s.ptoChile, destino_noa:s.destinoNoa, incoterm:s.incoterm, sentido:s.sentido,
+      puerto_china_id:s.puertoChiId, ciudad_destino_id:s.ciudadDestinoId,
       transito:s.transito, notas:s.notas, validez:s.validez, estado:'borrador',
       condiciones_particulares:s.observaciones.filter((o:string)=>o&&o.trim()),
       tipo_contenedores:s.contenedores, productos:productosDoc,
