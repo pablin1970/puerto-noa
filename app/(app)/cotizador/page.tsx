@@ -1824,7 +1824,7 @@ const clientesFiltrados=terceros.filter(t=>
                         <span className="font-mono text-xs font-semibold text-gray-700">USD {Math.round(c.total_landed||0).toLocaleString('es-AR')}</span>
                         {tieneHija ? (
                           <span className="text-[9px] text-gray-400 font-semibold px-2 py-0.5">recotizada</span>
-                        ) : recotizable && puede(permisos, 'cotizaciones_duplicar', 'crear') ? (
+                        ) : recotizable && puede(permisos, 'cotizaciones', 'crear') ? (
                           <button onMouseDown={()=>recotizarCotizacion(c.id)} className="px-2 py-0.5 bg-[#7C3AED] text-white rounded text-[9px] font-bold hover:bg-[#6024c0]">Recotizar</button>
                         ) : null}
                       </div>
