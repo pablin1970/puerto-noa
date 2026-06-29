@@ -673,27 +673,11 @@ const bloqueActivoCalc = (idx:number):boolean => {
   return s.bloquesActivos.includes((bloque as any).id)
 }
 // Subtotales por bloque (ya con su condición de bloque activo)
-const subBloque0 = bloqueActivoCalc(0) ? subFW+totalSeg : 0                    // marítimo (FW + seguro)
-const subBloque1 = bloqueActivoCalc(1) ? subGastosChile+subDescon+subAlm+subCarga : 0  // Chile
-const subBloque2 = bloqueActivoCalc(2) ? subTransp : 0                          // terrestre
-const subBloque3 = bloqueActivoCalc(3) ? subE+subGastosArg : 0                  // Argentina
-const subBloque4 = bloqueActivoCalc(4) ? fee : 0                                // fee
-// Lista de bloques logísticos con valor > 0 (para contar cuántos hay y armar la etiqueta)
-const bloquesConValor = [
-  {idx:0, sub:subBloque0, etiqueta:'Flete marítimo'},
-  {idx:1, sub:subBloque1, etiqueta:'Gastos en Chile'},
-  {idx:2, sub:subBloque2, etiqueta:'Flete terrestre'},
-  {idx:3, sub:subBloque3, etiqueta:'Gastos en Argentina'},
-  {idx:4, sub:subBloque4, etiqueta:'Fee de servicio'},
-].filter(b=>b.sub>0)
-// Denominador para los porcentajes: el total REAL de lo que se cotiza (no un landed con mercadería inexistente)
-const totalReal = totalLanded // ya incluye solo lo que tiene valor (FOB=0 si no hay merc, ARCA=0 si no aplica)
-// Etiqueta adaptativa del total y del KPI principal
-const etiquetaTotal = hayMercaderia
-  ? 'Mercadería puesta en destino'
-  : bloquesConValor.length===1
-    ? bloquesConValor[0].etiqueta
-    : (totalLog>0 ? 'Costo logístico total' : (arcaActivo ? 'Tributos ARCA' : 'Total de la operación'))
+// Denominador para los porcentajes: el total REAL de lo que se cotiza
+const totalReal = totalLanded
+// Ciudad donde queda puesta la carga: en impo la ciudad NOA de destino; en expo el lugar de destino exterior.
+const ciudadPuesta = s.sentido==='exportacion' ? (s.origen?s.origen.split(' (')[0]:'destino') : (s.destinoNoa||'destino')
+const etiquetaTotal = `Costo total puesto en ${ciudadPuesta}`
 
 
 
@@ -3702,21 +3686,22 @@ const clientesFiltrados=terceros.filter(t=>
                 </tr>
               </thead>
               <tbody>
-                {/* Mercadería — fila principal destacada */}
+                {/* Mercadería — valor base, sin gastos de origen */}
                 {hayMercaderia&&(
                   <tr className="border-t-2 border-gray-300">
                     <td className="px-5 py-3 font-semibold text-sm text-gray-900">Mercadería {s.incoterm}</td>
-                    <td className="px-3 py-3 text-gray-500 text-[11px]">Valor {s.incoterm} · precio en origen</td>
-                    <td className="px-5 py-3 text-right font-semibold text-sm font-mono text-gray-900">{fmt(totalFOB)}</td>
-                    <td className="px-5 py-3 text-right font-semibold text-gray-500">{fmt(totalFOB/totalReal*100,1)}%</td>
+                    <td className="px-3 py-3 text-gray-500 text-[11px]">{s.sentido==='exportacion'?'Valor de la mercadería':`Valor ${s.incoterm} · precio en origen`}</td>
+                    <td className="px-5 py-3 text-right font-semibold text-sm font-mono text-gray-900">{fmt(baseFOB)}</td>
+                    <td className="px-5 py-3 text-right font-semibold text-gray-500">{fmt(baseFOB/totalReal*100,1)}%</td>
                   </tr>
                 )}
-                {hayMercaderia&&s.incoterm==='EXW'&&(s.exwTransp+s.exwAgente+s.exwOtros)>0&&(
+                {/* Gastos de origen en IMPO: línea aparte, contigua a la mercadería (juntas forman el FOB) */}
+                {s.sentido!=='exportacion'&&origenActivoCalc&&subOrigen>0&&(
                   <tr className="border-t border-gray-50 bg-gray-50">
-                    <td className="px-5 py-2 pl-8 text-gray-400 text-[11px]">· Puesta a FOB</td>
-                    <td className="px-3 py-2 text-gray-400 text-[11px]">Transporte + agente + otros</td>
-                    <td className="px-5 py-2 text-right font-mono text-gray-500">{fmt(s.exwTransp+s.exwAgente+s.exwOtros)}</td>
-                    <td className="px-5 py-2 text-right text-gray-400">{fmt((s.exwTransp+s.exwAgente+s.exwOtros)/totalReal*100,1)}%</td>
+                    <td className="px-5 py-2 pl-8 text-gray-500 text-[11px]">· {bloqueOrigen?.nombre||'Gastos de origen'}</td>
+                    <td className="px-3 py-2 text-gray-400 text-[11px]">Forma el FOB junto con la mercadería</td>
+                    <td className="px-5 py-2 text-right font-mono text-gray-600">{fmt(subOrigen)}</td>
+                    <td className="px-5 py-2 text-right text-gray-400">{fmt(subOrigen/totalReal*100,1)}%</td>
                   </tr>
                 )}
 
@@ -3729,58 +3714,58 @@ const clientesFiltrados=terceros.filter(t=>
                   </tr>
                 )}
 
-                {/* Subrubros logísticos */}
-                {bloqueActivo(0)&&subFW>0&&(
-                  <tr className="border-t border-gray-50">
-                    <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[0]?.nombre||'Marítimo'}</td>
-                    <td className="px-3 py-2.5 text-gray-400 text-[11px]">{fwElegida?.proveedorNombre||'ForWarder'}{fwElegida?.referencia?` — ${fwElegida.referencia}`:''}</td>
-                    <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subFW)}</td>
-                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(subFW/totalReal*100,1)}%</td>
-                  </tr>
-                )}
-                {bloqueActivo(0)&&totalSeg>0&&(
-                  <tr className="border-t border-gray-50">
-                    <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· Seguro</td>
-                    <td className="px-3 py-2.5 text-gray-400 text-[11px]">{segFW>0?'Incluido en ForWarder':'Contratado independiente'}</td>
-                    <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(totalSeg)}</td>
-                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(totalSeg/totalReal*100,1)}%</td>
-                  </tr>
-                )}
-                {bloqueActivo(1)&&(subGastosChile+subDescon+subAlm+subCarga)>0&&(
-                  <tr className="border-t border-gray-50">
-                    <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[1]?.nombre||'Chile'}</td>
-                    <td className="px-3 py-2.5 text-gray-400 text-[11px]">Gastos en Chile · Op. {s.optTransp}</td>
-                    <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subGastosChile+subDescon+subAlm+subCarga)}</td>
-                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt((subGastosChile+subDescon+subAlm+subCarga)/totalReal*100,1)}%</td>
-                  </tr>
-                )}
-                {bloqueActivo(2)&&subTransp>0&&(
-                  <tr className="border-t border-gray-50">
-                    <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[2]?.nombre||'Terrestre'}</td>
-                    <td className="px-3 py-2.5 text-gray-400 text-[11px]">Flete terrestre</td>
-                    <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subTransp)}</td>
-                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(subTransp/totalReal*100,1)}%</td>
-                  </tr>
-                )}
-                {bloqueActivo(3)&&(subE+subGastosArg)>0&&(
-                  <tr className="border-t border-gray-50">
-                    <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[3]?.nombre||'Argentina'}</td>
-                    <td className="px-3 py-2.5 text-gray-400 text-[11px]">Despachante + honorarios + otros</td>
-                    <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subE+subGastosArg)}</td>
-                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt((subE+subGastosArg)/totalReal*100,1)}%</td>
-                  </tr>
-                )}
-                {bloqueActivo(4)&&fee>0&&(
-                  <tr className="border-t border-gray-50">
-                    <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[4]?.nombre||'Fee PN'}</td>
-                    <td className="px-3 py-2.5 text-gray-400 text-[11px]">Fee de servicio logístico</td>
-                    <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(fee)}</td>
-                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(fee/totalReal*100,1)}%</td>
-                  </tr>
-                )}
+                {/* Subrubros logísticos — el orden sigue el sentido (impo: China→NOA · expo: NOA→exterior) */}
+                {(()=>{
+                  const filaMar = bloqueActivo(0)&&subFW>0?(
+                    <tr key="mar" className="border-t border-gray-50">
+                      <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[0]?.nombre||'Marítimo'}</td>
+                      <td className="px-3 py-2.5 text-gray-400 text-[11px]">{fwElegida?.proveedorNombre||'ForWarder'}{fwElegida?.referencia?` — ${fwElegida.referencia}`:''}</td>
+                      <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subFW)}</td>
+                      <td className="px-5 py-2.5 text-right text-gray-400">{fmt(subFW/totalReal*100,1)}%</td>
+                    </tr>):null
+                  const filaSeg = bloqueActivo(0)&&totalSeg>0?(
+                    <tr key="seg" className="border-t border-gray-50">
+                      <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· Seguro</td>
+                      <td className="px-3 py-2.5 text-gray-400 text-[11px]">{segFW>0?'Incluido en ForWarder':'Contratado independiente'}</td>
+                      <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(totalSeg)}</td>
+                      <td className="px-5 py-2.5 text-right text-gray-400">{fmt(totalSeg/totalReal*100,1)}%</td>
+                    </tr>):null
+                  const filaChile = bloqueActivo(1)&&(subGastosChile+subDescon+subAlm+subCarga)>0?(
+                    <tr key="chile" className="border-t border-gray-50">
+                      <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[1]?.nombre||'Chile'}</td>
+                      <td className="px-3 py-2.5 text-gray-400 text-[11px]">Gastos en Chile · Op. {s.optTransp}</td>
+                      <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subGastosChile+subDescon+subAlm+subCarga)}</td>
+                      <td className="px-5 py-2.5 text-right text-gray-400">{fmt((subGastosChile+subDescon+subAlm+subCarga)/totalReal*100,1)}%</td>
+                    </tr>):null
+                  const filaTerr = bloqueActivo(2)&&subTransp>0?(
+                    <tr key="terr" className="border-t border-gray-50">
+                      <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[2]?.nombre||'Terrestre'}</td>
+                      <td className="px-3 py-2.5 text-gray-400 text-[11px]">Flete terrestre</td>
+                      <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subTransp)}</td>
+                      <td className="px-5 py-2.5 text-right text-gray-400">{fmt(subTransp/totalReal*100,1)}%</td>
+                    </tr>):null
+                  const filaArg = bloqueActivo(3)&&(subE+subGastosArg)>0?(
+                    <tr key="arg" className="border-t border-gray-50">
+                      <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[3]?.nombre||'Argentina'}</td>
+                      <td className="px-3 py-2.5 text-gray-400 text-[11px]">Despachante + honorarios + otros</td>
+                      <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(subE+subGastosArg)}</td>
+                      <td className="px-5 py-2.5 text-right text-gray-400">{fmt((subE+subGastosArg)/totalReal*100,1)}%</td>
+                    </tr>):null
+                  const filaFee = bloqueActivo(4)&&fee>0?(
+                    <tr key="fee" className="border-t border-gray-50">
+                      <td className="px-5 py-2.5 pl-8 text-gray-400 text-[11px]">· {bloques[4]?.nombre||'Fee PN'}</td>
+                      <td className="px-3 py-2.5 text-gray-400 text-[11px]">Fee de servicio logístico</td>
+                      <td className="px-5 py-2.5 text-right font-mono text-gray-500">{fmt(fee)}</td>
+                      <td className="px-5 py-2.5 text-right text-gray-400">{fmt(fee/totalReal*100,1)}%</td>
+                    </tr>):null
+                  const orden = s.sentido==='exportacion'
+                    ? [filaArg, filaTerr, filaChile, filaMar, filaSeg, filaFee]
+                    : [filaMar, filaSeg, filaChile, filaTerr, filaArg, filaFee]
+                  return orden.filter(Boolean)
+                })()}
 
-                {/* Subtotal logístico — solo tiene sentido mostrarlo si hay mercadería o ARCA arriba/abajo que lo separe del total */}
-                {totalLog>0&&(hayMercaderia||arcaActivo)&&(
+                {/* Subtotal logístico */}
+                {totalLog>0&&(hayMercaderia||arcaActivo||s.sentido==='exportacion')&&(
                   <tr className="border-t-2 border-gray-300">
                     <td colSpan={2} className="px-5 py-3 font-semibold text-sm text-gray-900">Subtotal logístico</td>
                     <td className="px-5 py-3 text-right font-semibold text-sm font-mono text-gray-900">{fmt(totalLog)}</td>
@@ -3788,19 +3773,36 @@ const clientesFiltrados=terceros.filter(t=>
                   </tr>
                 )}
 
-                {/* ARCA — solo si hay mercadería + toggle activo + tributos > 0 */}
-                {arcaActivo&&totalTribUSD>0&&(
+                {/* Tributos — ARCA en importación; en exportación, módulo a definir */}
+                {s.sentido==='exportacion'?(
+                  <tr className="border-t-2" style={{borderColor:'#cbd5e1',background:'#f8fafc'}}>
+                    <td className="px-5 py-3 font-semibold text-sm text-gray-400">Tributos de exportación</td>
+                    <td className="px-3 py-3 text-[11px] text-gray-400">Módulo a definir</td>
+                    <td className="px-5 py-3 text-right font-semibold text-sm font-mono text-gray-300">—</td>
+                    <td className="px-5 py-3 text-right font-semibold text-gray-300">—</td>
+                  </tr>
+                ):(arcaActivo&&totalTribUSD>0&&(
                   <tr className="border-t-2" style={{borderColor:'#ef9f27',background:'#faeeda'}}>
                     <td className="px-5 py-3 font-semibold text-sm" style={{color:'#412402'}}>Tributos ARCA</td>
                     <td className="px-3 py-3 text-[11px]" style={{color:'#633806'}}>Régimen {s.regimen} — base CIF Jama</td>
                     <td className="px-5 py-3 text-right font-semibold text-sm font-mono" style={{color:'#412402'}}>{fmt(totalTribUSD)}</td>
                     <td className="px-5 py-3 text-right font-semibold" style={{color:'#854f0b'}}>{fmt(totalTribUSD/totalReal*100,1)}%</td>
                   </tr>
+                ))}
+
+                {/* Gastos en destino en EXPO: al final, antes del total */}
+                {s.sentido==='exportacion'&&origenActivoCalc&&subOrigen>0&&(
+                  <tr className="border-t border-gray-50 bg-gray-50">
+                    <td className="px-5 py-2.5 text-gray-500 text-[11px]">Gastos en destino</td>
+                    <td className="px-3 py-2.5 text-gray-400 text-[11px]">Gastos en el lugar de destino exterior</td>
+                    <td className="px-5 py-2.5 text-right font-mono text-gray-600">{fmt(subOrigen)}</td>
+                    <td className="px-5 py-2.5 text-right text-gray-400">{fmt(subOrigen/totalReal*100,1)}%</td>
+                  </tr>
                 )}
 
-                {/* Total — etiqueta adaptativa */}
+                {/* Total — "Costo total puesto en [ciudad]" según sentido */}
                 <tr className="border-t-2 border-[#1168F8] bg-[#EBF2FF]">
-                  <td colSpan={2} className="px-5 py-3.5 font-bold text-sm text-[#052698]">Total — {etiquetaTotal.toLowerCase()}</td>
+                  <td colSpan={2} className="px-5 py-3.5 font-bold text-sm text-[#052698]">{etiquetaTotal}</td>
                   <td className="px-5 py-3.5 text-right font-bold text-base font-mono text-[#052698]">{fmt(totalReal)}</td>
                   <td className="px-5 py-3.5 text-right font-bold text-[#052698]">100%</td>
                 </tr>
