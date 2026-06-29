@@ -1,7 +1,7 @@
 'use client'
 import { Fragment, useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
-import { fmt, calcCapacidad, CONT_CAPS, PUERTOS_L, nextCotNum } from '@/lib/utils'
+import { fmt, calcCapacidad, CONT_CAPS, PUERTOS_L } from '@/lib/utils'
 import type { ContenedorCot, ProductoCot } from '@/types'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -1417,8 +1417,12 @@ async function guardar(){
   if(!s.cliente){alert('Ingresa el nombre del cliente.');return}
   setSaving(true)
   try {
-    const {data:cots}=await supabase.from('cotizaciones').select('num')
-    const num=nextCotNum(cots||[])
+    // Número definitivo desde el talonario "Cotizaciones a clientes" (COT): atómico y asignado al guardar.
+    const {data:talCot}=await supabase.from('talonarios').select('id').eq('prefijo','COT').eq('activo',true).limit(1).maybeSingle()
+    if(!(talCot as any)?.id){alert('No hay un talonario activo de cotizaciones a clientes (COT). Cargá uno en Catálogos › Talonarios.');setSaving(false);return}
+    const {data:numData,error:numErr}=await (supabase.rpc as any)('emitir_numero_talonario',{p_talonario:(talCot as any).id})
+    if(numErr||!numData?.[0]){alert('Error al numerar la cotización: '+(numErr?.message||'desconocido'));setSaving(false);return}
+    const num=numData[0].formateado as string
     setCotNumActual(num)
     const {data:user}=await supabase.auth.getUser()
     if(!user.user){alert('Sesion expirada.');setSaving(false);return}
@@ -1426,7 +1430,7 @@ async function guardar(){
     const uid=(uDB as any)?.id||''
     const presupuesto = armarPresupuesto()
     const {error}=await (supabase.from('cotizaciones') as any).insert({
-      num,version:1,
+      num,version:1,talonario_id:(talCot as any).id,
       cliente:s.cliente,cuit:s.cuit,email_cliente:s.email,telefono_cliente:s.telefono,
       tercero_id:clienteSelId||null,
       origen:s.origen,puerto_chile:s.ptoChile,destino_noa:s.destinoNoa,incoterm:s.incoterm,
