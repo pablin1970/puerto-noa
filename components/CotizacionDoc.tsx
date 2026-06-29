@@ -109,7 +109,9 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
   const gruposPago = ORD_MON
     .map((m) => ({ moneda: m, lineas: lineasPago.filter((l: any) => l.moneda === m), total: lineasPago.filter((l: any) => l.moneda === m).reduce((t: number, l: any) => t + l.montoPago, 0) }))
     .filter((g) => g.lineas.length > 0)
-  const mostrarReparto = lineasPago.some((l: any) => l.moneda !== 'USD')
+  // Se muestra siempre que haya conceptos (igual que el cuadro del resumen en pantalla).
+  // Con una sola moneda, agrupa todo bajo ella; con varias, separa por moneda.
+  const mostrarReparto = lineasPago.length > 0
   const tcRef = cot.tc_ars || 0
   const regimen = (cot as any).regimen || 'A'
   const precioArg = (cot as any).precio_arg_equiv || 0
