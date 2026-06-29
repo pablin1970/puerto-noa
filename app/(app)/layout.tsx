@@ -36,15 +36,15 @@ const NAV: NavItem[] = [
 
   // ── COMERCIAL ──────────────────────────────────────
   { label: 'Comercial', section: true },
-  { href: '/cotizador', label: 'Nueva cotización', icon: Sparkles, modulo: 'cotizaciones' },
-  { href: '/registro',  label: 'Cotizaciones',     icon: List, modulo: 'cotizaciones' },
+  { href: '/cotizador', label: 'Nueva cotización a clientes', icon: Sparkles, modulo: 'cotizaciones' },
+  { href: '/registro',  label: 'Cotizaciones a clientes',     icon: List, modulo: 'cotizaciones' },
   { href: '/clientes',  label: 'Clientes',         icon: Building2, modulo: 'clientes' },
 
   // ── OPERACIONES ────────────────────────────────────
   { label: 'Operaciones', section: true },
   { href: '/operaciones',              label: 'Operaciones activas',      icon: Ship, modulo: 'operaciones' },
   { href: '/cierre',                   label: 'Liquidación y cierre',     icon: ClipboardCheck, modulo: 'cierre' },
-  { href: '/cotizaciones-proveedores', label: 'Cotizaciones proveedores', icon: ClipboardList, modulo: 'cotizaciones_proveedores' },
+  { href: '/cotizaciones-proveedores', label: 'Cotizaciones de proveedores', icon: ClipboardList, modulo: 'cotizaciones_proveedores' },
   { href: '/precios',                  label: 'Inteligencia de precios',  icon: BarChart3, modulo: 'precios' },
   { href: '/clientes?ver=proveedores', label: 'Proveedores',              icon: Package, modulo: 'proveedores' },
 
