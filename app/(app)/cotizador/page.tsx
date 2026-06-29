@@ -1377,29 +1377,40 @@ function filtrarCotsBloque(cots: any[], clienteId: string|null) {
 // incluyendo la línea de gastos de origen/destino. Se usa en guardar() y en abrirPreview().
 function armarPresupuesto(){
   const esExpoDoc = s.sentido==='exportacion'
-  const itOrigen = subOrigen>0?[{etapa:'origen',tipo:'origen',concepto:esExpoDoc?'Gastos en destino':'Gastos de origen',usd:subOrigen}]:[]
+  // Fase C: cada línea lleva su moneda de pago y el monto ya convertido con el TC sellado del momento.
+  const tcMon = (m:string):number => m==='ARS'?s.tcTrib : m==='CLP'?s.tcClp : m==='CNY'?s.tcCny : 1
+  const L = (etapa:string,tipo:string,concepto:string,usd:number,moneda:string)=>({etapa,tipo,concepto,usd,moneda,montoPago:usd*tcMon(moneda)})
+  const segEl = s.cotsProvSeg.find(c=>c.elegida)
+  const monOrigen = origenElegida?.monedaPago||'USD'
+  const monFW = fwElegida?.monedaPago||'USD'
+  const monSeg = segEl?.monedaPago||'USD'
+  const monChile = transpChileElegida?.monedaPago||'USD'
+  const monTerr = transpTerrElegida?.monedaPago||'ARS'
+  const monMerc = mercElegida?.monedaPago||'USD'
+  const itMerc = baseFOB>0?[L('mercaderia','mercaderia','Mercadería (valor FOB)',baseFOB,monMerc)]:[]
+  const itOrigen = subOrigen>0?[L('origen','origen',esExpoDoc?'Gastos en destino':'Gastos de origen',subOrigen,monOrigen)]:[]
   const itMar = [
-    ...(subFW>0?[{etapa:'forwarder',tipo:'flete',concepto:`ForWarder: ${fwElegida?.proveedorNombre||'Manual'}`,usd:subFW}]:[]),
-    ...(segMarEff>0?[{etapa:'forwarder',tipo:'seguro',concepto:'Seguro maritimo',usd:segMarEff}]:[]),
+    ...(subFW>0?[L('forwarder','flete',`ForWarder: ${fwElegida?.proveedorNombre||'Manual'}`,subFW,monFW)]:[]),
+    ...(segMarEff>0?[L('forwarder','seguro','Seguro maritimo',segMarEff,monSeg)]:[]),
   ]
   const itChile = [
-    ...(subGastosChile>0?[{etapa:'chile',tipo:'servicios',concepto:'Gastos post-entrega Chile',usd:subGastosChile}]:[]),
-    ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidacion (Opcion ${s.optTransp})`,usd:subD}]:[]),
+    ...(subGastosChile>0?[L('chile','servicios','Gastos post-entrega Chile',subGastosChile,monChile)]:[]),
+    ...(subD>0?[L('chile','desconsolidacion',`Desconsolidacion (Opcion ${s.optTransp})`,subD,monChile)]:[]),
   ]
   const itTerr = [
-    ...(subTransp>0?[{etapa:'terrestre',tipo:'flete',concepto:'Transporte terrestre',usd:subTransp}]:[]),
-    ...(subEstadias>0?[{etapa:'terrestre',tipo:'estadia',concepto:'Estadias por demora',usd:subEstadias}]:[]),
-    ...(segTerrEff>0?[{etapa:'terrestre',tipo:'seguro',concepto:'Seguro terrestre',usd:segTerrEff}]:[]),
+    ...(subTransp>0?[L('terrestre','flete','Transporte terrestre',subTransp,monTerr)]:[]),
+    ...(subEstadias>0?[L('terrestre','estadia','Estadias por demora',subEstadias,monTerr)]:[]),
+    ...(segTerrEff>0?[L('terrestre','seguro','Seguro terrestre',segTerrEff,monSeg)]:[]),
   ]
   const itArg = [
-    ...(subE>0?[{etapa:'argentina',tipo:'servicios',concepto:'Gastos Argentina',usd:subE}]:[]),
-    ...(subGastosArg>0?[{etapa:'argentina',tipo:'gastos_arg',concepto:'Gastos Argentina (despachante)',usd:subGastosArg}]:[]),
+    ...(subE>0?[L('argentina','servicios','Gastos Argentina',subE,'ARS')]:[]),
+    ...(subGastosArg>0?[L('argentina','gastos_arg','Gastos Argentina (despachante)',subGastosArg,'ARS')]:[]),
   ]
-  const itTrib = totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Regimen ${s.regimen}`,usd:totalTribUSD}]:[]
-  const itFee = fee>0?[{etapa:'fee',tipo:'fee',concepto:'Fee Puerto NOA',usd:fee}]:[]
+  const itTrib = totalTribUSD>0?[L('tributos','tributos',`Tributos ARCA Regimen ${s.regimen}`,totalTribUSD,'ARS')]:[]
+  const itFee = fee>0?[L('fee','fee','Fee Puerto NOA',fee,'USD')]:[]
   return esExpoDoc
-    ? [...itArg, ...itTerr, ...itChile, ...itMar, ...itOrigen, ...itTrib, ...itFee]
-    : [...itOrigen, ...itMar, ...itChile, ...itTerr, ...itArg, ...itTrib, ...itFee]
+    ? [...itArg, ...itTerr, ...itChile, ...itMar, ...itOrigen, ...itMerc, ...itTrib, ...itFee]
+    : [...itMerc, ...itOrigen, ...itMar, ...itChile, ...itTerr, ...itArg, ...itTrib, ...itFee]
 }
 
 async function guardar(){
