@@ -95,6 +95,11 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
   const ciudadPuesta = esExpo
     ? ((cot as any).puerto_china_id && cot.origen ? String(cot.origen).split(' (')[0] : 'destino exterior')
     : (cot.destino_noa || 'destino')
+  // La mercadería se muestra en su valor base; los gastos de origen van como sub-línea. Juntos forman el FOB (cot.total_fob).
+  const origenItems = presup.filter((it: any) => it.etapa === 'origen')
+  const subOrigenDoc = origenItems.reduce((t: number, it: any) => t + (it.usd || 0), 0)
+  const baseFOBDoc = totalFOB - subOrigenDoc
+  const presupLog = presup.filter((it: any) => it.etapa !== 'origen' && it.tipo !== 'tributos')
   const tcRef = cot.tc_ars || 0
   const regimen = (cot as any).regimen || 'A'
   const precioArg = (cot as any).precio_arg_equiv || 0
@@ -275,15 +280,23 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
                 </tr>
               </thead>
               <tbody>
-                <tr style={{ background: '#dbeafe', borderBottom: '2px solid #93c5fd', borderLeft: '4px solid #1168F8' }}>
-                  <td style={{ ...td, fontWeight: 900, color: '#052698', fontSize: '11px' }}>Mercadería</td>
+                <tr style={{ background: '#dbeafe', borderBottom: origenItems.length ? '1px solid #bfdbfe' : '2px solid #93c5fd', borderLeft: '4px solid #1168F8' }}>
+                  <td style={{ ...td, fontWeight: 900, color: '#052698', fontSize: '11px' }}>Mercadería {cot.incoterm}</td>
                   <td style={{ ...td, color: '#1e3a5f', fontWeight: 600 }}>Valor {cot.incoterm} · {productos.length} producto(s)</td>
-                  <td style={{ ...td, textAlign: 'right', fontWeight: 900, fontFamily: 'monospace', color: '#052698', fontSize: '12px' }}>{fmt(totalFOB, 0)}</td>
-                  <td style={{ ...td, textAlign: 'right', color: '#1168F8', fontSize: '10px', fontWeight: 700 }}>{totalLanded > 0 ? fmt(totalFOB / totalLanded * 100, 1) : '0'}%</td>
+                  <td style={{ ...td, textAlign: 'right', fontWeight: 900, fontFamily: 'monospace', color: '#052698', fontSize: '12px' }}>{fmt(baseFOBDoc, 0)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: '#1168F8', fontSize: '10px', fontWeight: 700 }}>{totalLanded > 0 ? fmt(baseFOBDoc / totalLanded * 100, 1) : '0'}%</td>
                 </tr>
-                {presup.filter((it: any) => it.tipo !== 'tributos').map((it: any, i: number) => (
+                {origenItems.map((it: any, i: number) => (
+                  <tr key={'or' + i} style={{ background: '#eff6ff', borderBottom: i === origenItems.length - 1 ? '2px solid #93c5fd' : '1px solid #dbeafe', borderLeft: '4px solid #93c5fd' }}>
+                    <td style={{ ...td, fontSize: '10px', color: '#1e3a5f', paddingLeft: '20px' }}>{esExpo ? 'Gastos en destino' : 'Gastos de origen'}</td>
+                    <td style={{ ...td, color: '#374151', fontSize: '10px' }}>{it.concepto} · forma el FOB con la mercadería</td>
+                    <td style={{ ...td, textAlign: 'right', fontFamily: 'monospace', color: '#1e3a5f' }}>{fmt(it.usd, 0)}</td>
+                    <td style={{ ...td, textAlign: 'right', color: '#93c5fd', fontSize: '10px' }}>{totalLanded > 0 ? fmt(it.usd / totalLanded * 100, 1) : '0'}%</td>
+                  </tr>
+                ))}
+                {presupLog.map((it: any, i: number) => (
                   <tr key={i} style={{ borderBottom: '1px solid #f8fafc' }}>
-                    <td style={{ ...tdGray, fontSize: '10px' }}>{it.etapa==='origen' ? (esExpo?'Gastos en destino':'Gastos de origen') : (ETAPA_L[it.etapa] || it.etapa)}</td>
+                    <td style={{ ...tdGray, fontSize: '10px' }}>{ETAPA_L[it.etapa] || it.etapa}</td>
                     <td style={{ ...td, color: '#374151' }}>{it.concepto}</td>
                     <td style={{ ...td, textAlign: 'right', fontFamily: 'monospace', color: '#6b7280' }}>{fmt(it.usd, 0)}</td>
                     <td style={{ ...td, textAlign: 'right', color: '#d1d5db', fontSize: '10px' }}>{totalLanded > 0 ? fmt(it.usd / totalLanded * 100, 1) : '0'}%</td>
