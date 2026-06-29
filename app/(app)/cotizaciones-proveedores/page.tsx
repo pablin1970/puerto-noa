@@ -1467,6 +1467,13 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   // ── Vista previa (Mostrar → Guardar/Volver), mismo criterio que la cotización a cliente ──
   const fmtNum = (n:number)=>Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})
   const fmtFecha = (d:string)=>d?String(d).split('-').reverse().join('/'):'—'
+  // Orden de las pastillas de bloques según el sentido (mismo criterio que la cotización a cliente).
+  // IMPO / ambos: Mercadería → Gastos de origen → Marítimo → Chile → Terrestre → Argentina.
+  // EXPO: Mercadería → Argentina → Terrestre → Chile → Marítimo → Gastos en destino.
+  const bloquesEnOrden = (()=>{
+    const seq = sentido==='exportacion' ? [0,4,3,2,1,5] : [0,5,1,2,3,4]
+    return seq.map(n=>bloques.find((b:any)=>b.numero===n)).filter(Boolean)
+  })()
   const lineasPreview = ()=>{
     const out:{desc:string;detalle:string;valor:number;moneda:string;pct:boolean}[] = []
     if(tf==='terrestre'){
@@ -1681,9 +1688,10 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             {lbl('Bloques que cubre esta cotización')}
             {bloques.length===0 ? <div className="text-xs text-gray-400">Cargando...</div> : (
               <div className="flex flex-wrap gap-2">
-                {bloques.map(b=>{
+                {bloquesEnOrden.map((b:any)=>{
                   const bloqueIds:string[] = Array.isArray(form.bloque_ids)?form.bloque_ids:(form.bloque_id?[form.bloque_id]:[])
                   const activo = bloqueIds.includes(b.id)
+                  const rotulo = (b.numero===5 && sentido==='exportacion') ? 'Gastos en destino' : b.nombre
                   return (
                     <button key={b.id} onClick={()=>{
                       const current:string[] = Array.isArray(form.bloque_ids)?form.bloque_ids:(form.bloque_id?[form.bloque_id]:[])
@@ -1692,7 +1700,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                     }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all ${activo?'bg-[#052698] border-[#052698] text-white':'bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300'}`}>
                       {activo && <span className="w-1.5 h-1.5 rounded-full bg-white/60"/>}
-                      {b.nombre}
+                      {rotulo}
                     </button>
                   )
                 })}
