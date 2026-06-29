@@ -92,7 +92,9 @@ export default function CotizacionDoc({ cot, ejecutivo, condGenerales, mostrarCo
   const totalTribARS = cot.total_tributos_ars || 0
   const totalLanded = cot.total_landed || 0
   const esExpo = (cot as any).sentido === 'exportacion'
-  const ciudadPuesta = esExpo ? (cot.origen ? String(cot.origen).split(' (')[0] : 'destino') : (cot.destino_noa || 'destino')
+  const ciudadPuesta = esExpo
+    ? ((cot as any).puerto_china_id && cot.origen ? String(cot.origen).split(' (')[0] : 'destino exterior')
+    : (cot.destino_noa || 'destino')
   const tcRef = cot.tc_ars || 0
   const regimen = (cot as any).regimen || 'A'
   const precioArg = (cot as any).precio_arg_equiv || 0
