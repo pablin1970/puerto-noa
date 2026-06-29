@@ -1367,6 +1367,35 @@ function filtrarCotsBloque(cots: any[], clienteId: string|null) {
   return { especificas, genericas }
 }
 
+// Arma el desglose del presupuesto en el orden del sentido (impo China→NOA, expo NOA→exterior),
+// incluyendo la línea de gastos de origen/destino. Se usa en guardar() y en abrirPreview().
+function armarPresupuesto(){
+  const esExpoDoc = s.sentido==='exportacion'
+  const itOrigen = subOrigen>0?[{etapa:'origen',tipo:'origen',concepto:esExpoDoc?'Gastos en destino':'Gastos de origen',usd:subOrigen}]:[]
+  const itMar = [
+    ...(subFW>0?[{etapa:'forwarder',tipo:'flete',concepto:`ForWarder: ${fwElegida?.proveedorNombre||'Manual'}`,usd:subFW}]:[]),
+    ...(segMarEff>0?[{etapa:'forwarder',tipo:'seguro',concepto:'Seguro maritimo',usd:segMarEff}]:[]),
+  ]
+  const itChile = [
+    ...(subGastosChile>0?[{etapa:'chile',tipo:'servicios',concepto:'Gastos post-entrega Chile',usd:subGastosChile}]:[]),
+    ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidacion (Opcion ${s.optTransp})`,usd:subD}]:[]),
+  ]
+  const itTerr = [
+    ...(subTransp>0?[{etapa:'terrestre',tipo:'flete',concepto:'Transporte terrestre',usd:subTransp}]:[]),
+    ...(subEstadias>0?[{etapa:'terrestre',tipo:'estadia',concepto:'Estadias por demora',usd:subEstadias}]:[]),
+    ...(segTerrEff>0?[{etapa:'terrestre',tipo:'seguro',concepto:'Seguro terrestre',usd:segTerrEff}]:[]),
+  ]
+  const itArg = [
+    ...(subE>0?[{etapa:'argentina',tipo:'servicios',concepto:'Gastos Argentina',usd:subE}]:[]),
+    ...(subGastosArg>0?[{etapa:'argentina',tipo:'gastos_arg',concepto:'Gastos Argentina (despachante)',usd:subGastosArg}]:[]),
+  ]
+  const itTrib = totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Regimen ${s.regimen}`,usd:totalTribUSD}]:[]
+  const itFee = fee>0?[{etapa:'fee',tipo:'fee',concepto:'Fee Puerto NOA',usd:fee}]:[]
+  return esExpoDoc
+    ? [...itArg, ...itTerr, ...itChile, ...itMar, ...itOrigen, ...itTrib, ...itFee]
+    : [...itOrigen, ...itMar, ...itChile, ...itTerr, ...itArg, ...itTrib, ...itFee]
+}
+
 async function guardar(){
   if(!s.cliente){alert('Ingresa el nombre del cliente.');return}
   setSaving(true)
@@ -1378,19 +1407,7 @@ async function guardar(){
     if(!user.user){alert('Sesion expirada.');setSaving(false);return}
     const {data:uDB}=await supabase.from('usuarios').select('id').eq('auth_id',user.user.id).single()
     const uid=(uDB as any)?.id||''
-    const presupuesto=[
-      ...(subFW>0?[{etapa:'forwarder',tipo:'flete',concepto:`ForWarder: ${fwElegida?.proveedorNombre||'Manual'}`,usd:subFW}]:[]),
-      ...(segMarEff>0?[{etapa:'forwarder',tipo:'seguro',concepto:'Seguro maritimo',usd:segMarEff}]:[]),
-      ...(subGastosChile>0?[{etapa:'chile',tipo:'servicios',concepto:'Gastos post-entrega Chile',usd:subGastosChile}]:[]),
-      ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidacion (Opcion ${s.optTransp})`,usd:subD}]:[]),
-      ...(subTransp>0?[{etapa:'terrestre',tipo:'flete',concepto:'Transporte terrestre',usd:subTransp}]:[]),
-      ...(subEstadias>0?[{etapa:'terrestre',tipo:'estadia',concepto:'Estadias por demora',usd:subEstadias}]:[]),
-      ...(segTerrEff>0?[{etapa:'terrestre',tipo:'seguro',concepto:'Seguro terrestre',usd:segTerrEff}]:[]),
-      ...(subE>0?[{etapa:'argentina',tipo:'servicios',concepto:'Gastos Argentina',usd:subE}]:[]),
-      ...(subGastosArg>0?[{etapa:'argentina',tipo:'gastos_arg',concepto:'Gastos Argentina (despachante)',usd:subGastosArg}]:[]),
-      ...(totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Regimen ${s.regimen}`,usd:totalTribUSD}]:[]),
-      ...(fee>0?[{etapa:'fee',tipo:'fee',concepto:'Fee Puerto NOA',usd:fee}]:[]),
-    ]
+    const presupuesto = armarPresupuesto()
     const {error}=await (supabase.from('cotizaciones') as any).insert({
       num,version:1,
       cliente:s.cliente,cuit:s.cuit,email_cliente:s.email,telefono_cliente:s.telefono,
@@ -1440,24 +1457,12 @@ const clientesFiltrados=terceros.filter(t=>
   // ── Etapa 2: arma el objeto cot (forma que espera CotizacionDoc) desde el estado actual y abre el preview ──
   async function abrirPreview() {
     if(!s.cliente){alert('Ingresá el nombre del cliente antes de previsualizar.');return}
-    const presupuesto=[
-      ...(subFW>0?[{etapa:'forwarder',tipo:'flete',concepto:`ForWarder: ${fwElegida?.proveedorNombre||'Manual'}`,usd:subFW}]:[]),
-      ...(segMarEff>0?[{etapa:'forwarder',tipo:'seguro',concepto:'Seguro maritimo',usd:segMarEff}]:[]),
-      ...(subGastosChile>0?[{etapa:'chile',tipo:'servicios',concepto:'Gastos post-entrega Chile',usd:subGastosChile}]:[]),
-      ...(subD>0?[{etapa:'chile',tipo:'desconsolidacion',concepto:`Desconsolidacion (Opcion ${s.optTransp})`,usd:subD}]:[]),
-      ...(subTransp>0?[{etapa:'terrestre',tipo:'flete',concepto:'Transporte terrestre',usd:subTransp}]:[]),
-      ...(subEstadias>0?[{etapa:'terrestre',tipo:'estadia',concepto:'Estadias por demora',usd:subEstadias}]:[]),
-      ...(segTerrEff>0?[{etapa:'terrestre',tipo:'seguro',concepto:'Seguro terrestre',usd:segTerrEff}]:[]),
-      ...(subE>0?[{etapa:'argentina',tipo:'servicios',concepto:'Gastos Argentina',usd:subE}]:[]),
-      ...(subGastosArg>0?[{etapa:'argentina',tipo:'gastos_arg',concepto:'Gastos Argentina (despachante)',usd:subGastosArg}]:[]),
-      ...(totalTribUSD>0?[{etapa:'tributos',tipo:'tributos',concepto:`Tributos ARCA Regimen ${s.regimen}`,usd:totalTribUSD}]:[]),
-      ...(fee>0?[{etapa:'fee',tipo:'fee',concepto:'Fee Puerto NOA',usd:fee}]:[]),
-    ]
+    const presupuesto = armarPresupuesto()
     const cot={
       num: cotNumActual||'BORRADOR',
       cliente:s.cliente, cuit:s.cuit, email_cliente:s.email, telefono_cliente:s.telefono,
       despachante:s.despachante,
-      origen:s.origen, puerto_chile:s.ptoChile, destino_noa:s.destinoNoa, incoterm:s.incoterm,
+      origen:s.origen, puerto_chile:s.ptoChile, destino_noa:s.destinoNoa, incoterm:s.incoterm, sentido:s.sentido,
       transito:s.transito, notas:s.notas, validez:s.validez, estado:'borrador',
       condiciones_particulares:s.observaciones.filter((o:string)=>o&&o.trim()),
       tipo_contenedores:s.contenedores, productos:productosDoc,
