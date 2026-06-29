@@ -268,6 +268,11 @@ export default function RegistroPage() {
                         <button onClick={() => setModal({ type: 'estado', cot: c })}
                           className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
                           title="Cambiar estado">🏷</button>
+                        {['enviada', 'rechazada', 'vencida'].includes(c.estado) && !idsConHija.has(c.id) && puede(permisos, 'cotizaciones_duplicar', 'crear') && (
+                          <button onClick={() => router.push(`/cotizador?recotizar=${c.id}`)}
+                            className="p-1.5 border border-purple-200 rounded-lg hover:bg-purple-50 text-[#7C3AED] transition-colors"
+                            title="Recotizar con el tipo de cambio de hoy">🔄</button>
+                        )}
                         {c.estado === 'aceptada' && (
                           <button onClick={() => router.push(`/operaciones?cot=${c.id}`)}
                             className="p-1.5 border border-green-200 rounded-lg hover:bg-green-50 text-green-700 transition-colors"
