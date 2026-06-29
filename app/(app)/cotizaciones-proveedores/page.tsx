@@ -620,6 +620,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
   const [buscarProv, setBuscarProv] = useState('')
   const [showProvDropdown, setShowProvDropdown] = useState(false)
   const [usuarioNombre, setUsuarioNombre] = useState('')
+  const [preview, setPreview] = useState(false)
+  const [provManual, setProvManual] = useState(false)
   // Alta rápida de proveedor no registrado
   const [showAltaProv, setShowAltaProv] = useState(false)
   const [altaProvNombre, setAltaProvNombre] = useState('')
@@ -894,6 +896,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
 
   async function handleSave() {
     if(!form.proveedor_nombre) { alert('Ingresá el nombre del proveedor'); return }
+    // Recibida (formal): exige el N° de referencia del proveedor. Estimada: no se exige.
+    if(form.origen!=='estimada' && !String(form.referencia||'').trim()) { alert('Falta el número de referencia del proveedor.\n\nLa cotización es «Recibida», así que tenés que cargar el N° de cotización que te pasó el proveedor. Si no lo tenés, marcala como «Estimada».'); return }
     setSaving(true)
     try {
     const esAmbos = sentido==='ambos'
@@ -943,8 +947,16 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       }
     } catch (e) { /* sin TC disponible: se guarda null, no bloquea el guardado */ }
 
+    // ── Numeración interna desde el talonario RCP (atómica, recién al guardar) ──
+    const { data: talRcp } = await supabase.from('talonarios').select('id').eq('prefijo','RCP').eq('activo',true).limit(1).maybeSingle()
+    if(!(talRcp as any)?.id){ alert('No hay un talonario activo de recepción de cotizaciones (RCP). Cargá uno en Catálogos › Talonarios.'); setSaving(false); return }
+    const { data: numRcp, error: numRcpErr } = await (supabase.rpc as any)('emitir_numero_talonario',{ p_talonario:(talRcp as any).id })
+    if(numRcpErr || !numRcp?.[0]){ alert('Error al numerar la cotización: '+(numRcpErr?.message||'desconocido')); setSaving(false); return }
+    const numeroInterno = numRcp[0].formateado as string
+
     const payload = {
-      proveedor_nombre: form.proveedor_nombre, tercero_id: form.tercero_id||null,
+      proveedor_nombre: form.proveedor_nombre, tercero_id: provManual ? null : (form.tercero_id||null),
+      numero_interno: numeroInterno, talonario_id: (talRcp as any).id, creado_por: usuarioNombre||null,
       rubro: form.rubro, tipo: form.tipo, origen: form.origen||'recibida',
       referencia: form.referencia||null, fecha: form.fecha,
       fecha_vencimiento: form.fecha_vencimiento||null, moneda: form.moneda,
@@ -1452,6 +1464,130 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
     </>
   )
 
+  // ── Vista previa (Mostrar → Guardar/Volver), mismo criterio que la cotización a cliente ──
+  const fmtNum = (n:number)=>Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})
+  const fmtFecha = (d:string)=>d?String(d).split('-').reverse().join('/'):'—'
+  const lineasPreview = ()=>{
+    const out:{desc:string;detalle:string;valor:number;moneda:string;pct:boolean}[] = []
+    if(tf==='terrestre'){
+      tramos.forEach((t:any)=>{
+        const ida=parseN(String(t.flete_ida||0)),vue=parseN(String(t.flete_vuelta||0)),rt=parseN(String(t.flete_rt||0))
+        const oNom=nombrePunto(t.origen_id,t.origen_tipo),dNom=nombrePunto(t.destino_id,t.destino_tipo)
+        const dir=(oNom!=='—'||dNom!=='—')?`${oNom} → ${dNom}`:'Tramo'
+        if(ida>0) out.push({desc:'Flete terrestre ida',detalle:dir,valor:ida,moneda:form.moneda,pct:false})
+        if(vue>0) out.push({desc:'Flete terrestre vuelta',detalle:`${dNom} → ${oNom}`,valor:vue,moneda:form.moneda,pct:false})
+        if(rt>0) out.push({desc:'Flete terrestre round trip',detalle:dir,valor:rt,moneda:form.moneda,pct:false})
+        const seg=parseN(String(t.seguro_monto||0))
+        if(seg>0){const esPct=(t.seguro_modo||'pct')==='pct';out.push({desc:'Seguro terrestre',detalle:dir,valor:seg,moneda:'USD',pct:esPct})}
+      })
+    } else if(tf==='mercaderia'){
+      items.filter((it:any)=>it.descripcion).forEach((it:any)=>out.push({desc:it.descripcion,detalle:`${parseN(String(it.cantidad))||0} × ${it.incoterm||'FOB'}`,valor:parseN(String(it.valor))||0,moneda:it.moneda||'USD',pct:false}))
+    } else if(depServicios.length>0){
+      depServicios.forEach((svc:any)=>(svc.formas||[]).forEach((fr:any)=>{
+        const v=parseN(String(fr.precio||0));if(v<=0) return
+        const esPct=fr.comportamiento==='porcentaje'
+        out.push({desc:`${svc.nombre} — ${fr.nombre}`,detalle:'',valor:v,moneda:esPct?'USD':(fr.moneda||'USD'),pct:esPct})
+      }))
+    } else {
+      items.filter((it:any)=>it.descripcion).forEach((it:any)=>out.push({desc:it.descripcion,detalle:'',valor:parseN(String(it.valor))||0,moneda:it.moneda||'USD',pct:it.tipo_calculo==='pct_cif'}))
+    }
+    return out
+  }
+  const abrirPreview = ()=>{
+    if(!String(form.proveedor_nombre||'').trim()){ alert('Ingresá el nombre del proveedor antes de mostrar.'); return }
+    if(form.origen!=='estimada' && !String(form.referencia||'').trim()){ alert('Falta el número de referencia del proveedor.\n\nLa cotización es «Recibida», así que cargá el N° de cotización que te pasó el proveedor. Si no lo tenés, marcala como «Estimada».'); return }
+    setPreview(true)
+  }
+
+  if(preview){
+    const lns = lineasPreview()
+    const cli = form.cliente_id ? terceros.find((t:any)=>t.id===form.cliente_id) : null
+    const rubLabel = (RUBRO_ITEMS.find((r:any)=>r.key===form.rubro)?.label) || form.rubro
+    const sentLabel = sentido==='importacion'?'Importación':sentido==='exportacion'?'Exportación':'Ambos sentidos'
+    const esEst = form.origen==='estimada'
+    return (
+      <div className="max-w-3xl space-y-4">
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-start gap-3">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className={`text-[11px] px-2.5 py-1 rounded-lg font-bold inline-flex items-center gap-1 ${esEst?'bg-[#FDF1DC] text-[#854F0B]':'bg-[#EBF2FF] text-[#052698]'}`}>
+                  <span>{esEst?'✏️':'📨'}</span>{esEst?'Estimada':'Recibida'}
+                </span>
+                <span className="text-xs text-gray-400">Cotización de proveedor</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-bold text-gray-900">{form.proveedor_nombre||'—'}</span>
+                {provManual && <span className="text-[10px] text-gray-400 border border-gray-200 rounded-md px-2 py-0.5">manual</span>}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] text-gray-400">Número</div>
+              <div className="text-xs font-semibold text-gray-500 font-mono">se asigna al guardar</div>
+            </div>
+          </div>
+
+          <div className="px-6 py-4 space-y-4">
+            {esEst && (
+              <div className="flex items-start gap-2 bg-[#FDF1DC] border border-[#E0B96A] rounded-xl px-3 py-2 text-[11px] text-[#854F0B]">
+                <span>⚠️</span><span>Esta cotización proviene de una estimación, no de un presupuesto formal del proveedor.</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-3 gap-x-4 text-xs">
+              {!esEst && <div><div className="text-gray-400">Referencia del proveedor</div><div className="text-gray-900 font-mono mt-0.5">{form.referencia||'—'}</div></div>}
+              {form.tipo==='especifica' && <div><div className="text-gray-400">Cliente · específica</div><div className="text-gray-900 mt-0.5">{cli?.razon_social||'—'}</div></div>}
+              <div><div className="text-gray-400">Rubro</div><div className="text-gray-900 mt-0.5">{rubLabel}</div></div>
+              <div><div className="text-gray-400">Sentido</div><div className="text-gray-900 mt-0.5">{sentLabel}</div></div>
+              <div><div className="text-gray-400">Fecha</div><div className="text-gray-900 mt-0.5">{fmtFecha(form.fecha)}</div></div>
+              <div><div className="text-gray-400">Vigencia</div><div className="text-gray-900 mt-0.5">{form.fecha_vencimiento?'hasta '+fmtFecha(form.fecha_vencimiento):'—'}</div></div>
+              <div><div className="text-gray-400">Moneda de pago</div><div className="text-gray-900 mt-0.5">{form.moneda}</div></div>
+            </div>
+
+            <div>
+              <div className="text-[11px] text-gray-400 mb-1.5">Ítems cargados</div>
+              {lns.length===0 ? (
+                <div className="text-xs text-gray-400 italic py-2">No hay ítems con valor cargados todavía.</div>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead><tr className="text-gray-400 text-left"><th className="font-normal py-1">Concepto</th><th className="font-normal py-1">Detalle</th><th className="font-normal py-1 text-right">Valor</th></tr></thead>
+                  <tbody>
+                    {lns.map((l,i)=>(
+                      <tr key={i} className="border-t border-gray-50">
+                        <td className="py-1.5 text-gray-900">{l.desc}</td>
+                        <td className="py-1.5 text-gray-500">{l.detalle||'—'}</td>
+                        <td className="py-1.5 text-right text-gray-900 font-mono whitespace-nowrap">{l.pct?`${fmtNum(l.valor)} % CIF`:`${l.moneda} ${fmtNum(l.valor)}`}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="flex items-start gap-2 bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-3 py-2 text-[11px] text-[#052698]">
+              <span>ℹ️</span><span>El número definitivo se asigna recién al tocar Guardar. Si volvés a editar, no se gasta ningún número.</span>
+            </div>
+
+            <div className="pt-3 border-t border-gray-100 flex justify-end">
+              <div className="text-center" style={{minWidth:'240px'}}>
+                <div className="border-b border-gray-400 h-7"></div>
+                <div className="text-xs font-semibold text-gray-900 mt-1.5">{usuarioNombre||'—'}</div>
+                <div className="text-[10px] text-gray-400">Recibió y se hace cargo de la carga del presupuesto</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center">
+          <button onClick={()=>setPreview(false)} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50">← Volver a editar</button>
+          <button onClick={async()=>{ await handleSave() }} disabled={saving} className="px-6 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] disabled:opacity-50 shadow-sm">
+            {saving?'Guardando...':'✓ Guardar y numerar'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-3xl space-y-4">
 
@@ -1474,7 +1610,7 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
             {lbl('Origen de esta cotización')}
             <div className="flex gap-2">
               {[{key:'recibida',icon:'📨',label:'Recibida',desc:'Del proveedor'},{key:'estimada',icon:'✏️',label:'Estimada',desc:'Puerto NOA interno'}].map(o=>(
-                <button key={o.key} onClick={()=>setF('origen',o.key)}
+                <button key={o.key} onClick={()=>{setF('origen',o.key); if(o.key!=='estimada'){setProvManual(false)}}}
                   className={`flex-1 flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-left transition-all ${form.origen===o.key?'border-[#1168F8] bg-[#EBF2FF]':'border-gray-200 hover:bg-gray-50'}`}>
                   <span>{o.icon}</span>
                   <div><div className="text-xs font-bold text-gray-900">{o.label}</div><div className="text-[10px] text-gray-400">{o.desc}</div></div>
@@ -1575,15 +1711,19 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
           {/* Proveedor */}
           <div className="relative">
             {lbl('Proveedor * (buscá por nombre, CUIT/RUT o fantasía)')}
-            {form.origen==='estimada' ? (
-              <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-700 flex items-center gap-2">
-                <span>✏️</span><span className="font-semibold">{form.proveedor_nombre||usuarioNombre||'Puerto NOA SpA'}</span>
-                <span className="text-[10px] text-gray-400 ml-1">— usuario logueado</span>
+            {provManual ? (
+              <div className="flex items-center gap-2">
+                <input value={form.proveedor_nombre}
+                  onChange={e=>setF('proveedor_nombre',e.target.value)}
+                  className={inp} placeholder="Nombre del proveedor (apuntado a mano)" />
+                <span className="text-[10px] text-gray-500 border border-gray-200 rounded-md px-2 py-1 whitespace-nowrap">✍️ manual</span>
+                <button type="button" onClick={()=>{setProvManual(false);setF('proveedor_nombre','');setF('tercero_id','')}}
+                  className="text-[10px] text-[#1168F8] underline whitespace-nowrap">buscar</button>
               </div>
             ) : (
               <>
                 <input value={form.proveedor_nombre}
-                  onChange={e=>{setF('proveedor_nombre',e.target.value);setBuscarProv(e.target.value);setShowProvDropdown(true)}}
+                  onChange={e=>{setF('proveedor_nombre',e.target.value);setF('tercero_id','');setBuscarProv(e.target.value);setShowProvDropdown(true)}}
                   onFocus={()=>setShowProvDropdown(true)}
                   onBlur={()=>setTimeout(()=>setShowProvDropdown(false),200)}
                   className={inp} placeholder="Buscar por nombre, CUIT/RUT o fantasía..." />
@@ -1610,6 +1750,13 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
                         className="w-full text-left px-4 py-2.5 hover:bg-green-100 text-xs border-t border-gray-200 bg-green-50">
                         <span className="font-semibold text-green-700">+ {form.proveedor_nombre.trim().length>0 ? `Crear proveedor «${form.proveedor_nombre}»` : 'Crear nuevo proveedor'}</span>
                         <span className="block text-[10px] text-gray-400 mt-0.5">No está registrado — cargalo ahora con razón social y rubro</span>
+                      </button>
+                    )}
+                    {form.origen==='estimada' && (
+                      <button onMouseDown={()=>{setProvManual(true);setF('tercero_id','');setShowProvDropdown(false)}}
+                        className="w-full text-left px-4 py-2.5 hover:bg-amber-100 text-xs border-t border-gray-200 bg-amber-50">
+                        <span className="font-semibold text-amber-700">✍️ Apuntar proveedor manual</span>
+                        <span className="block text-[10px] text-gray-400 mt-0.5">No lo registra como proveedor — solo queda el nombre en esta cotización</span>
                       </button>
                     )}
                   </div>
@@ -2140,8 +2287,8 @@ function FormCotizacion({ supabase, terceros, cotsSistema, rubrosDisp, onSave, o
       {/* Botones */}
       <div className="flex justify-between items-center">
         <button onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50">Cancelar</button>
-        <button onClick={handleSave} disabled={saving} className="px-6 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] disabled:opacity-50 shadow-sm">
-          {saving?'Guardando...':'✓ Guardar cotización'}
+        <button onClick={abrirPreview} className="px-6 py-2.5 bg-[#1168F8] text-white rounded-xl text-sm font-bold hover:bg-[#0a4fc4] shadow-sm">
+          Mostrar →
         </button>
       </div>
 
