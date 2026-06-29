@@ -32,7 +32,7 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
   {
     section: 'Comercial — Cotizaciones y Clientes', icono: '💼',
     items: [
-      { modulo: 'cotizaciones',          label: 'Cotizaciones',            acciones: ['ver','crear','editar','eliminar','descargar'] },
+      { modulo: 'cotizaciones',          label: 'Cotizaciones a clientes', acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'cotizaciones_duplicar', label: '→ Duplicar cotización',     acciones: ['ver','crear'], subitem: true },
       { modulo: 'cotizaciones_estado',   label: '→ Cambiar estado',        acciones: ['ver','editar'], subitem: true },
       { modulo: 'clientes',              label: 'Clientes',                acciones: ['ver','crear','editar','eliminar','descargar'] },
@@ -45,7 +45,7 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
       { modulo: 'operaciones',              label: 'Operaciones activas',       acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'operaciones_documentos',   label: '→ Documentos de operación', acciones: ['ver','crear','eliminar','descargar'], subitem: true },
       { modulo: 'cierre',                   label: 'Liquidación y cierre',      acciones: ['ver','editar','descargar'] },
-      { modulo: 'cotizaciones_proveedores', label: 'Cotiz. proveedores',        acciones: ['ver','crear','editar','eliminar','descargar'] },
+      { modulo: 'cotizaciones_proveedores', label: 'Cotizaciones de proveedores', acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'cotizaciones_proveedores_duplicar', label: '→ Duplicar cotización', acciones: ['ver','crear'], subitem: true },
       { modulo: 'precios',                  label: 'Inteligencia de precios',   acciones: ['ver','descargar'] },
       { modulo: 'proveedores',              label: 'Proveedores',               acciones: ['ver','crear','editar','eliminar'] },
