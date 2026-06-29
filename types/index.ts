@@ -111,6 +111,10 @@ export interface Cotizacion {
   created_at: string
   updated_at: string
   presupuesto: ItemPresupuesto[]
+  recotiza_de_id: string | null
+  recotiza_de_num: string | null
+  recotiza_linaje: string[]
+  recotiza_cambios: { concepto: string; antes: string; despues: string }[]
   // joined
   ejecutivo?: Usuario
   creado_por_usuario?: Usuario
