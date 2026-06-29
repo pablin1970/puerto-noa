@@ -33,7 +33,6 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
     section: 'Comercial — Cotizaciones y Clientes', icono: '💼',
     items: [
       { modulo: 'cotizaciones',          label: 'Cotizaciones a clientes', acciones: ['ver','crear','editar','eliminar','descargar'] },
-      { modulo: 'cotizaciones_duplicar', label: '→ Duplicar cotización',     acciones: ['ver','crear'], subitem: true },
       { modulo: 'cotizaciones_estado',   label: '→ Cambiar estado',        acciones: ['ver','editar'], subitem: true },
       { modulo: 'cotizaciones_recotizaciones', label: '→ Análisis de recotizaciones', acciones: ['ver'], subitem: true },
       { modulo: 'clientes',              label: 'Clientes',                acciones: ['ver','crear','editar','eliminar','descargar'] },
