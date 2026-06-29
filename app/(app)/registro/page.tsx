@@ -94,6 +94,9 @@ export default function RegistroPage() {
     return matchB && matchE
   })
 
+  // Una cotización está "superada" si otra la tiene como padre (fue recotizada). Solo la última de la cadena se acepta.
+  const idsConHija = useMemo(() => new Set(cots.map(c => c.recotiza_de_id).filter(Boolean)), [cots])
+
   const stats = {
     total: cots.length,
     borrador: cots.filter(c => c.estado === 'borrador').length,
@@ -210,6 +213,16 @@ export default function RegistroPage() {
                         {c.num}
                       </Link>
                       {c.version > 1 && <span className="text-[9px] text-gray-400 ml-1 bg-gray-100 px-1 rounded">v{c.version}</span>}
+                      {c.recotiza_de_num && (
+                        <button onClick={() => setModal({ type: 'cambios', cot: c })}
+                          className="block text-[9px] text-[#7C3AED] font-semibold mt-0.5 hover:underline text-left"
+                          title="Ver las modificaciones de esta recotización">
+                          ↺ de {(c.recotiza_linaje && c.recotiza_linaje.length) ? c.recotiza_linaje.join(', ') : c.recotiza_de_num}
+                        </button>
+                      )}
+                      {idsConHija.has(c.id) && (
+                        <span className="block text-[9px] text-gray-400 mt-0.5">recotizada (superada)</span>
+                      )}
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
@@ -288,10 +301,15 @@ export default function RegistroPage() {
                   {ESTADO_ICON[modal.cot.estado]} {ESTADOS_L[modal.cot.estado]}
                 </span>
               </div>
-              {(['borrador', 'enviada', 'aceptada', 'rechazada', 'vencida'] as EstadoCotizacion[]).map(e => (
-                <button key={e} onClick={() => cambiarEstado(modal.cot!.id, e)}
+              {(['borrador', 'enviada', 'aceptada', 'rechazada', 'vencida'] as EstadoCotizacion[]).map(e => {
+                const bloqueaAcept = e === 'aceptada' && idsConHija.has(modal.cot!.id)
+                return (
+                <button key={e} onClick={() => { if (!bloqueaAcept) cambiarEstado(modal.cot!.id, e) }}
+                  disabled={bloqueaAcept}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
-                    e === modal.cot?.estado
+                    bloqueaAcept
+                      ? 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+                      : e === modal.cot?.estado
                       ? 'border-[#1168F8] bg-[#EBF2FF]'
                       : 'border-gray-200 hover:bg-gray-50'
                   }`}>
@@ -301,14 +319,58 @@ export default function RegistroPage() {
                   <span className="text-xs text-gray-500">
                     {{ borrador: 'En preparación', enviada: 'Enviada al cliente', aceptada: 'Confirmada → activa operación', rechazada: 'Rechazada por el cliente', vencida: 'Plazo vencido' }[e]}
                   </span>
-                  {e === 'aceptada' && e !== modal.cot?.estado && (
+                  {bloqueaAcept && (
+                    <span className="ml-auto text-[9px] text-gray-500">Recotizada — aceptá la última</span>
+                  )}
+                  {e === 'aceptada' && e !== modal.cot?.estado && !bloqueaAcept && (
                     <span className="ml-auto text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">🚢 Crea operación</span>
                   )}
                 </button>
-              ))}
+                )
+              })}
             </div>
             <div className="px-5 py-3 border-t border-gray-100 flex justify-end">
               <button onClick={() => setModal(null)} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50 transition-colors">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal modificaciones de la recotización */}
+      {modal?.type === 'cambios' && modal.cot && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <span className="text-[#7C3AED]">↺</span>
+                <div>
+                  <span className="font-bold text-sm text-gray-900">Modificaciones</span>
+                  <span className="text-xs text-gray-400 ml-2 font-mono">{modal.cot.num}</span>
+                </div>
+              </div>
+              <button onClick={() => setModal(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none w-6 h-6 flex items-center justify-center">×</button>
+            </div>
+            <div className="px-5 py-3 border-b border-gray-50">
+              <div className="text-[11px] text-gray-500">Recotización de <span className="font-mono text-[#7C3AED] font-semibold">{(modal.cot.recotiza_linaje && modal.cot.recotiza_linaje.length) ? modal.cot.recotiza_linaje.join(', ') : modal.cot.recotiza_de_num}</span></div>
+            </div>
+            <div className="p-4 overflow-y-auto">
+              {Array.isArray(modal.cot.recotiza_cambios) && modal.cot.recotiza_cambios.length > 0 ? (
+                <div className="space-y-1.5">
+                  {modal.cot.recotiza_cambios.map((ch, i) => (
+                    <div key={i} className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-[11px] flex items-center gap-2 flex-wrap">
+                      <span className="text-gray-600 flex-1 min-w-0">{ch.concepto}</span>
+                      <span className="text-gray-400 line-through">{ch.antes}</span>
+                      <span className="text-gray-400">→</span>
+                      <span className="text-[#1168F8] font-semibold">{ch.despues}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-[11px] text-gray-400 italic text-center py-4">No se modificó ningún ítem; solo se actualizó el tipo de cambio.</div>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end">
+              <button onClick={() => setModal(null)} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50 transition-colors">Cerrar</button>
             </div>
           </div>
         </div>
