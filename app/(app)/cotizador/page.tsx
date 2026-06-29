@@ -289,6 +289,7 @@ const [recotizaDeId,setRecotizaDeId]=useState<string|null>(null)
 const [recotizaDeNum,setRecotizaDeNum]=useState<string>('')
 const [recotizaLinaje,setRecotizaLinaje]=useState<string[]>([])
 const [recotizaSnapOrig,setRecotizaSnapOrig]=useState<CotState|null>(null)
+const recotInitRef=useRef(false)
 // Terceros proveedores por rubro (para búsqueda en carga manual)
 const [tercerosProv,setTercerosProv]=useState<any[]>([])
 
@@ -326,6 +327,13 @@ const [previewEjecutivo,setPreviewEjecutivo]=useState<any>(null)
 const [previewCondGen,setPreviewCondGen]=useState<string[]>([])
 const supabase=createClient()
 const router=useRouter()
+
+// Si se entra con /cotizador?recotizar=ID (desde el panel de cotizaciones), recotizar esa cotización.
+useEffect(()=>{
+  if(recotInitRef.current) return
+  const rid=new URLSearchParams(window.location.search).get('recotizar')
+  if(rid){ recotInitRef.current=true; recotizarCotizacion(rid) }
+},[])
 
 useEffect(()=>{
   supabase.from('tipos_cambio_eventos').select('ars,clp').order('created_at',{ascending:false}).limit(1)
