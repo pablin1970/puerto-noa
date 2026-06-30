@@ -1150,7 +1150,6 @@ function agregarArgDesdeSistema(cotId:string){
   const usadas = cotsSistemaUsadas[cotId]||[]
   const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
   setS(p=>({...p, cotsProvArg:[...p.cotsProvArg, nueva]}))
-  setProvUsado(pv=>({...pv,4:cotId}))
 }
 
 // Transporte terrestre desde sistema
@@ -1586,15 +1585,29 @@ async function guardar(){
     // Obtener el id de la cotizacion recien creada
     const {data:cotGuardada}=await supabase.from('cotizaciones').select('id').eq('num',num).single()
     if(cotGuardada) {
-      const provUsados=Object.entries(provUsado)
-        .filter(([_,cotProvId])=>cotProvId)
-        .map(([bloque,cotProvId])=>({
-          cotizacion_id:(cotGuardada as any).id,
-          cotizacion_proveedor_id:cotProvId,
-          bloque:parseInt(bloque)
-        }))
-      if(provUsados.length>0){
-        await (supabase.from('cotizacion_proveedores_usados') as any).insert(provUsados)
+      // Registro de cotizaciones de proveedor usadas: se deriva de las listas reales del cotizador,
+      // no de provUsado (que tenía un solo slot por bloque y pisaba cuando había varias en un mismo
+      // bloque, p. ej. varias cotizaciones argentinas). Soporta N por bloque y deduplica.
+      const cotIdGuardada=(cotGuardada as any).id
+      const usados:{cotizacion_id:string;cotizacion_proveedor_id:string;bloque:number}[]=[]
+      const vistos=new Set<string>()
+      const addUsado=(provId:string|null|undefined,bloque:number)=>{
+        if(!provId) return
+        const k=provId+'|'+bloque
+        if(vistos.has(k)) return
+        vistos.add(k)
+        usados.push({cotizacion_id:cotIdGuardada,cotizacion_proveedor_id:provId,bloque})
+      }
+      addUsado(s.cotsProvMerc.find(c=>c.elegida)?.cotProvId,0)
+      addUsado(s.cotsProvFW.find(c=>c.elegida)?.cotProvId,1)
+      addUsado(s.cotsProvSeg.find(c=>c.elegida)?.cotProvId,1)
+      addUsado(s.cotsProvChile.find(c=>c.elegida)?.cotProvId,2)
+      addUsado(s.cotsProvTransp.find(c=>c.elegida)?.cotProvId,3)
+      s.cotsProvArg.forEach(c=>addUsado(c.cotProvId,4))   // bloque 4: varias suman, se registran todas
+      addUsado(cotDesp?.id,4)                              // bloque 4: despachante
+      addUsado(s.cotsProvOrigen.find(c=>c.elegida)?.cotProvId,5)
+      if(usados.length>0){
+        await (supabase.from('cotizacion_proveedores_usados') as any).insert(usados)
       }
     }
     setRecotizaDeId(null);setRecotizaDeNum('');setRecotizaLinaje([]);setRecotizaSnapOrig(null)
