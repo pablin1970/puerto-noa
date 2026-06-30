@@ -557,11 +557,14 @@ const subTranspTerr = transpTerrElegida
     : transpTerrElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
   : 0
 
-// Bloque 2: Gastos Chile post-entrega
-const subGastosChile=s.gastosChile.reduce((t,g)=>{
-  const b=(g.tipoCalc==='m3'?g.valor*totalM3:g.valor)
-  return t+(g.ivaChile==='gravado'?b*1.19:b)
-},0)
+// Bloque 2: Gastos en Chile — total de la cotización del sistema elegida (agente/almacén/etc.).
+// Antes leía de s.gastosChile, que quedó sin vía de carga (la tarjeta no computaba). Ahora suma
+// los ítems seleccionados de la cotización elegida, igual que forwarder/terrestre/origen.
+const subGastosChile = transpChileElegida
+  ? (transpChileElegida.esManual
+      ? (transpChileElegida.manualMonto||0)
+      : transpChileElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0))
+  : 0
 
 // Bloque 3: Transporte + desconsolidacion
 const volAlm=s.almModoVol==='auto'?totalM3:s.almVolM3
@@ -663,10 +666,12 @@ pushCif('segmar','maritimo','Seguro marítimo',segMarEff)
 pushCif('terr','terrestre','Flete terrestre',subTranspIntl,`solo tramo intl · ${pctIntlTerr}%`)
 pushCif('segterr','terrestre','Seguro terrestre',segTerrEff*fIntlTerr,`solo tramo intl · ${pctIntlTerr}%`)
 if(chileActivoCif){
-  s.gastosChile.forEach((g,idx)=>{
-    const b=g.tipoCalc==='m3'?g.valor*totalM3:g.valor
-    pushCif(`chile:${idx}`,'chile',g.desc||'Gasto en Chile',g.ivaChile==='gravado'?b*1.19:b)
-  })
+  if(transpChileElegida){
+    if(transpChileElegida.esManual)
+      pushCif('chile','chile',transpChileElegida.proveedorNombre||'Gastos en Chile',transpChileElegida.manualMonto||0)
+    else transpChileElegida.items.filter(i=>i.seleccionado).forEach((it,idx)=>
+      pushCif(`chile:${idx}`,'chile',it.descripcion||'Gasto en Chile',it.subtotal))
+  }
   s.rowsDescon.forEach((r,idx)=>{
     const m=r.tipoCalc==='m3'?r.unitario*totalM3:r.cant*r.unitario
     pushCif(`descon:${idx}`,'deposito',r.desc||'Desconsolidado',m)
@@ -1245,17 +1250,8 @@ async function crearTerceroMinimo(razonSocial:string, rubro:string):Promise<stri
 
 
 
-  // Gastos Chile manual (cuando no hay cotización del sistema)
-function agregarGastoChileDesdeSistema(cotId:string){
-  const cot=cotsChileDisponibles.find(c=>c.id===cotId)
-  if(!cot) return
-  const nuevos:GastoChile[]=(cot.items||[]).map((it:any)=>({
-    id:uid2(),desc:it.descripcion,proveedor:cot.proveedor_nombre,
-    tipoCalc:(it.tipo_calculo==='por_m3'?'m3':'fijo') as 'fijo'|'m3',
-    valor:it.valor||0,ivaChile:'exento' as const,
-  }))
-  setS(p=>({...p,gastosChile:[...p.gastosChile,...nuevos]}))
-}
+  // Gastos en Chile: ahora se cargan como cotización del sistema en s.cotsProvChile (tarjeta con
+  // medidor) y computan vía subGastosChile. La vía vieja (volcado a s.gastosChile) quedó retirada.
 
 // Carga una cotización de despachante del sistema (patrón estándar, igual que transporte)
 function cargarDespachanteDesdeSistema(cotId:string){
