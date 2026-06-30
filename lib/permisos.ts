@@ -119,3 +119,17 @@ export function limpiarCachePermisos(): void {
   cacheEsSuperAdmin = false
   cacheTimestamp = 0
 }
+
+/**
+ * P-25 · Deja solo las cuentas que el rol del usuario puede operar con la función dada.
+ * Cada cuenta se gobierna como modulo='cuenta:<id>' en rol_permisos.
+ * funcion: 'ver' (listados/saldos) · 'ingresar' (cobros) · 'egresar' (pagos/movimientos).
+ * El Super Admin pasa todas (puede() ya lo resuelve). Deny by default: sin permiso, no aparece.
+ */
+export function cuentasPermitidas<T extends { id: string }>(
+  permisos: Record<string, string[]>,
+  cuentas: T[],
+  funcion: 'ver' | 'ingresar' | 'egresar',
+): T[] {
+  return cuentas.filter(c => puede(permisos, `cuenta:${c.id}`, funcion))
+}
