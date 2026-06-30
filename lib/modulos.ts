@@ -73,7 +73,6 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
       { modulo: 'ordenes_pago',  label: 'Órdenes de pago',           acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'aplicaciones_pago', label: 'Aplic. pago de tercero',  acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'movimientos_cuentas', label: 'Movim. entre cuentas',    acciones: ['ver','crear','editar','eliminar','descargar'] },
-      { modulo: 'flujo_cuentas', label: 'Flujo cuentas ARG↔CHL',     acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'tipos_cambio',  label: 'Tipos de cambio',           acciones: ['ver','editar'] },
     ]
   },
