@@ -69,6 +69,7 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
   {
     section: 'Tesorería', icono: '🏦',
     items: [
+      { modulo: 'cuentas_cajas_bancos', label: 'Cuentas (caja y bancos)', acciones: ['ver'] },
       { modulo: 'recibos',       label: 'Recibos',                   acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'ordenes_pago',  label: 'Órdenes de pago',           acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'aplicaciones_pago', label: 'Aplic. pago de tercero',  acciones: ['ver','crear','editar','eliminar','descargar'] },
