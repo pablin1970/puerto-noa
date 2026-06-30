@@ -13,7 +13,7 @@ import {
   LayoutDashboard, LineChart, Sparkles, List, Building2,
   Ship, ClipboardCheck, ClipboardList, BarChart3, Package,
   FileText, FileDown, Users, Handshake,
-  Receipt, Send, Link2, Repeat, ArrowLeftRight, Landmark, DollarSign,
+  Receipt, Send, Link2, Repeat, Landmark, DollarSign,
   BookOpen, TrendingDown, TrendingUp,
   Library, UserCog, GitBranch,
   ChevronLeft, ChevronRight, AlertTriangle, HelpCircle, LogOut,
@@ -62,7 +62,6 @@ const NAV: NavItem[] = [
   { href: '/tesoreria/ordenes-pago',      label: 'Órdenes de pago',        icon: Send, modulo: 'ordenes_pago' },
   { href: '/tesoreria/aplicaciones-pago', label: 'Aplicaciones de pago',   icon: Link2, modulo: 'aplicaciones_pago' },
   { href: '/tesoreria/movimientos',       label: 'Movim. entre cuentas',   icon: Repeat, modulo: 'movimientos_cuentas' },
-  { href: '/tesoreria/flujo',             label: 'Flujo de cuentas',       icon: ArrowLeftRight, modulo: 'flujo_cuentas' },
   { href: '/fondos',                      label: 'Fondos en custodia',     icon: Landmark, modulo: 'fondos_custodia' },
   { href: '/tipos-cambio',                label: 'Tipos de cambio',        icon: DollarSign, modulo: 'tipos_cambio' },
 
