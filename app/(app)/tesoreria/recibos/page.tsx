@@ -23,6 +23,13 @@ function aCLP(monto: number, moneda: string, snap: any): number {
   return Math.round(usd * clp)
 }
 
+const SUBTIPOS_INGRESO: { key: string; label: string }[] = [
+  { key: 'aporte_socio', label: 'Aporte de socio / accionista' },
+  { key: 'prestamo', label: 'Préstamo recibido' },
+  { key: 'ingreso_financiero', label: 'Ingreso financiero' },
+  { key: 'otro', label: 'Otro ingreso' },
+]
+
 export default function RecibosPage() {
   const supabase = createClient()
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
@@ -163,11 +170,11 @@ export default function RecibosPage() {
 }
 
 function FormRecibo({ supabase, currentUser, permisos, talonarios, terceros, operaciones, cuentasPropias, cuentasRendir, tcSnap, onSave, onCancel }: any) {
-  const [contexto, setContexto] = useState<'propia' | 'rendir'>('propia')
+  const [contexto, setContexto] = useState<'propia' | 'rendir' | 'otro'>('propia')
   const [form, setForm] = useState<any>({
     talonario_id: talonarios?.[0]?.id || '', tercero_id: '', operacion_id: '',
     fecha: new Date().toISOString().slice(0, 10), moneda: '',
-    cuenta_propia_id: '', cuenta_rendir_id: '', monto: '', concepto: '', notas: '',
+    cuenta_propia_id: '', cuenta_rendir_id: '', subtipo_ingreso: '', monto: '', concepto: '', notas: '',
   })
   const [buscarT, setBuscarT] = useState('')
   const [showTDD, setShowTDD] = useState(false)
@@ -216,7 +223,9 @@ function FormRecibo({ supabase, currentUser, permisos, talonarios, terceros, ope
 
   async function guardar() {
     if (!form.talonario_id) { alert('No hay talonario de recibos. Cargá uno en Catálogos › Talonarios.'); return }
-    if (!form.tercero_id) { alert('Elegí el cliente'); return }
+    if (contexto !== 'otro' && !form.tercero_id) { alert('Elegí el cliente'); return }
+    if (contexto === 'otro' && !form.subtipo_ingreso) { alert('Elegí el tipo de ingreso'); return }
+    if (contexto === 'otro' && !form.cuenta_propia_id) { alert('Elegí la cuenta donde entra la plata'); return }
     if (monto <= 0) { alert('Ingresá el monto'); return }
     if (contexto === 'propia' && !form.cuenta_propia_id) { alert('Elegí la cuenta de Puerto NOA donde entra la plata'); return }
     if (contexto === 'rendir' && !form.cuenta_rendir_id) { alert('Elegí la caja a rendir'); return }
@@ -232,13 +241,15 @@ function FormRecibo({ supabase, currentUser, permisos, talonarios, terceros, ope
       const montoUsd = aUSD(monto, form.moneda, tcSnap)
 
       // 2) Cabecera del comprobante
+      const subLabel = SUBTIPOS_INGRESO.find(st => st.key === form.subtipo_ingreso)?.label || 'Otro ingreso'
       const { data: comp, error: cErr } = await (supabase.from('comprobantes_tesoreria') as any).insert({
         talonario_id: form.talonario_id, tipo_comprobante_id: talonarios.find((t: any) => t.id === form.talonario_id)?.tipo_comprobante_id,
         numero, numero_formateado: formateado, fecha: form.fecha, sentido: 'ingreso',
-        tercero_id: form.tercero_id, operacion_id: form.operacion_id || null,
-        concepto: form.concepto || (contexto === 'rendir' ? 'Entrega a rendir' : 'Pago de cliente'),
-        contexto, cuenta_propia_id: contexto === 'propia' ? form.cuenta_propia_id : null,
+        tercero_id: form.tercero_id || null, operacion_id: form.operacion_id || null,
+        concepto: form.concepto || (contexto === 'rendir' ? 'Entrega a rendir' : contexto === 'otro' ? subLabel : 'Pago de cliente'),
+        contexto, cuenta_propia_id: contexto !== 'rendir' ? form.cuenta_propia_id : null,
         cuenta_rendir_id: contexto === 'rendir' ? form.cuenta_rendir_id : null,
+        subtipo_ingreso: contexto === 'otro' ? form.subtipo_ingreso : null,
         moneda: form.moneda, monto, tc_referencia: tcRef, monto_usd: montoUsd, tc_snapshot: tcSnap || null,
         imputa_facturas: contexto === 'propia' && totalImputado > 0, a_cuenta: contexto === 'propia' && aCuenta > 0.5,
         estado: 'emitido', creado_por: currentUser?.nombre, creado_por_id: currentUser?.id,
@@ -254,20 +265,21 @@ function FormRecibo({ supabase, currentUser, permisos, talonarios, terceros, ope
         await (supabase.from('comprobantes_tesoreria') as any).update({ archivo_url: archivoPath, archivo_nombre: compFile.name }).eq('id', comp.id)
       }
 
-      if (contexto === 'propia') {
+      if (contexto === 'propia' || contexto === 'otro') {
         // 4a) Movimiento en cuenta propia (ingreso) + saldo
         const cuenta = cuentasPropias.find((c: any) => c.id === form.cuenta_propia_id)
         await (supabase.from('movimientos_cuentas_pn') as any).insert({
           cuenta_id: form.cuenta_propia_id, fecha: form.fecha, tipo: 'ingreso',
-          concepto: `Recibo ${formateado} · ${tercero?.razon_social || ''}`, monto, moneda: form.moneda,
+          concepto: `Recibo ${formateado} · ${contexto === 'otro' ? subLabel : (tercero?.razon_social || '')}`, monto, moneda: form.moneda,
           monto_clp_equiv: aCLP(monto, form.moneda, tcSnap), tipo_cambio: tcRef,
-          referencia: formateado, operacion_id: form.operacion_id || null, tercero_id: form.tercero_id,
+          referencia: formateado, operacion_id: form.operacion_id || null, tercero_id: form.tercero_id || null,
           talonario_id: form.talonario_id, numero_comprobante: formateado, tc_snapshot: tcSnap || null,
           saldo_posterior: (Number(cuenta?.saldo_actual) || 0) + monto,
         })
         await (supabase.from('cuentas_pn') as any).update({ saldo_actual: (Number(cuenta?.saldo_actual) || 0) + monto }).eq('id', form.cuenta_propia_id)
 
-        // 4b) Imputaciones + asientos en cuenta corriente (haber) + marcar facturas pagadas
+        // 4b) Imputaciones + cuenta corriente: SOLO en Pago a Puerto NOA
+        if (contexto === 'propia') {
         for (const f of facturas) {
           const m = Number(imput[f.id]) || 0
           if (m <= 0) continue
@@ -291,6 +303,7 @@ function FormRecibo({ supabase, currentUser, permisos, talonarios, terceros, ope
             concepto: `Recibo ${formateado} · a cuenta`, moneda: form.moneda, monto: aCuenta, tc_referencia: tcRef,
             monto_usd: aUSD(aCuenta, form.moneda, tcSnap), debe: 0, haber: aCuenta, notas: 'Cobro a cuenta (sin imputar)', creado_por: currentUser?.nombre,
           })
+        }
         }
       } else {
         // 4) Entrega a rendir: solo movimiento en la caja a rendir (custodia)
@@ -319,16 +332,19 @@ function FormRecibo({ supabase, currentUser, permisos, talonarios, terceros, ope
           <button onClick={() => setContexto('rendir')} className={`flex-1 px-4 py-2.5 rounded-xl text-xs font-semibold border ${contexto === 'rendir' ? 'bg-[#7C3AED] text-white border-[#7C3AED]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#7C3AED]'}`}>
             📥 Entrega a rendir
           </button>
+          <button onClick={() => setContexto('otro')} className={`flex-1 px-4 py-2.5 rounded-xl text-xs font-semibold border ${contexto === 'otro' ? 'bg-[#ef9f27] text-white border-[#ef9f27]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#ef9f27]'}`}>
+            ➕ Otros ingresos
+          </button>
         </div>
-        <p className="text-[10px] text-gray-400 mt-2">{contexto === 'propia' ? 'El cliente paga: entra a una cuenta de PN, baja su saldo de cuenta corriente y se imputa a facturas.' : 'El cliente entrega plata para rendir: entra a la caja a rendir imputada a la operación. No cancela facturas.'}</p>
+        <p className="text-[10px] text-gray-400 mt-2">{contexto === 'propia' ? 'El cliente paga: entra a una cuenta de PN, baja su saldo de cuenta corriente y se imputa a facturas.' : contexto === 'rendir' ? 'El cliente entrega plata para rendir: entra a la caja a rendir imputada a la operación. No cancela facturas.' : 'Ingresos que no son de clientes (aportes, préstamos, financieros). Entran a una cuenta propia; no imputan facturas ni cuenta corriente.'}</p>
       </div>
 
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2 relative">
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cliente</label>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{contexto === 'otro' ? 'Tercero (opcional)' : 'Cliente'}</label>
             <input value={buscarT} onChange={e => { setBuscarT(e.target.value); setForm((f: any) => ({ ...f, tercero_id: '' })); setShowTDD(true) }}
-              onFocus={() => setShowTDD(true)} onBlur={() => setTimeout(() => setShowTDD(false), 150)} className={inp} placeholder="Buscar cliente…" />
+              onFocus={() => setShowTDD(true)} onBlur={() => setTimeout(() => setShowTDD(false), 150)} className={inp} placeholder={contexto === 'otro' ? 'Buscar tercero (opcional)…' : 'Buscar cliente…'} />
             {showTDD && (() => {
               const q = buscarT.trim().toLowerCase()
               const lista = terceros.filter((t: any) => !q || t.razon_social.toLowerCase().includes(q)).slice(0, 8)
@@ -353,7 +369,15 @@ function FormRecibo({ supabase, currentUser, permisos, talonarios, terceros, ope
               {operaciones.map((o: any) => <option key={o.id} value={o.id}>{o.cotizacion?.num} · {o.cotizacion?.cliente}</option>)}
             </select>
           </div>
-          {contexto === 'propia' ? (
+          {contexto === 'otro' && (
+            <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo de ingreso *</label>
+              <select value={form.subtipo_ingreso} onChange={e => setForm((f: any) => ({ ...f, subtipo_ingreso: e.target.value }))} className={inp}>
+                <option value="">— elegí el tipo —</option>
+                {SUBTIPOS_INGRESO.map(st => <option key={st.key} value={st.key}>{st.label}</option>)}
+              </select>
+            </div>
+          )}
+          {contexto !== 'rendir' ? (
             <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cuenta de Puerto NOA (entra)</label>
               <select value={form.cuenta_propia_id} onChange={e => { const c = cuentasPropias.find((x: any) => x.id === e.target.value); setForm((f: any) => ({ ...f, cuenta_propia_id: e.target.value, moneda: c?.moneda || '' })) }} className={inp}>
                 <option value="">— elegí la cuenta —</option>
