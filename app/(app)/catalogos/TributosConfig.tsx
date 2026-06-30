@@ -151,6 +151,7 @@ export default function TributosConfig() {
   }
 
   const pCrear = puede(permisos, 'tributos', 'crear')
+  const pEditar = puede(permisos, 'tributos', 'editar')
   const pEliminar = puede(permisos, 'tributos', 'eliminar')
 
   return (
@@ -225,8 +226,9 @@ export default function TributosConfig() {
                     {/* Toggle aplica */}
                     <td className="px-4 py-3">
                       <button
-                        onClick={() => saveField(row, 'aplica', !row.aplica)}
-                        className={`w-8 h-4 rounded-full transition-colors relative ${row.aplica ? 'bg-[#1168F8]' : 'bg-gray-200'}`}
+                        onClick={() => { if (pEditar) saveField(row, 'aplica', !row.aplica) }}
+                        disabled={!pEditar}
+                        className={`w-8 h-4 rounded-full transition-colors relative ${row.aplica ? 'bg-[#1168F8]' : 'bg-gray-200'} ${!pEditar ? 'opacity-60 cursor-not-allowed' : ''}`}
                       >
                         <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-all ${row.aplica ? 'left-4.5' : 'left-0.5'}`} style={{ left: row.aplica ? '18px' : '2px' }} />
                       </button>
@@ -236,7 +238,8 @@ export default function TributosConfig() {
                     <td className="px-4 py-3">
                       <input
                         defaultValue={row.codigo}
-                        onBlur={e => { if (e.target.value !== row.codigo) saveField(row, 'codigo', e.target.value) }}
+                        readOnly={!pEditar}
+                        onBlur={e => { if (pEditar && e.target.value !== row.codigo) saveField(row, 'codigo', e.target.value) }}
                         className="w-16 px-2 py-1 border border-transparent rounded hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs font-mono font-medium text-gray-700"
                       />
                     </td>
@@ -245,7 +248,8 @@ export default function TributosConfig() {
                     <td className="px-4 py-3">
                       <input
                         defaultValue={row.concepto}
-                        onBlur={e => { if (e.target.value !== row.concepto) saveField(row, 'concepto', e.target.value) }}
+                        readOnly={!pEditar}
+                        onBlur={e => { if (pEditar && e.target.value !== row.concepto) saveField(row, 'concepto', e.target.value) }}
                         className="w-full px-2 py-1 border border-transparent rounded hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs text-gray-800"
                       />
                     </td>
@@ -254,8 +258,9 @@ export default function TributosConfig() {
                     <td className="px-4 py-3">
                       <select
                         value={row.tipo}
-                        onChange={e => saveField(row, 'tipo', e.target.value)}
-                        className="px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white"
+                        disabled={!pEditar}
+                        onChange={e => { if (pEditar) saveField(row, 'tipo', e.target.value) }}
+                        className={`px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:border-[#1168F8] bg-white ${!pEditar ? 'opacity-60 cursor-not-allowed' : ''}`}
                       >
                         <option value="pct">Porcentaje (%)</option>
                         <option value="fijo">Importe fijo (ARS)</option>
@@ -268,10 +273,11 @@ export default function TributosConfig() {
                         <input
                           type="text" inputMode="decimal" onFocus={(e)=>e.target.select()}
                           defaultValue={row.valor}
+                          readOnly={!pEditar}
                           step={row.tipo === 'pct' ? 0.5 : 1}
                           onBlur={e => {
                             const v = parseFloat(e.target.value)
-                            if (v !== row.valor) saveField(row, 'valor', v)
+                            if (pEditar && v !== row.valor) saveField(row, 'valor', v)
                           }}
                           className="w-20 px-2 py-1 border border-transparent rounded hover:border-gray-200 focus:border-[#1168F8] focus:outline-none text-xs text-right font-mono"
                         />
