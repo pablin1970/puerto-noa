@@ -6,8 +6,9 @@ import type { Cotizacion, Operacion } from '@/types'
 import { useSearchParams } from 'next/navigation'
 import { cargarPermisos, puede } from '@/lib/permisos'
 import { urlVerConMarca } from '@/lib/documentos'
+import { liquidar, armarSnapshot, type ComponenteCif, type LiquidacionSnapshot } from '@/lib/liquidacion'
 
-type Tab = 'resumen' | 'facturas' | 'comparativo' | 'caja' | 'cierre' | 'minuta' | 'documentos'
+type Tab = 'resumen' | 'facturas' | 'comparativo' | 'liquidacion' | 'caja' | 'cierre' | 'minuta' | 'documentos'
 
 // ── Tipos locales (la operación solo refleja; la carga vive en Facturación/Tesorería) ──
 interface FacturaOp {
@@ -168,6 +169,7 @@ function OperacionDetail({ op, cot, tab, setTab, reload, permisos }: {
   const cerrada = op.estado === 'cerrada'
 
   const presup = Array.isArray(cot.presupuesto) ? cot.presupuesto : []
+  const tieneArca = !!(cot as any).liquidacion_presupuestada || ((cot as any).total_tributos_usd || 0) > 0
   const totalPresup = presup.reduce((s: number, i: any) => s + (i.usd || 0), 0)
 
   // Facturado de la operación: recibidas (gasto) + emitidas (lo que PN factura)
@@ -186,6 +188,7 @@ function OperacionDetail({ op, cot, tab, setTab, reload, permisos }: {
     { key: 'resumen', label: 'Resumen' },
     { key: 'facturas', label: 'Facturas' },
     { key: 'comparativo', label: 'Presup. vs. Real' },
+    ...(tieneArca ? [{ key: 'liquidacion' as Tab, label: 'Liquidación ARCA' }] : []),
     { key: 'caja', label: 'Caja a rendir' },
     { key: 'cierre', label: 'Cierre' },
     { key: 'minuta', label: 'Minuta de pago' },
@@ -275,6 +278,7 @@ function OperacionDetail({ op, cot, tab, setTab, reload, permisos }: {
 
           {tab === 'facturas' && <FacturasTab facturas={facturas} cot={cot} tipoOp={tipoOp} permisos={permisos} reload={loadDetail} />}
           {tab === 'comparativo' && <ComparativoTab presup={presup} facturas={facturas} />}
+          {tab === 'liquidacion' && <LiquidacionArcaTab op={op} cot={cot} reload={loadDetail} permisos={permisos} />}
           {tab === 'caja' && <CajaRendirTab opId={op.id} cotNum={cot.num || ''} movs={movs} saldo={saldoCaja} permisos={permisos} />}
           {tab === 'cierre' && <CierreTab op={op} saldoCaja={saldoCaja} totalPresup={totalPresup} facturadoGasto={facturadoGasto} saldadoUsd={saldadoUsd} pendienteUsd={pendienteUsd} reload={reload} permisos={permisos} />}
           {tab === 'minuta' && <MinutaTab opId={op.id} cotNum={cot.num || ''} cliente={cot.cliente} permisos={permisos} />}
@@ -397,6 +401,206 @@ function FacturasTab({ facturas, cot, tipoOp, permisos, reload }: {
               {previewModal.tipo === 'pdf'
                 ? <iframe src={previewModal.url} className="w-full h-[70vh] border-0" title={previewModal.nombre} />
                 : <img src={previewModal.url} alt={previewModal.nombre} className="max-w-full mx-auto rounded" />}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── LIQUIDACIÓN ARCA TAB (P-21: presupuestado vs real, con ajuste por destildado) ──
+function aliq(t: { codigo: string; tipo: string; valor: number }, derPct: number): string {
+  if (t.tipo === 'fijo') return 'fijo'
+  return (t.codigo === '010' ? derPct : t.valor) + '%'
+}
+function LiquidacionArcaTab({ op, cot, reload, permisos }: {
+  op: Operacion & { cotizacion: Cotizacion }
+  cot: Cotizacion
+  reload: () => void
+  permisos: Record<string, string[]>
+}) {
+  const supabase = createClient()
+  const pres = (cot as any).liquidacion_presupuestada as LiquidacionSnapshot | null
+  const realGuardada = (op as any).liquidacion_arca as LiquidacionSnapshot | null
+  const puedeEditar = puede(permisos, 'operaciones', 'editar')
+  const cerrada = op.estado === 'cerrada'
+  const [modal, setModal] = useState(false)
+  const [comps, setComps] = useState<ComponenteCif[]>([])
+  const [saving, setSaving] = useState(false)
+
+  if (!pres || !Array.isArray(pres.componentes) || pres.componentes.length === 0) {
+    return (
+      <div className="bg-white border border-gray-100 rounded-xl p-8 text-center">
+        <div className="text-3xl mb-2">📋</div>
+        <div className="font-semibold text-gray-700 mb-1">Sin liquidación sellada</div>
+        <div className="text-sm text-gray-400 max-w-md mx-auto">Esta cotización es anterior al sellado de la liquidación ARCA. Para habilitar el ajuste real, recotizala desde el cotizador y la nueva quedará con el desglose del CIF disponible.</div>
+      </div>
+    )
+  }
+
+  const ajustada = !!realGuardada && Array.isArray(realGuardada.componentes)
+  const baseComp = ajustada ? realGuardada!.componentes : pres.componentes
+  const liq = liquidar(baseComp, pres.tributos, pres.tc, pres.der_pct)
+  const liqM = liquidar(comps, pres.tributos, pres.tc, pres.der_pct)
+  const fnum = (n: number) => fmt(Math.round(n), 0)
+
+  function abrir() { setComps((ajustada ? realGuardada!.componentes : pres!.componentes).map(c => ({ ...c }))); setModal(true) }
+  function toggle(id: string) { setComps(cs => cs.map(c => c.id === id ? { ...c, al_cif: !c.al_cif } : c)) }
+  async function guardar() {
+    setSaving(true)
+    const snap = armarSnapshot(comps, pres!.tributos, pres!.tc, pres!.der_pct, pres!.regimen)
+    const { error } = await (supabase.from('operaciones') as any).update({ liquidacion_arca: { ...snap, ajustado_en: nowDate() } }).eq('id', op.id)
+    setSaving(false)
+    if (error) { alert('Error al guardar: ' + error.message); return }
+    setModal(false); reload()
+  }
+  async function restablecer() {
+    if (!confirm('¿Volver a la liquidación presupuestada? Se borra el ajuste real.')) return
+    const { error } = await (supabase.from('operaciones') as any).update({ liquidacion_arca: null }).eq('id', op.id)
+    if (error) { alert('Error: ' + error.message); return }
+    reload()
+  }
+
+  const difUsd = pres.total_trib_usd - liq.totalTribUsd
+
+  return (
+    <div>
+      <div className="bg-white border border-gray-100 rounded-xl p-5 mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-gray-900">Liquidación impositiva ARCA</span>
+            <span className="text-[11px] text-gray-400">régimen {pres.regimen} · TC cotización {fnum(pres.tc)}</span>
+          </div>
+          {ajustada
+            ? <span className="px-2.5 py-1 bg-green-50 text-green-700 rounded-full text-[10px] font-bold border border-green-200">✓ Ajustada (conceptos)</span>
+            : <span className="px-2.5 py-1 bg-gray-100 text-gray-500 rounded-full text-[10px] font-bold border border-gray-200">Presupuestada (sin ajustar)</span>}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-5">
+          <div className="bg-[#FAEEDA] rounded-xl p-4">
+            <div className="text-[10px] font-medium mb-1" style={{ color: '#854f0b' }}>CIF imponible</div>
+            <div className="text-xl font-semibold" style={{ color: '#633806' }}>USD {fnum(liq.cifUsd)}</div>
+            {ajustada && liq.cifUsd !== pres.cif_usd && <div className="text-[10px] mt-1" style={{ color: '#854f0b' }}>presup. USD {fnum(pres.cif_usd)}</div>}
+          </div>
+          <div className="bg-[#FAEEDA] rounded-xl p-4">
+            <div className="text-[10px] font-medium mb-1" style={{ color: '#854f0b' }}>Total tributos</div>
+            <div className="text-xl font-semibold" style={{ color: '#633806' }}>USD {fnum(liq.totalTribUsd)}</div>
+            {ajustada && Math.round(difUsd) !== 0 && <div className="text-[10px] mt-1" style={{ color: '#854f0b' }}>presup. USD {fnum(pres.total_trib_usd)} · {difUsd > 0 ? '−' : '+'}USD {fnum(Math.abs(difUsd))}</div>}
+          </div>
+        </div>
+
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-gray-200 text-gray-400">
+              <th className="text-left py-1.5 font-normal">Concepto</th>
+              <th className="text-right py-1.5 font-normal">Alíc.</th>
+              <th className="text-right py-1.5 font-normal">Presupuestado</th>
+              <th className="text-right py-1.5 font-normal" style={{ color: '#185FA5' }}>Ajustado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pres.tributos.map((t) => {
+              const r = liq.tributos.find(x => x.codigo === t.codigo)
+              const dif = Math.round((t.imp || 0) - (r?.imp || 0)) !== 0
+              return (
+                <tr key={t.codigo} className="border-b border-gray-100">
+                  <td className="py-1.5 text-gray-700">{t.concepto}</td>
+                  <td className="py-1.5 text-right text-gray-400">{aliq(t, pres.der_pct)}</td>
+                  <td className="py-1.5 text-right text-gray-400">$ {fnum(t.imp || 0)}</td>
+                  <td className="py-1.5 text-right font-medium" style={{ color: dif ? '#185FA5' : '#374151' }}>$ {fnum(r?.imp || 0)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-gray-200">
+              <td colSpan={2} className="py-2 font-semibold text-gray-700">Total</td>
+              <td className="py-2 text-right text-gray-400">$ {fnum(pres.total_trib_ars)}</td>
+              <td className="py-2 text-right font-semibold" style={{ color: '#185FA5' }}>$ {fnum(liq.totalTribArs)}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div className="mt-4 text-[11px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2 leading-relaxed">El ajuste solo excluye conceptos que la aduana no tomó a la base. Se mantiene el TC de la cotización ({fnum(pres.tc)}), porque es un valor histórico. La diferencia de cambio surgirá al cargar la liquidación de aduana efectivamente ejecutada, que se cotejará contra esta.</div>
+
+        {puedeEditar && !cerrada && (
+          <div className="flex gap-2 mt-5">
+            <button onClick={abrir} className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4]">Ajustar conceptos tomados</button>
+            {ajustada && <button onClick={restablecer} className="border border-gray-200 text-gray-500 px-4 py-2 rounded-lg text-xs hover:bg-gray-50">Volver a presupuestado</button>}
+          </div>
+        )}
+        {cerrada && <div className="mt-4 text-[11px] text-gray-400">Operación cerrada: la liquidación no se puede modificar.</div>}
+      </div>
+
+      {modal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => !saving && setModal(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-xl max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="bg-[#FAEEDA] px-5 py-3.5 flex items-center gap-2 sticky top-0 border-b border-[#FAC775]">
+              <span className="text-lg">⚖️</span>
+              <div className="flex-1">
+                <div className="text-sm font-semibold" style={{ color: '#633806' }}>Liquidación ARCA — ajuste de conceptos</div>
+                <div className="text-[11px]" style={{ color: '#854f0b' }}>{cot.num} · régimen {pres.regimen}</div>
+              </div>
+              <button onClick={() => setModal(false)} className="text-xl px-1" style={{ color: '#854f0b' }}>×</button>
+            </div>
+            <div className="p-5">
+              <p className="text-xs text-gray-500 mb-3 leading-relaxed">Destildá los conceptos que la aduana <strong>no</strong> tomó a la base imponible. El CIF y los tributos se recalculan al TC de la cotización ({fnum(pres.tc)}).</p>
+              <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-2">Componentes del CIF imponible</div>
+              <div className="border border-gray-200 rounded-lg overflow-hidden mb-4">
+                {comps.map((c, i) => (
+                  <label key={c.id} className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer text-[13px] hover:bg-gray-50 ${i > 0 ? 'border-t border-gray-100' : ''} ${!c.al_cif ? 'opacity-50' : ''}`}>
+                    <input type="checkbox" checked={c.al_cif} onChange={() => toggle(c.id)} className="w-4 h-4 accent-[#1168F8] cursor-pointer" />
+                    <span className="flex-1 text-gray-700">{c.label}{c.nota && <span className="text-[10px] ml-1.5 px-1.5 py-0.5 rounded-full" style={{ color: '#854f0b', background: '#FAEEDA' }}>{c.nota}</span>}</span>
+                    <span className="text-gray-500">USD {fnum(c.usd)}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2.5 mb-4 text-[13px]">
+                <span className="font-medium">CIF imponible</span>
+                <span><span className="text-gray-400 line-through">USD {fnum(pres.cif_usd)}</span><span className="mx-2 text-gray-300">→</span><span className="font-semibold" style={{ color: '#185FA5' }}>USD {fnum(liqM.cifUsd)}</span></span>
+              </div>
+
+              <table className="w-full text-xs mb-3">
+                <thead>
+                  <tr className="border-b border-gray-200 text-gray-400">
+                    <th className="text-left py-1.5 font-normal">Concepto</th>
+                    <th className="text-right py-1.5 font-normal">Presup.</th>
+                    <th className="text-right py-1.5 font-normal" style={{ color: '#185FA5' }}>Ajustado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pres.tributos.map((t) => {
+                    const r = liqM.tributos.find(x => x.codigo === t.codigo)
+                    return (
+                      <tr key={t.codigo} className="border-b border-gray-100">
+                        <td className="py-1.5 text-gray-700">{t.concepto}</td>
+                        <td className="py-1.5 text-right text-gray-400">$ {fnum(t.imp || 0)}</td>
+                        <td className="py-1.5 text-right text-gray-700">$ {fnum(r?.imp || 0)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200">
+                    <td className="py-2 font-semibold text-gray-700">Total tributos</td>
+                    <td className="py-2 text-right text-gray-400">$ {fnum(pres.total_trib_ars)}</td>
+                    <td className="py-2 text-right font-semibold" style={{ color: '#185FA5' }}>$ {fnum(liqM.totalTribArs)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              {(() => {
+                const d = pres.total_trib_ars - liqM.totalTribArs
+                return Math.round(d) === 0
+                  ? <div className="text-xs px-3 py-2 rounded-lg bg-gray-50 text-gray-500">Sin exclusiones: coincide con lo presupuestado.</div>
+                  : <div className="text-xs px-3 py-2 rounded-lg bg-green-50 text-green-700">Tributos menores en $ {fnum(d)} (USD {fnum(d / (pres.tc || 1))}) por los conceptos excluidos · a TC de la cotización ({fnum(pres.tc)}).</div>
+              })()}
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 sticky bottom-0 bg-white">
+              <button onClick={() => setModal(false)} disabled={saving} className="border border-gray-200 text-gray-600 px-4 py-2 rounded-lg text-xs hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+              <button onClick={guardar} disabled={saving} className="bg-[#1168F8] text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-[#0a4fc4] disabled:opacity-50">{saving ? 'Guardando...' : 'Guardar ajuste'}</button>
             </div>
           </div>
         </div>
