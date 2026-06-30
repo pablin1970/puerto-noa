@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fmt } from '@/lib/utils'
-import { cargarPermisos, puede } from '@/lib/permisos'
+import { cargarPermisos, puede, cuentasPermitidas } from '@/lib/permisos'
 import { urlVerConMarca } from '@/lib/documentos'
 
 type Tab = 'arqueo' | 'movimientos' | 'por_operacion' | 'conciliacion'
@@ -90,7 +90,10 @@ export default function FondosCustodiaPage() {
       .reduce((s, m) => s + (['ingreso_cliente'].includes(m.tipo) ? m.usd : -m.usd), 0)
   }
 
-  const totalUSD = cuentas.reduce((s, c) => s + saldoCuentaUSD(c.id, c.moneda), 0)
+  // P-25 · solo las cuentas de custodia que el rol puede ver (deny by default; Super Admin ve todas)
+  const cuentasVisibles = useMemo(() => cuentasPermitidas(permisos, cuentas, 'ver'), [permisos, cuentas])
+
+  const totalUSD = cuentasVisibles.reduce((s, c) => s + saldoCuentaUSD(c.id, c.moneda), 0)
 
   if (loading) return (
     <div className="p-8 text-center text-gray-400">
@@ -116,8 +119,8 @@ export default function FondosCustodiaPage() {
           <div className="text-[11px] text-blue-300 mt-1">Consolidado a TC actual</div>
         </div>
         {[
-          { label: 'Cajas efectivo', cuentas: cuentas.filter(c => c.tipo === 'caja') },
-          { label: 'Cuentas bancarias', cuentas: cuentas.filter(c => c.tipo === 'banco') },
+          { label: 'Cajas efectivo', cuentas: cuentasVisibles.filter(c => c.tipo === 'caja') },
+          { label: 'Cuentas bancarias', cuentas: cuentasVisibles.filter(c => c.tipo === 'banco') },
         ].map(g => (
           <div key={g.label} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">{g.label}</div>
@@ -180,7 +183,7 @@ export default function FondosCustodiaPage() {
                 </tr>
               </thead>
               <tbody>
-                {cuentas.map(c => {
+                {cuentasVisibles.map(c => {
                   const s = saldoCuenta(c.id)
                   const susd = saldoCuentaUSD(c.id, c.moneda)
                   return (
@@ -268,7 +271,7 @@ export default function FondosCustodiaPage() {
       {tab === 'movimientos' && (
         <MovimientosTab
           supabase={supabase}
-          cuentas={cuentas}
+          cuentas={cuentasVisibles}
           movimientos={movimientos}
           operaciones={operaciones}
           facturasEmit={facturasEmit}
@@ -285,7 +288,7 @@ export default function FondosCustodiaPage() {
         <PorOperacionTab
           movimientos={movimientos}
           operaciones={operaciones}
-          cuentas={cuentas}
+          cuentas={cuentasVisibles}
           saldoPorOperacion={saldoPorOperacion}
         />
       )}
@@ -294,7 +297,7 @@ export default function FondosCustodiaPage() {
       {tab === 'conciliacion' && (
         <ConciliacionTab
           supabase={supabase}
-          cuentas={cuentas}
+          cuentas={cuentasVisibles}
           movimientos={movimientos}
           saldoCuenta={saldoCuenta}
           reload={loadAll}
