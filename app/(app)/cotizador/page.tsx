@@ -119,7 +119,9 @@ interface CotState {
   honTipo: 'pct_cif'|'fijo_usd'|'fijo_ars'
   honValor: number; honPiso: number; honTecho: number
   gastosDesp: GastoArg[]
-  // Sección B: otros gastos en Argentina con tipoCalc completo
+  // Sección B: cotizaciones de proveedores en Argentina (almacén, agente, etc.) — tarjetas con medidor.
+  cotsProvArg: CotProvSel[]
+  // rowsE: retirado del flujo (sólo cotizaciones de proveedor). Queda latente para compatibilidad.
   rowsE: GastoArg[]
   // Bloque 5 - Fee
   feeModo: 'cont'|'pct'
@@ -157,7 +159,7 @@ const INIT: CotState = {
   cargaModo:'fijo',cargaValor:0,
   ftCamion:0,nCamiones:1,ftIda:0,ftDev:0,ftRt:0,
   estadiaCargaVal:0,estadiaCargaDias:0,estadiaDescargaVal:0,estadiaDescargaDias:0,
-  rowsE:[],gastosDesp:[],honTipo:'fijo_usd',honValor:0,honPiso:0,honTecho:0,feeModo:'cont',feeCont:0,feePct:0,
+  rowsE:[],cotsProvArg:[],gastosDesp:[],honTipo:'fijo_usd',honValor:0,honPiso:0,honTecho:0,feeModo:'cont',feeCont:0,feePct:0,
   tcClp:950,tcCny:7,regimen:'A',tcTrib:1000,derPct:18,
 }
 
@@ -634,7 +636,12 @@ const subChileCif = chileActivoCif ? (subGastosChile+subD) : 0
 // No incluye el fee: por eso el despachante puede cobrarse sobre él sin generar circularidad.
 const cifLog=totalFOB + subFW + subTranspIntl + segMarEff + segTerrEff*fIntlTerr + subChileCif
 // Otros gastos Argentina sección B — entran a la base del fee. Se calculan sobre el CIF logístico (sin fee).
-const subE=s.rowsE.reduce((t,r)=>t+calcGastoArg(r,cifLog,s.tcTrib),0)
+// Otros gastos Argentina sección B — ahora son cotizaciones de proveedor (almacén/agente/etc.).
+// Todas las cargadas suman sus ítems seleccionados. Entran a la base del fee y al total, NO al CIF
+// (gasto post-aduana). El nombre subE se mantiene para no tocar sus usos posteriores.
+const subE=s.cotsProvArg.reduce((t,c)=> t + (c.esManual
+  ? (c.manualMonto||0)
+  : c.items.filter(i=>i.seleccionado).reduce((a,i)=>a+i.subtotal,0)), 0)
 // Base del fee: toda la logística (exterior + Argentina) SIN la mercadería y SIN el despachante.
 // El despachante es el único gasto %CIF; se excluye de la base del fee para que el cálculo no muerda la cola.
 const baseLogFee=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+subE
@@ -1083,11 +1090,11 @@ function agregarSegDesdeSistema(cotId:string){
   setS(p=>({...p, cotsProvSeg:[...p.cotsProvSeg, nueva]}))
 }
 
-function elegirCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg'|'cotsProvOrigen', uid:string){
+function elegirCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg'|'cotsProvOrigen'|'cotsProvArg', uid:string){
   setS(p=>({...p, [campo]:p[campo].map((c:CotProvSel)=>({...c,elegida:c.uid===uid}))}))
 }
 
-function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg'|'cotsProvOrigen', uid:string){
+function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg'|'cotsProvOrigen'|'cotsProvArg', uid:string){
   setS(p=>{
     const nuevas = (p[campo] as CotProvSel[]).filter(c=>c.uid!==uid)
     if(nuevas.length>0&&!nuevas.some(c=>c.elegida)) nuevas[0].elegida=true
@@ -1095,7 +1102,7 @@ function eliminarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'co
   })
 }
 
-function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg'|'cotsProvOrigen', cotUid:string, itemId:string){
+function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg'|'cotsProvOrigen'|'cotsProvArg', cotUid:string, itemId:string){
   setS(p=>({...p,[campo]:(p[campo] as CotProvSel[]).map(c=>{
     if(c.uid!==cotUid) return c
     return {...c,items:c.items.map(i=>{
@@ -1106,7 +1113,7 @@ function toggleItemCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'
   })}))
 }
 
-function setCantUsarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg'|'cotsProvOrigen', cotUid:string, itemId:string, cant:number){
+function setCantUsarCotProv(campo:'cotsProvFW'|'cotsProvChile'|'cotsProvTransp'|'cotsProvMerc'|'cotsProvSeg'|'cotsProvOrigen'|'cotsProvArg', cotUid:string, itemId:string, cant:number){
   setS(p=>({...p,[campo]:(p[campo] as CotProvSel[]).map(c=>{
     if(c.uid!==cotUid) return c
     return {...c,items:c.items.map(i=>{
@@ -1133,6 +1140,17 @@ function agregarTranspChileDesdeSistema(cotId:string){
   nueva.elegida = s.cotsProvChile.length===0
   setS(p=>({...p, cotsProvChile:[...p.cotsProvChile, nueva]}))
   setProvUsado(pv=>({...pv,2:cotId}))
+}
+
+// Cotización de proveedor en Argentina (almacén/agente/etc., NO despachante) desde sistema.
+// A diferencia de Chile, acá conviven varias: todas las cargadas suman (sin radio exclusivo).
+function agregarArgDesdeSistema(cotId:string){
+  const cot = cotsArgDisponibles.find((c:any)=>c.id===cotId)
+  if(!cot) return
+  const usadas = cotsSistemaUsadas[cotId]||[]
+  const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
+  setS(p=>({...p, cotsProvArg:[...p.cotsProvArg, nueva]}))
+  setProvUsado(pv=>({...pv,4:cotId}))
 }
 
 // Transporte terrestre desde sistema
@@ -3362,29 +3380,22 @@ const clientesFiltrados=terceros.filter(t=>
                 })}
               </div>
 
-              {/* Seccion B — Otros gastos en Argentina */}
+              {/* Seccion B — Cotizaciones de proveedores en Argentina (almacén, agente, etc.) */}
               <div className="pt-4 border-t border-gray-100">
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold">B</span>
                     <span className="text-xs font-semibold text-gray-700">Otros gastos en Argentina</span>
-                    <span className="text-[10px] text-gray-400">Transporte interno, almacenaje, etc.</span>
+                    <span className="text-[10px] text-gray-400">Almacén, agente, transporte interno, etc.</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <select onChange={e=>{
-                      if(!e.target.value) return
-                      const cot=cotsArgDisponibles.find((c:any)=>c.id===e.target.value)
-                      if(!cot) return
-                      const items=(cot.items||[]) as any[]
-                      const nuevos=items.map((x:any)=>({id:uid2(),desc:x.descripcion||'',tipoCalc:(x.tipo_calculo==='pct_cif'?'pct_cif':x.tipo_calculo==='fijo_ars'?'fijo_ars':'fijo_usd') as any,moneda:'USD' as const,valor:x.valor||0,pisoUsd:x.piso_usd||0,techoUsd:x.techo_usd||0,usd:0,ars:0}))
-                      setS(p=>({...p,rowsE:[...p.rowsE,...nuevos]}))
-                      setProvUsado(pv=>({...pv,4:cot.id}))
-                      e.target.value=''
-                    }} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#6b21a8]" defaultValue="">
+                    <select onChange={e=>{if(e.target.value){agregarArgDesdeSistema(e.target.value);e.target.value=''}}}
+                      className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:border-[#6b21a8]" defaultValue="">
                       <option value="">+ Cargar del sistema</option>
                       {(()=>{
-                        const esp=cotsArg.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
-                        const gen=cotsArg.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
+                        const dispo=cotsArg.filter(c=>c.rubro!=='gastos_argentina')
+                        const esp=dispo.filter(c=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
+                        const gen=dispo.filter(c=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
                         return(<>
                           {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}{sufijoCoincDesp(c)}</option>)})}</optgroup>)}
                           <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}{sufijoCoincDesp(c)}</option>))}</optgroup>
@@ -3394,48 +3405,74 @@ const clientesFiltrados=terceros.filter(t=>
                     <button onClick={()=>{
                       window.open(`/cotizaciones-proveedores?nuevo=1&bloque=4&cliente_id=${clienteSelId||''}&cliente_nombre=${encodeURIComponent(s.cliente||'')}`, '_blank')
                     }} className="px-3 py-1 bg-[#6b21a8] text-white rounded-lg text-[10px] font-bold hover:bg-[#581c87] whitespace-nowrap">+ Manual</button>
-
                   </div>
                 </div>
-                {s.rowsE.length===0&&(
-                  <div className="text-[10px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">Sin gastos adicionales.</div>
+                {s.cotsProvArg.length===0&&(
+                  <div className="text-[10px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">Sin cotizaciones de proveedores en Argentina. Cargalas del sistema o ingresalas con + Manual.</div>
                 )}
-                {s.rowsE.map((r,i)=>{
-                  const usdR=calcGastoArg(r,cifLog,s.tcTrib)
+                {s.cotsProvArg.map(ct=>{
+                  const vigente=isVigente(ct.fechaVencimiento)
+                  const totalSel=ct.esManual?(ct.manualMonto||0):ct.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
                   return (
-                    <div key={r.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 mb-2">
-                      <div className="flex gap-2 items-center mb-2">
-                        <input value={r.desc} onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],desc:e.target.value};u('rowsE',n)}}
-                          className="flex-1 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#1168F8] bg-white" placeholder="Descripcion del gasto"/>
-                        <select value={r.tipoCalc} onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],tipoCalc:e.target.value as any};u('rowsE',n)}}
-                          className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none bg-white w-36 flex-shrink-0">
-                          <option value="pct_cif">% sobre CIF</option>
-                          <option value="fijo_usd">Fijo USD</option>
-                          <option value="fijo_ars">Fijo ARS</option>
-                        </select>
-                        <span className="text-[10px] text-gray-500 flex-shrink-0">{r.tipoCalc==='pct_cif'?'%':r.tipoCalc==='fijo_ars'?'ARS':'USD'}</span>
-                        <input type="text" inputMode="decimal" value={r.valor||''} placeholder="0" onFocus={e=>e.target.select()}
-                          onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],valor:parseNum(e.target.value)};u('rowsE',n)}}
-                          className="w-28 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]"/>
-                        <button onClick={()=>u('rowsE',s.rowsE.filter((_,j)=>j!==i))} className="text-gray-400 hover:text-red-500 text-xs flex-shrink-0">X</button>
-                      </div>
-                      {r.tipoCalc==='pct_cif'&&(
-                        <div className="flex gap-2 items-center mb-1">
-                          <span className="text-[10px] text-gray-400 flex-shrink-0 ml-1">Piso USD</span>
-                          <input type="text" inputMode="decimal" value={r.pisoUsd||''} placeholder="0" onFocus={e=>e.target.select()}
-                            onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],pisoUsd:parseNum(e.target.value)};u('rowsE',n)}}
-                            className="w-28 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]"/>
-                          <span className="text-[10px] text-gray-400 ml-2 flex-shrink-0">Techo USD</span>
-                          <input type="text" inputMode="decimal" value={r.techoUsd||''} placeholder="0" onFocus={e=>e.target.select()}
-                            onChange={e=>{const n=[...s.rowsE];n[i]={...n[i],techoUsd:parseNum(e.target.value)};u('rowsE',n)}}
-                            className="w-28 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#1168F8]"/>
+                    <div key={ct.uid} className="border-2 rounded-xl overflow-hidden mb-2 border-[#6b21a8]/40">
+                      <div className="flex items-center gap-0 bg-purple-50/40">
+                        <div className="flex-1 px-3 py-2.5">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <span className="font-semibold text-sm text-gray-900">{ct.proveedorNombre}</span>
+                            <MedidorCoincidencia criterios={criteriosProvArg(ct.terceroId)}/>
+                            {ct.tipo==='especifica'?<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEEDFE] text-[#3C3489]">⭐ Específica{ct.clienteId&&terceros.find(t=>t.id===ct.clienteId)?` · ${terceros.find(t=>t.id===ct.clienteId)!.razon_social}`:''}</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500">Genérica</span>}
+                            {vigente?<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700">vigente</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700">vencida {fmtFecha(ct.fechaVencimiento)}</span>}
+                            {ct.usadaEnCots.length>0&&<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">⚠ Usada en {ct.usadaEnCots.join(', ')}</span>}
+                          </div>
+                          <div className="flex gap-4 text-[10px] text-gray-500">
+                            {ct.referencia&&<span className="font-mono">Ref: {ct.referencia}</span>}
+                            {ct.fechaEmision&&<span>Emitida: {fmtFecha(ct.fechaEmision)}</span>}
+                            {ct.fechaVencimiento&&<span>Vence: {fmtFecha(ct.fechaVencimiento)}</span>}
+                          </div>
                         </div>
-                      )}
-                      <div className="flex justify-end mt-1">
-                        <span className="font-mono font-semibold text-gray-700 text-xs">USD {fmt(usdR)}</span>
-                        <span className="text-gray-300 mx-2">—</span>
-                        <span className="font-mono text-gray-500 text-[10px]">ARS {Math.round(usdR*s.tcTrib).toLocaleString('es-AR')}</span>
+                        <div className="flex items-center gap-3 px-3">
+                          {totalSel>0&&<span className="font-mono font-bold text-[#6b21a8] text-sm">USD {fmt(totalSel)}</span>}
+                          <button onClick={()=>eliminarCotProv('cotsProvArg',ct.uid)} className="text-gray-300 hover:text-red-500 text-xs">✕</button>
+                        </div>
                       </div>
+                      {!ct.esManual&&(
+                      <table className="w-full text-xs border-t border-gray-100">
+                        <thead><tr className="bg-gray-50 border-b border-gray-100">
+                          <th className="w-8 px-2 py-2"></th>
+                          <th className="text-left px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase">Ítem</th>
+                          <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Precio unit.</th>
+                          <th className="text-center px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-24">Cant. cot.</th>
+                          <th className="text-center px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Cant. a usar</th>
+                          <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase w-28">Subtotal</th>
+                        </tr></thead>
+                        <tbody>
+                          {ct.items.map(it=>(
+                            <tr key={it.itemId} className={`border-b border-gray-50 ${it.seleccionado?'bg-purple-50/30':''}`}>
+                              <td className="px-2 py-2 text-center">
+                                <button onClick={()=>toggleItemCotProv('cotsProvArg',ct.uid,it.itemId)}>
+                                  <div className={`w-4 h-4 rounded border-2 mx-auto flex items-center justify-center ${it.seleccionado?'bg-[#6b21a8] border-[#6b21a8]':'border-gray-300 hover:border-[#6b21a8]'}`}>
+                                    {it.seleccionado&&<div className="w-2 h-1.5 border-l-2 border-b-2 border-white" style={{transform:'rotate(-45deg) translate(1px,-1px)'}}/>}
+                                  </div>
+                                </button>
+                              </td>
+                              <td className="px-3 py-2"><div className="font-medium text-gray-800">{it.descripcion}</div></td>
+                              <td className="px-3 py-2 text-right font-mono text-gray-700">USD {fmt(it.valorUnit)}</td>
+                              <td className="px-3 py-2 text-center text-gray-400 font-mono">{it.cantCotizada>0?it.cantCotizada:'—'}</td>
+                              <td className="px-3 py-2 text-center">
+                                {it.seleccionado?(
+                                  <input type="text" inputMode="decimal" value={it.cantUsar} onFocus={e=>e.target.select()}
+                                    onChange={e=>setCantUsarCotProv('cotsProvArg',ct.uid,it.itemId,parseNum(e.target.value)||1)}
+                                    className="w-16 px-2 py-1 border border-purple-200 rounded-lg text-xs text-right font-mono bg-white focus:outline-none focus:border-[#6b21a8]"/>
+                                ):<span className="text-gray-300">—</span>}
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                {it.seleccionado?<span className="font-mono font-semibold text-[#6b21a8]">USD {fmt(it.subtotal)}</span>:<span className="text-gray-300">—</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      )}
                     </div>
                   )
                 })}
