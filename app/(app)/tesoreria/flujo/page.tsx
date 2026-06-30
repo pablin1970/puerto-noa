@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
-import { cargarPermisos, puede } from '@/lib/permisos'
+import { cargarPermisos, puede, cuentasPermitidas } from '@/lib/permisos'
 import { urlVerConMarca } from '@/lib/documentos'
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
@@ -244,10 +244,10 @@ export default function FlujoCuentasPage() {
               <select value={form.cuenta_origen_id} onChange={e => setForm(f => ({...f, cuenta_origen_id: e.target.value}))} className={inp}>
                 <option value="">— Seleccionar cuenta —</option>
                 <optgroup label="Cuentas propias PN">
-                  {cuentasPn.map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>)}
+                  {cuentasPermitidas(permisos, cuentasPn, 'egresar').map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>)}
                 </optgroup>
                 <optgroup label="Fondos custodia">
-                  {cuentasCustodia.map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>)}
+                  {cuentasPermitidas(permisos, cuentasCustodia, 'egresar').map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>)}
                 </optgroup>
               </select>
             </div>
@@ -256,10 +256,10 @@ export default function FlujoCuentasPage() {
               <select value={form.cuenta_destino_id} onChange={e => setForm(f => ({...f, cuenta_destino_id: e.target.value}))} className={inp}>
                 <option value="">— Seleccionar cuenta —</option>
                 <optgroup label="Cuentas propias PN">
-                  {cuentasPn.map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>)}
+                  {cuentasPermitidas(permisos, cuentasPn, 'ingresar').map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>)}
                 </optgroup>
                 <optgroup label="Fondos custodia">
-                  {cuentasCustodia.map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>)}
+                  {cuentasPermitidas(permisos, cuentasCustodia, 'ingresar').map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>)}
                 </optgroup>
               </select>
             </div>
