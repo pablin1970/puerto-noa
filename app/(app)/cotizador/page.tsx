@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import CotizacionDoc from '@/components/CotizacionDoc'
 import { cargarPermisos, puede } from '@/lib/permisos'
+import { armarSnapshot, calcTrib, type ComponenteCif } from '@/lib/liquidacion'
 
 type Tab = 'embarque' | 'mercaderia' | 'logistica' | 'tributos' | 'resumen'
 type OptTransp = 'A' | 'B1' | 'B2'
@@ -642,18 +643,37 @@ const subHon=calcGastoArg({id:'hon',desc:'',tipoCalc:s.honTipo,moneda:'USD',valo
 const subGastosDesp=s.gastosDesp.reduce((t,g)=>t+calcGastoArg(g,cif,s.tcTrib),0)
 const subGastosArg=subHon+subGastosDesp
 
-function calcTrib(cfg:TribCfg[],cifARS:number,derPct:number){
-  const VA=cifARS; let base=VA
-  return cfg.map(t=>{
-    let imp=0
-    if(t.codigo==='010'){imp=VA*derPct/100;base=VA+imp}
-    else if(t.codigo==='011'){const e=VA*t.valor/100;imp=e;base+=e}
-    else if(t.tipo==='fijo'){imp=t.valor}
-    else{imp=base*t.valor/100}
-    return {...t,imp}
-  })
-}
+// calcTrib se importa de @/lib/liquidacion (fuente única — P-21).
 const tributos=calcTrib(tribCfg,cifARS,s.derPct)
+// ── P-21: cada gasto individual que compone el CIF imponible (para la liquidación real en la operación) ──
+// Se sella en la cotización; en la operación el usuario destilda los que la aduana no tomó a la base.
+const compCif:ComponenteCif[]=[]
+const pushCif=(id:string,etapa:string,label:string,usd:number,nota?:string)=>{
+  if(usd&&Math.abs(usd)>0.005) compCif.push({id,etapa,label,usd,al_cif:true,...(nota?{nota}:{})})
+}
+pushCif('fob','mercaderia','FOB mercadería',baseFOB)
+if(origenActivoCalc&&origenElegida){
+  if(origenElegida.esManual) pushCif('origen','origen','Gastos de origen',origenElegida.manualMonto||0)
+  else origenElegida.items.filter(i=>i.seleccionado).forEach((it,idx)=>
+    pushCif(`origen:${idx}`,'origen',it.descripcion||'Gasto de origen',it.subtotal))
+}
+pushCif('fw','maritimo','Flete marítimo · forwarder',subFW)
+pushCif('segmar','maritimo','Seguro marítimo',segMarEff)
+pushCif('terr','terrestre','Flete terrestre',subTranspIntl,`solo tramo intl · ${pctIntlTerr}%`)
+pushCif('segterr','terrestre','Seguro terrestre',segTerrEff*fIntlTerr,`solo tramo intl · ${pctIntlTerr}%`)
+if(chileActivoCif){
+  s.gastosChile.forEach((g,idx)=>{
+    const b=g.tipoCalc==='m3'?g.valor*totalM3:g.valor
+    pushCif(`chile:${idx}`,'chile',g.desc||'Gasto en Chile',g.ivaChile==='gravado'?b*1.19:b)
+  })
+  s.rowsDescon.forEach((r,idx)=>{
+    const m=r.tipoCalc==='m3'?r.unitario*totalM3:r.cant*r.unitario
+    pushCif(`descon:${idx}`,'deposito',r.desc||'Desconsolidado',m)
+  })
+  pushCif('alm','deposito','Almacenaje',subAlm)
+  pushCif('carga','deposito','Carga al camión',subCarga)
+}
+pushCif('fee','fee','Fee Puerto NOA',fee)
 const totalTribARS=tributos.reduce((t,r)=>t+r.imp,0)
 // ── Mercadería como bloque: activa si su id está en bloquesActivos (o si la lista está vacía = todos activos) ──
 const mercaderiaActiva = (): boolean => {
@@ -1509,6 +1529,7 @@ async function guardar(){
     const {data:uDB}=await supabase.from('usuarios').select('id').eq('auth_id',user.user.id).single()
     const uid=(uDB as any)?.id||''
     const presupuesto = armarPresupuesto()
+    const liquidacionPresup = arcaActivo ? armarSnapshot(compCif,tribCfg,s.tcTrib,s.derPct,s.regimen) : null
     const cambiosRecot = recotizaDeId ? calcularCambios(recotizaSnapOrig, s) : []
     const {error}=await (supabase.from('cotizaciones') as any).insert({
       num,version:1,talonario_id:(talCot as any).id,
@@ -1530,7 +1551,7 @@ async function guardar(){
       sentido:s.sentido,
       recotiza_de_id:recotizaDeId,recotiza_de_num:recotizaDeNum||null,recotiza_linaje:recotizaLinaje,recotiza_cambios:cambiosRecot,
       estado_cotizador:{...s, _despachanteSelId:despachanteSelId, _cotDesp:cotDesp, _provUsado:provUsado},
-      ejecutivo_id:uid,creado_por:uid,modificado_por:uid,presupuesto,
+      ejecutivo_id:uid,creado_por:uid,modificado_por:uid,presupuesto,liquidacion_presupuestada:liquidacionPresup,
     })
     if(error){alert('Error al guardar: '+error.message);setSaving(false);return}
     // Obtener el id de la cotizacion recien creada
