@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { cargarPermisos, puede } from '@/lib/permisos'
+import { cargarPermisos, puede, cuentasPermitidas } from '@/lib/permisos'
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 const fmt = (n: number) => Math.round(n || 0).toLocaleString('es-CL')
@@ -114,14 +114,14 @@ export default function MovimientosCuentasPage() {
       )}
 
       {view === 'nuevo' && (
-        <FormMovimiento supabase={supabase} currentUser={currentUser} talonarios={talonarios} cuentas={cuentas} tcSnap={tcSnap}
+        <FormMovimiento supabase={supabase} currentUser={currentUser} permisos={permisos} talonarios={talonarios} cuentas={cuentas} tcSnap={tcSnap}
           onSave={async () => { await loadData(); setView('lista') }} onCancel={() => setView('lista')} />
       )}
     </div>
   )
 }
 
-function FormMovimiento({ supabase, currentUser, talonarios, cuentas, tcSnap, onSave, onCancel }: any) {
+function FormMovimiento({ supabase, currentUser, permisos, talonarios, cuentas, tcSnap, onSave, onCancel }: any) {
   const [modo, setModo] = useState<'transferencia' | 'cambio'>('transferencia')
   const [form, setForm] = useState<any>({
     fecha: new Date().toISOString().slice(0, 10), cuenta_origen_id: '', cuenta_destino_id: '',
@@ -265,13 +265,13 @@ function FormMovimiento({ supabase, currentUser, talonarios, cuentas, tcSnap, on
           <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cuenta origen (sale)</label>
             <select value={form.cuenta_origen_id} onChange={e => setForm((f: any) => ({ ...f, cuenta_origen_id: e.target.value }))} className={inp}>
               <option value="">— elegí —</option>
-              {cuentas.map((c: any) => <option key={c.id} value={c.id}>{c.nombre} · {c.moneda} ({c.pais}) · {fmt(c.saldo_actual)}</option>)}
+              {cuentasPermitidas(permisos, cuentas, 'egresar').map((c: any) => <option key={c.id} value={c.id}>{c.nombre} · {c.moneda} ({c.pais}) · {fmt(c.saldo_actual)}</option>)}
             </select>
           </div>
           <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Cuenta destino (entra)</label>
             <select value={form.cuenta_destino_id} onChange={e => setForm((f: any) => ({ ...f, cuenta_destino_id: e.target.value }))} className={inp}>
               <option value="">— elegí —</option>
-              {cuentas.map((c: any) => <option key={c.id} value={c.id}>{c.nombre} · {c.moneda} ({c.pais}) · {fmt(c.saldo_actual)}</option>)}
+              {cuentasPermitidas(permisos, cuentas, 'ingresar').map((c: any) => <option key={c.id} value={c.id}>{c.nombre} · {c.moneda} ({c.pais}) · {fmt(c.saldo_actual)}</option>)}
             </select>
           </div>
           <div><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Monto que sale {origen ? `(${origen.moneda})` : ''}</label>
