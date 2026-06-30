@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { cargarPermisos, puede } from '@/lib/permisos'
+import { cargarPermisos, puede, cuentasPermitidas } from '@/lib/permisos'
 import { abrirConMarca } from '@/lib/documentos'
 import { imprimirComprobante } from '@/lib/comprobantePrint'
 
@@ -153,7 +153,7 @@ export default function RecibosPage() {
       {view === 'nuevo' && (
         <FormRecibo supabase={supabase} currentUser={currentUser} permisos={permisos}
           talonarios={talonarios} terceros={terceros} operaciones={operaciones}
-          cuentasPropias={cuentasPropias} cuentasRendir={cuentasRendir} tcSnap={tcSnap}
+          cuentasPropias={cuentasPermitidas(permisos, cuentasPropias, 'ingresar')} cuentasRendir={cuentasPermitidas(permisos, cuentasRendir, 'ingresar')} tcSnap={tcSnap}
           onSave={async () => { await loadData(); setView('lista') }} onCancel={() => setView('lista')} />
       )}
 
