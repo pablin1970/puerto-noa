@@ -381,6 +381,7 @@ function MovimientosTab({ supabase, cuentas, movimientos, operaciones, facturasE
       monto: montoNum,
       tc_usd: tcEfectivo,
       usd: usdEquiv,
+      tc_snapshot: { USD: 1, ARS: tcActual.ARS, CLP: tcActual.CLP },
       notas: form.notas || null,
       creado_por: currentUser?.nombre || null,
     }
