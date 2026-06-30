@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { cargarPermisos, puede } from '@/lib/permisos'
+import { cargarPermisos, puede, cuentasPermitidas } from '@/lib/permisos'
 import { abrirConMarca } from '@/lib/documentos'
 import { imprimirComprobante } from '@/lib/comprobantePrint'
 
@@ -164,7 +164,7 @@ export default function OrdenesPagoPage() {
       {view === 'nuevo' && (
         <FormOrdenPago supabase={supabase} currentUser={currentUser}
           talonarios={talonarios} talDifCambio={talDifCambio} proveedores={proveedores} clientes={clientes} operaciones={operaciones}
-          cuentasPropias={cuentasPropias} cuentasRendir={cuentasRendir} tcSnap={tcSnap}
+          cuentasPropias={cuentasPermitidas(permisos, cuentasPropias, 'egresar')} cuentasRendir={cuentasPermitidas(permisos, cuentasRendir, 'egresar')} tcSnap={tcSnap}
           onSave={async () => { await loadData(); setView('lista') }} onCancel={() => setView('lista')} />
       )}
 
