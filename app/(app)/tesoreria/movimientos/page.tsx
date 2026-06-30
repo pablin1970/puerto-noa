@@ -181,30 +181,12 @@ function FormMovimiento({ supabase, currentUser, permisos, talonarios, cuentas, 
       }).select('id').single()
       if (cErr || !comp) { alert('Error al guardar: ' + (cErr?.message || '')); setSaving(false); return }
 
-      // Registro en flujo_cuentas_pn
-      const tipoFlujo = modo === 'cambio' ? 'cambio_divisa'
-        : (origen?.pais === destino?.pais ? 'transferencia_interna' : (origen?.pais === 'AR' ? 'transferencia_arg_chile' : 'transferencia_chile_arg'))
-      const { data: flujo } = await (supabase.from('flujo_cuentas_pn') as any).insert({
-        fecha: form.fecha, tipo: tipoFlujo, descripcion: form.concepto || (modo === 'cambio' ? 'Cambio de divisa' : 'Transferencia interna'),
-        cuenta_origen_id: form.cuenta_origen_id, cuenta_origen_tipo: origen?.pais === 'AR' ? 'propia_argentina' : 'propia_chile', cuenta_origen_nombre: origen?.nombre,
-        cuenta_destino_id: form.cuenta_destino_id, cuenta_destino_tipo: destino?.pais === 'AR' ? 'propia_argentina' : 'propia_chile', cuenta_destino_nombre: destino?.nombre,
-        monto_origen: montoOrigen, moneda_origen: monedaO, monto_destino: montoDestino, moneda_destino: monedaD,
-        tipo_cambio_aplicado: tcAplicado, monto_usd_equiv: aUSD(montoOrigen, monedaO, tcSnap),
-        costo_conversion: costoActivo ? costoMonto : null,
-        costo_conversion_moneda: costoActivo ? costoMoneda : null,
-        costo_conversion_modo: costoActivo ? form.costo_modo : null,
-        tc_efectivo: costoActivo ? tcEfectivo : null,
-        referencia: formateado, talonario_id: talonario.id, numero_comprobante: formateado, tc_snapshot: tcSnap || null,
-        created_by: currentUser?.id,
-      }).select('id').single()
-
       // Adjunto
       if (compFile) {
         const ext = compFile.name.split('.').pop()
         const path = `movimientos/${comp.id}.${ext}`
         await supabase.storage.from('comprobantes').upload(path, compFile, { upsert: true })
         await (supabase.from('comprobantes_tesoreria') as any).update({ archivo_url: path, archivo_nombre: compFile.name }).eq('id', comp.id)
-        if (flujo) await (supabase.from('flujo_cuentas_pn') as any).update({ archivo_url: path, archivo_nombre: compFile.name }).eq('id', flujo.id)
       }
 
       // Costo de conversión → se registra como gasto (comisión bancaria) en contabilidad
@@ -232,14 +214,14 @@ function FormMovimiento({ supabase, currentUser, permisos, talonarios, cuentas, 
       await (supabase.from('movimientos_cuentas_pn') as any).insert({
         cuenta_id: form.cuenta_origen_id, fecha: form.fecha, tipo: 'transferencia_out',
         concepto: `${formateado} · a ${destino?.nombre}`, monto: egresoOrigen, moneda: monedaO,
-        referencia: formateado, flujo_id: flujo?.id || null, talonario_id: talonario.id, numero_comprobante: formateado, tc_snapshot: tcSnap || null,
+        referencia: formateado, talonario_id: talonario.id, numero_comprobante: formateado, tc_snapshot: tcSnap || null,
         saldo_posterior: (Number(origen?.saldo_actual) || 0) - egresoOrigen,
       })
       await (supabase.from('cuentas_pn') as any).update({ saldo_actual: (Number(origen?.saldo_actual) || 0) - egresoOrigen }).eq('id', form.cuenta_origen_id)
       await (supabase.from('movimientos_cuentas_pn') as any).insert({
         cuenta_id: form.cuenta_destino_id, fecha: form.fecha, tipo: 'transferencia_in',
         concepto: `${formateado} · de ${origen?.nombre}`, monto: ingresoDestino, moneda: monedaD,
-        referencia: formateado, flujo_id: flujo?.id || null, talonario_id: talonario.id, numero_comprobante: formateado, tc_snapshot: tcSnap || null,
+        referencia: formateado, talonario_id: talonario.id, numero_comprobante: formateado, tc_snapshot: tcSnap || null,
         saldo_posterior: (Number(destino?.saldo_actual) || 0) + ingresoDestino,
       })
       await (supabase.from('cuentas_pn') as any).update({ saldo_actual: (Number(destino?.saldo_actual) || 0) + ingresoDestino }).eq('id', form.cuenta_destino_id)
