@@ -119,6 +119,8 @@ export default function LibroIVAPage() {
     )
   }
 
+  const pEditar = puede(permisos, 'iva', 'editar')
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       {/* Header */}
@@ -137,7 +139,7 @@ export default function LibroIVAPage() {
           {periodoActual?.estado === 'cerrado' ? (
             <span className="px-3 py-1.5 bg-red-50 text-red-700 rounded-xl text-xs font-semibold border border-red-100">Período cerrado</span>
           ) : (
-            <button onClick={cerrarPeriodo} className="px-4 py-2 border border-orange-200 text-orange-700 rounded-xl text-xs font-semibold hover:bg-orange-50">Cerrar período</button>
+            pEditar && <button onClick={cerrarPeriodo} className="px-4 py-2 border border-orange-200 text-orange-700 rounded-xl text-xs font-semibold hover:bg-orange-50">Cerrar período</button>
           )}
         </div>
       </div>
@@ -148,15 +150,19 @@ export default function LibroIVAPage() {
         {faltaUtm ? (
           <>
             <span className="text-amber-700">Sin cargar.</span>
+            {pEditar && <>
             <input value={utmInput} onChange={e => setUtmInput(e.target.value)} placeholder="valor en $" className="px-2 py-1 border border-gray-200 rounded-lg text-xs w-32" inputMode="decimal" />
             <button onClick={guardarUtm} disabled={savingUtm} className="px-3 py-1 bg-[#1168F8] text-white rounded-lg text-[11px] font-semibold disabled:opacity-50">{savingUtm ? 'Guardando...' : 'Guardar'}</button>
+            </>}
             <span className="text-[10px] text-gray-400">El cron mensual la trae de mindicador.cl; podés cargarla a mano si falta.</span>
           </>
         ) : (
           <>
             <span className="font-mono font-bold text-[#052698]">$ {fmtN(utmMes!)}</span>
+            {pEditar && <>
             <input value={utmInput} onChange={e => setUtmInput(e.target.value)} className="px-2 py-1 border border-gray-200 rounded-lg text-xs w-28" inputMode="decimal" />
             <button onClick={guardarUtm} disabled={savingUtm} className="px-3 py-1 border border-gray-200 text-gray-600 rounded-lg text-[11px] font-semibold hover:bg-gray-50 disabled:opacity-50">Corregir</button>
+            </>}
           </>
         )}
       </div>
