@@ -162,12 +162,17 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       // Fuente de verdad ÚNICA: un módulo deja de ser "nuevo" cuando se confirmó con Guardar
       // en la matriz (tabla modulos_revisados). Igual criterio que la pantalla de Usuarios,
       // para que el aviso del sidebar y el cartel coincidan.
-      const { data: revisados } = await supabase
-        .from('modulos_revisados')
-        .select('modulo, acciones')
+      const [{ data: revisados }, cpRes, fcRes] = await Promise.all([
+        supabase.from('modulos_revisados').select('modulo, acciones'),
+        (supabase.from('cuentas_pn') as any).select('id').eq('activo', true),
+        (supabase.from('fondos_cuentas') as any).select('id').eq('activo', true),
+      ])
       if (cancelado) return
       const revMap = new Map((revisados || []).map((p: any) => [p.modulo, (p.acciones || []) as string[]]))
-      setModulosNuevosCount(modulosPendientesSet(revMap).size)
+      // P-25 · una cuenta activa (propia o custodia) sin confirmar también cuenta como "nueva"
+      const cuentasIds = [...((cpRes.data as any[]) || []), ...((fcRes.data as any[]) || [])].map(c => `cuenta:${c.id}`)
+      const cuentasNuevas = cuentasIds.filter(m => !revMap.has(m)).length
+      setModulosNuevosCount(modulosPendientesSet(revMap).size + cuentasNuevas)
     })()
     return () => { cancelado = true }
   }, [pathname])
