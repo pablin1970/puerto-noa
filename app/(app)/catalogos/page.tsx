@@ -643,7 +643,7 @@ function FondosCuentasABM() {
     setLoading(true)
     const [cRes, tRes, eRes] = await Promise.all([
       (supabase.from('fondos_cuentas') as any).select('*').order('numero_interno', { ascending: true }),
-      (supabase.from('talonarios') as any).select('*').in('prefijo', ['CTA-CL', 'CTA-AR']),
+      (supabase.from('talonarios') as any).select('*').in('prefijo', ['CTA-CL', 'CTA-AR', 'CTA-US']),
       (supabase.from('empresa_config') as any).select('razon_social').limit(1).maybeSingle(),
     ])
     if (cRes.data) setCuentas(cRes.data)
@@ -663,6 +663,7 @@ function FondosCuentasABM() {
     const base = {
       nombre: form.nombre, tipo: form.tipo, moneda: form.moneda, pais: form.pais,
       banco: form.banco || null, nro_cuenta: form.nro_cuenta || null, cbu_iban: form.cbu_iban || null, swift: form.swift || null,
+      tipo_cuenta: form.tipo_cuenta || null, routing_number: form.routing_number || null, banco_direccion: form.banco_direccion || null, alias: form.alias || null,
       titular: empresaNombre, apoderados: Array.isArray(form.apoderados) ? form.apoderados : [], notas: form.notas || null, activo: form.activo !== false,
     }
     if (editId) {
@@ -792,7 +793,7 @@ function CuentasABM() {
     setLoading(true)
     const [pRes, tRes, eRes] = await Promise.all([
       (supabase.from('cuentas_pn') as any).select('*').order('pais').order('moneda'),
-      (supabase.from('talonarios') as any).select('*').in('prefijo', ['CTA-CL', 'CTA-AR']),
+      (supabase.from('talonarios') as any).select('*').in('prefijo', ['CTA-CL', 'CTA-AR', 'CTA-US']),
       (supabase.from('empresa_config') as any).select('razon_social').limit(1).maybeSingle(),
     ])
     if (pRes.data) setPropias(pRes.data)
@@ -816,6 +817,7 @@ function CuentasABM() {
     await (supabase.from('cuentas_pn') as any).insert({
       nombre: newData.nombre, tipo: newData.tipo || 'banco', pais: newData.pais, moneda: newData.moneda,
       banco: newData.banco || null, nro_cuenta: newData.nro_cuenta || null, cbu_iban: newData.cbu_iban || null, swift: newData.swift || null,
+      tipo_cuenta: newData.tipo_cuenta || null, routing_number: newData.routing_number || null, banco_direccion: newData.banco_direccion || null, alias: newData.alias || null,
       titular: empresaNombre, apoderados: Array.isArray(newData.apoderados) ? newData.apoderados : [],
       numero_interno, talonario_id, notas: newData.notas || null,
       saldo_inicial: 0, saldo_actual: 0, activo: newData.activo !== false,
@@ -829,6 +831,7 @@ function CuentasABM() {
     await (supabase.from('cuentas_pn') as any).update({
       nombre: editData.nombre, tipo: editData.tipo, pais: editData.pais, moneda: editData.moneda,
       banco: editData.banco || null, nro_cuenta: editData.nro_cuenta || null, cbu_iban: editData.cbu_iban || null, swift: editData.swift || null,
+      tipo_cuenta: editData.tipo_cuenta || null, routing_number: editData.routing_number || null, banco_direccion: editData.banco_direccion || null, alias: editData.alias || null,
       apoderados: Array.isArray(editData.apoderados) ? editData.apoderados : [], notas: editData.notas || null, activo: editData.activo !== false,
     }).eq('id', editId)
     setEditId(null); await load(); setSaving(false)
@@ -2061,8 +2064,20 @@ function CuentaForm({ data, setData, onSave, onCancel, ambito, inp, empresaNombr
   const [apNombre, setApNombre] = useState('')
   const [apTipo, setApTipo] = useState<string>(data.pais === 'AR' ? 'CUIT' : 'RUT')
   const [apNumero, setApNumero] = useState('')
+  const supabaseTC = useMemo(() => createClient(), [])
+  const [tiposCuenta, setTiposCuenta] = useState<any[]>([])
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      const { data: tc } = await (supabaseTC.from('tipos_cuenta_bancaria') as any)
+        .select('*').eq('pais', data.pais || 'CL').eq('activo', true).order('orden', { ascending: true })
+      if (vivo) setTiposCuenta(tc || [])
+    })()
+    return () => { vivo = false }
+  }, [data.pais, supabaseTC])
   const esCaja = (data.tipo || 'banco') === 'caja'
-  const cbuLbl = data.pais === 'AR' ? 'CBU (Argentina)' : 'IBAN (Chile)'
+  const esCL = (data.pais || 'CL') === 'CL', esAR = data.pais === 'AR', esUS = data.pais === 'US'
+  const paisNom = esAR ? 'Argentina' : esUS ? 'Estados Unidos' : 'Chile'
   const lbl = 'block text-[10px] font-semibold text-gray-500 mb-1 uppercase'
   function addApoderado() {
     if (!apNombre.trim()) return
@@ -2080,7 +2095,7 @@ function CuentaForm({ data, setData, onSave, onCancel, ambito, inp, empresaNombr
           <div className="text-[11px] text-gray-400">{esCustodia ? 'Fondos de clientes a rendir · titular Puerto NOA' : 'Caja, bancos e inversiones de Puerto NOA'}</div>
         </div>
         <div className="text-right bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-3 py-1.5 flex-shrink-0">
-          <div className="text-[9px] uppercase text-[#1168F8] tracking-wide">N° interno · {data.pais === 'AR' ? 'Argentina' : 'Chile'}</div>
+          <div className="text-[9px] uppercase text-[#1168F8] tracking-wide">N° interno · {paisNom}</div>
           <div className="text-sm font-mono font-bold text-[#052698]">{numeroPreview || '—'}</div>
           <div className="text-[9px] text-[#1168F8]">se graba al guardar</div>
         </div>
@@ -2104,6 +2119,7 @@ function CuentaForm({ data, setData, onSave, onCancel, ambito, inp, empresaNombr
         <select value={data.pais || 'CL'} onChange={e => setData((p: any) => ({ ...p, pais: e.target.value }))} className={inp}>
           <option value="CL">🇨🇱 Chile</option>
           <option value="AR">🇦🇷 Argentina</option>
+          <option value="US">🇺🇸 Estados Unidos</option>
         </select>
       </div>
 
@@ -2116,7 +2132,7 @@ function CuentaForm({ data, setData, onSave, onCancel, ambito, inp, empresaNombr
         </select>
       </div>
       <div>
-        <label className={lbl}>{data.tipo === 'inversion' ? 'ALyC / Agente (custodia)' : 'Banco / Entidad'}</label>
+        <label className={lbl}>{data.tipo === 'inversion' ? 'ALyC / Agente (custodia)' : esUS ? 'Bank Name' : 'Banco / Entidad'}</label>
         {!esCaja
           ? <SelectorBanco pais={data.pais} value={data.banco || ''} onChange={(n: string) => setData((p: any) => ({ ...p, banco: n }))} className={inp} />
           : <div className="text-[11px] text-gray-400 py-2.5">No aplica para caja</div>}
@@ -2129,11 +2145,32 @@ function CuentaForm({ data, setData, onSave, onCancel, ambito, inp, empresaNombr
 
       {!esCaja && (
         <div className="col-span-2 border-t border-gray-100 pt-3">
-          <div className="text-[11px] font-semibold text-gray-500 mb-2 uppercase">Datos de la cuenta</div>
-          <div className="grid grid-cols-1 gap-2">
-            <div><label className="block text-[10px] text-gray-400 mb-1">N° de cuenta</label><input value={data.nro_cuenta || ''} onChange={e => setData((p: any) => ({ ...p, nro_cuenta: e.target.value }))} className={inp} placeholder="Número de cuenta" /></div>
-            <div><label className="block text-[10px] text-gray-400 mb-1">{cbuLbl}</label><input value={data.cbu_iban || ''} onChange={e => setData((p: any) => ({ ...p, cbu_iban: e.target.value }))} className={inp} placeholder={data.pais === 'AR' ? 'CBU' : 'IBAN'} /></div>
-            <div><label className="block text-[10px] text-gray-400 mb-1">SWIFT / BIC (internacional)</label><input value={data.swift || ''} onChange={e => setData((p: any) => ({ ...p, swift: e.target.value }))} className={inp} placeholder="Código SWIFT" /></div>
+          <div className="text-[11px] font-semibold text-gray-500 mb-2 uppercase">Datos de la cuenta · {paisNom}</div>
+          <div className="grid grid-cols-2 gap-2">
+            {data.tipo === 'banco' && (
+              <div className="col-span-2"><label className="block text-[10px] text-gray-400 mb-1">Tipo de cuenta</label>
+                <select value={data.tipo_cuenta || ''} onChange={e => setData((p: any) => ({ ...p, tipo_cuenta: e.target.value }))} className={inp}>
+                  <option value="">— elegí el tipo —</option>
+                  {tiposCuenta.map((t: any) => <option key={t.id} value={t.codigo}>{t.nombre}</option>)}
+                </select></div>
+            )}
+
+            {esCL && (
+              <div className="col-span-2"><label className="block text-[10px] text-gray-400 mb-1">N° de cuenta</label><input value={data.nro_cuenta || ''} onChange={e => setData((p: any) => ({ ...p, nro_cuenta: e.target.value }))} className={inp} placeholder="Número de cuenta" /></div>
+            )}
+
+            {esAR && (<>
+              <div className="col-span-2"><label className="block text-[10px] text-gray-400 mb-1">N° de cuenta</label><input value={data.nro_cuenta || ''} onChange={e => setData((p: any) => ({ ...p, nro_cuenta: e.target.value }))} className={inp} placeholder="Número de cuenta" /></div>
+              <div><label className="block text-[10px] text-gray-400 mb-1">CBU</label><input value={data.cbu_iban || ''} onChange={e => setData((p: any) => ({ ...p, cbu_iban: e.target.value }))} className={inp} placeholder="22 dígitos" /></div>
+              <div><label className="block text-[10px] text-gray-400 mb-1">Alias</label><input value={data.alias || ''} onChange={e => setData((p: any) => ({ ...p, alias: e.target.value }))} className={inp} placeholder="alias.del.cbu" /></div>
+            </>)}
+
+            {esUS && (<>
+              <div><label className="block text-[10px] text-gray-400 mb-1">Account Number</label><input value={data.nro_cuenta || ''} onChange={e => setData((p: any) => ({ ...p, nro_cuenta: e.target.value }))} className={inp} placeholder="Account number" /></div>
+              <div><label className="block text-[10px] text-gray-400 mb-1">Routing Number</label><input value={data.routing_number || ''} onChange={e => setData((p: any) => ({ ...p, routing_number: e.target.value }))} className={inp} placeholder="9 dígitos (ACH/Wire)" /></div>
+              <div className="col-span-2"><label className="block text-[10px] text-gray-400 mb-1">SWIFT / BIC</label><input value={data.swift || ''} onChange={e => setData((p: any) => ({ ...p, swift: e.target.value }))} className={inp} placeholder="Código SWIFT" /></div>
+              <div className="col-span-2"><label className="block text-[10px] text-gray-400 mb-1">Bank Address</label><input value={data.banco_direccion || ''} onChange={e => setData((p: any) => ({ ...p, banco_direccion: e.target.value }))} className={inp} placeholder="Dirección del banco en EE.UU." /></div>
+            </>)}
           </div>
         </div>
       )}
