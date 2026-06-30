@@ -19,14 +19,16 @@ function aUSD(monto: number, moneda: string, tc: { ARS: number; CLP: number }) {
 function paisLabel(p: string) {
   if (p === 'AR' || p === 'Argentina') return 'Argentina'
   if (p === 'CL' || p === 'Chile') return 'Chile'
+  if (p === 'US' || p === 'Estados Unidos' || p === 'EEUU') return 'Estados Unidos'
   return p || 'Sin país'
 }
 function paisKey(p: string) {
   if (p === 'AR' || p === 'Argentina') return 'AR'
   if (p === 'CL' || p === 'Chile') return 'CL'
+  if (p === 'US' || p === 'Estados Unidos' || p === 'EEUU') return 'US'
   return p || 'ZZ'
 }
-function paisFlag(k: string) { return k === 'AR' ? '🇦🇷' : k === 'CL' ? '🇨🇱' : '🌐' }
+function paisFlag(k: string) { return k === 'AR' ? '🇦🇷' : k === 'CL' ? '🇨🇱' : k === 'US' ? '🇺🇸' : '🌐' }
 function tipoLabel(t: string) {
   if (t === 'caja') return 'Cajas'
   if (t === 'banco') return 'Bancos'
