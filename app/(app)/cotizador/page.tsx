@@ -496,11 +496,10 @@ const fobProforma = mercElegida
 // Bloque 5 (Origen / Puesta a FOB): cotización de forwarder/agente de origen elegida.
 // Se anula si el bloque Origen está desactivado desde sus pills (igual que el resto de bloques).
 const origenActivoCalc = !bloqueOrigen ? false : (s.bloquesActivos.length===0 ? true : s.bloquesActivos.includes(bloqueOrigen.id))
-const origenElegida = s.cotsProvOrigen.find(c=>c.elegida)
-const subOrigen = (origenActivoCalc && origenElegida)
-  ? origenElegida.esManual
-    ? (origenElegida.manualMonto||0)
-    : origenElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
+const subOrigen = origenActivoCalc
+  ? s.cotsProvOrigen.reduce((t,c)=> t + (c.esManual
+      ? (c.manualMonto||0)
+      : c.items.filter(i=>i.seleccionado).reduce((a,i)=>a+i.subtotal,0)), 0)
   : 0
 // En la COTIZACIÓN, los gastos de origen SIEMPRE forman el FOB.
 // Qué computa a la base imponible ante ARCA se ajusta recién en la operación (liquidación real).
@@ -550,7 +549,6 @@ const subSegMar  = sumaSegAseg(false)   // aseguradora — tramo marítimo
 const subSegTerr = sumaSegAseg(true)    // aseguradora — tramo terrestre
 const subSeg = subSegMar + subSegTerr
 // Bloque 2: Transporte Chile-NOA (cotizaciones del sistema)
-const transpChileElegida = s.cotsProvChile.find(c=>c.elegida)
 // Bloque 3: Flete terrestre (cotizaciones del sistema para B1/B2)
 const transpTerrElegida = s.cotsProvTransp.find(c=>c.elegida)
 const subTranspTerr = transpTerrElegida
@@ -562,11 +560,9 @@ const subTranspTerr = transpTerrElegida
 // Bloque 2: Gastos en Chile — total de la cotización del sistema elegida (agente/almacén/etc.).
 // Antes leía de s.gastosChile, que quedó sin vía de carga (la tarjeta no computaba). Ahora suma
 // los ítems seleccionados de la cotización elegida, igual que forwarder/terrestre/origen.
-const subGastosChile = transpChileElegida
-  ? (transpChileElegida.esManual
-      ? (transpChileElegida.manualMonto||0)
-      : transpChileElegida.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0))
-  : 0
+const subGastosChile = s.cotsProvChile.reduce((t,c)=> t + (c.esManual
+  ? (c.manualMonto||0)
+  : c.items.filter(i=>i.seleccionado).reduce((a,i)=>a+i.subtotal,0)), 0)
 
 // Bloque 3: Transporte + desconsolidacion
 const volAlm=s.almModoVol==='auto'?totalM3:s.almVolM3
@@ -663,22 +659,24 @@ const pushCif=(id:string,etapa:string,label:string,usd:number,nota?:string)=>{
   if(usd&&Math.abs(usd)>0.005) compCif.push({id,etapa,label,usd,al_cif:true,...(nota?{nota}:{})})
 }
 pushCif('fob','mercaderia','FOB mercadería',baseFOB)
-if(origenActivoCalc&&origenElegida){
-  if(origenElegida.esManual) pushCif('origen','origen','Gastos de origen',origenElegida.manualMonto||0)
-  else origenElegida.items.filter(i=>i.seleccionado).forEach((it,idx)=>
-    pushCif(`origen:${idx}`,'origen',it.descripcion||'Gasto de origen',it.subtotal))
+if(origenActivoCalc){
+  s.cotsProvOrigen.forEach((c,ci)=>{
+    if(c.esManual) pushCif(`origen:${ci}`,'origen',c.proveedorNombre||'Gastos de origen',c.manualMonto||0)
+    else c.items.filter(i=>i.seleccionado).forEach((it,idx)=>
+      pushCif(`origen:${ci}:${idx}`,'origen',it.descripcion||'Gasto de origen',it.subtotal))
+  })
 }
 pushCif('fw','maritimo','Flete marítimo · forwarder',subFW)
 pushCif('segmar','maritimo','Seguro marítimo',segMarEff)
 pushCif('terr','terrestre','Flete terrestre',subTranspIntl,`solo tramo intl · ${pctIntlTerr}%`)
 pushCif('segterr','terrestre','Seguro terrestre',segTerrEff*fIntlTerr,`solo tramo intl · ${pctIntlTerr}%`)
 if(chileActivoCif){
-  if(transpChileElegida){
-    if(transpChileElegida.esManual)
-      pushCif('chile','chile',transpChileElegida.proveedorNombre||'Gastos en Chile',transpChileElegida.manualMonto||0)
-    else transpChileElegida.items.filter(i=>i.seleccionado).forEach((it,idx)=>
-      pushCif(`chile:${idx}`,'chile',it.descripcion||'Gasto en Chile',it.subtotal))
-  }
+  s.cotsProvChile.forEach((cot,ci)=>{
+    if(cot.esManual)
+      pushCif(`chile:${ci}`,'chile',cot.proveedorNombre||'Gastos en Chile',cot.manualMonto||0)
+    else cot.items.filter(i=>i.seleccionado).forEach((it,idx)=>
+      pushCif(`chile:${ci}:${idx}`,'chile',it.descripcion||'Gasto en Chile',it.subtotal))
+  })
   s.rowsDescon.forEach((r,idx)=>{
     const m=r.tipoCalc==='m3'?r.unitario*totalM3:r.cant*r.unitario
     pushCif(`descon:${idx}`,'deposito',r.desc||'Desconsolidado',m)
@@ -1137,7 +1135,6 @@ function agregarTranspChileDesdeSistema(cotId:string){
   if(!cot) return
   const usadas = cotsSistemaUsadas[cotId]||[]
   const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
-  nueva.elegida = s.cotsProvChile.length===0
   setS(p=>({...p, cotsProvChile:[...p.cotsProvChile, nueva]}))
   setProvUsado(pv=>({...pv,2:cotId}))
 }
@@ -1196,7 +1193,6 @@ function agregarOrigenDesdeSistema(cotId:string){
   if(!cot) return
   const usadas = cotsSistemaUsadas[cotId]||[]
   const nueva = cotProvDesdeSistema(cot, s.contenedores, usadas)
-  nueva.elegida = s.cotsProvOrigen.length===0
   setS(p=>({...p, cotsProvOrigen:[...p.cotsProvOrigen, nueva]}))
   setProvUsado(pv=>({...pv,5:cotId}))
 }
@@ -1509,21 +1505,28 @@ function armarPresupuesto(){
   const tcMon = (m:string):number => m==='ARS'?s.tcTrib : m==='CLP'?s.tcClp : m==='CNY'?s.tcCny : 1
   const L = (etapa:string,tipo:string,concepto:string,usd:number,moneda:string)=>({etapa,tipo,concepto,usd,moneda,montoPago:usd*tcMon(moneda)})
   const segEl = s.cotsProvSeg.find(c=>c.elegida)
-  const monOrigen = origenElegida?.monedaPago||'USD'
+  // Con varias cotizaciones por bloque (Chile/Origen/Argentina), el reparto agrupa por moneda de pago.
+  const subsPorMoneda = (cots:CotProvSel[]):Record<string,number> => {
+    const mm:Record<string,number> = {}
+    cots.forEach(c=>{ const v=c.esManual?(c.manualMonto||0):c.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0); if(v>0){const mo=c.monedaPago||'USD'; mm[mo]=(mm[mo]||0)+v} })
+    return mm
+  }
+  const origenPorMon = subsPorMoneda(s.cotsProvOrigen)
+  const chilePorMon = subsPorMoneda(s.cotsProvChile)
+  const monChileDef = Object.keys(chilePorMon)[0]||'USD'
   const monFW = fwElegida?.monedaPago||'USD'
   const monSeg = segEl?.monedaPago||'USD'
-  const monChile = transpChileElegida?.monedaPago||'USD'
   const monTerr = transpTerrElegida?.monedaPago||'ARS'
   const monMerc = mercElegida?.monedaPago||'USD'
   const itMerc = baseFOB>0?[L('mercaderia','mercaderia','Mercadería (valor FOB)',baseFOB,monMerc)]:[]
-  const itOrigen = subOrigen>0?[L('origen','origen',esExpoDoc?'Gastos en destino':'Gastos de origen',subOrigen,monOrigen)]:[]
+  const itOrigen = Object.entries(origenPorMon).map(([mo,v])=>L('origen','origen',esExpoDoc?'Gastos en destino':'Gastos de origen',v,mo))
   const itMar = [
     ...(subFW>0?[L('forwarder','flete',`ForWarder: ${fwElegida?.proveedorNombre||'Manual'}`,subFW,monFW)]:[]),
     ...(segMarEff>0?[L('forwarder','seguro','Seguro maritimo',segMarEff,monSeg)]:[]),
   ]
   const itChile = [
-    ...(subGastosChile>0?[L('chile','servicios','Gastos post-entrega Chile',subGastosChile,monChile)]:[]),
-    ...(subD>0?[L('chile','desconsolidacion',`Desconsolidacion (Opcion ${s.optTransp})`,subD,monChile)]:[]),
+    ...Object.entries(chilePorMon).map(([mo,v])=>L('chile','servicios','Gastos en Chile',v,mo)),
+    ...(subD>0?[L('chile','desconsolidacion',`Desconsolidacion (Opcion ${s.optTransp})`,subD,monChileDef)]:[]),
   ]
   const itTerr = [
     ...(subTransp>0?[L('terrestre','flete','Transporte terrestre',subTransp,monTerr)]:[]),
@@ -1601,11 +1604,11 @@ async function guardar(){
       addUsado(s.cotsProvMerc.find(c=>c.elegida)?.cotProvId,0)
       addUsado(s.cotsProvFW.find(c=>c.elegida)?.cotProvId,1)
       addUsado(s.cotsProvSeg.find(c=>c.elegida)?.cotProvId,1)
-      addUsado(s.cotsProvChile.find(c=>c.elegida)?.cotProvId,2)
+      s.cotsProvChile.forEach(c=>addUsado(c.cotProvId,2))   // bloque 2: varias suman
       addUsado(s.cotsProvTransp.find(c=>c.elegida)?.cotProvId,3)
       s.cotsProvArg.forEach(c=>addUsado(c.cotProvId,4))   // bloque 4: varias suman, se registran todas
       addUsado(cotDesp?.id,4)                              // bloque 4: despachante
-      addUsado(s.cotsProvOrigen.find(c=>c.elegida)?.cotProvId,5)
+      s.cotsProvOrigen.forEach(c=>addUsado(c.cotProvId,5))  // bloque 5: varias suman
       if(usados.length>0){
         await (supabase.from('cotizacion_proveedores_usados') as any).insert(usados)
       }
@@ -2432,11 +2435,8 @@ const clientesFiltrados=terceros.filter(t=>
                     const vigente=isVigente(oc.fechaVencimiento)
                     const totalSel=oc.esManual?(oc.manualMonto||0):oc.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
                     return (
-                      <div key={oc.uid} className={`border-2 rounded-xl overflow-hidden mb-2 ${oc.elegida?'border-[#EF9F27]':'border-gray-200'}`}>
-                        <div className={`flex items-center gap-0 ${oc.elegida?'bg-amber-50':'bg-gray-50'}`}>
-                          <button onClick={()=>elegirCotProv('cotsProvOrigen',oc.uid)} className="w-10 flex-shrink-0 flex items-center justify-center self-stretch hover:bg-black/5">
-                            <div className={`w-4 h-4 rounded-full border-2 ${oc.elegida?'border-[#EF9F27] bg-[#EF9F27]':'border-gray-300 bg-white'}`}>{oc.elegida&&<div className="w-1.5 h-1.5 bg-white rounded-full mx-auto mt-0.5"/>}</div>
-                          </button>
+                      <div key={oc.uid} className="border-2 rounded-xl overflow-hidden mb-2 border-[#EF9F27]/50">
+                        <div className="flex items-center gap-0 bg-amber-50">
                           <div className="flex-1 px-3 py-2.5">
                             <div className="flex items-center gap-2 flex-wrap mb-0.5">
                               <span className="font-semibold text-sm text-gray-900">{oc.proveedorNombre}</span>
@@ -2444,7 +2444,7 @@ const clientesFiltrados=terceros.filter(t=>
                               {oc.tipo==='especifica'?<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEEDFE] text-[#3C3489]">⭐ Específica</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500">Genérica</span>}
                               {vigente?<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700">vigente</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700">vencida {fmtFecha(oc.fechaVencimiento)}</span>}
                               {oc.usadaEnCots.length>0&&<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">⚠ Usada en {oc.usadaEnCots.join(', ')}</span>}
-                              {oc.elegida&&<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EF9F27] text-white">ELEGIDA</span>}
+                              {/* todas las cotizaciones de origen suman */}
                             </div>
                             <div className="flex gap-4 text-[10px] text-gray-500">
                               {oc.referencia&&<span className="font-mono">Ref: {oc.referencia}</span>}
@@ -2880,11 +2880,8 @@ const clientesFiltrados=terceros.filter(t=>
                     const vigente=isVigente(ct.fechaVencimiento)
                     const totalSel=ct.esManual?(ct.manualMonto||0):ct.items.filter(i=>i.seleccionado).reduce((t,i)=>t+i.subtotal,0)
                     return (
-                      <div key={ct.uid} className={`border-2 rounded-xl overflow-hidden mb-2 ${ct.elegida?'border-[#0a9e6e]':'border-gray-200'}`}>
-                        <div className={`flex items-center gap-0 ${ct.elegida?'bg-green-50':'bg-gray-50'}`}>
-                          <button onClick={()=>elegirCotProv('cotsProvChile',ct.uid)} className="w-10 flex-shrink-0 flex items-center justify-center self-stretch hover:bg-black/5">
-                            <div className={`w-4 h-4 rounded-full border-2 ${ct.elegida?'border-[#0a9e6e] bg-[#0a9e6e]':'border-gray-300 bg-white'}`}>{ct.elegida&&<div className="w-1.5 h-1.5 bg-white rounded-full mx-auto mt-0.5"/>}</div>
-                          </button>
+                      <div key={ct.uid} className="border-2 rounded-xl overflow-hidden mb-2 border-[#0a9e6e]/50">
+                        <div className="flex items-center gap-0 bg-green-50">
                           <div className="flex-1 px-3 py-2.5">
                             <div className="flex items-center gap-2 flex-wrap mb-0.5">
                               <span className="font-semibold text-sm text-gray-900">{ct.proveedorNombre}</span>
@@ -2892,7 +2889,7 @@ const clientesFiltrados=terceros.filter(t=>
                               {ct.tipo==='especifica'?<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEEDFE] text-[#3C3489]">⭐ Específica{ct.clienteId&&terceros.find(t=>t.id===ct.clienteId)?` · ${terceros.find(t=>t.id===ct.clienteId)!.razon_social}`:''}</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500">Genérica</span>}
                               {vigente?<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700">vigente</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700">vencida {fmtFecha(ct.fechaVencimiento)}</span>}
                               {ct.usadaEnCots.length>0&&<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">⚠ Usada en {ct.usadaEnCots.join(', ')}</span>}
-                              {ct.elegida&&<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0a9e6e] text-white">ELEGIDA</span>}
+                              {/* todas las cotizaciones de Chile suman */}
                             </div>
                             <div className="flex gap-4 text-[10px] text-gray-500">
                               {ct.referencia&&<span className="font-mono">Ref: {ct.referencia}</span>}
@@ -3873,10 +3870,10 @@ const clientesFiltrados=terceros.filter(t=>
             const segEl = s.cotsProvSeg.find(c=>c.elegida)
             const lineas: {concepto:string; quien:string; usd:number; moneda:string}[] = [
               ...(hayMercaderia&&baseFOB>0 ? [{concepto:'Mercadería', quien: mercElegida?.proveedorNombre||'Proveedor de mercadería', usd: baseFOB, moneda: mercElegida?.monedaPago||'USD'}] : []),
-              ...(origenActivoCalc&&subOrigen>0 ? [{concepto:'Gastos de origen', quien: origenElegida?.proveedorNombre||'Agente de origen', usd: subOrigen, moneda: origenElegida?.monedaPago||'USD'}] : []),
+              ...(origenActivoCalc&&subOrigen>0 ? [{concepto:'Gastos de origen', quien: s.cotsProvOrigen.map(c=>c.proveedorNombre).filter(Boolean).join(' + ')||'Agente de origen', usd: subOrigen, moneda: s.cotsProvOrigen[0]?.monedaPago||'USD'}] : []),
               ...(subFW>0 ? [{concepto:'Flete internacional', quien: fwElegida?.proveedorNombre||'Forwarder / agente de carga', usd: subFW, moneda: fwElegida?.monedaPago||'USD'}] : []),
               ...(totalSeg>0 ? [{concepto:'Seguro', quien: segEl?.proveedorNombre||'Compañía aseguradora', usd: totalSeg, moneda: segEl?.monedaPago||'USD'}] : []),
-              ...((subGastosChile+subD)>0 ? [{concepto:'Gastos en Chile', quien: transpChileElegida?.proveedorNombre||'Depósito / agente Chile', usd: subGastosChile+subD, moneda: transpChileElegida?.monedaPago||'USD'}] : []),
+              ...((subGastosChile+subD)>0 ? [{concepto:'Gastos en Chile', quien: s.cotsProvChile.map(c=>c.proveedorNombre).filter(Boolean).join(' + ')||'Depósito / agente Chile', usd: subGastosChile+subD, moneda: s.cotsProvChile[0]?.monedaPago||'USD'}] : []),
               ...(bloqueActivo(2)&&subTransp>0 ? [{concepto:'Flete terrestre', quien: transpTerrElegida?.proveedorNombre||(s.sentido==='exportacion'?'NOA → Puerto Chile':'Puerto Chile → destino NOA'), usd: subTransp, moneda: transpTerrElegida?.monedaPago||'ARS'}] : []),
               ...(bloqueActivo(3)&&(subGastosArg+subE)>0 ? [{concepto:'Despachante + gastos Argentina', quien:'Honorarios + gastos despacho', usd: subGastosArg+subE, moneda:'ARS'}] : []),
               ...(fee>0 ? [{concepto:'Servicio Puerto NOA', quien:'Puerto NOA SpA', usd: fee, moneda:'USD'}] : []),
