@@ -41,6 +41,17 @@ const GRUPOS = [
 ] as const
 const labelDe = (k:string) => TABS.find(t=>t.key===k)?.label || k
 
+// Cada pestaña del árbol se gobierna por el permiso 'ver' de su módulo.
+const MODULO_POR_KEY: Record<string, string> = {
+  rubros_proveedor: 'cat_servicios', servicios_deposito: 'cat_servicios',
+  bloques_cotizacion: 'cat_cotizador', condiciones_cotizacion: 'cat_cotizador',
+  puertos_china: 'cat_geografia', puertos_chile: 'cat_geografia', pasos: 'cat_geografia', ciudades: 'cat_geografia',
+  contenedores: 'cat_logistica', camiones: 'cat_logistica',
+  fondos: 'cat_finanzas', cuentas_abm: 'cat_finanzas', entidades_financieras: 'cat_finanzas', gastos_categorias: 'cat_finanzas',
+  tributos: 'tributos', talonarios: 'talonarios',
+  empresa: 'cat_empresa',
+}
+
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 const btn = 'px-4 py-2 rounded-xl text-xs font-semibold transition-all'
 
@@ -367,9 +378,32 @@ function CatalogoABM({
 export default function CatalogosPage() {
   const [tab, setTab] = useState<Tab>('servicios_deposito')
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
-  useEffect(() => { cargarPermisos().then(setPermisos) }, [])
-  const verTributos = puede(permisos, 'tributos', 'ver')
+  const [permListos, setPermListos] = useState(false)
+  useEffect(() => { cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
+  const puedeVerTab = (k: string) => puede(permisos, MODULO_POR_KEY[k] || 'catalogos', 'ver')
+  // Si el usuario no puede ver la pestaña actual, lo llevo a la primera que sí puede ver.
+  useEffect(() => {
+    if (!permListos) return
+    if (!puedeVerTab(tab)) {
+      const primera = (TABS as readonly { key: string }[]).find(t => puedeVerTab(t.key))
+      if (primera) setTab(primera.key as Tab)
+    }
+  }, [permListos]) // eslint-disable-line react-hooks/exhaustive-deps
+  const gruposVisibles = GRUPOS.filter(g => g.keys.some(k => puedeVerTab(k)))
   const grupoActivo = GRUPOS.find(g => (g.keys as readonly string[]).includes(tab)) || GRUPOS[0]
+
+  if (!permListos) return <div className="p-8 text-center text-gray-400 text-sm">Cargando...</div>
+  if (gruposVisibles.length === 0) {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-3">🔒</div>
+          <h2 className="text-lg font-bold text-gray-700">Sin acceso</h2>
+          <p className="text-sm text-gray-400 mt-1">No tenés permiso para ver los catálogos. Si creés que es un error, contactá al administrador.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen lg:min-h-0 lg:h-full lg:flex lg:flex-col lg:overflow-hidden">
@@ -389,13 +423,13 @@ export default function CatalogosPage() {
             <span className="text-sm font-bold text-gray-800">Catálogos</span>
           </div>
           <nav className="flex flex-col gap-3">
-            {GRUPOS.map(g => (
+            {gruposVisibles.map(g => (
               <div key={g.titulo}>
                 <div className="flex items-center gap-1.5 px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider" style={{ color: g.texto }}>
                   <span className="text-xs">{g.icon}</span>{g.titulo}
                 </div>
                 <div className="flex flex-col gap-0.5" style={{ borderLeft: `2px solid ${g.color}`, marginLeft: '7px', paddingLeft: '6px' }}>
-                  {g.keys.filter(k => k !== 'tributos' || verTributos).map(k => {
+                  {g.keys.filter(k => puedeVerTab(k)).map(k => {
                     const activo = tab === k
                     return (
                       <button key={k} onClick={() => setTab(k as Tab)}
