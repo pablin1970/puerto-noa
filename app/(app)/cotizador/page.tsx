@@ -625,17 +625,22 @@ const calcGastoArg=(g:GastoArg,cifUsd:number,tcTrib:number):number=>{
 // La base imponible real ante ARCA se ajusta recién en la operación (liquidación real).
 const chileActivoCif = s.bloquesActivos.length===0 ? true : (bloques[1] ? s.bloquesActivos.includes(bloques[1].id) : true)
 const subChileCif = chileActivoCif ? (subGastosChile+subD) : 0
-const cif=totalFOB + subFW + subTranspIntl + segMarEff + segTerrEff*fIntlTerr + subChileCif
+// CIF logístico del exterior (FOB + fletes·%intl + seguros·%intl + gastos Chile). Base de los gastos %CIF (despachante).
+// No incluye el fee: por eso el despachante puede cobrarse sobre él sin generar circularidad.
+const cifLog=totalFOB + subFW + subTranspIntl + segMarEff + segTerrEff*fIntlTerr + subChileCif
+// Otros gastos Argentina sección B — entran a la base del fee. Se calculan sobre el CIF logístico (sin fee).
+const subE=s.rowsE.reduce((t,r)=>t+calcGastoArg(r,cifLog,s.tcTrib),0)
+// Base del fee: toda la logística (exterior + Argentina) SIN la mercadería y SIN el despachante.
+// El despachante es el único gasto %CIF; se excluye de la base del fee para que el cálculo no muerda la cola.
+const baseLogFee=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+subE
+const fee=s.feeModo==='pct' ? baseLogFee*s.feePct/100 : s.feeCont*nc
+// CIF imponible: el fee de Puerto NOA (gasto facturado en Chile) computa a la base de los tributos ARCA.
+const cif=cifLog+fee
 const cifARS=cif*s.tcTrib
-// Honorario + gastos adicionales despachante (sección A)
+// Despachante: honorario + gastos adicionales, % sobre el CIF imponible (aparte, fuera de la base del fee).
 const subHon=calcGastoArg({id:'hon',desc:'',tipoCalc:s.honTipo,moneda:'USD',valor:s.honValor,pisoUsd:s.honPiso,techoUsd:s.honTecho,usd:0,ars:0},cif,s.tcTrib)
 const subGastosDesp=s.gastosDesp.reduce((t,g)=>t+calcGastoArg(g,cif,s.tcTrib),0)
 const subGastosArg=subHon+subGastosDesp
-// Otros gastos Argentina sección B
-const subE=s.rowsE.reduce((t,r)=>t+calcGastoArg(r,cif,s.tcTrib),0)
-// Base logística para el fee (sin FOB, sin ARCA, sin el propio fee)
-const baseLogFee=subFW+totalSeg+subGastosChile+subD+subTransp+subEstadias+subE+subGastosArg
-const fee=s.feeModo==='pct' ? baseLogFee*s.feePct/100 : s.feeCont*nc
 
 function calcTrib(cfg:TribCfg[],cifARS:number,derPct:number){
   const VA=cifARS; let base=VA
@@ -3363,7 +3368,7 @@ const clientesFiltrados=terceros.filter(t=>
                   <div className="text-[10px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">Sin gastos adicionales.</div>
                 )}
                 {s.rowsE.map((r,i)=>{
-                  const usdR=calcGastoArg(r,cif,s.tcTrib)
+                  const usdR=calcGastoArg(r,cifLog,s.tcTrib)
                   return (
                     <div key={r.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 mb-2">
                       <div className="flex gap-2 items-center mb-2">
@@ -3505,9 +3510,9 @@ const clientesFiltrados=terceros.filter(t=>
               </div>
               <div className="flex items-center justify-center px-2 text-gray-300 text-lg font-light">+</div>
               <div className="flex-1 px-5 py-3.5">
-                <div className="text-[10px] text-gray-400 mb-0.5">Flete + seguro</div>
+                <div className="text-[10px] text-gray-400 mb-0.5">Logística + fee</div>
                 <div className="text-lg font-bold font-mono text-gray-800">USD {fmt(cif-totalFOB,0)}</div>
-                <div className="text-[9px] text-gray-400 mt-0.5">Flete + seguro · porción internacional</div>
+                <div className="text-[9px] text-gray-400 mt-0.5">Fletes, seguros, Chile y fee</div>
               </div>
               <div className="flex items-center justify-center px-2 text-gray-300 text-lg font-light">=</div>
               <div className="flex-1 px-5 py-3.5" style={{background:'#052698'}}>
