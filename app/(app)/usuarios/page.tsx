@@ -61,6 +61,14 @@ interface LoginLog {
 // ── Definición completa de módulos y permisos ──────────────────────
 import { ACCIONES, MODULOS_PERMISOS, modulosPendientesSet, ACCIONES_POR_MODULO } from '@/lib/modulos'
 import type { Accion } from '@/lib/modulos'
+
+// P-25 · Permisos de cuentas por rol. Cada cuenta se administra como modulo='cuenta:<id>'
+// reutilizando rol_permisos + puede(). Acciones propias (no entran en la matriz global).
+const ACCIONES_CUENTA: { key: string; label: string }[] = [
+  { key: 'ver', label: 'Ver' },
+  { key: 'ingresar', label: 'Ingresar' },
+  { key: 'egresar', label: 'Egresar / mover' },
+]
 import { PAISES_OPERACION, terminoRegion, regionesDe } from '@/lib/geografiaPaises'
 import { abrirConMarca } from '@/lib/documentos'
 
@@ -93,6 +101,8 @@ export default function UsuariosPage() {
   const [formR, setFormR] = useState({ nombre: '', descripcion: '', color: '#1168F8' })
   const [saving, setSaving] = useState(false)
   const [permisosModificados, setPermisosModificados] = useState<Record<string, boolean>>({})
+  // P-25 · cuentas activas (propias + custodia) para la sección de permisos de cuentas
+  const [cuentasPerm, setCuentasPerm] = useState<{ id: string; nombre: string; tipo: string; pais: string; moneda: string; numero_interno: string | null; ambito: 'propia' | 'custodia' }[]>([])
   const [savingPermisos, setSavingPermisos] = useState(false)
   // Módulos ya confirmados con "Guardar" (tabla modulos_revisados) + los marcados en esta sesión sin guardar aún
   const [modulosRevisados, setModulosRevisados] = useState<Map<string, string[]>>(new Map())
@@ -137,11 +147,13 @@ export default function UsuariosPage() {
   async function loadAll() {
     setLoading(true)
     const { data: authData } = await supabase.auth.getUser()
-    const [uRes, rRes, pRes, mrRes] = await Promise.all([
+    const [uRes, rRes, pRes, mrRes, cpRes, fcRes] = await Promise.all([
       supabase.from('usuarios').select('*').order('nombre'),
       supabase.from('roles').select('*').order('nombre'),
       supabase.from('rol_permisos').select('*'),
       supabase.from('modulos_revisados').select('modulo, acciones'),
+      (supabase.from('cuentas_pn') as any).select('id,nombre,tipo,pais,moneda,numero_interno').eq('activo', true).order('nombre'),
+      (supabase.from('fondos_cuentas') as any).select('id,nombre,tipo,pais,moneda,numero_interno').eq('activo', true).order('orden'),
     ])
     if (uRes.data) setUsuarios(uRes.data as Usuario[])
     if (rRes.data) {
@@ -155,6 +167,10 @@ export default function UsuariosPage() {
     }
     if (pRes.data) setPermisos(pRes.data as Permiso[])
     if (mrRes.data) setModulosRevisados(new Map((mrRes.data as any[]).map(r => [r.modulo, (r.acciones || []) as string[]])))
+    const cuentas: { id: string; nombre: string; tipo: string; pais: string; moneda: string; numero_interno: string | null; ambito: 'propia' | 'custodia' }[] = []
+    if (cpRes.data) (cpRes.data as any[]).forEach(c => cuentas.push({ ...c, ambito: 'propia' }))
+    if (fcRes.data) (fcRes.data as any[]).forEach(c => cuentas.push({ ...c, ambito: 'custodia' }))
+    setCuentasPerm(cuentas)
     setLoading(false)
   }
 
@@ -724,6 +740,76 @@ export default function UsuariosPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* ── P-25 · PERMISOS DE CUENTAS (por rol) ── */}
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] font-black text-[#052698] uppercase tracking-widest">💳 Permisos de cuentas</span>
+              <span className="text-[10px] text-gray-400 normal-case font-normal">— qué cuentas ve y opera cada rol (cajas, bancos y custodia)</span>
+            </div>
+            {cuentasPerm.length === 0 ? (
+              <div className="px-4 py-6 text-center text-xs text-gray-400 bg-gray-50 rounded-2xl border border-gray-100">
+                No hay cuentas activas todavía. Cargá cuentas en <span className="font-medium text-gray-500">Catálogos → Cuentas (caja y bancos)</span> y van a aparecer acá para asignar permisos.
+              </div>
+            ) : (
+              <div className="overflow-x-auto border border-gray-100 rounded-2xl">
+                <table className="w-full border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-[#f0f4fa]">
+                      <th className="sticky left-0 z-10 bg-[#f0f4fa] text-left px-4 py-2 border-r border-gray-200 text-[10px] font-bold text-gray-500 uppercase" style={{ minWidth: 220 }}>Cuenta</th>
+                      {roles.map(r => (
+                        <th key={r.id} colSpan={ACCIONES_CUENTA.length} className="text-center px-2 py-1.5 text-[10px] font-bold uppercase" style={{ color: r.color, borderLeft: `2px solid ${r.color}33` }}>
+                          {r.nombre}
+                        </th>
+                      ))}
+                    </tr>
+                    <tr className="bg-[#f6f9fd]">
+                      <th className="sticky left-0 z-10 bg-[#f6f9fd] border-r border-gray-200"></th>
+                      {roles.map(r => (
+                        ACCIONES_CUENTA.map((ac, i) => (
+                          <th key={`${r.id}-${ac.key}`} className="text-center px-2 py-1 text-[9px] font-semibold text-gray-500 uppercase whitespace-nowrap" style={i === 0 ? { borderLeft: `2px solid ${r.color}33` } : undefined}>{ac.label}</th>
+                        ))
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cuentasPerm.map(c => {
+                      const modulo = `cuenta:${c.id}`
+                      return (
+                        <tr key={c.id} className="group border-b border-gray-50 hover:bg-blue-50/10">
+                          <td className="sticky left-0 z-10 bg-white group-hover:bg-[#f4f8ff] px-4 py-2.5 border-r border-gray-200" style={{ minWidth: 220, boxShadow: '2px 0 5px -3px rgba(0,0,0,0.08)' }}>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-gray-800">{c.nombre}</span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${c.ambito === 'propia' ? 'bg-blue-50 text-blue-600' : 'bg-violet-50 text-violet-600'}`}>{c.ambito === 'propia' ? 'Propia' : 'Custodia'}</span>
+                            </div>
+                            <span className="text-[10px] text-gray-400">{[c.numero_interno, c.tipo, c.moneda, c.pais].filter(Boolean).join(' · ')}</span>
+                          </td>
+                          {roles.map(r => {
+                            const esSA = !!r.es_super_admin
+                            return ACCIONES_CUENTA.map((ac, i) => {
+                              const activo = esSA ? true : isPermitidoEfectivo(r.id, modulo, ac.key)
+                              const modificado = permisosModificados.hasOwnProperty(`${r.id}|${modulo}|${ac.key}`)
+                              return (
+                                <td key={`${r.id}-${ac.key}`} className={`text-center px-2 py-2 ${modificado ? 'bg-amber-100/70' : ''} ${esSA ? 'bg-green-50/40' : ''}`} style={i === 0 ? { borderLeft: `2px solid ${r.color}33` } : undefined}>
+                                  <input type="checkbox"
+                                    checked={activo}
+                                    disabled={esSA || !puedeEditarR}
+                                    onChange={() => { if (!esSA && puedeEditarR) togglePermiso(r.id, modulo, ac.key) }}
+                                    title={esSA ? 'El Super Administrador siempre tiene acceso total' : `${ac.label} — ${c.nombre}`}
+                                    className={`w-3.5 h-3.5 ${esSA ? 'cursor-not-allowed accent-green-600 opacity-70' : !puedeEditarR ? 'cursor-not-allowed accent-gray-400' : 'cursor-pointer accent-[#1168F8]'}`}/>
+                                </td>
+                              )
+                            })
+                          })}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="mt-2 text-[10px] text-gray-400">🔒 Por defecto, un rol sin tildar no ve ni opera la cuenta. El Super Administrador siempre tiene acceso total.</p>
           </div>
 
           {/* Botón guardar abajo también */}
