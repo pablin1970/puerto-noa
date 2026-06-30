@@ -326,7 +326,7 @@ function FacturasTab({ facturas, cot, tipoOp, permisos, reload }: {
           <div className="flex gap-2 flex-wrap">
             <a href="/facturacion/recibidas" className="px-3 py-1.5 bg-white border border-[#1168F8] text-[#1168F8] rounded-lg text-[11px] font-semibold hover:bg-[#1168F8] hover:text-white transition-colors">↗ Cargar factura de tercero</a>
             <a href="/facturacion/emitidas" className="px-3 py-1.5 bg-white border border-[#1168F8] text-[#1168F8] rounded-lg text-[11px] font-semibold hover:bg-[#1168F8] hover:text-white transition-colors">↗ Emitir factura PN</a>
-            <a href="/tesoreria/flujo" className="px-3 py-1.5 bg-white border border-[#0a9e6e] text-[#0a9e6e] rounded-lg text-[11px] font-semibold hover:bg-[#0a9e6e] hover:text-white transition-colors">↗ Registrar pago / recibo</a>
+            <a href="/tesoreria/recibos" className="px-3 py-1.5 bg-white border border-[#0a9e6e] text-[#0a9e6e] rounded-lg text-[11px] font-semibold hover:bg-[#0a9e6e] hover:text-white transition-colors">↗ Registrar pago / recibo</a>
           </div>
         </div>
       </div>
@@ -707,7 +707,7 @@ function CajaRendirTab({ opId, cotNum, movs, saldo, permisos }: {
     <div>
       <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-xl p-4 mb-4 flex items-center justify-between flex-wrap gap-2">
         <div className="text-xs text-[#052698]"><span className="font-semibold">La caja a rendir se mueve desde Tesorería.</span> Acá ves los movimientos de fondos de esta operación.</div>
-        <a href="/tesoreria/flujo" className="px-3 py-1.5 bg-white border border-[#0a9e6e] text-[#0a9e6e] rounded-lg text-[11px] font-semibold hover:bg-[#0a9e6e] hover:text-white transition-colors">↗ Ir a Tesorería</a>
+        <a href="/tesoreria/movimientos" className="px-3 py-1.5 bg-white border border-[#0a9e6e] text-[#0a9e6e] rounded-lg text-[11px] font-semibold hover:bg-[#0a9e6e] hover:text-white transition-colors">↗ Ir a Tesorería</a>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-4">
@@ -857,7 +857,7 @@ function CierreTab({ op, saldoCaja, totalPresup, facturadoGasto, saldadoUsd, pen
               : `Faltan USD ${fmt(Math.abs(saldoCaja))} en la caja a rendir. Antes de cerrar, pedí los fondos al cliente y registrá el cobro de la diferencia desde Tesorería.`}
             <span className="block mt-1 text-amber-600">El movimiento se toma al TC del día; si hubo diferencia de cambio, registrala como ajuste en Tesorería para que la caja cierre en cero.</span>
           </div>
-          <a href="/tesoreria/flujo" className="inline-block px-4 py-2 bg-white border border-amber-400 text-amber-700 rounded-lg text-xs font-semibold hover:bg-amber-100">↗ Ir a Tesorería</a>
+          <a href="/tesoreria/movimientos" className="inline-block px-4 py-2 bg-white border border-amber-400 text-amber-700 rounded-lg text-xs font-semibold hover:bg-amber-100">↗ Ir a Tesorería</a>
         </div>
       )}
     </div>
