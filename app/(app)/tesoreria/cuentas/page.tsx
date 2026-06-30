@@ -72,6 +72,9 @@ export default function CuentasCajaBancosPage() {
   const [cuentaSel, setCuentaSel] = useState<any>(null)
   const [movsCuenta, setMovsCuenta] = useState<any[]>([])
   const [cargandoMovs, setCargandoMovs] = useState(false)
+  const [fDesde, setFDesde] = useState('')
+  const [fHasta, setFHasta] = useState('')
+  const [fTipo, setFTipo] = useState<'todos' | 'ingresos' | 'egresos'>('todos')
 
   useEffect(() => { loadData(); cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
 
@@ -130,10 +133,68 @@ export default function CuentasCajaBancosPage() {
       })
   }, [visibles, agrup])
 
+  // Estado de cuenta: el rango de fechas manda el resumen; el tipo solo filtra la lista
+  const enRango = useMemo(() => movsCuenta.filter((m: any) => {
+    const f = String(m.fecha).slice(0, 10)
+    if (fDesde && f < fDesde) return false
+    if (fHasta && f > fHasta) return false
+    return true
+  }), [movsCuenta, fDesde, fHasta])
+
+  const resumen = useMemo(() => {
+    const ingresos = enRango.filter((m: any) => m.signo > 0).reduce((a: number, m: any) => a + Number(m.monto || 0), 0)
+    const egresos = enRango.filter((m: any) => m.signo < 0).reduce((a: number, m: any) => a + Number(m.monto || 0), 0)
+    const saldoFinal = enRango.length ? Number(enRango[0].saldo) : (cuentaSel ? Number(cuentaSel.saldo) : 0)
+    const masAntiguo: any = enRango[enRango.length - 1]
+    const saldoInicial = masAntiguo ? Number(masAntiguo.saldo) - masAntiguo.signo * Number(masAntiguo.monto || 0) : saldoFinal
+    return { ingresos, egresos, saldoInicial, saldoFinal }
+  }, [enRango, cuentaSel])
+
+  const filtrados = useMemo(() => {
+    if (fTipo === 'ingresos') return enRango.filter((m: any) => m.signo > 0)
+    if (fTipo === 'egresos') return enRango.filter((m: any) => m.signo < 0)
+    return enRango
+  }, [enRango, fTipo])
+
+  function exportarCSV() {
+    if (!cuentaSel) return
+    const sep = ';'
+    const d = (f: string) => f ? String(f).slice(0, 10).split('-').reverse().join('/') : ''
+    const meta = [
+      [`Estado de cuenta: ${cuentaSel.nombre}`],
+      [[cuentaSel.numero_interno, cuentaSel.moneda, paisLabel(cuentaSel.pais)].filter(Boolean).join(' · ')],
+      [`Periodo: ${fDesde ? d(fDesde) : 'inicio'} a ${fHasta ? d(fHasta) : 'hoy'}`],
+      [`Saldo inicial${sep}${Math.round(resumen.saldoInicial)}`],
+      [`Ingresos${sep}${Math.round(resumen.ingresos)}`],
+      [`Egresos${sep}${Math.round(resumen.egresos)}`],
+      [`Saldo final${sep}${Math.round(resumen.saldoFinal)}`],
+      [''],
+    ]
+    const cab = ['Fecha', 'Comprobante', 'Tipo', 'Concepto', 'Ingreso', 'Egreso', 'Saldo']
+    const filas = filtrados.map((m: any) => [
+      d(m.fecha),
+      m.numero_comprobante || m.referencia || '',
+      TIPO_MOV_LABEL[m.tipo] || m.tipo,
+      String(m.concepto || '').replace(/[\r\n;]/g, ' '),
+      m.signo > 0 ? Math.round(Number(m.monto || 0)) : '',
+      m.signo < 0 ? Math.round(Number(m.monto || 0)) : '',
+      m.saldo != null ? Math.round(Number(m.saldo)) : '',
+    ])
+    const cuerpo = [...meta, cab, ...filas].map(r => r.join(sep)).join('\r\n')
+    const blob = new Blob(['\uFEFF' + cuerpo], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `estado-cuenta-${String(cuentaSel.nombre || 'cuenta').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function abrirCuenta(c: any) {
     setCuentaSel(c)
     setCargandoMovs(true)
     setMovsCuenta([])
+    setFDesde(''); setFHasta(''); setFTipo('todos')
     if (c.ambito === 'propia') {
       const { data } = await (supabase.from('movimientos_cuentas_pn') as any)
         .select('id,fecha,tipo,concepto,monto,moneda,saldo_posterior,numero_comprobante,referencia')
@@ -186,15 +247,63 @@ export default function CuentasCajaBancosPage() {
           </div>
         </div>
 
+        {/* Filtros + exportación */}
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm mb-4">
+          <div className="flex items-end gap-3 flex-wrap">
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Desde</label>
+              <input type="date" value={fDesde} onChange={e => setFDesde(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8]" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Hasta</label>
+              <input type="date" value={fHasta} onChange={e => setFHasta(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8]" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
+              <div className="inline-flex border border-gray-200 rounded-xl overflow-hidden text-xs">
+                {([['todos', 'Todos'], ['ingresos', 'Ingresos'], ['egresos', 'Egresos']] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setFTipo(k)} className={`px-3 py-2 ${fTipo === k ? 'bg-[#1168F8] text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>{l}</button>
+                ))}
+              </div>
+            </div>
+            {(fDesde || fHasta || fTipo !== 'todos') && (
+              <button onClick={() => { setFDesde(''); setFHasta(''); setFTipo('todos') }} className="px-3 py-2 text-xs text-gray-500 hover:text-gray-700 hover:underline">Limpiar</button>
+            )}
+            <div className="ml-auto">
+              <button onClick={exportarCSV} disabled={filtrados.length === 0} className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0a9e6e] text-white hover:bg-[#08815a] disabled:opacity-40 disabled:cursor-not-allowed">⬇ Exportar a Excel</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Resumen del período */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+            <div className="text-[10px] text-gray-400 uppercase tracking-wider">Saldo inicial</div>
+            <div className={`text-lg font-black font-mono mt-1 ${resumen.saldoInicial < 0 ? 'text-red-500' : 'text-gray-700'}`}>{fmtMon(cuentaSel.moneda, resumen.saldoInicial)}</div>
+          </div>
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+            <div className="text-[10px] text-gray-400 uppercase tracking-wider">Ingresos del período</div>
+            <div className="text-lg font-black font-mono text-green-600 mt-1">{fmtMon(cuentaSel.moneda, resumen.ingresos)}</div>
+          </div>
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+            <div className="text-[10px] text-gray-400 uppercase tracking-wider">Egresos del período</div>
+            <div className="text-lg font-black font-mono text-red-500 mt-1">{fmtMon(cuentaSel.moneda, resumen.egresos)}</div>
+          </div>
+          <div className="bg-[#052698] rounded-2xl p-4 text-white shadow-sm">
+            <div className="text-[10px] text-white/60 uppercase tracking-wider">Saldo final</div>
+            <div className="text-lg font-black font-mono mt-1">{fmtMon(cuentaSel.moneda, resumen.saldoFinal)}</div>
+          </div>
+        </div>
+
         <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
           <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-            <span className="font-semibold text-sm text-gray-900">Estado de cuenta · movimientos</span>
-            <span className="text-[11px] text-gray-400">{movsCuenta.length} movimiento(s)</span>
+            <span className="font-semibold text-sm text-gray-900">Movimientos</span>
+            <span className="text-[11px] text-gray-400">{filtrados.length === movsCuenta.length ? `${movsCuenta.length} movimiento(s)` : `${filtrados.length} de ${movsCuenta.length}`}</span>
           </div>
           {cargandoMovs ? (
             <div className="px-5 py-8 text-center text-xs text-gray-400">Cargando movimientos...</div>
-          ) : movsCuenta.length === 0 ? (
-            <div className="px-5 py-8 text-center text-xs text-gray-400">Esta cuenta todavía no tiene movimientos.</div>
+          ) : filtrados.length === 0 ? (
+            <div className="px-5 py-8 text-center text-xs text-gray-400">{movsCuenta.length === 0 ? 'Esta cuenta todavía no tiene movimientos.' : 'No hay movimientos para los filtros elegidos.'}</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -206,7 +315,7 @@ export default function CuentasCajaBancosPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {movsCuenta.map((m: any) => (
+                  {filtrados.map((m: any) => (
                     <tr key={m.id} className="border-b border-gray-50 hover:bg-blue-50/20">
                       <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{String(m.fecha).split('-').reverse().join('/')}</td>
                       <td className="px-4 py-2.5 text-gray-400">{m.numero_comprobante || m.referencia || '—'}</td>
