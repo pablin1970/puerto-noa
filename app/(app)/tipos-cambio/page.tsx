@@ -247,6 +247,8 @@ export default function TiposCambioPage() {
     )
   }
 
+  const pEditar = puede(permisos, 'tipos_cambio', 'editar')
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-6">
@@ -266,10 +268,10 @@ export default function TiposCambioPage() {
             <div className="font-bold text-white text-sm">Tipos de cambio vigentes</div>
             <div className="text-blue-200 text-[10px] mt-0.5">Ultima actualizacion: {vigente.fecha || '-'}</div>
           </div>
-          <button disabled={actualizando} onClick={() => actualizarDesdeAPI('forzado')}
+          {pEditar && <button disabled={actualizando} onClick={() => actualizarDesdeAPI('forzado')}
             className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-colors border border-white/20 disabled:opacity-50">
             {actualizando ? 'Consultando APIs...' : 'Actualizar todo desde APIs'}
-          </button>
+          </button>}
         </div>
 
         <div className="grid grid-cols-3 divide-x divide-gray-100">
@@ -293,7 +295,7 @@ export default function TiposCambioPage() {
                 {valor !== null ? fmt(valor, decimals) : '-'}
               </div>
               <div className="flex items-center gap-2">
-                <input type="text" inputMode="decimal" value={edit}
+                <input type="text" inputMode="decimal" value={edit} readOnly={!pEditar}
                   onChange={e => setEdit(e.target.value)} onFocus={e => e.target.select()}
                   className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono font-bold text-right focus:outline-none focus:border-[#1168F8]"
                   placeholder="0.00" />
@@ -312,7 +314,7 @@ export default function TiposCambioPage() {
                   <div className="text-2xl font-black font-mono mb-3" style={{ color: '#7C3AED' }}>
                     {vigente.clpFiscal !== null ? fmt(vigente.clpFiscal, 0) : '-'}
                   </div>
-                  <input type="text" inputMode="decimal" value={editCLPFiscal}
+                  <input type="text" inputMode="decimal" value={editCLPFiscal} readOnly={!pEditar}
                     onChange={e => setEditCLPFiscal(e.target.value)} onFocus={e => e.target.select()}
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono font-bold text-right focus:outline-none focus:border-[#7C3AED]"
                     placeholder="0" />
@@ -327,10 +329,10 @@ export default function TiposCambioPage() {
 
         <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
           <div className="text-[10px] text-gray-400">Edita los valores que quieras (incluido el fiscal) y haz click en Guardar.</div>
-          <button disabled={guardando} onClick={guardarManual}
+          {pEditar && <button disabled={guardando} onClick={guardarManual}
             className="flex items-center gap-2 px-5 py-2 bg-gray-800 text-white rounded-xl text-xs font-bold hover:bg-gray-700 disabled:opacity-50 transition-colors">
             {guardando ? 'Guardando...' : 'Guardar cambios manuales'}
-          </button>
+          </button>}
         </div>
       </div>
 
