@@ -64,11 +64,13 @@ import type { Accion } from '@/lib/modulos'
 
 // P-25 · Permisos de cuentas por rol. Cada cuenta se administra como modulo='cuenta:<id>'
 // reutilizando rol_permisos + puede(). Acciones propias (no entran en la matriz global).
-const ACCIONES_CUENTA: { key: string; label: string }[] = [
-  { key: 'ver', label: 'Ver' },
-  { key: 'ingresar', label: 'Ingresar' },
-  { key: 'egresar', label: 'Egresar / mover' },
-]
+const ACCIONES_CUENTA: string[] = ['ver', 'ingresar', 'egresar']
+// Columnas de la matriz = acciones estándar + las dos propias de cuentas (ingresar/egresar).
+const COLS_MATRIZ: string[] = [...ACCIONES, 'ingresar', 'egresar']
+const COL_LABEL: Record<string, string> = {
+  ver: 'Ver', crear: 'Crear', editar: 'Editar', eliminar: 'Elim.', descargar: 'Descargar',
+  solicitar: 'Solicitar', autorizar: 'Autorizar', ingresar: 'Ingresar', egresar: 'Egresar',
+}
 import { PAISES_OPERACION, terminoRegion, regionesDe } from '@/lib/geografiaPaises'
 import { abrirConMarca } from '@/lib/documentos'
 
@@ -180,14 +182,35 @@ export default function UsuariosPage() {
   // Pendiente = módulo nuevo O módulo existente al que se le agregó una acción nueva.
   const modulosNuevos = useMemo(() => {
     const pend = modulosPendientesSet(modulosRevisados)
-    return MODULOS_PERMISOS
+    const deModulos = MODULOS_PERMISOS
       .flatMap(s => s.items)
       .filter(it => pend.has(it.modulo))
-      .map(it => ({ modulo: it.modulo, label: it.label.replace(/^→\s*/, ''), acciones: it.acciones }))
-  }, [modulosRevisados])
+      .map(it => ({ modulo: it.modulo, label: it.label.replace(/^→\s*/, ''), acciones: it.acciones as string[] }))
+    // Una cuenta es "nueva" hasta que se confirma (asignándole permisos o confirmando sin permisos).
+    // Por defecto no la ve nadie, así que el aviso ámbar recuerda ir a asignarle permisos.
+    const deCuentas = cuentasPerm
+      .filter(c => !modulosRevisados.has(`cuenta:${c.id}`))
+      .map(c => ({ modulo: `cuenta:${c.id}`, label: c.ambito === 'custodia' ? `${c.nombre} · custodia` : c.nombre, acciones: ACCIONES_CUENTA }))
+    return [...deModulos, ...deCuentas]
+  }, [modulosRevisados, cuentasPerm])
 
   // Set de módulos nuevos (sin confirmar) para resaltar su fila en verde
   const modulosNuevosSet = useMemo(() => new Set(modulosNuevos.map(m => m.modulo)), [modulosNuevos])
+
+  // P-25 · La matriz = secciones del código + una sección "Cuentas" generada con las cuentas activas.
+  // Cada cuenta es un ítem modulo='cuenta:<id>' con acciones ver/ingresar/egresar.
+  const seccionesMatriz = useMemo(() => {
+    const base = MODULOS_PERMISOS as { section: string; icono?: string; items: any[] }[]
+    if (cuentasPerm.length === 0) return base
+    return [...base, {
+      section: 'Cuentas — cajas, bancos y custodia', icono: '💳',
+      items: cuentasPerm.map(c => ({
+        modulo: `cuenta:${c.id}`,
+        label: c.ambito === 'custodia' ? `${c.nombre} · custodia` : c.nombre,
+        acciones: ACCIONES_CUENTA,
+      })),
+    }]
+  }, [cuentasPerm])
 
   // Total de cambios pendientes de guardar = permisos tocados + módulos confirmados en esta sesión
   const totalCambios = Object.keys(permisosModificados).length + modulosRevisadosLocal.size
@@ -224,8 +247,8 @@ export default function UsuariosPage() {
   }
 
   // Tilde/destilde toda una columna (rol + accion) para todos los módulos que la soporten
-  function toggleColumna(rolId: string, accion: Accion) {
-    const todosModulos = MODULOS_PERMISOS.flatMap(s => s.items).filter(it => it.acciones.includes(accion))
+  function toggleColumna(rolId: string, accion: string) {
+    const todosModulos = seccionesMatriz.flatMap(s => s.items).filter(it => (it.acciones as string[]).includes(accion))
     const todosActivos = todosModulos.every(it => isPermitidoEfectivo(rolId, it.modulo, accion))
     const updates: Record<string, boolean> = {}
     todosModulos.forEach(it => {
@@ -234,8 +257,8 @@ export default function UsuariosPage() {
     setPermisosModificados(pm => ({ ...pm, ...updates }))
   }
 
-  function columnaTodasActivas(rolId: string, accion: Accion): boolean {
-    const modulos = MODULOS_PERMISOS.flatMap(s => s.items).filter(it => it.acciones.includes(accion))
+  function columnaTodasActivas(rolId: string, accion: string): boolean {
+    const modulos = seccionesMatriz.flatMap(s => s.items).filter(it => (it.acciones as string[]).includes(accion))
     return modulos.length > 0 && modulos.every(it => isPermitidoEfectivo(rolId, it.modulo, accion))
   }
 
@@ -259,7 +282,7 @@ export default function UsuariosPage() {
       if (modulosNuevosSet.has(modulo)) aConfirmar.add(modulo)
     })
     if (aConfirmar.size > 0) {
-      const filas = Array.from(aConfirmar).map(m => ({ modulo: m, acciones: ACCIONES_POR_MODULO[m] || [] }))
+      const filas = Array.from(aConfirmar).map(m => ({ modulo: m, acciones: m.startsWith('cuenta:') ? ACCIONES_CUENTA : (ACCIONES_POR_MODULO[m] || []) }))
       await (supabase.from('modulos_revisados') as any).upsert(filas, { onConflict: 'modulo' })
     }
     setPermisosModificados({})
@@ -419,7 +442,7 @@ export default function UsuariosPage() {
     return roles.filter(r => (u.roles_ids || []).includes(r.id))
   }
 
-  const accionLabel: Record<Accion, string> = { ver: 'Ver', crear: 'Crear', editar: 'Editar', eliminar: 'Elim.', descargar: 'Descargar', solicitar: 'Solicitar', autorizar: 'Autorizar' }
+  const accionLabel = COL_LABEL
 
   if (permUserListos && !puedeAccion(permUser, 'usuarios', 'ver')) {
     return (
@@ -629,7 +652,7 @@ export default function UsuariosPage() {
                     <th className="sticky left-0 top-0 z-30 px-4 py-2 border-r border-b border-gray-200"
                       style={{ background: HEAD_BG, minWidth: 184, boxShadow: '2px 0 5px -3px rgba(0,0,0,0.12)' }} />
                     {roles.map(r => (
-                      <th key={r.id} colSpan={ACCIONES.length}
+                      <th key={r.id} colSpan={COLS_MATRIZ.length}
                         className="sticky top-0 z-20 text-center py-2.5 px-2 text-[11px] font-bold whitespace-nowrap"
                         style={{ color: r.color, background: HEAD_BG, borderBottom: `3px solid ${r.color}`, borderLeft: `2px solid ${r.color}33` }}>
                         <div className="flex flex-col items-center gap-0.5">
@@ -650,7 +673,7 @@ export default function UsuariosPage() {
                       Módulo
                     </th>
                     {roles.map(r => (
-                      ACCIONES.map(ac => (
+                      COLS_MATRIZ.map((ac: string) => (
                         <th key={`${r.id}-${ac}`}
                           className="sticky z-20 text-center px-2 py-2 text-[10px] text-gray-500 font-semibold border-b border-gray-200 whitespace-nowrap"
                           style={{ top: row1H, background: HEAD_BG, ...(ac === 'ver' ? { borderLeft: `2px solid ${r.color}33` } : {}) }}>
@@ -669,11 +692,11 @@ export default function UsuariosPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {MODULOS_PERMISOS.map(seccion => (
+                  {seccionesMatriz.map(seccion => (
                     <Fragment key={seccion.section}>
                       {/* Encabezado de sección */}
                       <tr>
-                        <td colSpan={1 + roles.length * ACCIONES.length}
+                        <td colSpan={1 + roles.length * COLS_MATRIZ.length}
                           className="px-4 py-2 border-y-2 border-[#1168F8]/20"
                           style={{ background: 'linear-gradient(90deg, #e8eeff 0%, #f0f4fa 100%)' }}>
                           <span className="text-[11px] font-black text-[#052698] uppercase tracking-widest flex items-center gap-1.5"
@@ -709,8 +732,8 @@ export default function UsuariosPage() {
                             )}
                           </td>
                           {roles.map(r => (
-                            ACCIONES.map(ac => {
-                              const aplica = item.acciones.includes(ac)
+                            COLS_MATRIZ.map((ac: string) => {
+                              const aplica = (item.acciones as string[]).includes(ac)
                               const esSA = !!r.es_super_admin
                               // Super Administrador: siempre marcado y bloqueado (acceso total garantizado)
                               const activo = esSA ? aplica : (aplica ? isPermitidoEfectivo(r.id, item.modulo, ac) : false)
@@ -740,76 +763,6 @@ export default function UsuariosPage() {
                 </tbody>
               </table>
             </div>
-          </div>
-
-          {/* ── P-25 · PERMISOS DE CUENTAS (por rol) ── */}
-          <div className="mt-6">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[11px] font-black text-[#052698] uppercase tracking-widest">💳 Permisos de cuentas</span>
-              <span className="text-[10px] text-gray-400 normal-case font-normal">— qué cuentas ve y opera cada rol (cajas, bancos y custodia)</span>
-            </div>
-            {cuentasPerm.length === 0 ? (
-              <div className="px-4 py-6 text-center text-xs text-gray-400 bg-gray-50 rounded-2xl border border-gray-100">
-                No hay cuentas activas todavía. Cargá cuentas en <span className="font-medium text-gray-500">Catálogos → Cuentas (caja y bancos)</span> y van a aparecer acá para asignar permisos.
-              </div>
-            ) : (
-              <div className="overflow-x-auto border border-gray-100 rounded-2xl">
-                <table className="w-full border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-[#f0f4fa]">
-                      <th className="sticky left-0 z-10 bg-[#f0f4fa] text-left px-4 py-2 border-r border-gray-200 text-[10px] font-bold text-gray-500 uppercase" style={{ minWidth: 220 }}>Cuenta</th>
-                      {roles.map(r => (
-                        <th key={r.id} colSpan={ACCIONES_CUENTA.length} className="text-center px-2 py-1.5 text-[10px] font-bold uppercase" style={{ color: r.color, borderLeft: `2px solid ${r.color}33` }}>
-                          {r.nombre}
-                        </th>
-                      ))}
-                    </tr>
-                    <tr className="bg-[#f6f9fd]">
-                      <th className="sticky left-0 z-10 bg-[#f6f9fd] border-r border-gray-200"></th>
-                      {roles.map(r => (
-                        ACCIONES_CUENTA.map((ac, i) => (
-                          <th key={`${r.id}-${ac.key}`} className="text-center px-2 py-1 text-[9px] font-semibold text-gray-500 uppercase whitespace-nowrap" style={i === 0 ? { borderLeft: `2px solid ${r.color}33` } : undefined}>{ac.label}</th>
-                        ))
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cuentasPerm.map(c => {
-                      const modulo = `cuenta:${c.id}`
-                      return (
-                        <tr key={c.id} className="group border-b border-gray-50 hover:bg-blue-50/10">
-                          <td className="sticky left-0 z-10 bg-white group-hover:bg-[#f4f8ff] px-4 py-2.5 border-r border-gray-200" style={{ minWidth: 220, boxShadow: '2px 0 5px -3px rgba(0,0,0,0.08)' }}>
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-gray-800">{c.nombre}</span>
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${c.ambito === 'propia' ? 'bg-blue-50 text-blue-600' : 'bg-violet-50 text-violet-600'}`}>{c.ambito === 'propia' ? 'Propia' : 'Custodia'}</span>
-                            </div>
-                            <span className="text-[10px] text-gray-400">{[c.numero_interno, c.tipo, c.moneda, c.pais].filter(Boolean).join(' · ')}</span>
-                          </td>
-                          {roles.map(r => {
-                            const esSA = !!r.es_super_admin
-                            return ACCIONES_CUENTA.map((ac, i) => {
-                              const activo = esSA ? true : isPermitidoEfectivo(r.id, modulo, ac.key)
-                              const modificado = permisosModificados.hasOwnProperty(`${r.id}|${modulo}|${ac.key}`)
-                              return (
-                                <td key={`${r.id}-${ac.key}`} className={`text-center px-2 py-2 ${modificado ? 'bg-amber-100/70' : ''} ${esSA ? 'bg-green-50/40' : ''}`} style={i === 0 ? { borderLeft: `2px solid ${r.color}33` } : undefined}>
-                                  <input type="checkbox"
-                                    checked={activo}
-                                    disabled={esSA || !puedeEditarR}
-                                    onChange={() => { if (!esSA && puedeEditarR) togglePermiso(r.id, modulo, ac.key) }}
-                                    title={esSA ? 'El Super Administrador siempre tiene acceso total' : `${ac.label} — ${c.nombre}`}
-                                    className={`w-3.5 h-3.5 ${esSA ? 'cursor-not-allowed accent-green-600 opacity-70' : !puedeEditarR ? 'cursor-not-allowed accent-gray-400' : 'cursor-pointer accent-[#1168F8]'}`}/>
-                                </td>
-                              )
-                            })
-                          })}
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <p className="mt-2 text-[10px] text-gray-400">🔒 Por defecto, un rol sin tildar no ve ni opera la cuenta. El Super Administrador siempre tiene acceso total.</p>
           </div>
 
           {/* Botón guardar abajo también */}
