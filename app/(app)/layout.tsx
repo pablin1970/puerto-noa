@@ -58,6 +58,7 @@ const NAV: NavItem[] = [
 
   // ── TESORERÍA (todo lo que mueve plata) ────────────
   { label: 'Tesorería', section: true },
+  { href: '/tesoreria/cuentas',           label: 'Cuentas (caja y bancos)', icon: Landmark, modulo: 'cuentas_cajas_bancos' },
   { href: '/tesoreria/recibos',           label: 'Recibos',                icon: Receipt, modulo: 'recibos' },
   { href: '/tesoreria/ordenes-pago',      label: 'Órdenes de pago',        icon: Send, modulo: 'ordenes_pago' },
   { href: '/tesoreria/aplicaciones-pago', label: 'Aplicaciones de pago',   icon: Link2, modulo: 'aplicaciones_pago' },
