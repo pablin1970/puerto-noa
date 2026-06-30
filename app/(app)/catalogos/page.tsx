@@ -626,6 +626,7 @@ function FondosCuentasABM() {
   const pEliminar = puede(permisos, 'cat_finanzas', 'eliminar')
   const supabase = useMemo(() => createClient(), [])
   const [cuentas, setCuentas] = useState<any[]>([])
+  const [entidades, setEntidades] = useState<any[]>([])
   const [talonarios, setTalonarios] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
@@ -633,7 +634,7 @@ function FondosCuentasABM() {
   const [saving, setSaving] = useState(false)
   const [empresaNombre, setEmpresaNombre] = useState<string>('PUERTO NOA SPA')
 
-  const vacio = { nombre: '', tipo: 'banco', moneda: 'USD', pais: 'CL', banco: '', nro_cuenta: '', cbu_iban: '', swift: '', apoderados: [], notas: '', activo: true }
+  const vacio = { nombre: '', tipo: 'banco', moneda: 'USD', pais: 'CL', banco: '', nro_cuenta: '', cbu_iban: '', swift: '', acceso: 'directa', gestor_id: null, apoderados: [], notas: '', activo: true }
   const [form, setForm] = useState<any>({ ...vacio })
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 
@@ -641,14 +642,16 @@ function FondosCuentasABM() {
 
   async function load() {
     setLoading(true)
-    const [cRes, tRes, eRes] = await Promise.all([
+    const [cRes, tRes, eRes, enRes] = await Promise.all([
       (supabase.from('fondos_cuentas') as any).select('*').order('numero_interno', { ascending: true }),
       (supabase.from('talonarios') as any).select('*').in('prefijo', ['CTA-CL', 'CTA-AR', 'CTA-US']),
       (supabase.from('empresa_config') as any).select('razon_social').limit(1).maybeSingle(),
+      (supabase.from('entidades_financieras') as any).select('id,nombre,nombre_corto'),
     ])
     if (cRes.data) setCuentas(cRes.data)
     if (tRes.data) setTalonarios(tRes.data)
     if (eRes?.data?.razon_social) setEmpresaNombre(eRes.data.razon_social)
+    if (enRes.data) setEntidades(enRes.data)
     setLoading(false)
   }
 
@@ -664,6 +667,7 @@ function FondosCuentasABM() {
       nombre: form.nombre, tipo: form.tipo, moneda: form.moneda, pais: form.pais,
       banco: form.banco || null, nro_cuenta: form.nro_cuenta || null, cbu_iban: form.cbu_iban || null, swift: form.swift || null,
       tipo_cuenta: form.tipo_cuenta || null, routing_number: form.routing_number || null, banco_direccion: form.banco_direccion || null, alias: form.alias || null,
+      acceso: form.acceso || 'directa', gestor_id: form.gestor_id || null,
       titular: empresaNombre, apoderados: Array.isArray(form.apoderados) ? form.apoderados : [], notas: form.notas || null, activo: form.activo !== false,
     }
     if (editId) {
@@ -692,6 +696,8 @@ function FondosCuentasABM() {
     await supabase.from('fondos_cuentas').delete().eq('id', id)
     setCuentas(prev => prev.filter(c => c.id !== id))
   }
+
+  const gestorNombre = (id: string) => { const e = entidades.find((x: any) => x.id === id); return e ? (e.nombre_corto || e.nombre) : 'billetera' }
 
   return (
     <div className="space-y-4">
@@ -739,7 +745,7 @@ function FondosCuentasABM() {
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${c.tipo === 'banco' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>{c.tipo === 'banco' ? '🏦 Banco' : '💵 Caja'}</span>
                   </td>
                   <td className="px-3 py-3 font-mono text-[11px] font-bold text-[#052698]">{c.moneda}</td>
-                  <td className="px-3 py-3 text-gray-600">{c.banco || '—'}</td>
+                  <td className="px-3 py-3 text-gray-600">{c.banco || '—'}{c.acceso === 'gestionada' && c.gestor_id && <span className="block text-[10px] text-violet-500">vía {gestorNombre(c.gestor_id)}</span>}</td>
                   <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.nro_cuenta || '—'}</td>
                   <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.cbu_iban || '—'}</td>
                   <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.swift || '—'}</td>
@@ -777,12 +783,13 @@ function CuentasABM() {
   const pEliminar = puede(permisos, 'cat_finanzas', 'eliminar')
   const supabase = useMemo(() => createClient(), [])
   const [propias, setPropias] = useState<any[]>([])
+  const [entidades, setEntidades] = useState<any[]>([])
   const [talonarios, setTalonarios] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [editId, setEditId] = useState<string | null>(null)
   const [editData, setEditData] = useState<any>({})
   const [showNew, setShowNew] = useState(false)
-  const vacio = { nombre: '', tipo: 'banco', pais: 'CL', moneda: 'CLP', banco: '', nro_cuenta: '', cbu_iban: '', swift: '', apoderados: [], notas: '', activo: true }
+  const vacio = { nombre: '', tipo: 'banco', pais: 'CL', moneda: 'CLP', banco: '', nro_cuenta: '', cbu_iban: '', swift: '', acceso: 'directa', gestor_id: null, apoderados: [], notas: '', activo: true }
   const [newData, setNewData] = useState<any>({ ...vacio })
   const [saving, setSaving] = useState(false)
   const [empresaNombre, setEmpresaNombre] = useState<string>('PUERTO NOA SPA')
@@ -791,14 +798,16 @@ function CuentasABM() {
 
   async function load() {
     setLoading(true)
-    const [pRes, tRes, eRes] = await Promise.all([
+    const [pRes, tRes, eRes, enRes] = await Promise.all([
       (supabase.from('cuentas_pn') as any).select('*').order('pais').order('moneda'),
       (supabase.from('talonarios') as any).select('*').in('prefijo', ['CTA-CL', 'CTA-AR', 'CTA-US']),
       (supabase.from('empresa_config') as any).select('razon_social').limit(1).maybeSingle(),
+      (supabase.from('entidades_financieras') as any).select('id,nombre,nombre_corto'),
     ])
     if (pRes.data) setPropias(pRes.data)
     if (tRes.data) setTalonarios(tRes.data)
     if (eRes?.data?.razon_social) setEmpresaNombre(eRes.data.razon_social)
+    if (enRes.data) setEntidades(enRes.data)
     setLoading(false)
   }
 
@@ -818,6 +827,7 @@ function CuentasABM() {
       nombre: newData.nombre, tipo: newData.tipo || 'banco', pais: newData.pais, moneda: newData.moneda,
       banco: newData.banco || null, nro_cuenta: newData.nro_cuenta || null, cbu_iban: newData.cbu_iban || null, swift: newData.swift || null,
       tipo_cuenta: newData.tipo_cuenta || null, routing_number: newData.routing_number || null, banco_direccion: newData.banco_direccion || null, alias: newData.alias || null,
+      acceso: newData.acceso || 'directa', gestor_id: newData.gestor_id || null,
       titular: empresaNombre, apoderados: Array.isArray(newData.apoderados) ? newData.apoderados : [],
       numero_interno, talonario_id, notas: newData.notas || null,
       saldo_inicial: 0, saldo_actual: 0, activo: newData.activo !== false,
@@ -832,6 +842,7 @@ function CuentasABM() {
       nombre: editData.nombre, tipo: editData.tipo, pais: editData.pais, moneda: editData.moneda,
       banco: editData.banco || null, nro_cuenta: editData.nro_cuenta || null, cbu_iban: editData.cbu_iban || null, swift: editData.swift || null,
       tipo_cuenta: editData.tipo_cuenta || null, routing_number: editData.routing_number || null, banco_direccion: editData.banco_direccion || null, alias: editData.alias || null,
+      acceso: editData.acceso || 'directa', gestor_id: editData.gestor_id || null,
       apoderados: Array.isArray(editData.apoderados) ? editData.apoderados : [], notas: editData.notas || null, activo: editData.activo !== false,
     }).eq('id', editId)
     setEditId(null); await load(); setSaving(false)
@@ -849,6 +860,8 @@ function CuentasABM() {
     await (supabase.from('cuentas_pn') as any).delete().eq('id', id)
     await load()
   }
+
+  const gestorNombre = (id: string) => { const e = entidades.find((x: any) => x.id === id); return e ? (e.nombre_corto || e.nombre) : 'billetera' }
 
   const inp2 = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 
@@ -901,7 +914,7 @@ function CuentasABM() {
                     <td className="px-3 py-3 text-gray-500">{c.pais === 'AR' ? '🇦🇷' : '🇨🇱'}</td>
                     <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${tb.cls}`}>{tb.lbl}</span></td>
                     <td className="px-3 py-3 font-mono text-[11px] font-bold text-[#052698]">{c.moneda}</td>
-                    <td className="px-3 py-3 text-gray-600">{c.banco || '—'}</td>
+                    <td className="px-3 py-3 text-gray-600">{c.banco || '—'}{c.acceso === 'gestionada' && c.gestor_id && <span className="block text-[10px] text-violet-500">vía {gestorNombre(c.gestor_id)}</span>}</td>
                     <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.nro_cuenta || '—'}</td>
                     <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.cbu_iban || '—'}</td>
                     <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.swift || '—'}</td>
@@ -2075,6 +2088,17 @@ function CuentaForm({ data, setData, onSave, onCancel, ambito, inp, empresaNombr
     })()
     return () => { vivo = false }
   }, [data.pais, supabaseTC])
+  const [gestoras, setGestoras] = useState<any[]>([])
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      const { data: g } = await (supabaseTC.from('entidades_financieras') as any)
+        .select('id,pais,tipo,nombre,nombre_corto').eq('activo', true).in('tipo', ['fintech', 'banco'])
+        .order('orden', { ascending: true })
+      if (vivo) setGestoras(g || [])
+    })()
+    return () => { vivo = false }
+  }, [supabaseTC])
   const esCaja = (data.tipo || 'banco') === 'caja'
   const esCL = (data.pais || 'CL') === 'CL', esAR = data.pais === 'AR', esUS = data.pais === 'US'
   const paisNom = esAR ? 'Argentina' : esUS ? 'Estados Unidos' : 'Chile'
@@ -2174,6 +2198,33 @@ function CuentaForm({ data, setData, onSave, onCancel, ambito, inp, empresaNombr
           </div>
         </div>
       )}
+
+      <div className="col-span-2 border-t border-gray-100 pt-3">
+        <label className={lbl}>Acceso a la cuenta</label>
+        <div className="flex gap-2 mb-2">
+          <button type="button" onClick={() => setData((p: any) => ({ ...p, acceso: 'directa', gestor_id: null }))} className={`flex-1 px-3 py-2 rounded-xl text-xs font-semibold border ${(data.acceso || 'directa') === 'directa' ? 'bg-[#0a9e6e] text-white border-[#0a9e6e]' : 'bg-white text-gray-600 border-gray-200'}`}>Directa del banco</button>
+          <button type="button" onClick={() => setData((p: any) => ({ ...p, acceso: 'gestionada' }))} className={`flex-1 px-3 py-2 rounded-xl text-xs font-semibold border ${data.acceso === 'gestionada' ? 'bg-[#7C3AED] text-white border-[#7C3AED]' : 'bg-white text-gray-600 border-gray-200'}`}>Gestionada por billetera</button>
+        </div>
+        {data.acceso === 'gestionada' && (
+          <div>
+            <label className="block text-[10px] text-gray-400 mb-1">Billetera / entidad que la gestiona</label>
+            <select value={data.gestor_id || ''} onChange={e => setData((p: any) => ({ ...p, gestor_id: e.target.value || null }))} className={inp}>
+              <option value="">— elegí la entidad —</option>
+              {gestoras.filter((g: any) => g.tipo === 'fintech').length > 0 && (
+                <optgroup label="Billeteras / fintech">
+                  {gestoras.filter((g: any) => g.tipo === 'fintech').map((g: any) => <option key={g.id} value={g.id}>{g.nombre} ({g.pais})</option>)}
+                </optgroup>
+              )}
+              {gestoras.filter((g: any) => g.tipo === 'banco').length > 0 && (
+                <optgroup label="Bancos">
+                  {gestoras.filter((g: any) => g.tipo === 'banco').map((g: any) => <option key={g.id} value={g.id}>{g.nombre} ({g.pais})</option>)}
+                </optgroup>
+              )}
+            </select>
+            <p className="text-[10px] text-gray-400 mt-1">Ej.: una cuenta en EE.UU. gestionada por Global66 (CL).</p>
+          </div>
+        )}
+      </div>
 
       <div className="col-span-2 border-t border-gray-100 pt-3">
         <label className={lbl}>{esCaja ? 'Responsable de la caja' : 'Apoderados / Firmantes'}</label>
