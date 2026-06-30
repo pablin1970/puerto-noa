@@ -67,6 +67,7 @@ interface CotProvSel {
   seguroMonto: number
   segAlcance: 'no'|'maritimo'|'punta_a_punta'
   terceroId?: string|null
+  puertoChinaId?: string|null
   esManual?: boolean
   manualMonto?: number
 }
@@ -829,6 +830,17 @@ const criteriosProvArg = (terceroId:any): CritCoincidencia[] => {
   return out
 }
 const criteriosDespachanteCot = (c:any): CritCoincidencia[] => criteriosProvArg(c?.tercero_id || c?.terceroId || null)
+// ORIGEN / Puesta a FOB (forwarder, agente o almacén de origen). El extremo lejano es China en
+// ambos sentidos (origen en impo, destino en expo), así que anclamos en el puerto China de la
+// operación. Acepta CotProvSel (puertoChinaId, camelCase) y la cotización cruda del sistema
+// (puerto_china_id, snake_case) para servir tanto a la tarjeta como al dropdown.
+const criteriosProvOrigen = (c:any): CritCoincidencia[] => {
+  const ptoCot = c?.puertoChinaId ?? c?.puerto_china_id ?? null
+  return [
+    { label:'Toca origen',            aplica: true,         ok: !!s.puertoChiId },
+    { label:'Mismo puerto de origen', aplica: !!ptoCot,     ok: !!s.puertoChiId && ptoCot===s.puertoChiId },
+  ]
+}
 const sufijoCoincCrit = (crit: CritCoincidencia[]):string => {
   const { todo, ok, total } = nivelCoincidencia(crit)
   if(total===0) return ''
@@ -838,6 +850,7 @@ const sufijoCoincCrit = (crit: CritCoincidencia[]):string => {
 }
 const sufijoCoincChile = (c:any):string => sufijoCoincCrit(criteriosProvChile(c?.tercero_id || c?.terceroId || null))
 const sufijoCoincDesp  = (c:any):string => sufijoCoincCrit(criteriosProvArg(c?.tercero_id || c?.terceroId || null))
+const sufijoCoincOrigen = (c:any):string => sufijoCoincCrit(criteriosProvOrigen(c))
 
 // Criterios para COMPAÑÍA ASEGURADORA: los dos extremos del tramo cubierto por la
 // cotización deben pertenecer a la ruta de la operación (China/Chile/NOA), + paso si aplica.
@@ -943,6 +956,7 @@ function cotMercDesdeSistema(cot:any, usadas:string[]): CotProvSel {
     cotProvId: cot.id,
     proveedorNombre: cot.proveedor_nombre||'',
     terceroId: cot.tercero_id||null,
+    puertoChinaId: cot.puerto_china_id||null,
     referencia: cot.referencia||'',
     fechaEmision: cot.fecha||'',
     fechaVencimiento: cot.fecha_vencimiento||'',
@@ -987,6 +1001,7 @@ function cotProvDesdeSistema(cot:any, contenedoresH1:{tipo:string;cantidad:numbe
     cotProvId: cot.id,
     proveedorNombre: cot.proveedor_nombre||'',
     terceroId: cot.tercero_id||null,
+    puertoChinaId: cot.puerto_china_id||null,
     referencia: cot.referencia||'',
     fechaEmision: cot.fecha||'',
     fechaVencimiento: cot.fecha_vencimiento||'',
@@ -2369,8 +2384,8 @@ const clientesFiltrados=terceros.filter(t=>
                       const esp=cotsOrig.filter((c:any)=>c.tipo==='especifica'&&clienteSelId&&c.cliente_id===clienteSelId)
                       const gen=cotsOrig.filter((c:any)=>c.tipo!=='especifica'||!clienteSelId||c.cliente_id!==clienteSelId)
                       return(<>
-                        {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}{!isVigente(c.fecha_vencimiento||'')?'  (VENCIDA)':''}</option>)})}</optgroup>)}
-                        <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}</option>))}</optgroup>
+                        {esp.length>0&&(<optgroup label="⭐ Específicas para este cliente">{esp.map((c:any)=>{const cli=terceros.find(t=>t.id===c.cliente_id);return(<option key={c.id} value={c.id}>⭐ {c.proveedor_nombre}{cli?` · ${cli.razon_social}`:''} — {c.referencia||c.fecha}{sufijoCoincOrigen(c)}{!isVigente(c.fecha_vencimiento||'')?'  (VENCIDA)':''}</option>)})}</optgroup>)}
+                        <optgroup label="Genéricas vigentes">{gen.filter((c:any)=>isVigente(c.fecha_vencimiento||'')).map((c:any)=>(<option key={c.id} value={c.id}>{c.proveedor_nombre} — {c.referencia||c.fecha}{sufijoCoincOrigen(c)}</option>))}</optgroup>
                       </>)
                     })()}
                   </select>
@@ -2398,6 +2413,7 @@ const clientesFiltrados=terceros.filter(t=>
                           <div className="flex-1 px-3 py-2.5">
                             <div className="flex items-center gap-2 flex-wrap mb-0.5">
                               <span className="font-semibold text-sm text-gray-900">{oc.proveedorNombre}</span>
+                              <MedidorCoincidencia criterios={criteriosProvOrigen(oc)}/>
                               {oc.tipo==='especifica'?<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEEDFE] text-[#3C3489]">⭐ Específica</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500">Genérica</span>}
                               {vigente?<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700">vigente</span>:<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700">vencida {fmtFecha(oc.fechaVencimiento)}</span>}
                               {oc.usadaEnCots.length>0&&<span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">⚠ Usada en {oc.usadaEnCots.join(', ')}</span>}
