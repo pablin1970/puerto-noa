@@ -589,17 +589,14 @@ function FondosCuentasABM() {
   const pEliminar = puede(permisos, 'cat_finanzas', 'eliminar')
   const supabase = useMemo(() => createClient(), [])
   const [cuentas, setCuentas] = useState<any[]>([])
+  const [talonarios, setTalonarios] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [empresaNombre, setEmpresaNombre] = useState<string>('PUERTO NOA SPA')
 
-  const vacio = {
-    nombre: '', tipo: 'banco', moneda: 'USD', pais: 'Argentina',
-    banco: '', nro_cuenta: '', cbu_iban: '', swift: '',
-    titular: '', responsable: '', firmantes: '', notas: '', activo: true, orden: 0,
-  }
+  const vacio = { nombre: '', tipo: 'banco', moneda: 'USD', pais: 'CL', banco: '', nro_cuenta: '', cbu_iban: '', swift: '', apoderados: [], notas: '', activo: true }
   const [form, setForm] = useState<any>({ ...vacio })
   const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 
@@ -607,46 +604,42 @@ function FondosCuentasABM() {
 
   async function load() {
     setLoading(true)
-    const [cRes, eRes] = await Promise.all([
-      supabase.from('fondos_cuentas').select('*').order('orden', { ascending: true }),
+    const [cRes, tRes, eRes] = await Promise.all([
+      (supabase.from('fondos_cuentas') as any).select('*').order('numero_interno', { ascending: true }),
+      (supabase.from('talonarios') as any).select('*').in('prefijo', ['CTA-CL', 'CTA-AR']),
       (supabase.from('empresa_config') as any).select('razon_social').limit(1).maybeSingle(),
     ])
     if (cRes.data) setCuentas(cRes.data)
+    if (tRes.data) setTalonarios(tRes.data)
     if (eRes?.data?.razon_social) setEmpresaNombre(eRes.data.razon_social)
     setLoading(false)
   }
 
-  function startEdit(c: any) {
-    if (!pEditar) return
-    setEditId(c.id)
-    setForm({ ...c })
-    setShowNew(false)
-  }
-
+  function talPais(pais: string) { return talonarios.find(t => t.pais === pais) }
+  function startEdit(c: any) { if (!pEditar) return; setEditId(c.id); setForm({ ...c, apoderados: Array.isArray(c.apoderados) ? c.apoderados : [] }); setShowNew(false) }
   function cancelEdit() { setEditId(null); setForm({ ...vacio }) }
 
   async function guardar() {
     if (editId ? !pEditar : !pCrear) return
     if (!form.nombre) { alert('Ingresá el nombre'); return }
     setSaving(true)
-    const payload = {
+    const base = {
       nombre: form.nombre, tipo: form.tipo, moneda: form.moneda, pais: form.pais,
-      banco: form.banco || null, nro_cuenta: form.nro_cuenta || null,
-      cbu_iban: form.cbu_iban || null, swift: form.swift || null,
-      titular: empresaNombre, responsable: form.responsable || null,
-      firmantes: form.firmantes || null, notas: form.notas || null,
-      activo: form.activo, orden: parseInt(form.orden) || 0,
+      banco: form.banco || null, nro_cuenta: form.nro_cuenta || null, cbu_iban: form.cbu_iban || null, swift: form.swift || null,
+      titular: empresaNombre, apoderados: Array.isArray(form.apoderados) ? form.apoderados : [], notas: form.notas || null, activo: form.activo !== false,
     }
     if (editId) {
-      await (supabase.from('fondos_cuentas') as any).update(payload).eq('id', editId)
+      await (supabase.from('fondos_cuentas') as any).update(base).eq('id', editId)
     } else {
-      await (supabase.from('fondos_cuentas') as any).insert(payload)
+      const tal = talPais(form.pais)
+      let numero_interno: string | null = null, talonario_id: string | null = null
+      if (tal) {
+        const { data: nd } = await (supabase.rpc as any)('emitir_numero_talonario', { p_talonario: tal.id })
+        if (nd?.[0]) { numero_interno = nd[0].formateado; talonario_id = tal.id }
+      }
+      await (supabase.from('fondos_cuentas') as any).insert({ ...base, numero_interno, talonario_id })
     }
-    await load()
-    setEditId(null)
-    setShowNew(false)
-    setForm({ ...vacio })
-    setSaving(false)
+    await load(); setEditId(null); setShowNew(false); setForm({ ...vacio }); setSaving(false)
   }
 
   async function toggleActivo(c: any) {
@@ -662,7 +655,6 @@ function FondosCuentasABM() {
     setCuentas(prev => prev.filter(c => c.id !== id))
   }
 
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -671,10 +663,7 @@ function FondosCuentasABM() {
           <p className="text-xs text-gray-400 mt-0.5">{cuentas.length} cuenta(s) · {cuentas.filter(c => c.activo).length} activas</p>
         </div>
         {!showNew && !editId && pCrear && (
-          <button onClick={() => { setShowNew(true); setForm({ ...vacio, orden: cuentas.length + 1 }) }}
-            className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-semibold hover:bg-[#0a4fc4] shadow-sm">
-            + Agregar cuenta
-          </button>
+          <button onClick={() => { setShowNew(true); setForm({ ...vacio }) }} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-semibold hover:bg-[#0a4fc4] shadow-sm">+ Agregar cuenta</button>
         )}
       </div>
 
@@ -682,7 +671,11 @@ function FondosCuentasABM() {
         💡 Estas son las cajas y cuentas bancarias donde Puerto NOA administra <strong>fondos de clientes a rendir</strong>. No corresponden a las finanzas propias de Puerto NOA.
       </div>
 
-      {(showNew || editId) && <FondoCuentaForm form={form} setForm={setForm} inp={inp} empresaNombre={empresaNombre} editId={editId} onCancel={() => { setShowNew(false); cancelEdit() }} onSave={guardar} saving={saving} />}
+      {(showNew || editId) && (
+        <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-4">
+          <CuentaForm data={form} setData={setForm} onSave={guardar} onCancel={() => { setShowNew(false); cancelEdit() }} ambito="custodia" inp={inp} empresaNombre={empresaNombre} saving={saving} numeroPreview={editId ? form.numero_interno : previewNumeroCuenta(talPais(form.pais))} />
+        </div>
+      )}
 
       <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
         {loading ? (
@@ -693,7 +686,7 @@ function FondosCuentasABM() {
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {['#','Nombre','País','Tipo','Moneda','Banco','N° Cuenta','CBU/IBAN','SWIFT','Titular','Responsable','Firmantes','Estado',''].map(h => (
+                {['N° interno', 'Nombre', 'País', 'Tipo', 'Moneda', 'Banco', 'N° Cuenta', 'CBU/IBAN', 'SWIFT', 'Firmantes', 'Estado', ''].map(h => (
                   <th key={h} className="text-left px-3 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -701,40 +694,25 @@ function FondosCuentasABM() {
             <tbody>
               {cuentas.map(c => (
                 <tr key={c.id} className={`border-b border-gray-50 transition-colors ${!c.activo ? 'opacity-40' : 'hover:bg-blue-50/20'}`}>
-                  <td className="px-3 py-3 text-gray-400 font-mono text-[10px]">{c.orden}</td>
+                  <td className="px-3 py-3 text-[#1168F8] font-mono text-[10px] font-bold">{c.numero_interno || '—'}</td>
                   <td className="px-3 py-3 font-semibold text-gray-800">{c.nombre}</td>
-                  <td className="px-3 py-3 text-gray-500">{c.pais === 'Argentina' ? '🇦🇷' : '🇨🇱'}</td>
+                  <td className="px-3 py-3 text-gray-500">{c.pais === 'AR' ? '🇦🇷' : '🇨🇱'}</td>
                   <td className="px-3 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${c.tipo === 'banco' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>
-                      {c.tipo === 'banco' ? '🏦 Banco' : '💵 Caja'}
-                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${c.tipo === 'banco' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>{c.tipo === 'banco' ? '🏦 Banco' : '💵 Caja'}</span>
                   </td>
                   <td className="px-3 py-3 font-mono text-[11px] font-bold text-[#052698]">{c.moneda}</td>
                   <td className="px-3 py-3 text-gray-600">{c.banco || '—'}</td>
                   <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.nro_cuenta || '—'}</td>
                   <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.cbu_iban || '—'}</td>
                   <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.swift || '—'}</td>
-                  <td className="px-3 py-3 text-gray-500">{c.titular || '—'}</td>
-                  <td className="px-3 py-3 text-gray-500">{c.responsable || '—'}</td>
-                  <td className="px-3 py-3 text-gray-400 text-[10px]">{c.firmantes || '—'}</td>
+                  <td className="px-3 py-3 text-gray-400 text-[10px]">{Array.isArray(c.apoderados) && c.apoderados.length > 0 ? c.apoderados.map((a: any) => a.nombre).join(', ') : '—'}</td>
                   <td className="px-3 py-3">
-                    <button onClick={() => toggleActivo(c)}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold cursor-pointer transition-all ${
-                        c.activo ? 'bg-green-50 text-green-700 hover:bg-red-50 hover:text-red-600' : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-700'
-                      }`}>
-                      {c.activo ? 'Activa' : 'Inactiva'}
-                    </button>
+                    <button onClick={() => toggleActivo(c)} className={`px-2 py-0.5 rounded-full text-[10px] font-semibold cursor-pointer transition-all ${c.activo ? 'bg-green-50 text-green-700 hover:bg-red-50 hover:text-red-600' : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-700'}`}>{c.activo ? 'Activa' : 'Inactiva'}</button>
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex gap-1">
-                      <button onClick={() => startEdit(c)}
-                        className="px-3 py-1 border border-gray-200 rounded-lg text-[10px] text-gray-500 hover:bg-[#EBF2FF] hover:text-[#1168F8] hover:border-[#93B8FC] transition-all">
-                        Editar
-                      </button>
-                      <button onClick={() => eliminar(c.id)}
-                        className="px-3 py-1 border border-red-100 rounded-lg text-[10px] text-gray-400 hover:bg-red-50 hover:text-red-600 transition-all">
-                        Eliminar
-                      </button>
+                      {pEditar && <button onClick={() => startEdit(c)} className="px-3 py-1 border border-gray-200 rounded-lg text-[10px] text-gray-500 hover:bg-[#EBF2FF] hover:text-[#1168F8] hover:border-[#93B8FC] transition-all">Editar</button>}
+                      {pEliminar && <button onClick={() => eliminar(c.id)} className="px-3 py-1 border border-red-100 rounded-lg text-[10px] text-gray-400 hover:bg-red-50 hover:text-red-600 transition-all">Eliminar</button>}
                     </div>
                   </td>
                 </tr>
@@ -761,12 +739,13 @@ function CuentasABM() {
   const pEliminar = puede(permisos, 'cat_finanzas', 'eliminar')
   const supabase = useMemo(() => createClient(), [])
   const [propias, setPropias] = useState<any[]>([])
+  const [talonarios, setTalonarios] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [editId, setEditId] = useState<string|null>(null)
-  const [editTipo, setEditTipo] = useState<'propia'|'custodia'>('propia')
+  const [editId, setEditId] = useState<string | null>(null)
   const [editData, setEditData] = useState<any>({})
   const [showNew, setShowNew] = useState(false)
-  const [newData, setNewData] = useState<any>({ nombre:'', tipo:'banco', pais:'CL', moneda:'CLP', banco:'', nro_cuenta:'', firmante:'', notas:'' })
+  const vacio = { nombre: '', tipo: 'banco', pais: 'CL', moneda: 'CLP', banco: '', nro_cuenta: '', cbu_iban: '', swift: '', apoderados: [], notas: '', activo: true }
+  const [newData, setNewData] = useState<any>({ ...vacio })
   const [saving, setSaving] = useState(false)
   const [empresaNombre, setEmpresaNombre] = useState<string>('PUERTO NOA SPA')
 
@@ -774,95 +753,91 @@ function CuentasABM() {
 
   async function load() {
     setLoading(true)
-    const [pRes, eRes] = await Promise.all([
+    const [pRes, tRes, eRes] = await Promise.all([
       (supabase.from('cuentas_pn') as any).select('*').order('pais').order('moneda'),
+      (supabase.from('talonarios') as any).select('*').in('prefijo', ['CTA-CL', 'CTA-AR']),
       (supabase.from('empresa_config') as any).select('razon_social').limit(1).maybeSingle(),
     ])
     if (pRes.data) setPropias(pRes.data)
+    if (tRes.data) setTalonarios(tRes.data)
     if (eRes?.data?.razon_social) setEmpresaNombre(eRes.data.razon_social)
     setLoading(false)
   }
+
+  function talPais(pais: string) { return talonarios.find(t => t.pais === pais) }
 
   async function saveNew() {
     if (!pCrear) return
     if (!newData.nombre || !newData.moneda) { alert('Nombre y moneda son obligatorios'); return }
     setSaving(true)
+    const tal = talPais(newData.pais)
+    let numero_interno: string | null = null, talonario_id: string | null = null
+    if (tal) {
+      const { data: nd } = await (supabase.rpc as any)('emitir_numero_talonario', { p_talonario: tal.id })
+      if (nd?.[0]) { numero_interno = nd[0].formateado; talonario_id = tal.id }
+    }
     await (supabase.from('cuentas_pn') as any).insert({
-      nombre: newData.nombre, tipo: newData.tipo||'banco',
-      pais: newData.pais, moneda: newData.moneda,
-      banco: newData.banco||null, nro_cuenta: newData.nro_cuenta||null,
-      firmante: newData.firmante||null,
-      notas: newData.notas||null, saldo_inicial: 0, saldo_actual: 0, activo: true,
+      nombre: newData.nombre, tipo: newData.tipo || 'banco', pais: newData.pais, moneda: newData.moneda,
+      banco: newData.banco || null, nro_cuenta: newData.nro_cuenta || null, cbu_iban: newData.cbu_iban || null, swift: newData.swift || null,
+      titular: empresaNombre, apoderados: Array.isArray(newData.apoderados) ? newData.apoderados : [],
+      numero_interno, talonario_id, notas: newData.notas || null,
+      saldo_inicial: 0, saldo_actual: 0, activo: newData.activo !== false,
     })
-    setShowNew(false)
-    setNewData({ nombre:'', tipo:'banco', pais:'CL', moneda:'CLP', banco:'', nro_cuenta:'', firmante:'', notas:'' })
-    await load()
-    setSaving(false)
+    setShowNew(false); setNewData({ ...vacio }); await load(); setSaving(false)
   }
 
   async function saveEdit() {
     if (!pEditar) return
     setSaving(true)
-    const tabla = editTipo === 'propia' ? 'cuentas_pn' : 'fondos_cuentas'
-    await (supabase.from(tabla) as any).update({
-      nombre: editData.nombre, tipo: editData.tipo,
-      pais: editData.pais, moneda: editData.moneda,
-      banco: editData.banco||null, nro_cuenta: editData.nro_cuenta||null,
-      firmante: editData.firmante||null, notas: editData.notas||null,
+    await (supabase.from('cuentas_pn') as any).update({
+      nombre: editData.nombre, tipo: editData.tipo, pais: editData.pais, moneda: editData.moneda,
+      banco: editData.banco || null, nro_cuenta: editData.nro_cuenta || null, cbu_iban: editData.cbu_iban || null, swift: editData.swift || null,
+      apoderados: Array.isArray(editData.apoderados) ? editData.apoderados : [], notas: editData.notas || null, activo: editData.activo !== false,
     }).eq('id', editId)
-    setEditId(null)
-    await load()
-    setSaving(false)
+    setEditId(null); await load(); setSaving(false)
   }
 
-  async function toggleActivo(id: string, tipo: 'propia'|'custodia', activo: boolean) {
+  async function toggleActivo(id: string, activo: boolean) {
     if (!pEditar) return
-    const tabla = tipo === 'propia' ? 'cuentas_pn' : 'fondos_cuentas'
-    await (supabase.from(tabla) as any).update({ activo: !activo }).eq('id', id)
+    await (supabase.from('cuentas_pn') as any).update({ activo: !activo }).eq('id', id)
     await load()
   }
 
-  async function eliminar(id: string, tipo: 'propia'|'custodia') {
+  async function eliminar(id: string) {
     if (!pEliminar) return
     if (!confirm('¿Eliminar esta cuenta? Solo si no tiene movimientos asociados.')) return
-    const tabla = tipo === 'propia' ? 'cuentas_pn' : 'fondos_cuentas'
-    await (supabase.from(tabla) as any).delete().eq('id', id)
+    await (supabase.from('cuentas_pn') as any).delete().eq('id', id)
     await load()
   }
 
   const inp2 = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 
-
-  function RowCuenta({ row, tipo }: { row: any, tipo: 'propia'|'custodia' }) {
+  function RowCuenta({ row }: { row: any }) {
     const paisFlag = row.pais === 'CL' ? '🇨🇱' : row.pais === 'AR' ? '🇦🇷' : '🌐'
     return editId === row.id ? (
       <div className="p-4 bg-white border border-[#1168F8] rounded-2xl mb-2">
-        <CuentaPropiaForm data={editData} setData={setEditData} onSave={saveEdit} onCancel={() => setEditId(null)} inp2={inp2} empresaNombre={empresaNombre} saving={saving} />
+        <CuentaForm data={editData} setData={setEditData} onSave={saveEdit} onCancel={() => setEditId(null)} ambito="propia" inp={inp2} empresaNombre={empresaNombre} saving={saving} numeroPreview={row.numero_interno} />
       </div>
     ) : (
-      <div className={`bg-white border border-gray-100 rounded-2xl px-4 py-3 mb-2 shadow-sm flex items-center gap-3 ${!row.activo?'opacity-50':''}`}>
+      <div className={`bg-white border border-gray-100 rounded-2xl px-4 py-3 mb-2 shadow-sm flex items-center gap-3 ${!row.activo ? 'opacity-50' : ''}`}>
         <div className="text-xl flex-shrink-0">{paisFlag}</div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
+            {row.numero_interno && <span className="text-[10px] font-mono font-bold text-[#1168F8]">{row.numero_interno}</span>}
             <span className="text-xs font-semibold text-gray-900">{row.nombre}</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${row.moneda==='CLP'?'bg-blue-50 text-blue-700':row.moneda==='ARS'?'bg-sky-50 text-sky-700':'bg-green-50 text-green-700'}`}>{row.moneda}</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${row.moneda === 'CLP' ? 'bg-blue-50 text-blue-700' : row.moneda === 'ARS' ? 'bg-sky-50 text-sky-700' : 'bg-green-50 text-green-700'}`}>{row.moneda}</span>
             <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px]">{row.tipo}</span>
           </div>
-          <div className="text-[10px] text-gray-400 mt-0.5 flex gap-3">
+          <div className="text-[10px] text-gray-400 mt-0.5 flex gap-3 flex-wrap">
             {row.banco && <span>{row.banco}</span>}
             {row.nro_cuenta && <span className="font-mono">{row.nro_cuenta}</span>}
-            {row.firmante && <span>{row.tipo === 'caja' ? 'Responsable' : 'Firmante'}: {row.firmante}</span>}
+            {Array.isArray(row.apoderados) && row.apoderados.length > 0 && <span>Firmantes: {row.apoderados.map((a: any) => a.nombre).join(', ')}</span>}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button onClick={() => toggleActivo(row.id, tipo, row.activo)}
-            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${row.activo?'bg-green-50 text-green-700 border-green-200':'bg-gray-100 text-gray-400 border-gray-200'}`}>
-            {row.activo ? 'Activa' : 'Inactiva'}
-          </button>
-          <button onClick={() => { setEditId(row.id); setEditTipo(tipo); setEditData({...row}) }}
-            className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 hover:border-[#1168F8] hover:text-[#1168F8]">Editar</button>
-          <button onClick={() => eliminar(row.id, tipo)}
-            className="px-3 py-1.5 border border-red-100 rounded-xl text-xs text-red-500 hover:bg-red-50">Eliminar</button>
+          <button onClick={() => toggleActivo(row.id, row.activo)} className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${row.activo ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-400 border-gray-200'}`}>{row.activo ? 'Activa' : 'Inactiva'}</button>
+          {pEditar && <button onClick={() => { setEditId(row.id); setEditData({ ...row, apoderados: Array.isArray(row.apoderados) ? row.apoderados : [] }) }} className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 hover:border-[#1168F8] hover:text-[#1168F8]">Editar</button>}
+          {pEliminar && <button onClick={() => eliminar(row.id)} className="px-3 py-1.5 border border-red-100 rounded-xl text-xs text-red-500 hover:bg-red-50">Eliminar</button>}
         </div>
       </div>
     )
@@ -877,19 +852,15 @@ function CuentasABM() {
           <h2 className="font-bold text-base text-gray-900">Cuentas (caja y bancos)</h2>
           <p className="text-xs text-gray-400 mt-0.5">Cuentas propias de Puerto NOA (caja, bancos e inversiones)</p>
         </div>
-        {pCrear && <button onClick={() => setShowNew(true)} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Nueva cuenta</button>}
+        {pCrear && !showNew && <button onClick={() => { setShowNew(true); setNewData({ ...vacio }) }} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Nueva cuenta</button>}
       </div>
 
       {showNew && (
         <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-4 mb-4">
-          <div className="flex gap-3 mb-4">
-            <h3 className="font-bold text-sm text-gray-900 mr-2">Nueva cuenta propia</h3>
-          </div>
-          <CuentaPropiaForm data={newData} setData={setNewData} onSave={saveNew} onCancel={() => setShowNew(false)} inp2={inp2} empresaNombre={empresaNombre} saving={saving} />
+          <CuentaForm data={newData} setData={setNewData} onSave={saveNew} onCancel={() => setShowNew(false)} ambito="propia" inp={inp2} empresaNombre={empresaNombre} saving={saving} numeroPreview={previewNumeroCuenta(talPais(newData.pais))} />
         </div>
       )}
 
-      {/* Cuentas propias PN — agrupadas por subtipo */}
       <div className="mb-4">
         <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3 flex items-center gap-2">
           <span>Cuentas propias Puerto NOA</span>
@@ -897,14 +868,14 @@ function CuentasABM() {
         </div>
         {propias.length === 0 ? <div className="text-xs text-gray-400 py-3">Sin cuentas propias registradas</div> : (
           <>
-            {(['banco','caja','inversion'] as const).map(subtipo => {
+            {(['banco', 'caja', 'inversion'] as const).map(subtipo => {
               const grupo = propias.filter(r => r.tipo === subtipo)
               if (grupo.length === 0) return null
-              const labels: Record<string,string> = { banco:'🏛 Cuentas bancarias', caja:'💵 Cajas / efectivo', inversion:'📈 Inversiones' }
+              const labels: Record<string, string> = { banco: '🏛 Cuentas bancarias', caja: '💵 Cajas / efectivo', inversion: '📈 Inversiones' }
               return (
                 <div key={subtipo} className="mb-3">
                   <div className="text-[10px] font-semibold text-gray-500 mb-1.5 pl-1">{labels[subtipo]}</div>
-                  {grupo.map(r => <RowCuenta key={r.id} row={r} tipo="propia" />)}
+                  {grupo.map(r => <RowCuenta key={r.id} row={r} />)}
                 </div>
               )
             })}
@@ -2043,183 +2014,135 @@ function CondicionesCotizacionABM() {
   )
 }
 
-function FondoCuentaForm({ form, setForm, inp, empresaNombre, editId, onCancel, onSave, saving }: any) {
+function previewNumeroCuenta(t: any) {
+  if (!t) return ''
+  const num = t.longitud > 0 ? String(t.proximo_numero).padStart(t.longitud, '0') : String(t.proximo_numero)
+  return [t.prefijo, t.serie, num].filter(Boolean).join('-')
+}
+
+function CuentaForm({ data, setData, onSave, onCancel, ambito, inp, empresaNombre, saving, numeroPreview }: any) {
+  const esCustodia = ambito === 'custodia'
+  const apoderados = Array.isArray(data.apoderados) ? data.apoderados : []
+  const [apNombre, setApNombre] = useState('')
+  const [apTipo, setApTipo] = useState<string>(data.pais === 'AR' ? 'CUIT' : 'RUT')
+  const [apNumero, setApNumero] = useState('')
+  const esCaja = (data.tipo || 'banco') === 'caja'
+  const cbuLbl = data.pais === 'AR' ? 'CBU (Argentina)' : 'IBAN (Chile)'
+  const lbl = 'block text-[10px] font-semibold text-gray-500 mb-1 uppercase'
+  function addApoderado() {
+    if (!apNombre.trim()) return
+    setData((p: any) => ({ ...p, apoderados: [...(Array.isArray(p.apoderados) ? p.apoderados : []), { nombre: apNombre.trim(), tipo_doc: apTipo, numero: apNumero.trim() }] }))
+    setApNombre(''); setApNumero('')
+  }
+  function quitarApoderado(i: number) {
+    setData((p: any) => ({ ...p, apoderados: (Array.isArray(p.apoderados) ? p.apoderados : []).filter((_: any, idx: number) => idx !== i) }))
+  }
   return (
-    <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-5 mb-4">
-      <div className="text-xs font-bold text-[#052698] mb-4">{editId ? 'Editar cuenta' : 'Nueva cuenta'}</div>
-      <div className="grid grid-cols-3 gap-3 mb-3">
-        <div className="col-span-2">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre descriptivo *</label>
-          <input value={form.nombre} onChange={e => setForm((f: any) => ({ ...f, nombre: e.target.value }))}
-            className={inp} placeholder="ej. Caja efectivo Argentina USD"/>
-        </div>
+    <div className="grid grid-cols-2 gap-3">
+      <div className="col-span-2 flex items-start justify-between gap-3">
         <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Orden</label>
-          <input type="number" value={form.orden} onChange={e => setForm((f: any) => ({ ...f, orden: e.target.value }))}
-            className={inp} placeholder="1"/>
+          <div className="font-bold text-sm text-gray-900">{esCustodia ? 'Cuenta en custodia de clientes' : 'Cuenta propia'}</div>
+          <div className="text-[11px] text-gray-400">{esCustodia ? 'Fondos de clientes a rendir · titular Puerto NOA' : 'Caja, bancos e inversiones de Puerto NOA'}</div>
         </div>
-      </div>
-      <div className="grid grid-cols-3 gap-3 mb-3">
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
-          <select value={form.tipo} onChange={e => setForm((f: any) => ({ ...f, tipo: e.target.value }))} className={inp}>
-            <option value="banco">🏦 Banco</option>
-            <option value="caja">💵 Caja efectivo</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
-          <select value={form.moneda} onChange={e => setForm((f: any) => ({ ...f, moneda: e.target.value }))} className={inp}>
-            <option value="ARS">ARS — Peso argentino</option>
-            <option value="USD">USD — Dólar</option>
-            <option value="CLP">CLP — Peso chileno</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">País</label>
-          <select value={form.pais} onChange={e => setForm((f: any) => ({ ...f, pais: e.target.value }))} className={inp}>
-            <option value="Argentina">🇦🇷 Argentina</option>
-            <option value="Chile">🇨🇱 Chile</option>
-          </select>
+        <div className="text-right bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-3 py-1.5 flex-shrink-0">
+          <div className="text-[9px] uppercase text-[#1168F8] tracking-wide">N° interno · {data.pais === 'AR' ? 'Argentina' : 'Chile'}</div>
+          <div className="text-sm font-mono font-bold text-[#052698]">{numeroPreview || '—'}</div>
+          <div className="text-[9px] text-[#1168F8]">se graba al guardar</div>
         </div>
       </div>
 
-      <div className="mb-3">
-        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Titular de la cuenta</label>
-        <div className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-gray-50 text-gray-600 flex items-center gap-1">{empresaNombre}<span className="text-gray-400">· titular legal</span></div>
+      <div className="col-span-2">
+        <label className={lbl}>Nombre descriptivo *</label>
+        <input value={data.nombre || ''} onChange={e => setData((p: any) => ({ ...p, nombre: e.target.value }))} className={inp} placeholder="ej. Banco Itaú CLP Chile" />
       </div>
 
-      {/* Datos bancarios — solo si es banco */}
-      {form.tipo === 'banco' && (
-        <>
-          <div className="grid grid-cols-1 gap-3 mb-3">
-            <div>
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco</label>
-              <SelectorBanco pais={form.pais} value={form.banco || ''} onChange={(n) => setForm((f: any) => ({ ...f, banco: n }))} className={inp} />
-            </div>
+      <div>
+        <label className={lbl}>Tipo</label>
+        <select value={data.tipo || 'banco'} onChange={e => setData((p: any) => ({ ...p, tipo: e.target.value, banco: e.target.value === 'caja' ? '' : p.banco, nro_cuenta: e.target.value === 'caja' ? '' : p.nro_cuenta }))} className={inp}>
+          <option value="banco">Banco</option>
+          <option value="caja">Caja / efectivo</option>
+          {!esCustodia && <option value="inversion">Inversión (fondos)</option>}
+        </select>
+      </div>
+      <div>
+        <label className={lbl}>País donde opera</label>
+        <select value={data.pais || 'CL'} onChange={e => setData((p: any) => ({ ...p, pais: e.target.value }))} className={inp}>
+          <option value="CL">🇨🇱 Chile</option>
+          <option value="AR">🇦🇷 Argentina</option>
+        </select>
+      </div>
+
+      <div>
+        <label className={lbl}>Moneda</label>
+        <select value={data.moneda || 'CLP'} onChange={e => setData((p: any) => ({ ...p, moneda: e.target.value }))} className={inp}>
+          <option value="CLP">CLP — Peso chileno</option>
+          <option value="ARS">ARS — Peso argentino</option>
+          <option value="USD">USD — Dólar</option>
+        </select>
+      </div>
+      <div>
+        <label className={lbl}>{data.tipo === 'inversion' ? 'ALyC / Agente (custodia)' : 'Banco / Entidad'}</label>
+        {!esCaja
+          ? <SelectorBanco pais={data.pais} value={data.banco || ''} onChange={(n: string) => setData((p: any) => ({ ...p, banco: n }))} className={inp} />
+          : <div className="text-[11px] text-gray-400 py-2.5">No aplica para caja</div>}
+      </div>
+
+      <div className="col-span-2">
+        <label className={lbl}>Titular de la cuenta</label>
+        <div className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-gray-50 text-gray-600 flex items-center gap-1">{empresaNombre}<span className="text-gray-400">· titular legal (fijo)</span></div>
+      </div>
+
+      {!esCaja && (
+        <div className="col-span-2 border-t border-gray-100 pt-3">
+          <div className="text-[11px] font-semibold text-gray-500 mb-2 uppercase">Datos de la cuenta</div>
+          <div className="grid grid-cols-1 gap-2">
+            <div><label className="block text-[10px] text-gray-400 mb-1">N° de cuenta</label><input value={data.nro_cuenta || ''} onChange={e => setData((p: any) => ({ ...p, nro_cuenta: e.target.value }))} className={inp} placeholder="Número de cuenta" /></div>
+            <div><label className="block text-[10px] text-gray-400 mb-1">{cbuLbl}</label><input value={data.cbu_iban || ''} onChange={e => setData((p: any) => ({ ...p, cbu_iban: e.target.value }))} className={inp} placeholder={data.pais === 'AR' ? 'CBU' : 'IBAN'} /></div>
+            <div><label className="block text-[10px] text-gray-400 mb-1">SWIFT / BIC (internacional)</label><input value={data.swift || ''} onChange={e => setData((p: any) => ({ ...p, swift: e.target.value }))} className={inp} placeholder="Código SWIFT" /></div>
           </div>
-          <div className="grid grid-cols-3 gap-3 mb-3">
-            <div>
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N° de cuenta</label>
-              <input value={form.nro_cuenta || ''} onChange={e => setForm((f: any) => ({ ...f, nro_cuenta: e.target.value }))}
-                className={inp} placeholder="Número de cuenta bancaria"/>
-            </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">CBU / IBAN</label>
-              <input value={form.cbu_iban || ''} onChange={e => setForm((f: any) => ({ ...f, cbu_iban: e.target.value }))}
-                className={inp} placeholder="CBU o IBAN"/>
-            </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">SWIFT / BIC</label>
-              <input value={form.swift || ''} onChange={e => setForm((f: any) => ({ ...f, swift: e.target.value }))}
-                className={inp} placeholder="Código SWIFT"/>
-            </div>
-          </div>
-        </>
+        </div>
       )}
 
-      {/* Responsable — siempre visible */}
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">
-            {form.tipo === 'caja' ? 'Responsable de la caja' : 'Responsable / Apoderado'}
-          </label>
-          <input value={form.responsable || ''} onChange={e => setForm((f: any) => ({ ...f, responsable: e.target.value }))}
-            className={inp} placeholder="Nombre del responsable"/>
-        </div>
-        {form.tipo === 'banco' && (
-          <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Usuarios / Firmantes autorizados</label>
-            <input value={form.firmantes || ''} onChange={e => setForm((f: any) => ({ ...f, firmantes: e.target.value }))}
-              className={inp} placeholder="ej. Pablo Mealla, Rene Mealla"/>
+      <div className="col-span-2 border-t border-gray-100 pt-3">
+        <label className={lbl}>Apoderados / Firmantes</label>
+        {apoderados.length > 0 && (
+          <div className="flex flex-col gap-1.5 mb-2">
+            {apoderados.map((a: any, i: number) => (
+              <div key={i} className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5">
+                <span className="text-xs text-gray-800 flex-1">{a.nombre}</span>
+                <span className="text-[11px] text-gray-400 font-mono">{a.tipo_doc} {a.numero}</span>
+                <button type="button" onClick={() => quitarApoderado(i)} className="text-gray-300 hover:text-red-500 text-sm leading-none">×</button>
+              </div>
+            ))}
           </div>
         )}
+        <div className="flex gap-2">
+          <input value={apNombre} onChange={e => setApNombre(e.target.value)} className={inp} style={{ flex: 1.4 }} placeholder="Nombre completo" />
+          <select value={apTipo} onChange={e => setApTipo(e.target.value)} className={inp} style={{ width: 84, flex: 'none' }}>
+            <option value="RUT">RUT</option>
+            <option value="CUIT">CUIT</option>
+          </select>
+          <input value={apNumero} onChange={e => setApNumero(e.target.value)} className={inp} style={{ flex: 1 }} placeholder="N° documento" />
+          <button type="button" onClick={addApoderado} className="px-3 py-2 border border-gray-200 rounded-xl text-xs whitespace-nowrap hover:border-[#1168F8] hover:text-[#1168F8]">+ Agregar</button>
+        </div>
       </div>
 
-      <div className="mb-3">
-        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas / observaciones</label>
-        <input value={form.notas || ''} onChange={e => setForm((f: any) => ({ ...f, notas: e.target.value }))}
-          className={inp} placeholder="Información adicional"/>
+      <div className="col-span-2">
+        <label className={lbl}>Notas</label>
+        <input value={data.notas || ''} onChange={e => setData((p: any) => ({ ...p, notas: e.target.value }))} className={inp} placeholder="Observaciones" />
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="col-span-2">
         <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={form.activo} onChange={e => setForm((f: any) => ({ ...f, activo: e.target.checked }))} className="w-4 h-4 rounded"/>
+          <input type="checkbox" checked={data.activo !== false} onChange={e => setData((p: any) => ({ ...p, activo: e.target.checked }))} className="w-4 h-4 rounded" />
           <span className="text-xs text-gray-600 font-medium">Cuenta activa</span>
         </label>
-        <div className="flex gap-2">
-          <button onClick={onCancel}
-            className="px-4 py-2 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50 bg-white">Cancelar</button>
-          <button onClick={onSave} disabled={saving}
-            className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
-            {saving ? 'Guardando...' : 'Guardar'}
-          </button>
-        </div>
+      </div>
+
+      <div className="col-span-2 flex justify-end gap-2 mt-1">
+        <button onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cancelar</button>
+        <button onClick={onSave} disabled={saving} className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">{saving ? 'Guardando...' : 'Guardar cuenta'}</button>
       </div>
     </div>
   )
 }
-
-function CuentaPropiaForm({ data, setData, onSave, onCancel, inp2, empresaNombre, saving }: any) {
-    return (
-      <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre *</label>
-          <input value={data.nombre||''} onChange={e => setData((p:any)=>({...p,nombre:e.target.value}))} className={inp2} placeholder="ej. Banco Itaú CLP Chile"/>
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
-          <select value={data.tipo||'banco'} onChange={e => setData((p:any)=>({...p,tipo:e.target.value, banco: e.target.value==='caja' ? '' : p.banco, nro_cuenta: e.target.value==='caja' ? '' : p.nro_cuenta}))} className={inp2}>
-            <option value="banco">Banco</option>
-            <option value="caja">Caja / efectivo</option>
-            <option value="inversion">Inversión (fondos / custodia)</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">País</label>
-          <select value={data.pais||'CL'} onChange={e => setData((p:any)=>({...p,pais:e.target.value}))} className={inp2}>
-            <option value="CL">🇨🇱 Chile</option>
-            <option value="AR">🇦🇷 Argentina</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
-          <select value={data.moneda||'CLP'} onChange={e => setData((p:any)=>({...p,moneda:e.target.value}))} className={inp2}>
-            <option value="CLP">CLP — Peso chileno</option>
-            <option value="ARS">ARS — Peso argentino</option>
-            <option value="USD">USD — Dólar</option>
-          </select>
-        </div>
-        {(data.tipo||'banco') !== 'caja' && (
-        <>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{data.tipo === 'inversion' ? 'ALyC / Agente (custodia)' : 'Banco / Entidad'}</label>
-          <SelectorBanco pais={data.pais} value={data.banco||''} onChange={(n)=>setData((p:any)=>({...p,banco:n}))} className={inp2} />
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{data.tipo === 'inversion' ? 'N° de cuenta comitente / custodia' : 'N° Cuenta / CBU / IBAN'}</label>
-          <input value={data.nro_cuenta||''} onChange={e => setData((p:any)=>({...p,nro_cuenta:e.target.value}))} className={inp2} placeholder={data.tipo === 'inversion' ? 'Número de cuenta comitente' : 'Número de cuenta'}/>
-        </div>
-        </>
-        )}
-        <div className="col-span-2">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Titular de la cuenta</label>
-          <div className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-gray-50 text-gray-600 flex items-center gap-1">{empresaNombre}<span className="text-gray-400">· titular legal</span></div>
-        </div>
-        <div className="col-span-2">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{data.tipo === 'caja' ? 'Responsable de la caja' : 'Firmante / Apoderado'}</label>
-          <input value={data.firmante||''} onChange={e => setData((p:any)=>({...p,firmante:e.target.value}))} className={inp2} placeholder={data.tipo === 'caja' ? 'Quién hace el arqueo y responde por la caja' : 'Nombre del firmante o apoderado de la cuenta'}/>
-        </div>
-        <div className="col-span-2">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas</label>
-          <input value={data.notas||''} onChange={e => setData((p:any)=>({...p,notas:e.target.value}))} className={inp2} placeholder="Observaciones"/>
-        </div>
-        <div className="col-span-2 flex justify-end gap-2 mt-1">
-          <button onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cancelar</button>
-          <button onClick={onSave} disabled={saving} className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
-            {saving ? 'Guardando...' : 'Guardar'}
-          </button>
-        </div>
-      </div>
-    )
-  }
