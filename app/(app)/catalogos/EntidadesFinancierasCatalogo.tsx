@@ -20,6 +20,7 @@ const PAISES = [
   { code: 'AR', label: 'Argentina', flag: '🇦🇷' },
   { code: 'CL', label: 'Chile', flag: '🇨🇱' },
   { code: 'CN', label: 'China', flag: '🇨🇳' },
+  { code: 'US', label: 'Estados Unidos', flag: '🇺🇸' },
 ]
 
 export default function EntidadesFinancierasCatalogo() {
