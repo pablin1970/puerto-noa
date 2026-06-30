@@ -662,120 +662,6 @@ function FondosCuentasABM() {
     setCuentas(prev => prev.filter(c => c.id !== id))
   }
 
-  const FormCuenta = () => (
-    <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-5 mb-4">
-      <div className="text-xs font-bold text-[#052698] mb-4">{editId ? 'Editar cuenta' : 'Nueva cuenta'}</div>
-      <div className="grid grid-cols-3 gap-3 mb-3">
-        <div className="col-span-2">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre descriptivo *</label>
-          <input value={form.nombre} onChange={e => setForm((f: any) => ({ ...f, nombre: e.target.value }))}
-            className={inp} placeholder="ej. Caja efectivo Argentina USD"/>
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Orden</label>
-          <input type="number" value={form.orden} onChange={e => setForm((f: any) => ({ ...f, orden: e.target.value }))}
-            className={inp} placeholder="1"/>
-        </div>
-      </div>
-      <div className="grid grid-cols-3 gap-3 mb-3">
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
-          <select value={form.tipo} onChange={e => setForm((f: any) => ({ ...f, tipo: e.target.value }))} className={inp}>
-            <option value="banco">🏦 Banco</option>
-            <option value="caja">💵 Caja efectivo</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
-          <select value={form.moneda} onChange={e => setForm((f: any) => ({ ...f, moneda: e.target.value }))} className={inp}>
-            <option value="ARS">ARS — Peso argentino</option>
-            <option value="USD">USD — Dólar</option>
-            <option value="CLP">CLP — Peso chileno</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">País</label>
-          <select value={form.pais} onChange={e => setForm((f: any) => ({ ...f, pais: e.target.value }))} className={inp}>
-            <option value="Argentina">🇦🇷 Argentina</option>
-            <option value="Chile">🇨🇱 Chile</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="mb-3">
-        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Titular de la cuenta</label>
-        <div className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-gray-50 text-gray-600 flex items-center gap-1">{empresaNombre}<span className="text-gray-400">· titular legal</span></div>
-      </div>
-
-      {/* Datos bancarios — solo si es banco */}
-      {form.tipo === 'banco' && (
-        <>
-          <div className="grid grid-cols-1 gap-3 mb-3">
-            <div>
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco</label>
-              <SelectorBanco pais={form.pais} value={form.banco || ''} onChange={(n) => setForm((f: any) => ({ ...f, banco: n }))} className={inp} />
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-3 mb-3">
-            <div>
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N° de cuenta</label>
-              <input value={form.nro_cuenta || ''} onChange={e => setForm((f: any) => ({ ...f, nro_cuenta: e.target.value }))}
-                className={inp} placeholder="Número de cuenta bancaria"/>
-            </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">CBU / IBAN</label>
-              <input value={form.cbu_iban || ''} onChange={e => setForm((f: any) => ({ ...f, cbu_iban: e.target.value }))}
-                className={inp} placeholder="CBU o IBAN"/>
-            </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">SWIFT / BIC</label>
-              <input value={form.swift || ''} onChange={e => setForm((f: any) => ({ ...f, swift: e.target.value }))}
-                className={inp} placeholder="Código SWIFT"/>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Responsable — siempre visible */}
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">
-            {form.tipo === 'caja' ? 'Responsable de la caja' : 'Responsable / Apoderado'}
-          </label>
-          <input value={form.responsable || ''} onChange={e => setForm((f: any) => ({ ...f, responsable: e.target.value }))}
-            className={inp} placeholder="Nombre del responsable"/>
-        </div>
-        {form.tipo === 'banco' && (
-          <div>
-            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Usuarios / Firmantes autorizados</label>
-            <input value={form.firmantes || ''} onChange={e => setForm((f: any) => ({ ...f, firmantes: e.target.value }))}
-              className={inp} placeholder="ej. Pablo Mealla, Rene Mealla"/>
-          </div>
-        )}
-      </div>
-
-      <div className="mb-3">
-        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas / observaciones</label>
-        <input value={form.notas || ''} onChange={e => setForm((f: any) => ({ ...f, notas: e.target.value }))}
-          className={inp} placeholder="Información adicional"/>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={form.activo} onChange={e => setForm((f: any) => ({ ...f, activo: e.target.checked }))} className="w-4 h-4 rounded"/>
-          <span className="text-xs text-gray-600 font-medium">Cuenta activa</span>
-        </label>
-        <div className="flex gap-2">
-          <button onClick={() => { setShowNew(false); cancelEdit() }}
-            className="px-4 py-2 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50 bg-white">Cancelar</button>
-          <button onClick={guardar} disabled={saving}
-            className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
-            {saving ? 'Guardando...' : 'Guardar'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
 
   return (
     <div className="space-y-4">
@@ -796,7 +682,7 @@ function FondosCuentasABM() {
         💡 Estas son las cajas y cuentas bancarias donde Puerto NOA administra <strong>fondos de clientes a rendir</strong>. No corresponden a las finanzas propias de Puerto NOA.
       </div>
 
-      {(showNew || editId) && <FormCuenta />}
+      {(showNew || editId) && <FondoCuentaForm form={form} setForm={setForm} inp={inp} empresaNombre={empresaNombre} editId={editId} onCancel={() => { setShowNew(false); cancelEdit() }} onSave={guardar} saving={saving} />}
 
       <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
         {loading ? (
@@ -946,75 +832,12 @@ function CuentasABM() {
 
   const inp2 = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 
-  function FormCuenta({ data, setData, onSave, onCancel }: any) {
-    return (
-      <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre *</label>
-          <input value={data.nombre||''} onChange={e => setData((p:any)=>({...p,nombre:e.target.value}))} className={inp2} placeholder="ej. Banco Itaú CLP Chile"/>
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
-          <select value={data.tipo||'banco'} onChange={e => setData((p:any)=>({...p,tipo:e.target.value, banco: e.target.value==='caja' ? '' : p.banco, nro_cuenta: e.target.value==='caja' ? '' : p.nro_cuenta}))} className={inp2}>
-            <option value="banco">Banco</option>
-            <option value="caja">Caja / efectivo</option>
-            <option value="inversion">Inversión (fondos / custodia)</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">País</label>
-          <select value={data.pais||'CL'} onChange={e => setData((p:any)=>({...p,pais:e.target.value}))} className={inp2}>
-            <option value="CL">🇨🇱 Chile</option>
-            <option value="AR">🇦🇷 Argentina</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
-          <select value={data.moneda||'CLP'} onChange={e => setData((p:any)=>({...p,moneda:e.target.value}))} className={inp2}>
-            <option value="CLP">CLP — Peso chileno</option>
-            <option value="ARS">ARS — Peso argentino</option>
-            <option value="USD">USD — Dólar</option>
-          </select>
-        </div>
-        {(data.tipo||'banco') !== 'caja' && (
-        <>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{data.tipo === 'inversion' ? 'ALyC / Agente (custodia)' : 'Banco / Entidad'}</label>
-          <SelectorBanco pais={data.pais} value={data.banco||''} onChange={(n)=>setData((p:any)=>({...p,banco:n}))} className={inp2} />
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{data.tipo === 'inversion' ? 'N° de cuenta comitente / custodia' : 'N° Cuenta / CBU / IBAN'}</label>
-          <input value={data.nro_cuenta||''} onChange={e => setData((p:any)=>({...p,nro_cuenta:e.target.value}))} className={inp2} placeholder={data.tipo === 'inversion' ? 'Número de cuenta comitente' : 'Número de cuenta'}/>
-        </div>
-        </>
-        )}
-        <div className="col-span-2">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Titular de la cuenta</label>
-          <div className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-gray-50 text-gray-600 flex items-center gap-1">{empresaNombre}<span className="text-gray-400">· titular legal</span></div>
-        </div>
-        <div className="col-span-2">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{data.tipo === 'caja' ? 'Responsable de la caja' : 'Firmante / Apoderado'}</label>
-          <input value={data.firmante||''} onChange={e => setData((p:any)=>({...p,firmante:e.target.value}))} className={inp2} placeholder={data.tipo === 'caja' ? 'Quién hace el arqueo y responde por la caja' : 'Nombre del firmante o apoderado de la cuenta'}/>
-        </div>
-        <div className="col-span-2">
-          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas</label>
-          <input value={data.notas||''} onChange={e => setData((p:any)=>({...p,notas:e.target.value}))} className={inp2} placeholder="Observaciones"/>
-        </div>
-        <div className="col-span-2 flex justify-end gap-2 mt-1">
-          <button onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cancelar</button>
-          <button onClick={onSave} disabled={saving} className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
-            {saving ? 'Guardando...' : 'Guardar'}
-          </button>
-        </div>
-      </div>
-    )
-  }
 
   function RowCuenta({ row, tipo }: { row: any, tipo: 'propia'|'custodia' }) {
     const paisFlag = row.pais === 'CL' ? '🇨🇱' : row.pais === 'AR' ? '🇦🇷' : '🌐'
     return editId === row.id ? (
       <div className="p-4 bg-white border border-[#1168F8] rounded-2xl mb-2">
-        <FormCuenta data={editData} setData={setEditData} onSave={saveEdit} onCancel={() => setEditId(null)} />
+        <CuentaPropiaForm data={editData} setData={setEditData} onSave={saveEdit} onCancel={() => setEditId(null)} inp2={inp2} empresaNombre={empresaNombre} saving={saving} />
       </div>
     ) : (
       <div className={`bg-white border border-gray-100 rounded-2xl px-4 py-3 mb-2 shadow-sm flex items-center gap-3 ${!row.activo?'opacity-50':''}`}>
@@ -1062,7 +885,7 @@ function CuentasABM() {
           <div className="flex gap-3 mb-4">
             <h3 className="font-bold text-sm text-gray-900 mr-2">Nueva cuenta propia</h3>
           </div>
-          <FormCuenta data={newData} setData={setNewData} onSave={saveNew} onCancel={() => setShowNew(false)} />
+          <CuentaPropiaForm data={newData} setData={setNewData} onSave={saveNew} onCancel={() => setShowNew(false)} inp2={inp2} empresaNombre={empresaNombre} saving={saving} />
         </div>
       )}
 
@@ -2219,3 +2042,184 @@ function CondicionesCotizacionABM() {
     </div>
   )
 }
+
+function FondoCuentaForm({ form, setForm, inp, empresaNombre, editId, onCancel, onSave, saving }: any) {
+  return (
+    <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-5 mb-4">
+      <div className="text-xs font-bold text-[#052698] mb-4">{editId ? 'Editar cuenta' : 'Nueva cuenta'}</div>
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        <div className="col-span-2">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre descriptivo *</label>
+          <input value={form.nombre} onChange={e => setForm((f: any) => ({ ...f, nombre: e.target.value }))}
+            className={inp} placeholder="ej. Caja efectivo Argentina USD"/>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Orden</label>
+          <input type="number" value={form.orden} onChange={e => setForm((f: any) => ({ ...f, orden: e.target.value }))}
+            className={inp} placeholder="1"/>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
+          <select value={form.tipo} onChange={e => setForm((f: any) => ({ ...f, tipo: e.target.value }))} className={inp}>
+            <option value="banco">🏦 Banco</option>
+            <option value="caja">💵 Caja efectivo</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
+          <select value={form.moneda} onChange={e => setForm((f: any) => ({ ...f, moneda: e.target.value }))} className={inp}>
+            <option value="ARS">ARS — Peso argentino</option>
+            <option value="USD">USD — Dólar</option>
+            <option value="CLP">CLP — Peso chileno</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">País</label>
+          <select value={form.pais} onChange={e => setForm((f: any) => ({ ...f, pais: e.target.value }))} className={inp}>
+            <option value="Argentina">🇦🇷 Argentina</option>
+            <option value="Chile">🇨🇱 Chile</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="mb-3">
+        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Titular de la cuenta</label>
+        <div className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-gray-50 text-gray-600 flex items-center gap-1">{empresaNombre}<span className="text-gray-400">· titular legal</span></div>
+      </div>
+
+      {/* Datos bancarios — solo si es banco */}
+      {form.tipo === 'banco' && (
+        <>
+          <div className="grid grid-cols-1 gap-3 mb-3">
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Banco</label>
+              <SelectorBanco pais={form.pais} value={form.banco || ''} onChange={(n) => setForm((f: any) => ({ ...f, banco: n }))} className={inp} />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">N° de cuenta</label>
+              <input value={form.nro_cuenta || ''} onChange={e => setForm((f: any) => ({ ...f, nro_cuenta: e.target.value }))}
+                className={inp} placeholder="Número de cuenta bancaria"/>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">CBU / IBAN</label>
+              <input value={form.cbu_iban || ''} onChange={e => setForm((f: any) => ({ ...f, cbu_iban: e.target.value }))}
+                className={inp} placeholder="CBU o IBAN"/>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">SWIFT / BIC</label>
+              <input value={form.swift || ''} onChange={e => setForm((f: any) => ({ ...f, swift: e.target.value }))}
+                className={inp} placeholder="Código SWIFT"/>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Responsable — siempre visible */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">
+            {form.tipo === 'caja' ? 'Responsable de la caja' : 'Responsable / Apoderado'}
+          </label>
+          <input value={form.responsable || ''} onChange={e => setForm((f: any) => ({ ...f, responsable: e.target.value }))}
+            className={inp} placeholder="Nombre del responsable"/>
+        </div>
+        {form.tipo === 'banco' && (
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Usuarios / Firmantes autorizados</label>
+            <input value={form.firmantes || ''} onChange={e => setForm((f: any) => ({ ...f, firmantes: e.target.value }))}
+              className={inp} placeholder="ej. Pablo Mealla, Rene Mealla"/>
+          </div>
+        )}
+      </div>
+
+      <div className="mb-3">
+        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas / observaciones</label>
+        <input value={form.notas || ''} onChange={e => setForm((f: any) => ({ ...f, notas: e.target.value }))}
+          className={inp} placeholder="Información adicional"/>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={form.activo} onChange={e => setForm((f: any) => ({ ...f, activo: e.target.checked }))} className="w-4 h-4 rounded"/>
+          <span className="text-xs text-gray-600 font-medium">Cuenta activa</span>
+        </label>
+        <div className="flex gap-2">
+          <button onClick={onCancel}
+            className="px-4 py-2 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50 bg-white">Cancelar</button>
+          <button onClick={onSave} disabled={saving}
+            className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] disabled:opacity-50">
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CuentaPropiaForm({ data, setData, onSave, onCancel, inp2, empresaNombre, saving }: any) {
+    return (
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Nombre *</label>
+          <input value={data.nombre||''} onChange={e => setData((p:any)=>({...p,nombre:e.target.value}))} className={inp2} placeholder="ej. Banco Itaú CLP Chile"/>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Tipo</label>
+          <select value={data.tipo||'banco'} onChange={e => setData((p:any)=>({...p,tipo:e.target.value, banco: e.target.value==='caja' ? '' : p.banco, nro_cuenta: e.target.value==='caja' ? '' : p.nro_cuenta}))} className={inp2}>
+            <option value="banco">Banco</option>
+            <option value="caja">Caja / efectivo</option>
+            <option value="inversion">Inversión (fondos / custodia)</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">País</label>
+          <select value={data.pais||'CL'} onChange={e => setData((p:any)=>({...p,pais:e.target.value}))} className={inp2}>
+            <option value="CL">🇨🇱 Chile</option>
+            <option value="AR">🇦🇷 Argentina</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Moneda</label>
+          <select value={data.moneda||'CLP'} onChange={e => setData((p:any)=>({...p,moneda:e.target.value}))} className={inp2}>
+            <option value="CLP">CLP — Peso chileno</option>
+            <option value="ARS">ARS — Peso argentino</option>
+            <option value="USD">USD — Dólar</option>
+          </select>
+        </div>
+        {(data.tipo||'banco') !== 'caja' && (
+        <>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{data.tipo === 'inversion' ? 'ALyC / Agente (custodia)' : 'Banco / Entidad'}</label>
+          <SelectorBanco pais={data.pais} value={data.banco||''} onChange={(n)=>setData((p:any)=>({...p,banco:n}))} className={inp2} />
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{data.tipo === 'inversion' ? 'N° de cuenta comitente / custodia' : 'N° Cuenta / CBU / IBAN'}</label>
+          <input value={data.nro_cuenta||''} onChange={e => setData((p:any)=>({...p,nro_cuenta:e.target.value}))} className={inp2} placeholder={data.tipo === 'inversion' ? 'Número de cuenta comitente' : 'Número de cuenta'}/>
+        </div>
+        </>
+        )}
+        <div className="col-span-2">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Titular de la cuenta</label>
+          <div className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-gray-50 text-gray-600 flex items-center gap-1">{empresaNombre}<span className="text-gray-400">· titular legal</span></div>
+        </div>
+        <div className="col-span-2">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">{data.tipo === 'caja' ? 'Responsable de la caja' : 'Firmante / Apoderado'}</label>
+          <input value={data.firmante||''} onChange={e => setData((p:any)=>({...p,firmante:e.target.value}))} className={inp2} placeholder={data.tipo === 'caja' ? 'Quién hace el arqueo y responde por la caja' : 'Nombre del firmante o apoderado de la cuenta'}/>
+        </div>
+        <div className="col-span-2">
+          <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas</label>
+          <input value={data.notas||''} onChange={e => setData((p:any)=>({...p,notas:e.target.value}))} className={inp2} placeholder="Observaciones"/>
+        </div>
+        <div className="col-span-2 flex justify-end gap-2 mt-1">
+          <button onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-xl text-xs hover:bg-gray-50">Cancelar</button>
+          <button onClick={onSave} disabled={saving} className="px-5 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold disabled:opacity-50">
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    )
+  }
