@@ -18,13 +18,12 @@ const TABS = [
   { key: 'ciudades',      label: 'Ciudades Argentina',   icon: '🇦🇷' },
   { key: 'contenedores',  label: 'Tipos de contenedor',  icon: '📦' },
   { key: 'camiones',      label: 'Tipos de camión',      icon: '🚛' },
-  { key: 'fondos',        label: 'Fondos en custodia de clientes',   icon: '🏦' },
   { key: 'bloques_cotizacion', label: 'Bloques cotización',   icon: '📋' },
   { key: 'rubros_proveedor',   label: 'Rubros de proveedor',  icon: '🏷️' },
   { key: 'servicios_deposito', label: 'Catálogo de servicios',   icon: '📋' },
   { key: 'condiciones_cotizacion', label: 'Condiciones cotización', icon: '📜' },
   { key: 'gastos_categorias',  label: 'Cat. gastos fijos',    icon: '💸' },
-  { key: 'cuentas_abm',        label: 'Cuentas (caja y bancos)', icon: '🏦' },
+  { key: 'cuentas_abm',        label: 'Cuentas y cajas', icon: '🏦' },
   { key: 'entidades_financieras', label: 'Entidades financieras', icon: '🏛️' },
   { key: 'tipos_cuenta',          label: 'Tipos de cuenta',        icon: '🏷️' },
   { key: 'empresa',             label: 'Datos de la empresa',    icon: '🏢' },
@@ -38,7 +37,7 @@ const GRUPOS = [
   { titulo:'Cotizador',             icon:'🧾', color:'#7C3AED', claro:'#F1EBFD', texto:'#5B21B6', keys:['bloques_cotizacion','condiciones_cotizacion'] },
   { titulo:'Geografía y rutas',     icon:'📍', color:'#0a9e6e', claro:'#E3F6EF', texto:'#07614A', keys:['puertos_china','puertos_chile','pasos','ciudades'] },
   { titulo:'Logística',             icon:'🚛', color:'#ef9f27', claro:'#FDF3E2', texto:'#92610C', keys:['contenedores','camiones'] },
-  { titulo:'Finanzas',              icon:'💰', color:'#0d9488', claro:'#E0F5F2', texto:'#0A5F58', keys:['fondos','cuentas_abm','entidades_financieras','tipos_cuenta','gastos_categorias','tributos','talonarios'] },
+  { titulo:'Finanzas',              icon:'💰', color:'#0d9488', claro:'#E0F5F2', texto:'#0A5F58', keys:['cuentas_abm','entidades_financieras','tipos_cuenta','gastos_categorias','tributos','talonarios'] },
   { titulo:'Empresa',               icon:'🏢', color:'#64748b', claro:'#EEF1F5', texto:'#475569', keys:['empresa'] },
 ] as const
 const labelDe = (k:string) => TABS.find(t=>t.key===k)?.label || k
@@ -49,7 +48,7 @@ const MODULO_POR_KEY: Record<string, string> = {
   bloques_cotizacion: 'cat_cotizador', condiciones_cotizacion: 'cat_cotizador',
   puertos_china: 'cat_geografia', puertos_chile: 'cat_geografia', pasos: 'cat_geografia', ciudades: 'cat_geografia',
   contenedores: 'cat_logistica', camiones: 'cat_logistica',
-  fondos: 'cat_finanzas', cuentas_abm: 'cat_finanzas', entidades_financieras: 'cat_finanzas', tipos_cuenta: 'cat_finanzas', gastos_categorias: 'cat_finanzas',
+  cuentas_abm: 'cat_finanzas', entidades_financieras: 'cat_finanzas', tipos_cuenta: 'cat_finanzas', gastos_categorias: 'cat_finanzas',
   tributos: 'tributos', talonarios: 'talonarios',
   empresa: 'cat_empresa',
 }
@@ -595,13 +594,10 @@ export default function CatalogosPage() {
         </div>
       )}
 
-      {/* ── FONDOS EN CUSTODIA ── */}
-      {tab === 'fondos' && <FondosCuentasABM />}
-
       {/* ── RUBROS POR BLOQUE ── */}
       {tab === 'bloques_cotizacion' && <BloquesCotizacionABM />}
       {tab === 'gastos_categorias' && <GastosCatABM />}
-      {tab === 'cuentas_abm' && <CuentasABM />}
+      {tab === 'cuentas_abm' && <CuentasYCajasABM />}
       {tab === 'entidades_financieras' && <EntidadesFinancierasCatalogo />}
       {tab === 'tipos_cuenta' && <TiposCuentaCatalogo />}
       {tab === 'empresa' && <EmpresaABM />}
@@ -618,164 +614,9 @@ export default function CatalogosPage() {
 }
 
 // ── ABM especializado para cuentas de fondos en custodia ───────
-function FondosCuentasABM() {
-  const [permisos, setPermisos] = useState<Record<string, string[]>>({})
-  useEffect(() => { cargarPermisos().then(setPermisos) }, [])
-  const pCrear = puede(permisos, 'cat_finanzas', 'crear')
-  const pEditar = puede(permisos, 'cat_finanzas', 'editar')
-  const pEliminar = puede(permisos, 'cat_finanzas', 'eliminar')
-  const supabase = useMemo(() => createClient(), [])
-  const [cuentas, setCuentas] = useState<any[]>([])
-  const [entidades, setEntidades] = useState<any[]>([])
-  const [talonarios, setTalonarios] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showNew, setShowNew] = useState(false)
-  const [editId, setEditId] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [empresaNombre, setEmpresaNombre] = useState<string>('PUERTO NOA SPA')
-
-  const vacio = { nombre: '', tipo: 'banco', moneda: 'USD', pais: 'CL', banco: '', nro_cuenta: '', cbu_iban: '', swift: '', acceso: 'directa', gestor_id: null, apoderados: [], notas: '', activo: true }
-  const [form, setForm] = useState<any>({ ...vacio })
-  const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
-
-  useEffect(() => { load() }, [])
-
-  async function load() {
-    setLoading(true)
-    const [cRes, tRes, eRes, enRes] = await Promise.all([
-      (supabase.from('fondos_cuentas') as any).select('*').order('numero_interno', { ascending: true }),
-      (supabase.from('talonarios') as any).select('*').in('prefijo', ['CTA-CL', 'CTA-AR', 'CTA-US']),
-      (supabase.from('empresa_config') as any).select('razon_social').limit(1).maybeSingle(),
-      (supabase.from('entidades_financieras') as any).select('id,nombre,nombre_corto'),
-    ])
-    if (cRes.data) setCuentas(cRes.data)
-    if (tRes.data) setTalonarios(tRes.data)
-    if (eRes?.data?.razon_social) setEmpresaNombre(eRes.data.razon_social)
-    if (enRes.data) setEntidades(enRes.data)
-    setLoading(false)
-  }
-
-  function talPais(pais: string) { return talonarios.find(t => t.pais === pais) }
-  function startEdit(c: any) { if (!pEditar) return; setEditId(c.id); setForm({ ...c, apoderados: Array.isArray(c.apoderados) ? c.apoderados : [] }); setShowNew(false) }
-  function cancelEdit() { setEditId(null); setForm({ ...vacio }) }
-
-  async function guardar() {
-    if (editId ? !pEditar : !pCrear) return
-    if (!form.nombre) { alert('Ingresá el nombre'); return }
-    setSaving(true)
-    const base = {
-      nombre: form.nombre, tipo: form.tipo, moneda: form.moneda, pais: form.pais,
-      banco: form.banco || null, nro_cuenta: form.nro_cuenta || null, cbu_iban: form.cbu_iban || null, swift: form.swift || null,
-      tipo_cuenta: form.tipo_cuenta || null, routing_number: form.routing_number || null, banco_direccion: form.banco_direccion || null, alias: form.alias || null,
-      acceso: form.acceso || 'directa', gestor_id: form.gestor_id || null,
-      titular: empresaNombre, apoderados: Array.isArray(form.apoderados) ? form.apoderados : [], notas: form.notas || null, activo: form.activo !== false,
-    }
-    if (editId) {
-      await (supabase.from('fondos_cuentas') as any).update(base).eq('id', editId)
-    } else {
-      const tal = talPais(form.pais)
-      let numero_interno: string | null = null, talonario_id: string | null = null
-      if (tal) {
-        const { data: nd } = await (supabase.rpc as any)('emitir_numero_talonario', { p_talonario: tal.id })
-        if (nd?.[0]) { numero_interno = nd[0].formateado; talonario_id = tal.id }
-      }
-      await (supabase.from('fondos_cuentas') as any).insert({ ...base, numero_interno, talonario_id })
-    }
-    await load(); setEditId(null); setShowNew(false); setForm({ ...vacio }); setSaving(false)
-  }
-
-  async function toggleActivo(c: any) {
-    if (!pEditar) return
-    await (supabase.from('fondos_cuentas') as any).update({ activo: !c.activo }).eq('id', c.id)
-    setCuentas(prev => prev.map(x => x.id === c.id ? { ...x, activo: !x.activo } : x))
-  }
-
-  async function eliminar(id: string) {
-    if (!pEliminar) return
-    if (!confirm('¿Eliminar esta cuenta? Solo si no tiene movimientos registrados.')) return
-    await supabase.from('fondos_cuentas').delete().eq('id', id)
-    setCuentas(prev => prev.filter(c => c.id !== id))
-  }
-
-  const gestorNombre = (id: string) => { const e = entidades.find((x: any) => x.id === id); return e ? (e.nombre_corto || e.nombre) : 'billetera' }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-bold text-base text-gray-900">Fondos en custodia de clientes</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{cuentas.length} cuenta(s) · {cuentas.filter(c => c.activo).length} activas</p>
-        </div>
-        {!showNew && !editId && pCrear && (
-          <button onClick={() => { setShowNew(true); setForm({ ...vacio }) }} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-semibold hover:bg-[#0a4fc4] shadow-sm">+ Agregar cuenta</button>
-        )}
-      </div>
-
-      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700">
-        💡 Estas son las cajas y cuentas bancarias donde Puerto NOA administra <strong>fondos de clientes a rendir</strong>. No corresponden a las finanzas propias de Puerto NOA.
-      </div>
-
-      {(showNew || editId) && (
-        <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-4">
-          <CuentaForm data={form} setData={setForm} onSave={guardar} onCancel={() => { setShowNew(false); cancelEdit() }} ambito="custodia" inp={inp} empresaNombre={empresaNombre} saving={saving} numeroPreview={editId ? form.numero_interno : previewNumeroCuenta(talPais(form.pais))} />
-        </div>
-      )}
-
-      <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-        {loading ? (
-          <div className="p-8 text-center text-gray-400">Cargando...</div>
-        ) : cuentas.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">Sin cuentas cargadas aún.</div>
-        ) : (
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                {['N° interno', 'Nombre', 'País', 'Tipo', 'Moneda', 'Banco', 'N° Cuenta', 'CBU/IBAN', 'SWIFT', 'Firmantes', 'Estado', ''].map(h => (
-                  <th key={h} className="text-left px-3 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {cuentas.map(c => (
-                <tr key={c.id} className={`border-b border-gray-50 transition-colors ${!c.activo ? 'opacity-40' : 'hover:bg-blue-50/20'}`}>
-                  <td className="px-3 py-3 text-[#1168F8] font-mono text-[10px] font-bold">{c.numero_interno || '—'}</td>
-                  <td className="px-3 py-3 font-semibold text-gray-800">{c.nombre}</td>
-                  <td className="px-3 py-3 text-gray-500">{c.pais === 'AR' ? '🇦🇷' : '🇨🇱'}</td>
-                  <td className="px-3 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${c.tipo === 'banco' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>{c.tipo === 'banco' ? '🏦 Banco' : '💵 Caja'}</span>
-                  </td>
-                  <td className="px-3 py-3 font-mono text-[11px] font-bold text-[#052698]">{c.moneda}</td>
-                  <td className="px-3 py-3 text-gray-600">{c.banco || '—'}{c.acceso === 'gestionada' && c.gestor_id && <span className="block text-[10px] text-violet-500">vía {gestorNombre(c.gestor_id)}</span>}</td>
-                  <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.nro_cuenta || '—'}</td>
-                  <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.cbu_iban || '—'}</td>
-                  <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.swift || '—'}</td>
-                  <td className="px-3 py-3 text-gray-400 text-[10px]">{Array.isArray(c.apoderados) && c.apoderados.length > 0 ? c.apoderados.map((a: any) => a.nombre).join(', ') : '—'}</td>
-                  <td className="px-3 py-3">
-                    <button onClick={() => toggleActivo(c)} className={`px-2 py-0.5 rounded-full text-[10px] font-semibold cursor-pointer transition-all ${c.activo ? 'bg-green-50 text-green-700 hover:bg-red-50 hover:text-red-600' : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-700'}`}>{c.activo ? 'Activa' : 'Inactiva'}</button>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex gap-1">
-                      {pEditar && <button onClick={() => startEdit(c)} className="px-3 py-1 border border-gray-200 rounded-lg text-[10px] text-gray-500 hover:bg-[#EBF2FF] hover:text-[#1168F8] hover:border-[#93B8FC] transition-all">Editar</button>}
-                      {pEliminar && <button onClick={() => eliminar(c.id)} className="px-3 py-1 border border-red-100 rounded-lg text-[10px] text-gray-400 hover:bg-red-50 hover:text-red-600 transition-all">Eliminar</button>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// (El mapeo rubro→bloque se administra ahora desde el ABM de bloques: tabla cotizador_bloque_rubros.)
-
-
-// ── ABM Categorías de Gastos Fijos ────────────────────────────────
-
-// ── ABM Cuentas bancarias y cajas PROPIAS de Puerto NOA (la custodia vive en FondosCuentasABM) ───────
-function CuentasABM() {
+// ── ABM unificado: Cuentas y cajas (propias y/o de terceros) ───────
+// Una "cuenta física" = un grupo_id. Carriles: cuentas_pn (propio) y/o fondos_cuentas (terceros).
+function CuentasYCajasABM() {
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
   useEffect(() => { cargarPermisos().then(setPermisos) }, [])
   const pCrear = puede(permisos, 'cat_finanzas', 'crear')
@@ -783,28 +624,34 @@ function CuentasABM() {
   const pEliminar = puede(permisos, 'cat_finanzas', 'eliminar')
   const supabase = useMemo(() => createClient(), [])
   const [propias, setPropias] = useState<any[]>([])
+  const [custodia, setCustodia] = useState<any[]>([])
   const [entidades, setEntidades] = useState<any[]>([])
   const [talonarios, setTalonarios] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [editId, setEditId] = useState<string | null>(null)
-  const [editData, setEditData] = useState<any>({})
   const [showNew, setShowNew] = useState(false)
-  const vacio = { nombre: '', tipo: 'banco', pais: 'CL', moneda: 'CLP', banco: '', nro_cuenta: '', cbu_iban: '', swift: '', acceso: 'directa', gestor_id: null, apoderados: [], notas: '', activo: true }
-  const [newData, setNewData] = useState<any>({ ...vacio })
+  const [editGrupo, setEditGrupo] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [empresaNombre, setEmpresaNombre] = useState<string>('PUERTO NOA SPA')
+  const [bloqueoPropia, setBloqueoPropia] = useState(false)
+  const [bloqueoTerceros, setBloqueoTerceros] = useState(false)
+
+  const vacio = { nombre: '', tipo: 'banco', pais: 'CL', moneda: 'CLP', banco: '', nro_cuenta: '', cbu_iban: '', swift: '', tipo_cuenta: '', routing_number: '', banco_direccion: '', alias: '', acceso: 'directa', gestor_id: null, apoderados: [], notas: '', activo: true, usaPropia: true, usaTerceros: false }
+  const [form, setForm] = useState<any>({ ...vacio })
+  const inp = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 
   useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
-    const [pRes, tRes, eRes, enRes] = await Promise.all([
-      (supabase.from('cuentas_pn') as any).select('*').order('pais').order('moneda'),
+    const [pRes, cRes, tRes, eRes, enRes] = await Promise.all([
+      (supabase.from('cuentas_pn') as any).select('*'),
+      (supabase.from('fondos_cuentas') as any).select('*'),
       (supabase.from('talonarios') as any).select('*').in('prefijo', ['CTA-CL', 'CTA-AR', 'CTA-US']),
       (supabase.from('empresa_config') as any).select('razon_social').limit(1).maybeSingle(),
       (supabase.from('entidades_financieras') as any).select('id,nombre,nombre_corto'),
     ])
     if (pRes.data) setPropias(pRes.data)
+    if (cRes.data) setCustodia(cRes.data)
     if (tRes.data) setTalonarios(tRes.data)
     if (eRes?.data?.razon_social) setEmpresaNombre(eRes.data.razon_social)
     if (enRes.data) setEntidades(enRes.data)
@@ -812,106 +659,153 @@ function CuentasABM() {
   }
 
   function talPais(pais: string) { return talonarios.find(t => t.pais === pais) }
-
-  async function saveNew() {
-    if (!pCrear) return
-    if (!newData.nombre || !newData.moneda) { alert('Nombre y moneda son obligatorios'); return }
-    setSaving(true)
-    const tal = talPais(newData.pais)
-    let numero_interno: string | null = null, talonario_id: string | null = null
-    if (tal) {
-      const { data: nd } = await (supabase.rpc as any)('emitir_numero_talonario', { p_talonario: tal.id })
-      if (nd?.[0]) { numero_interno = nd[0].formateado; talonario_id = tal.id }
-    }
-    await (supabase.from('cuentas_pn') as any).insert({
-      nombre: newData.nombre, tipo: newData.tipo || 'banco', pais: newData.pais, moneda: newData.moneda,
-      banco: newData.banco || null, nro_cuenta: newData.nro_cuenta || null, cbu_iban: newData.cbu_iban || null, swift: newData.swift || null,
-      tipo_cuenta: newData.tipo_cuenta || null, routing_number: newData.routing_number || null, banco_direccion: newData.banco_direccion || null, alias: newData.alias || null,
-      acceso: newData.acceso || 'directa', gestor_id: newData.gestor_id || null,
-      titular: empresaNombre, apoderados: Array.isArray(newData.apoderados) ? newData.apoderados : [],
-      numero_interno, talonario_id, notas: newData.notas || null,
-      saldo_inicial: 0, saldo_actual: 0, activo: newData.activo !== false,
-    })
-    setShowNew(false); setNewData({ ...vacio }); await load(); setSaving(false)
-  }
-
-  async function saveEdit() {
-    if (!pEditar) return
-    setSaving(true)
-    await (supabase.from('cuentas_pn') as any).update({
-      nombre: editData.nombre, tipo: editData.tipo, pais: editData.pais, moneda: editData.moneda,
-      banco: editData.banco || null, nro_cuenta: editData.nro_cuenta || null, cbu_iban: editData.cbu_iban || null, swift: editData.swift || null,
-      tipo_cuenta: editData.tipo_cuenta || null, routing_number: editData.routing_number || null, banco_direccion: editData.banco_direccion || null, alias: editData.alias || null,
-      acceso: editData.acceso || 'directa', gestor_id: editData.gestor_id || null,
-      apoderados: Array.isArray(editData.apoderados) ? editData.apoderados : [], notas: editData.notas || null, activo: editData.activo !== false,
-    }).eq('id', editId)
-    setEditId(null); await load(); setSaving(false)
-  }
-
-  async function toggleActivo(id: string, activo: boolean) {
-    if (!pEditar) return
-    await (supabase.from('cuentas_pn') as any).update({ activo: !activo }).eq('id', id)
-    await load()
-  }
-
-  async function eliminar(id: string) {
-    if (!pEliminar) return
-    if (!confirm('¿Eliminar esta cuenta? Solo si no tiene movimientos asociados.')) return
-    await (supabase.from('cuentas_pn') as any).delete().eq('id', id)
-    await load()
-  }
-
   const gestorNombre = (id: string) => { const e = entidades.find((x: any) => x.id === id); return e ? (e.nombre_corto || e.nombre) : 'billetera' }
 
-  const inp2 = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
+  // Agrupar carriles por grupo_id → una fila por cuenta física
+  const grupos = useMemo(() => {
+    const map = new Map<string, any>()
+    for (const p of propias) { const g = map.get(p.grupo_id) || { grupo_id: p.grupo_id }; g.propia = p; map.set(p.grupo_id, g) }
+    for (const c of custodia) { const g = map.get(c.grupo_id) || { grupo_id: c.grupo_id }; g.terceros = c; map.set(c.grupo_id, g) }
+    const arr = Array.from(map.values()).map((g: any) => {
+      const base = g.propia || g.terceros
+      const uso = g.propia && g.terceros ? 'mixta' : g.propia ? 'propia' : 'terceros'
+      return { ...g, base, uso }
+    })
+    arr.sort((a, b) => String(a.base.numero_interno || '').localeCompare(String(b.base.numero_interno || '')))
+    return arr
+  }, [propias, custodia])
+
+  function nuevaCuenta() { setForm({ ...vacio }); setBloqueoPropia(false); setBloqueoTerceros(false); setShowNew(true); setEditGrupo(null) }
+  function cancelar() { setShowNew(false); setEditGrupo(null); setForm({ ...vacio }); setBloqueoPropia(false); setBloqueoTerceros(false) }
+
+  async function startEdit(g: any) {
+    if (!pEditar) return
+    const base = g.base
+    setForm({
+      ...vacio, ...base,
+      apoderados: Array.isArray(base.apoderados) ? base.apoderados : [],
+      usaPropia: !!g.propia, usaTerceros: !!g.terceros,
+      _grupo_id: g.grupo_id, _propiaId: g.propia?.id || null, _tercerosId: g.terceros?.id || null,
+      _numero_interno: base.numero_interno || null, _talonario_id: base.talonario_id || null,
+    })
+    setShowNew(false); setEditGrupo(g.grupo_id)
+    let bp = false, bt = false
+    if (g.propia) { const { count } = await (supabase.from('movimientos_cuentas_pn') as any).select('id', { count: 'exact', head: true }).eq('cuenta_id', g.propia.id); bp = (count || 0) > 0 }
+    if (g.terceros) { const { count } = await (supabase.from('fondos_movimientos') as any).select('id', { count: 'exact', head: true }).or(`cuenta_id.eq.${g.terceros.id},cuenta_destino_id.eq.${g.terceros.id}`); bt = (count || 0) > 0 }
+    setBloqueoPropia(bp); setBloqueoTerceros(bt)
+  }
+
+  function cabecera() {
+    return {
+      nombre: form.nombre, tipo: form.tipo, pais: form.pais, moneda: form.moneda,
+      banco: form.banco || null, nro_cuenta: form.nro_cuenta || null, cbu_iban: form.cbu_iban || null, swift: form.swift || null,
+      tipo_cuenta: form.tipo_cuenta || null, routing_number: form.routing_number || null, banco_direccion: form.banco_direccion || null, alias: form.alias || null,
+      acceso: form.acceso || 'directa', gestor_id: form.gestor_id || null,
+      titular: empresaNombre, apoderados: Array.isArray(form.apoderados) ? form.apoderados : [], notas: form.notas || null, activo: form.activo !== false,
+    }
+  }
+
+  async function guardar() {
+    if (editGrupo ? !pEditar : !pCrear) return
+    if (!form.nombre || !form.moneda) { alert('Nombre y moneda son obligatorios'); return }
+    const inv = form.tipo === 'inversion'
+    const usaPropia = inv ? true : !!form.usaPropia
+    const usaTerceros = inv ? false : !!form.usaTerceros
+    if (!usaPropia && !usaTerceros) { alert('Marcá al menos un uso: fondos propios o de terceros'); return }
+    setSaving(true)
+    const cab = cabecera()
+
+    if (!editGrupo) {
+      const grupo_id = (crypto as any).randomUUID()
+      const tal = talPais(form.pais)
+      let numero_interno: string | null = null, talonario_id: string | null = null
+      if (tal) {
+        const { data: nd } = await (supabase.rpc as any)('emitir_numero_talonario', { p_talonario: tal.id })
+        if (nd?.[0]) { numero_interno = nd[0].formateado; talonario_id = tal.id }
+      }
+      if (usaPropia) await (supabase.from('cuentas_pn') as any).insert({ ...cab, grupo_id, numero_interno, talonario_id, saldo_inicial: 0, saldo_actual: 0 })
+      if (usaTerceros) await (supabase.from('fondos_cuentas') as any).insert({ ...cab, grupo_id, numero_interno, talonario_id })
+    } else {
+      const grupo_id = form._grupo_id, numero_interno = form._numero_interno, talonario_id = form._talonario_id
+      // Carril propio
+      if (usaPropia && form._propiaId) await (supabase.from('cuentas_pn') as any).update(cab).eq('id', form._propiaId)
+      else if (usaPropia && !form._propiaId) await (supabase.from('cuentas_pn') as any).insert({ ...cab, grupo_id, numero_interno, talonario_id, saldo_inicial: 0, saldo_actual: 0 })
+      else if (!usaPropia && form._propiaId) { if (bloqueoPropia) { alert('No se puede quitar el uso propio: la cuenta tiene movimientos.'); setSaving(false); return } await (supabase.from('cuentas_pn') as any).delete().eq('id', form._propiaId) }
+      // Carril terceros
+      if (usaTerceros && form._tercerosId) await (supabase.from('fondos_cuentas') as any).update(cab).eq('id', form._tercerosId)
+      else if (usaTerceros && !form._tercerosId) await (supabase.from('fondos_cuentas') as any).insert({ ...cab, grupo_id, numero_interno, talonario_id })
+      else if (!usaTerceros && form._tercerosId) { if (bloqueoTerceros) { alert('No se puede quitar el uso de terceros: la cuenta tiene movimientos.'); setSaving(false); return } await (supabase.from('fondos_cuentas') as any).delete().eq('id', form._tercerosId) }
+    }
+    await load(); cancelar(); setSaving(false)
+  }
+
+  async function toggleActivo(g: any) {
+    if (!pEditar) return
+    const nuevo = !(g.base.activo)
+    if (g.propia) await (supabase.from('cuentas_pn') as any).update({ activo: nuevo }).eq('id', g.propia.id)
+    if (g.terceros) await (supabase.from('fondos_cuentas') as any).update({ activo: nuevo }).eq('id', g.terceros.id)
+    await load()
+  }
+
+  async function eliminar(g: any) {
+    if (!pEliminar) return
+    if (!confirm('¿Eliminar esta cuenta? Solo si no tiene movimientos asociados en ninguno de sus usos.')) return
+    if (g.propia) { const { count } = await (supabase.from('movimientos_cuentas_pn') as any).select('id', { count: 'exact', head: true }).eq('cuenta_id', g.propia.id); if ((count || 0) > 0) { alert('No se puede eliminar: el uso propio tiene movimientos.'); return } }
+    if (g.terceros) { const { count } = await (supabase.from('fondos_movimientos') as any).select('id', { count: 'exact', head: true }).or(`cuenta_id.eq.${g.terceros.id},cuenta_destino_id.eq.${g.terceros.id}`); if ((count || 0) > 0) { alert('No se puede eliminar: el uso de terceros tiene movimientos.'); return } }
+    if (g.propia) await (supabase.from('cuentas_pn') as any).delete().eq('id', g.propia.id)
+    if (g.terceros) await (supabase.from('fondos_cuentas') as any).delete().eq('id', g.terceros.id)
+    await load()
+  }
+
+  const usoBadge = (uso: string) => uso === 'mixta' ? { cls: 'bg-violet-50 text-violet-700', lbl: 'Mixta' } : uso === 'propia' ? { cls: 'bg-teal-50 text-teal-700', lbl: 'Propia' } : { cls: 'bg-orange-50 text-orange-700', lbl: 'Terceros' }
+  const paisFlag = (p: string) => p === 'AR' ? '🇦🇷' : p === 'US' ? '🇺🇸' : '🇨🇱'
+  const tipoBadge = (t: string) => t === 'banco' ? { cls: 'bg-blue-50 text-blue-700', lbl: '🏦 Banco' } : t === 'inversion' ? { cls: 'bg-violet-50 text-violet-700', lbl: '📈 Inversión' } : { cls: 'bg-amber-50 text-amber-700', lbl: '💵 Caja' }
 
   if (loading) return <div className="p-8 text-center text-gray-400 text-sm">Cargando...</div>
+
+  const numeroPreview = editGrupo ? form._numero_interno : previewNumeroCuenta(talPais(form.pais))
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-bold text-base text-gray-900">Cuentas (caja y bancos)</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{propias.length} cuenta(s) · {propias.filter(c => c.activo).length} activas · propias de Puerto NOA</p>
+          <h2 className="font-bold text-base text-gray-900">Cuentas y cajas</h2>
+          <p className="text-xs text-gray-400 mt-0.5">{grupos.length} cuenta(s) · {grupos.filter(g => g.base.activo).length} activas · cajas, bancos e inversiones</p>
         </div>
-        {pCrear && !showNew && !editId && <button onClick={() => { setShowNew(true); setNewData({ ...vacio }) }} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] shadow-sm">+ Nueva cuenta</button>}
+        {pCrear && !showNew && !editGrupo && <button onClick={nuevaCuenta} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] shadow-sm">+ Nueva cuenta</button>}
       </div>
 
       <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700">
-        💡 Estas son las cajas, cuentas bancarias e inversiones <strong>propias de Puerto NOA</strong>. Los fondos de clientes a rendir se administran en «Fondos en custodia de clientes».
+        💡 Una misma cuenta puede habilitar <strong>fondos propios</strong> de Puerto NOA, <strong>fondos de terceros</strong> a rendir, o <strong>ambos</strong>. Aunque compartan la cuenta física, cada uso se registra por separado.
       </div>
 
-      {showNew && (
+      {(showNew || editGrupo) && (
         <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-4">
-          <CuentaForm data={newData} setData={setNewData} onSave={saveNew} onCancel={() => setShowNew(false)} ambito="propia" inp={inp2} empresaNombre={empresaNombre} saving={saving} numeroPreview={previewNumeroCuenta(talPais(newData.pais))} />
-        </div>
-      )}
-      {editId && (
-        <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-4">
-          <CuentaForm data={editData} setData={setEditData} onSave={saveEdit} onCancel={() => setEditId(null)} ambito="propia" inp={inp2} empresaNombre={empresaNombre} saving={saving} numeroPreview={editData.numero_interno} />
+          <CuentaForm data={form} setData={setForm} onSave={guardar} onCancel={cancelar} inp={inp} empresaNombre={empresaNombre} saving={saving} numeroPreview={numeroPreview} bloqueoPropia={bloqueoPropia} bloqueoTerceros={bloqueoTerceros} />
         </div>
       )}
 
       <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-        {propias.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">Sin cuentas propias registradas aún.</div>
+        {grupos.length === 0 ? (
+          <div className="p-8 text-center text-gray-400">Sin cuentas registradas aún.</div>
         ) : (
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {['N° interno', 'Nombre', 'País', 'Tipo', 'Moneda', 'Banco', 'N° Cuenta', 'CBU/IBAN', 'SWIFT', 'Firmantes', 'Estado', ''].map(h => (
+                {['N° interno', 'Nombre', 'Uso', 'País', 'Tipo', 'Moneda', 'Banco', 'N° Cuenta', 'CBU/IBAN', 'SWIFT', 'Firmantes', 'Estado', ''].map(h => (
                   <th key={h} className="text-left px-3 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {propias.map(c => {
-                const tb = c.tipo === 'banco' ? { cls: 'bg-blue-50 text-blue-700', lbl: '🏦 Banco' } : c.tipo === 'inversion' ? { cls: 'bg-violet-50 text-violet-700', lbl: '📈 Inversión' } : { cls: 'bg-amber-50 text-amber-700', lbl: '💵 Caja' }
+              {grupos.map(g => {
+                const c = g.base; const ub = usoBadge(g.uso); const tb = tipoBadge(c.tipo)
                 return (
-                  <tr key={c.id} className={`border-b border-gray-50 transition-colors ${!c.activo ? 'opacity-40' : 'hover:bg-blue-50/20'}`}>
+                  <tr key={g.grupo_id} className={`border-b border-gray-50 transition-colors ${!c.activo ? 'opacity-40' : 'hover:bg-blue-50/20'}`}>
                     <td className="px-3 py-3 text-[#1168F8] font-mono text-[10px] font-bold">{c.numero_interno || '—'}</td>
                     <td className="px-3 py-3 font-semibold text-gray-800">{c.nombre}</td>
-                    <td className="px-3 py-3 text-gray-500">{c.pais === 'AR' ? '🇦🇷' : '🇨🇱'}</td>
+                    <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${ub.cls}`}>{ub.lbl}</span></td>
+                    <td className="px-3 py-3 text-gray-500">{paisFlag(c.pais)}</td>
                     <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${tb.cls}`}>{tb.lbl}</span></td>
                     <td className="px-3 py-3 font-mono text-[11px] font-bold text-[#052698]">{c.moneda}</td>
                     <td className="px-3 py-3 text-gray-600">{c.banco || '—'}{c.acceso === 'gestionada' && c.gestor_id && <span className="block text-[10px] text-violet-500">vía {gestorNombre(c.gestor_id)}</span>}</td>
@@ -919,11 +813,11 @@ function CuentasABM() {
                     <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.cbu_iban || '—'}</td>
                     <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.swift || '—'}</td>
                     <td className="px-3 py-3 text-gray-400 text-[10px]">{Array.isArray(c.apoderados) && c.apoderados.length > 0 ? c.apoderados.map((a: any) => a.nombre).join(', ') : '—'}</td>
-                    <td className="px-3 py-3"><button onClick={() => toggleActivo(c.id, c.activo)} className={`px-2 py-0.5 rounded-full text-[10px] font-semibold cursor-pointer transition-all ${c.activo ? 'bg-green-50 text-green-700 hover:bg-red-50 hover:text-red-600' : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-700'}`}>{c.activo ? 'Activa' : 'Inactiva'}</button></td>
+                    <td className="px-3 py-3"><button onClick={() => toggleActivo(g)} className={`px-2 py-0.5 rounded-full text-[10px] font-semibold cursor-pointer transition-all ${c.activo ? 'bg-green-50 text-green-700 hover:bg-red-50 hover:text-red-600' : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-700'}`}>{c.activo ? 'Activa' : 'Inactiva'}</button></td>
                     <td className="px-3 py-3">
                       <div className="flex gap-1">
-                        {pEditar && <button onClick={() => { setShowNew(false); setEditId(c.id); setEditData({ ...c, apoderados: Array.isArray(c.apoderados) ? c.apoderados : [] }) }} className="px-3 py-1 border border-gray-200 rounded-lg text-[10px] text-gray-500 hover:bg-[#EBF2FF] hover:text-[#1168F8] hover:border-[#93B8FC] transition-all">Editar</button>}
-                        {pEliminar && <button onClick={() => eliminar(c.id)} className="px-3 py-1 border border-red-100 rounded-lg text-[10px] text-gray-400 hover:bg-red-50 hover:text-red-600 transition-all">Eliminar</button>}
+                        {pEditar && <button onClick={() => startEdit(g)} className="px-3 py-1 border border-gray-200 rounded-lg text-[10px] text-gray-500 hover:bg-[#EBF2FF] hover:text-[#1168F8] hover:border-[#93B8FC] transition-all">Editar</button>}
+                        {pEliminar && <button onClick={() => eliminar(g)} className="px-3 py-1 border border-red-100 rounded-lg text-[10px] text-gray-400 hover:bg-red-50 hover:text-red-600 transition-all">Eliminar</button>}
                       </div>
                     </td>
                   </tr>
@@ -2071,8 +1965,8 @@ function previewNumeroCuenta(t: any) {
   return [t.prefijo, t.serie, num].filter(Boolean).join('-')
 }
 
-function CuentaForm({ data, setData, onSave, onCancel, ambito, inp, empresaNombre, saving, numeroPreview }: any) {
-  const esCustodia = ambito === 'custodia'
+function CuentaForm({ data, setData, onSave, onCancel, inp, empresaNombre, saving, numeroPreview, bloqueoPropia, bloqueoTerceros }: any) {
+  const esInversion = data.tipo === 'inversion'
   const apoderados = Array.isArray(data.apoderados) ? data.apoderados : []
   const [apNombre, setApNombre] = useState('')
   const [apTipo, setApTipo] = useState<string>(data.pais === 'AR' ? 'CUIT' : 'RUT')
@@ -2115,8 +2009,8 @@ function CuentaForm({ data, setData, onSave, onCancel, ambito, inp, empresaNombr
     <div className="grid grid-cols-2 gap-3">
       <div className="col-span-2 flex items-start justify-between gap-3">
         <div>
-          <div className="font-bold text-sm text-gray-900">{esCustodia ? 'Cuenta en custodia de clientes' : 'Cuenta propia'}</div>
-          <div className="text-[11px] text-gray-400">{esCustodia ? 'Fondos de clientes a rendir · titular Puerto NOA' : 'Caja, bancos e inversiones de Puerto NOA'}</div>
+          <div className="font-bold text-sm text-gray-900">Cuenta o caja</div>
+          <div className="text-[11px] text-gray-400">Cajas, bancos e inversiones · uso propio y/o de terceros</div>
         </div>
         <div className="text-right bg-[#EBF2FF] border border-[#93B8FC] rounded-xl px-3 py-1.5 flex-shrink-0">
           <div className="text-[9px] uppercase text-[#1168F8] tracking-wide">N° interno · {paisNom}</div>
@@ -2130,12 +2024,29 @@ function CuentaForm({ data, setData, onSave, onCancel, ambito, inp, empresaNombr
         <input value={data.nombre || ''} onChange={e => setData((p: any) => ({ ...p, nombre: e.target.value }))} className={inp} placeholder="ej. Banco Itaú CLP Chile" />
       </div>
 
+      <div className="col-span-2 border border-gray-100 rounded-xl p-3 bg-gray-50/60">
+        <label className={lbl}>Usos habilitados *</label>
+        {esInversion && <p className="text-[10px] text-violet-500 mb-1.5">Las inversiones son siempre fondos propios de Puerto NOA.</p>}
+        <div className="flex flex-col gap-2">
+          <label className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer ${(esInversion || data.usaPropia) ? 'bg-teal-50 border-teal-200' : 'border-gray-200 bg-white'}`}>
+            <input type="checkbox" checked={esInversion ? true : !!data.usaPropia} disabled={esInversion || bloqueoPropia} onChange={e => setData((p: any) => ({ ...p, usaPropia: e.target.checked }))} className="w-4 h-4 rounded" />
+            <span className="text-xs text-gray-700 font-medium flex-1">Fondos propios de Puerto NOA</span>
+            {bloqueoPropia && <span className="text-[9px] text-gray-400">tiene movimientos · no se puede quitar</span>}
+          </label>
+          <label className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer ${esInversion ? 'opacity-40 cursor-not-allowed border-gray-200 bg-white' : (data.usaTerceros ? 'bg-orange-50 border-orange-200' : 'border-gray-200 bg-white')}`}>
+            <input type="checkbox" checked={esInversion ? false : !!data.usaTerceros} disabled={esInversion || bloqueoTerceros} onChange={e => setData((p: any) => ({ ...p, usaTerceros: e.target.checked }))} className="w-4 h-4 rounded" />
+            <span className="text-xs text-gray-700 font-medium flex-1">Fondos de terceros (a rendir)</span>
+            {bloqueoTerceros && <span className="text-[9px] text-gray-400">tiene movimientos · no se puede quitar</span>}
+          </label>
+        </div>
+      </div>
+
       <div>
         <label className={lbl}>Tipo</label>
-        <select value={data.tipo || 'banco'} onChange={e => setData((p: any) => ({ ...p, tipo: e.target.value, banco: e.target.value === 'caja' ? '' : p.banco, nro_cuenta: e.target.value === 'caja' ? '' : p.nro_cuenta }))} className={inp}>
+        <select value={data.tipo || 'banco'} onChange={e => { const v = e.target.value; setData((p: any) => ({ ...p, tipo: v, banco: v === 'caja' ? '' : p.banco, nro_cuenta: v === 'caja' ? '' : p.nro_cuenta, ...(v === 'inversion' ? { usaPropia: true, usaTerceros: false } : {}) })) }} className={inp}>
           <option value="banco">Banco</option>
           <option value="caja">Caja / efectivo</option>
-          {!esCustodia && <option value="inversion">Inversión (fondos)</option>}
+          <option value="inversion">Inversión (fondos)</option>
         </select>
       </div>
       <div>
