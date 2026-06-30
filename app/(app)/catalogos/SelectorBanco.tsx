@@ -19,6 +19,7 @@ function normPais(p?: string): string {
   if (s === 'ar' || s.startsWith('arg')) return 'AR'
   if (s === 'cl' || s.startsWith('chil')) return 'CL'
   if (s === 'cn' || s.startsWith('chin')) return 'CN'
+  if (s === 'us' || s.startsWith('est') || s.startsWith('eeuu') || s.startsWith('united')) return 'US'
   return (p || '').toUpperCase()
 }
 
