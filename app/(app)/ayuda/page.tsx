@@ -28,7 +28,6 @@ FINANZAS CLIENTES:
 - Fondos en custodia: Administración de fondos anticipados.
 
 TESORERÍA:
-- Flujo de cuentas: Transferencias ARG↔CHL con conversión de TC.
 - Tipos de cambio: ARS/USD, CLP/USD, CNY/USD. Actualización automática diaria.
 
 CONTABILIDAD:
