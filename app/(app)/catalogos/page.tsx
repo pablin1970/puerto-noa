@@ -846,74 +846,72 @@ function CuentasABM() {
 
   const inp2 = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#1168F8] bg-white'
 
-  function RowCuenta({ row }: { row: any }) {
-    const paisFlag = row.pais === 'CL' ? '🇨🇱' : row.pais === 'AR' ? '🇦🇷' : '🌐'
-    return editId === row.id ? (
-      <div className="p-4 bg-white border border-[#1168F8] rounded-2xl mb-2">
-        <CuentaForm data={editData} setData={setEditData} onSave={saveEdit} onCancel={() => setEditId(null)} ambito="propia" inp={inp2} empresaNombre={empresaNombre} saving={saving} numeroPreview={row.numero_interno} />
-      </div>
-    ) : (
-      <div className={`bg-white border border-gray-100 rounded-2xl px-4 py-3 mb-2 shadow-sm flex items-center gap-3 ${!row.activo ? 'opacity-50' : ''}`}>
-        <div className="text-xl flex-shrink-0">{paisFlag}</div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            {row.numero_interno && <span className="text-[10px] font-mono font-bold text-[#1168F8]">{row.numero_interno}</span>}
-            <span className="text-xs font-semibold text-gray-900">{row.nombre}</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${row.moneda === 'CLP' ? 'bg-blue-50 text-blue-700' : row.moneda === 'ARS' ? 'bg-sky-50 text-sky-700' : 'bg-green-50 text-green-700'}`}>{row.moneda}</span>
-            <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px]">{row.tipo}</span>
-          </div>
-          <div className="text-[10px] text-gray-400 mt-0.5 flex gap-3 flex-wrap">
-            {row.banco && <span>{row.banco}</span>}
-            {row.nro_cuenta && <span className="font-mono">{row.nro_cuenta}</span>}
-            {Array.isArray(row.apoderados) && row.apoderados.length > 0 && <span>Firmantes: {row.apoderados.map((a: any) => a.nombre).join(', ')}</span>}
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button onClick={() => toggleActivo(row.id, row.activo)} className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${row.activo ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-400 border-gray-200'}`}>{row.activo ? 'Activa' : 'Inactiva'}</button>
-          {pEditar && <button onClick={() => { setEditId(row.id); setEditData({ ...row, apoderados: Array.isArray(row.apoderados) ? row.apoderados : [] }) }} className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 hover:border-[#1168F8] hover:text-[#1168F8]">Editar</button>}
-          {pEliminar && <button onClick={() => eliminar(row.id)} className="px-3 py-1.5 border border-red-100 rounded-xl text-xs text-red-500 hover:bg-red-50">Eliminar</button>}
-        </div>
-      </div>
-    )
-  }
-
   if (loading) return <div className="p-8 text-center text-gray-400 text-sm">Cargando...</div>
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between mb-4">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
         <div>
           <h2 className="font-bold text-base text-gray-900">Cuentas (caja y bancos)</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Cuentas propias de Puerto NOA (caja, bancos e inversiones)</p>
+          <p className="text-xs text-gray-400 mt-0.5">{propias.length} cuenta(s) · {propias.filter(c => c.activo).length} activas · propias de Puerto NOA</p>
         </div>
-        {pCrear && !showNew && <button onClick={() => { setShowNew(true); setNewData({ ...vacio }) }} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4]">+ Nueva cuenta</button>}
+        {pCrear && !showNew && !editId && <button onClick={() => { setShowNew(true); setNewData({ ...vacio }) }} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] shadow-sm">+ Nueva cuenta</button>}
+      </div>
+
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700">
+        💡 Estas son las cajas, cuentas bancarias e inversiones <strong>propias de Puerto NOA</strong>. Los fondos de clientes a rendir se administran en «Fondos en custodia de clientes».
       </div>
 
       {showNew && (
-        <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-4 mb-4">
+        <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-4">
           <CuentaForm data={newData} setData={setNewData} onSave={saveNew} onCancel={() => setShowNew(false)} ambito="propia" inp={inp2} empresaNombre={empresaNombre} saving={saving} numeroPreview={previewNumeroCuenta(talPais(newData.pais))} />
         </div>
       )}
-
-      <div className="mb-4">
-        <div className="text-[10px] font-semibold text-gray-400 uppercase mb-3 flex items-center gap-2">
-          <span>Cuentas propias Puerto NOA</span>
-          <span className="px-2 py-0.5 bg-[#EBF2FF] text-[#052698] rounded-full font-bold">{propias.length}</span>
+      {editId && (
+        <div className="bg-[#EBF2FF] border border-[#93B8FC] rounded-2xl p-4">
+          <CuentaForm data={editData} setData={setEditData} onSave={saveEdit} onCancel={() => setEditId(null)} ambito="propia" inp={inp2} empresaNombre={empresaNombre} saving={saving} numeroPreview={editData.numero_interno} />
         </div>
-        {propias.length === 0 ? <div className="text-xs text-gray-400 py-3">Sin cuentas propias registradas</div> : (
-          <>
-            {(['banco', 'caja', 'inversion'] as const).map(subtipo => {
-              const grupo = propias.filter(r => r.tipo === subtipo)
-              if (grupo.length === 0) return null
-              const labels: Record<string, string> = { banco: '🏛 Cuentas bancarias', caja: '💵 Cajas / efectivo', inversion: '📈 Inversiones' }
-              return (
-                <div key={subtipo} className="mb-3">
-                  <div className="text-[10px] font-semibold text-gray-500 mb-1.5 pl-1">{labels[subtipo]}</div>
-                  {grupo.map(r => <RowCuenta key={r.id} row={r} />)}
-                </div>
-              )
-            })}
-          </>
+      )}
+
+      <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+        {propias.length === 0 ? (
+          <div className="p-8 text-center text-gray-400">Sin cuentas propias registradas aún.</div>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                {['N° interno', 'Nombre', 'País', 'Tipo', 'Moneda', 'Banco', 'N° Cuenta', 'CBU/IBAN', 'SWIFT', 'Firmantes', 'Estado', ''].map(h => (
+                  <th key={h} className="text-left px-3 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {propias.map(c => {
+                const tb = c.tipo === 'banco' ? { cls: 'bg-blue-50 text-blue-700', lbl: '🏦 Banco' } : c.tipo === 'inversion' ? { cls: 'bg-violet-50 text-violet-700', lbl: '📈 Inversión' } : { cls: 'bg-amber-50 text-amber-700', lbl: '💵 Caja' }
+                return (
+                  <tr key={c.id} className={`border-b border-gray-50 transition-colors ${!c.activo ? 'opacity-40' : 'hover:bg-blue-50/20'}`}>
+                    <td className="px-3 py-3 text-[#1168F8] font-mono text-[10px] font-bold">{c.numero_interno || '—'}</td>
+                    <td className="px-3 py-3 font-semibold text-gray-800">{c.nombre}</td>
+                    <td className="px-3 py-3 text-gray-500">{c.pais === 'AR' ? '🇦🇷' : '🇨🇱'}</td>
+                    <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${tb.cls}`}>{tb.lbl}</span></td>
+                    <td className="px-3 py-3 font-mono text-[11px] font-bold text-[#052698]">{c.moneda}</td>
+                    <td className="px-3 py-3 text-gray-600">{c.banco || '—'}</td>
+                    <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.nro_cuenta || '—'}</td>
+                    <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.cbu_iban || '—'}</td>
+                    <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{c.swift || '—'}</td>
+                    <td className="px-3 py-3 text-gray-400 text-[10px]">{Array.isArray(c.apoderados) && c.apoderados.length > 0 ? c.apoderados.map((a: any) => a.nombre).join(', ') : '—'}</td>
+                    <td className="px-3 py-3"><button onClick={() => toggleActivo(c.id, c.activo)} className={`px-2 py-0.5 rounded-full text-[10px] font-semibold cursor-pointer transition-all ${c.activo ? 'bg-green-50 text-green-700 hover:bg-red-50 hover:text-red-600' : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-700'}`}>{c.activo ? 'Activa' : 'Inactiva'}</button></td>
+                    <td className="px-3 py-3">
+                      <div className="flex gap-1">
+                        {pEditar && <button onClick={() => { setShowNew(false); setEditId(c.id); setEditData({ ...c, apoderados: Array.isArray(c.apoderados) ? c.apoderados : [] }) }} className="px-3 py-1 border border-gray-200 rounded-lg text-[10px] text-gray-500 hover:bg-[#EBF2FF] hover:text-[#1168F8] hover:border-[#93B8FC] transition-all">Editar</button>}
+                        {pEliminar && <button onClick={() => eliminar(c.id)} className="px-3 py-1 border border-red-100 rounded-lg text-[10px] text-gray-400 hover:bg-red-50 hover:text-red-600 transition-all">Eliminar</button>}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         )}
       </div>
     </div>
@@ -2138,7 +2136,7 @@ function CuentaForm({ data, setData, onSave, onCancel, ambito, inp, empresaNombr
       )}
 
       <div className="col-span-2 border-t border-gray-100 pt-3">
-        <label className={lbl}>Apoderados / Firmantes</label>
+        <label className={lbl}>{esCaja ? 'Responsable de la caja' : 'Apoderados / Firmantes'}</label>
         {apoderados.length > 0 && (
           <div className="flex flex-col gap-1.5 mb-2">
             {apoderados.map((a: any, i: number) => (
