@@ -55,7 +55,7 @@ const TIPO_MOV_LABEL: Record<string, string> = {
   transferencia_out: 'Transferencia (salida)', transferencia_in: 'Transferencia (entrada)',
   ingreso_cliente: 'Ingreso de cliente', pago_proveedor: 'Pago a proveedor',
   transferencia: 'Transferencia', honorarios_puertonoa: 'Honorarios Puerto NOA',
-  devolucion_cliente: 'Devolución a cliente',
+  devolucion_cliente: 'Devolución a cliente', comision_bancaria: 'Comisión bancaria',
 }
 
 export default function CuentasCajaBancosPage() {
