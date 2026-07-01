@@ -3,7 +3,7 @@
 // importan de aquí. Para agregar un módulo nuevo: agregarlo a MODULOS_PERMISOS
 // y queda cubierto automáticamente (deny by default para todos, salvo super admin).
 
-export const ACCIONES = ['ver', 'crear', 'editar', 'eliminar', 'descargar', 'solicitar', 'autorizar'] as const
+export const ACCIONES = ['ver', 'crear', 'editar', 'eliminar', 'descargar', 'solicitar', 'autorizar', 'conciliar'] as const
 export type Accion = typeof ACCIONES[number]
 
 export interface ModuloItem {
@@ -69,7 +69,7 @@ export const MODULOS_PERMISOS: ModuloSeccion[] = [
   {
     section: 'Tesorería', icono: '🏦',
     items: [
-      { modulo: 'cuentas_cajas_bancos', label: 'Cuentas (caja y bancos)', acciones: ['ver'] },
+      { modulo: 'cuentas_cajas_bancos', label: 'Cuentas (caja y bancos)', acciones: ['ver', 'conciliar'] },
       { modulo: 'recibos',       label: 'Recibos',                   acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'ordenes_pago',  label: 'Órdenes de pago',           acciones: ['ver','crear','editar','eliminar','descargar'] },
       { modulo: 'aplicaciones_pago', label: 'Aplic. pago de tercero',  acciones: ['ver','crear','editar','eliminar','descargar'] },
