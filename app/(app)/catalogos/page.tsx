@@ -378,6 +378,7 @@ function CatalogoABM({
 // ── Página principal ────────────────────────────────────────────────
 export default function CatalogosPage() {
   const [tab, setTab] = useState<Tab>('servicios_deposito')
+  const [navSeq, setNavSeq] = useState(0)
   const [permisos, setPermisos] = useState<Record<string, string[]>>({})
   const [permListos, setPermListos] = useState(false)
   useEffect(() => { cargarPermisos().then(p => { setPermisos(p); setPermListos(true) }) }, [])
@@ -433,7 +434,7 @@ export default function CatalogosPage() {
                   {g.keys.filter(k => puedeVerTab(k)).map(k => {
                     const activo = tab === k
                     return (
-                      <button key={k} onClick={() => setTab(k as Tab)}
+                      <button key={k} onClick={() => { if (k === tab) setNavSeq(s => s + 1); else setTab(k as Tab) }}
                         className="text-left py-1.5 text-[12px] font-medium transition-colors flex items-center gap-1.5"
                         style={activo
                           ? { background: g.claro, color: g.texto, borderLeft: `3px solid ${g.color}`, marginLeft: '-8px', paddingLeft: '9px', paddingRight: '8px', borderRadius: '0 8px 8px 0' }
@@ -597,7 +598,7 @@ export default function CatalogosPage() {
       {/* ── RUBROS POR BLOQUE ── */}
       {tab === 'bloques_cotizacion' && <BloquesCotizacionABM />}
       {tab === 'gastos_categorias' && <GastosCatABM />}
-      {tab === 'cuentas_abm' && <CuentasYCajasABM />}
+      {tab === 'cuentas_abm' && <CuentasYCajasABM key={navSeq} />}
       {tab === 'entidades_financieras' && <EntidadesFinancierasCatalogo />}
       {tab === 'tipos_cuenta' && <TiposCuentaCatalogo />}
       {tab === 'empresa' && <EmpresaABM />}
@@ -773,7 +774,6 @@ function CuentasYCajasABM() {
           <p className="text-xs text-gray-400 mt-0.5">{grupos.length} cuenta(s) · {grupos.filter(g => g.base.activo).length} activas · cajas, bancos e inversiones</p>
         </div>
         {pCrear && !showNew && !editGrupo && <button onClick={nuevaCuenta} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] shadow-sm">+ Nueva cuenta</button>}
-        {(showNew || editGrupo) && <button onClick={cancelar} className="px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50">✕ Cerrar</button>}
       </div>
 
       <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700">
