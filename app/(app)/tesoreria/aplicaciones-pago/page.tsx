@@ -63,7 +63,7 @@ export default function AplicacionesPagoTerceroPage() {
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Aplicación de pago de tercero</h1>
+          <h1 className="text-xl font-bold text-gray-900">Aplicación de pago de terceros</h1>
           <p className="text-xs text-gray-400 mt-0.5">El cliente pagó directo al proveedor · marca la factura saldada sin mover tus cuentas</p>
         </div>
         <div className="flex gap-2">
@@ -274,7 +274,7 @@ function DetalleAPT({ apt, supabase }: any) {
     <div className="max-w-2xl space-y-4">
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
         <div className="border-b border-gray-100 pb-4 mb-4">
-          <div className="text-[11px] font-bold text-[#1168F8]/60 uppercase tracking-widest">Aplicación de pago de tercero</div>
+          <div className="text-[11px] font-bold text-[#1168F8]/60 uppercase tracking-widest">Aplicación de pago de terceros</div>
           <div className="text-2xl font-bold font-mono text-gray-900">{apt.numero_formateado}</div>
           <div className="text-xs text-gray-400 mt-1">{apt.fecha}</div>
         </div>
