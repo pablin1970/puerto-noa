@@ -2034,7 +2034,7 @@ function CuentaForm({ data, setData, onSave, onCancel, inp, empresaNombre, savin
             {bloqueoPropia && <span className="text-[9px] text-gray-400">tiene movimientos · no se puede quitar</span>}
           </label>
           <label className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer ${esInversion ? 'opacity-40 cursor-not-allowed border-gray-200 bg-white' : (data.usaTerceros ? 'bg-orange-50 border-orange-200' : 'border-gray-200 bg-white')}`}>
-            <input type="checkbox" checked={esInversion ? false : !!data.usaTerceros} disabled={esInversion || bloqueoTerceros} onChange={e => setData((p: any) => ({ ...p, usaTerceros: e.target.checked }))} className="w-4 h-4 rounded" />
+            <input type="checkbox" checked={esInversion ? false : !!data.usaTerceros} disabled={esInversion || bloqueoTerceros} onChange={e => setData((p: any) => ({ ...p, usaTerceros: e.target.checked, ...(e.target.checked && p.tipo === 'inversion' ? { tipo: 'banco' } : {}) }))} className="w-4 h-4 rounded" />
             <span className="text-xs text-gray-700 font-medium flex-1">Fondos de terceros (a rendir)</span>
             {bloqueoTerceros && <span className="text-[9px] text-gray-400">tiene movimientos · no se puede quitar</span>}
           </label>
@@ -2046,7 +2046,7 @@ function CuentaForm({ data, setData, onSave, onCancel, inp, empresaNombre, savin
         <select value={data.tipo || 'banco'} onChange={e => { const v = e.target.value; setData((p: any) => ({ ...p, tipo: v, banco: v === 'caja' ? '' : p.banco, nro_cuenta: v === 'caja' ? '' : p.nro_cuenta, ...(v === 'inversion' ? { usaPropia: true, usaTerceros: false } : {}) })) }} className={inp}>
           <option value="banco">Banco</option>
           <option value="caja">Caja / efectivo</option>
-          <option value="inversion">Inversión (fondos)</option>
+          {data.usaPropia && !data.usaTerceros && <option value="inversion">Inversión (fondos)</option>}
         </select>
       </div>
       <div>
