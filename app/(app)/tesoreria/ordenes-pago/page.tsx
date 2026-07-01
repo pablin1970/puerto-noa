@@ -189,6 +189,8 @@ function FormOrdenPago({ supabase, currentUser, talonarios, talDifCambio, provee
   const [compFile, setCompFile] = useState<File | null>(null)
   const [tcFiscalDia, setTcFiscalDia] = useState<number | null>(null)  // TC fiscal (SII) de la fecha del pago
   const [difModal, setDifModal] = useState<any | null>(null)           // datos del pop-up de diferencia de cambio
+  const [comMonto, setComMonto] = useState('')                          // comisión bancaria (opcional)
+  const [comNota, setComNota] = useState('')
 
   const esDevolucion = contexto === 'rendir' && modoRendir === 'devolucion'
   const listaBenef = esDevolucion ? clientes : proveedores
@@ -332,18 +334,48 @@ function FormOrdenPago({ supabase, currentUser, talonarios, talDifCambio, provee
         await (supabase.from('comprobantes_tesoreria') as any).update({ archivo_url: archivoPath, archivo_nombre: compFile.name }).eq('id', comp.id)
       }
 
+      const comision = parseFloat(comMonto) || 0
       if (contexto === 'propia') {
         // Egreso de cuenta propia + saldo
         const cuenta = cuentasPropias.find((c: any) => c.id === form.cuenta_propia_id)
+        const saldoBase = Number(cuenta?.saldo_actual) || 0
         await (supabase.from('movimientos_cuentas_pn') as any).insert({
           cuenta_id: form.cuenta_propia_id, fecha: form.fecha, tipo: 'egreso',
           concepto: `OP ${formateado} · ${tercero?.razon_social || ''}`, monto, moneda: form.moneda,
           monto_clp_equiv: aCLP(monto, form.moneda, tcSnap), tipo_cambio: tcRef,
           referencia: formateado, operacion_id: form.operacion_id || null, tercero_id: form.tercero_id,
           talonario_id: form.talonario_id, numero_comprobante: formateado, tc_snapshot: tcSnap || null,
-          saldo_posterior: (Number(cuenta?.saldo_actual) || 0) - monto,
+          saldo_posterior: saldoBase - monto,
         })
-        await (supabase.from('cuentas_pn') as any).update({ saldo_actual: (Number(cuenta?.saldo_actual) || 0) - monto }).eq('id', form.cuenta_propia_id)
+        // Comisión bancaria → gasto propio de Puerto NOA (egreso de la misma cuenta + gasto en contabilidad)
+        if (comision > 0) {
+          await (supabase.from('movimientos_cuentas_pn') as any).insert({
+            cuenta_id: form.cuenta_propia_id, fecha: form.fecha, tipo: 'egreso',
+            concepto: `Comisión bancaria · OP ${formateado}${comNota ? ' · ' + comNota : ''}`, monto: comision, moneda: form.moneda,
+            monto_clp_equiv: aCLP(comision, form.moneda, tcSnap), tipo_cambio: tcRef,
+            referencia: formateado, operacion_id: form.operacion_id || null, tercero_id: form.tercero_id,
+            talonario_id: form.talonario_id, numero_comprobante: formateado, tc_snapshot: tcSnap || null,
+            saldo_posterior: saldoBase - monto - comision,
+          })
+          const catNombre = cuenta?.pais === 'AR' ? 'Gastos bancarios Argentina' : cuenta?.pais === 'US' ? 'Gastos bancarios Estados Unidos' : 'Gastos bancarios Chile'
+          const { data: cat } = await (supabase.from('gastos_fijos_categorias') as any).select('id').eq('nombre', catNombre).maybeSingle()
+          const [pAnio, pMes] = String(form.fecha).split('-').map(Number)
+          await (supabase.from('gastos_fijos_pn') as any).insert({
+            categoria_id: cat?.id || null,
+            descripcion: `Comisión bancaria · OP ${formateado}${comNota ? ' · ' + comNota : ''}`,
+            moneda: form.moneda,
+            monto_clp: form.moneda === 'CLP' ? comision : null,
+            monto_usd: form.moneda === 'USD' ? comision : null,
+            monto_ars: form.moneda === 'ARS' ? comision : null,
+            monto_clp_equiv: aCLP(comision, form.moneda, tcSnap),
+            tipo_cambio_ref: aCLP(1, form.moneda, tcSnap),
+            fecha: form.fecha, periodo_anio: pAnio, periodo_mes: pMes,
+            es_recurrente: false, comprobante_ref: formateado,
+            notas: `Comisión bancaria del pago OP ${formateado}`,
+            tc_snapshot: tcSnap || null, created_by: currentUser?.id,
+          })
+        }
+        await (supabase.from('cuentas_pn') as any).update({ saldo_actual: saldoBase - monto - comision }).eq('id', form.cuenta_propia_id)
         // Imputaciones + cc_proveedores (debe) + marcar pagadas + nota de diferencia de cambio
         for (const f of facturas) {
           const m = Number(imput[f.id]) || 0
@@ -400,6 +432,17 @@ function FormOrdenPago({ supabase, currentUser, talonarios, talDifCambio, provee
           talonario_id: form.talonario_id, numero_comprobante: formateado, tc_snapshot: tcSnap || null,
           creado_por: currentUser?.nombre,
         })
+        // Comisión bancaria: la paga el cliente → egreso de su caja a rendir, imputado al tercero
+        if (comision > 0) {
+          await (supabase.from('fondos_movimientos') as any).insert({
+            fecha: form.fecha, tipo: 'comision_bancaria',
+            concepto: `Comisión bancaria · OP ${formateado}${comNota ? ' · ' + comNota : ''}`,
+            operacion_id: form.operacion_id, cuenta_id: form.cuenta_rendir_id, moneda: form.moneda, monto: comision,
+            tc_usd: tcRef || 1, usd: aUSD(comision, form.moneda, tcSnap), tercero_id: form.tercero_id,
+            talonario_id: form.talonario_id, numero_comprobante: formateado, tc_snapshot: tcSnap || null,
+            creado_por: currentUser?.nombre,
+          })
+        }
         // Marcar facturas de la operación pagadas + registrar imputación (trazabilidad), sin cc PN
         if (!esDevolucion) {
           for (const f of facturas) {
@@ -529,6 +572,14 @@ function FormOrdenPago({ supabase, currentUser, talonarios, talDifCambio, provee
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2"><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Concepto</label>
             <input value={form.concepto} onChange={e => setForm((f: any) => ({ ...f, concepto: e.target.value }))} className={inp} placeholder={esDevolucion ? 'ej. Devolución saldo a rendir' : 'ej. Pago flete / despacho'} /></div>
+          <div className="col-span-2 border border-gray-100 rounded-xl p-3 bg-gray-50/60">
+            <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Comisión bancaria (opcional)</label>
+            <div className="flex gap-2">
+              <input type="text" inputMode="decimal" value={comMonto} onChange={e => setComMonto(e.target.value.replace(/\./g, '').replace(',', '.'))} className={inp + ' text-right font-mono'} style={{ maxWidth: 140 }} placeholder="0" />
+              <input value={comNota} onChange={e => setComNota(e.target.value)} className={inp} placeholder="Detalle (ej. transferencia internacional)" />
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1.5">{contexto === 'propia' ? 'Se registra como gasto bancario de Puerto NOA.' : 'La paga el cliente: se descuenta de su caja a rendir y se imputa a su cuenta.'} En {form.moneda || '—'}, desde la misma cuenta del pago.</p>
+          </div>
           <div className="col-span-2"><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Comprobante / recibo del proveedor (adjunto)</label>
             <input type="file" onChange={e => setCompFile(e.target.files?.[0] || null)} className="text-xs" /></div>
           <div className="col-span-2"><label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Notas</label>
