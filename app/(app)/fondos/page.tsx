@@ -5,7 +5,7 @@ import { fmt } from '@/lib/utils'
 import { cargarPermisos, puede, cuentasPermitidas } from '@/lib/permisos'
 import { urlVerConMarca } from '@/lib/documentos'
 
-type Tab = 'arqueo' | 'movimientos' | 'por_operacion' | 'conciliacion'
+type Tab = 'arqueo' | 'movimientos' | 'por_operacion' | 'por_cliente' | 'conciliacion'
 
 const TIPOS_MOV = [
   { key: 'ingreso_cliente',      label: 'Ingreso cliente',            icon: '⬇', color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200' },
@@ -43,8 +43,8 @@ export default function FondosCustodiaPage() {
     }
     const [cRes, mRes, oRes, tcRes, feRes, frRes] = await Promise.all([
       supabase.from('fondos_cuentas').select('*').eq('activo', true).order('orden'),
-      supabase.from('fondos_movimientos').select('*, cuenta:fondos_cuentas!fondos_movimientos_cuenta_id_fkey(nombre,tipo,moneda,pais), cuenta_dest:fondos_cuentas!fondos_movimientos_cuenta_destino_id_fkey(nombre,tipo,moneda,pais), operacion:operaciones(id,cotizacion:cotizaciones(num,cliente))').order('fecha', { ascending: false }).order('created_at', { ascending: false }),
-      supabase.from('operaciones').select('id, cotizacion:cotizaciones(num,cliente)').order('created_at', { ascending: false }),
+      supabase.from('fondos_movimientos').select('*, cuenta:fondos_cuentas!fondos_movimientos_cuenta_id_fkey(nombre,tipo,moneda,pais), cuenta_dest:fondos_cuentas!fondos_movimientos_cuenta_destino_id_fkey(nombre,tipo,moneda,pais), operacion:operaciones(id,tercero_id,cotizacion:cotizaciones(num,cliente))').order('fecha', { ascending: false }).order('created_at', { ascending: false }),
+      supabase.from('operaciones').select('id, tercero_id, cotizacion:cotizaciones(num,cliente)').order('created_at', { ascending: false }),
       supabase.from('tipos_cambio_eventos').select('ars,clp').order('created_at', { ascending: false }).limit(1),
       supabase.from('facturas_emitidas').select('id,folio,cliente_razon_social,total,total_usd,moneda,estado,operacion_id').not('operacion_id', 'is', null),
       supabase.from('facturas_recibidas').select('id,folio,proveedor_razon_social,total,total_usd,moneda,estado,operacion_id').not('operacion_id', 'is', null),
@@ -155,6 +155,7 @@ export default function FondosCustodiaPage() {
           { key: 'arqueo',         label: 'Arqueo',             icon: '⊞' },
           { key: 'movimientos',    label: 'Movimientos',        icon: '↕' },
           { key: 'por_operacion',  label: 'Por operación',      icon: '📋' },
+          { key: 'por_cliente',    label: 'Por cliente',        icon: '👤' },
           { key: 'conciliacion',   label: 'Conciliación',       icon: '✓' },
         ] as const).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
@@ -289,6 +290,14 @@ export default function FondosCustodiaPage() {
           movimientos={movimientos}
           operaciones={operaciones}
           cuentas={cuentasVisibles}
+          saldoPorOperacion={saldoPorOperacion}
+        />
+      )}
+
+      {/* ══ TAB POR CLIENTE ═══════════════════════════════════════ */}
+      {tab === 'por_cliente' && (
+        <PorClienteTab
+          movimientos={movimientos}
           saldoPorOperacion={saldoPorOperacion}
         />
       )}
@@ -653,6 +662,104 @@ function PorOperacionTab({ movimientos, operaciones, cuentas, saldoPorOperacion 
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+// ── POR CLIENTE TAB ────────────────────────────────────────────
+// Estado de cuenta de custodia agrupado por cliente. El cliente dueño de los
+// fondos es siempre operacion.tercero_id (el tercero_id del movimiento puede ser
+// el proveedor). Saldo a rendir = ingresos − usos (excluye transferencias).
+function PorClienteTab({ movimientos, saldoPorOperacion }: any) {
+  const [expandido, setExpandido] = useState<string>('')
+
+  const clientes = useMemo(() => {
+    const map = new Map<string, any>()
+    for (const m of movimientos) {
+      const op = m.operacion
+      if (!op || !op.tercero_id) continue
+      const cid = op.tercero_id
+      if (!map.has(cid)) map.set(cid, { tercero_id: cid, nombre: op.cotizacion?.cliente || 'Cliente', ops: new Map() })
+      const c = map.get(cid)
+      if (!c.ops.has(op.id)) c.ops.set(op.id, { id: op.id, num: op.cotizacion?.num, recibido: 0, usado: 0 })
+      if (m.tipo === 'transferencia') continue
+      const o = c.ops.get(op.id)
+      if (m.tipo === 'ingreso_cliente') o.recibido += Number(m.usd) || 0
+      else o.usado += Number(m.usd) || 0
+    }
+    return Array.from(map.values()).map((c: any) => {
+      const ops = Array.from(c.ops.values()).map((o: any) => ({ ...o, saldo: saldoPorOperacion(o.id) }))
+      return {
+        ...c, ops,
+        saldoTotal: ops.reduce((s: number, o: any) => s + o.saldo, 0),
+        recibido: ops.reduce((s: number, o: any) => s + o.recibido, 0),
+        usado: ops.reduce((s: number, o: any) => s + o.usado, 0),
+      }
+    }).sort((a: any, b: any) => b.saldoTotal - a.saldoTotal)
+  }, [movimientos, saldoPorOperacion])
+
+  const totalRendir = clientes.reduce((s: number, c: any) => s + c.saldoTotal, 0)
+
+  if (clientes.length === 0) return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center text-gray-400 text-sm">Todavía no hay fondos de clientes en custodia.</div>
+  )
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[#052698] rounded-2xl p-4 text-white flex items-center justify-between">
+        <div>
+          <div className="text-[10px] font-bold text-blue-300 uppercase tracking-widest">Total a rendir · {clientes.length} cliente(s)</div>
+          <div className="text-[10px] text-blue-300 mt-0.5">Suma de los saldos disponibles de cada cliente</div>
+        </div>
+        <div className="text-2xl font-black font-mono">USD {fmt(totalRendir, 0)}</div>
+      </div>
+
+      <div className="space-y-2">
+        {clientes.map((c: any) => {
+          const abierto = expandido === c.tercero_id
+          return (
+            <div key={c.tercero_id} className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+              <button onClick={() => setExpandido(abierto ? '' : c.tercero_id)} className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-blue-50/30 text-left">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-gray-300 text-xs">{abierto ? '▾' : '▸'}</span>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-gray-900 truncate">{c.nombre}</div>
+                    <div className="text-[10px] text-gray-400">{c.ops.length} operación(es) · recibido USD {fmt(c.recibido, 0)} · usado USD {fmt(c.usado, 0)}</div>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-[9px] text-gray-400 uppercase">Saldo a rendir</div>
+                  <div className={`font-mono font-black ${c.saldoTotal >= 0 ? 'text-[#052698]' : 'text-red-600'}`}>USD {fmt(c.saldoTotal, 0)}</div>
+                </div>
+              </button>
+              {abierto && (
+                <div className="border-t border-gray-100 px-3 py-2">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-[10px] text-gray-400 uppercase">
+                        <th className="text-left px-3 py-2 font-semibold">Operación</th>
+                        <th className="text-right px-3 py-2 font-semibold">Recibido</th>
+                        <th className="text-right px-3 py-2 font-semibold">Usado</th>
+                        <th className="text-right px-3 py-2 font-semibold">Saldo a rendir</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {c.ops.map((o: any) => (
+                        <tr key={o.id} className="border-t border-gray-50">
+                          <td className="px-3 py-2 font-medium text-gray-700">{o.num || '—'}</td>
+                          <td className="px-3 py-2 text-right font-mono text-green-700">USD {fmt(o.recibido, 0)}</td>
+                          <td className="px-3 py-2 text-right font-mono text-red-600">USD {fmt(o.usado, 0)}</td>
+                          <td className={`px-3 py-2 text-right font-mono font-bold ${o.saldo >= 0 ? 'text-[#052698]' : 'text-red-600'}`}>USD {fmt(o.saldo, 0)}{o.saldo < 0 && <span className="block text-[9px] text-red-500">⚠ solicitar fondos</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
