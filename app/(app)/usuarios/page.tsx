@@ -69,7 +69,7 @@ const ACCIONES_CUENTA: string[] = ['ver', 'ingresar', 'egresar']
 const COLS_MATRIZ: string[] = [...ACCIONES, 'ingresar', 'egresar']
 const COL_LABEL: Record<string, string> = {
   ver: 'Ver', crear: 'Crear', editar: 'Editar', eliminar: 'Elim.', descargar: 'Descargar',
-  solicitar: 'Solicitar', autorizar: 'Autorizar', ingresar: 'Ingresar', egresar: 'Egresar',
+  solicitar: 'Solicitar', autorizar: 'Autorizar', ingresar: 'Ingresar', egresar: 'Egresar', conciliar: 'Conciliar',
 }
 import { PAISES_OPERACION, terminoRegion, regionesDe } from '@/lib/geografiaPaises'
 import { abrirConMarca } from '@/lib/documentos'
