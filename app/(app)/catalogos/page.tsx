@@ -773,6 +773,7 @@ function CuentasYCajasABM() {
           <p className="text-xs text-gray-400 mt-0.5">{grupos.length} cuenta(s) · {grupos.filter(g => g.base.activo).length} activas · cajas, bancos e inversiones</p>
         </div>
         {pCrear && !showNew && !editGrupo && <button onClick={nuevaCuenta} className="px-4 py-2 bg-[#1168F8] text-white rounded-xl text-xs font-bold hover:bg-[#0a4fc4] shadow-sm">+ Nueva cuenta</button>}
+        {(showNew || editGrupo) && <button onClick={cancelar} className="px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50">✕ Cerrar</button>}
       </div>
 
       <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] text-blue-700">
@@ -789,6 +790,7 @@ function CuentasYCajasABM() {
         {grupos.length === 0 ? (
           <div className="p-8 text-center text-gray-400">Sin cuentas registradas aún.</div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
@@ -825,6 +827,7 @@ function CuentasYCajasABM() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>
