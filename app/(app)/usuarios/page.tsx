@@ -172,6 +172,8 @@ export default function UsuariosPage() {
     const cuentas: { id: string; nombre: string; tipo: string; pais: string; moneda: string; numero_interno: string | null; ambito: 'propia' | 'custodia' }[] = []
     if (cpRes.data) (cpRes.data as any[]).forEach(c => cuentas.push({ ...c, ambito: 'propia' }))
     if (fcRes.data) (fcRes.data as any[]).forEach(c => cuentas.push({ ...c, ambito: 'custodia' }))
+    // Agrupar los dos carriles de cada caja física: por nombre y, dentro, propia antes que terceros
+    cuentas.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '') || (a.ambito === 'propia' ? -1 : 1))
     setCuentasPerm(cuentas)
     setLoading(false)
   }
@@ -190,7 +192,7 @@ export default function UsuariosPage() {
     // Por defecto no la ve nadie, así que el aviso ámbar recuerda ir a asignarle permisos.
     const deCuentas = cuentasPerm
       .filter(c => !modulosRevisados.has(`cuenta:${c.id}`))
-      .map(c => ({ modulo: `cuenta:${c.id}`, label: c.ambito === 'custodia' ? `${c.nombre} · custodia` : c.nombre, acciones: ACCIONES_CUENTA }))
+      .map(c => ({ modulo: `cuenta:${c.id}`, label: c.ambito === 'custodia' ? `${c.nombre} · terceros` : `${c.nombre} · propia`, acciones: ACCIONES_CUENTA }))
     return [...deModulos, ...deCuentas]
   }, [modulosRevisados, cuentasPerm])
 
@@ -206,7 +208,7 @@ export default function UsuariosPage() {
       section: 'Cuentas — cajas, bancos y custodia', icono: '💳',
       items: cuentasPerm.map(c => ({
         modulo: `cuenta:${c.id}`,
-        label: c.ambito === 'custodia' ? `${c.nombre} · custodia` : c.nombre,
+        label: c.ambito === 'custodia' ? `${c.nombre} · terceros` : `${c.nombre} · propia`,
         acciones: ACCIONES_CUENTA,
       })),
     }]
