@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import Image from 'next/image'
 import { cargarPermisos, puede } from '@/lib/permisos'
 
 // ── Marca Puerto NOA ──
@@ -200,158 +201,167 @@ export default function DashboardFinancieroPage() {
   const catColors = [C.azul, C.violeta, C.teal, C.ambar, C.coral, '#94a3b8']
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Dashboard financiero 💰</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Puerto NOA SpA · {MESES[mes]} {anio} · año en curso · TC USD/CLP {d.tcClp.toLocaleString('es-CL')}{!d.tcOk && ' · TC sin actualizar hoy'}</p>
+    <div className="min-h-screen bg-gray-50">
+      {/* ── Header con marca ── */}
+      <div className="text-white" style={{ background: 'linear-gradient(135deg,#1168F8 0%,#052698 100%)' }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              <Image src="/logo-white.png" alt="Puerto NOA" width={132} height={40} priority style={{ height: 34, width: 'auto' }} className="shrink-0" />
+              <div className="min-w-0">
+                <div className="text-base sm:text-xl font-bold leading-tight">Dashboard financiero</div>
+                <div className="text-[11px] opacity-75 truncate">{MESES[mes]} {anio} · año en curso · TC USD/CLP {d.tcClp.toLocaleString('es-CL')}{!d.tcOk && ' · TC sin actualizar hoy'}</div>
+              </div>
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {[{ l: 'Libro IVA', h: '/contabilidad/iva' }, { l: 'Gastos', h: '/contabilidad/gastos' }, { l: 'Resultados', h: '/contabilidad/resultados' }].map(x => (
+                <Link key={x.h} href={x.h} className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: 'rgba(255,255,255,.16)' }}>{x.l}</Link>
+              ))}
+            </div>
+          </div>
         </div>
-        <div className="flex gap-2">
-          {[{ l: 'Libro IVA', h: '/contabilidad/iva' }, { l: 'Gastos', h: '/contabilidad/gastos' }, { l: 'Resultados', h: '/contabilidad/resultados' }].map(x => (
-            <Link key={x.h} href={x.h} className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 hover:border-[#1168F8] hover:text-[#1168F8] bg-white font-semibold">{x.l}</Link>
+      </div>
+
+      <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-4">
+        {/* ── HERO Resultado: apila en mobile ── */}
+        <div className="rounded-2xl p-4 sm:p-6 text-white grid gap-4 lg:gap-5 grid-cols-1 lg:grid-cols-[1.3fr_1fr]" style={{ background: 'linear-gradient(135deg,#1168F8 0%,#052698 100%)', boxShadow: '0 8px 24px rgba(17,104,248,.18)' }}>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider opacity-75">Resultado del ejercicio · año en curso</div>
+            <div className="font-extrabold font-mono" style={{ fontSize: 34, marginTop: 4 }}>{fmtUSDk(d.resultadoEjercicio)}</div>
+            <div className="flex gap-2 mt-2 flex-wrap">
+              <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: 'rgba(255,255,255,.16)' }}>{d.margenPct >= 0 ? '▲' : '▼'} {Math.abs(d.margenPct).toFixed(1)}% margen</span>
+              <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: 'rgba(255,255,255,.16)' }}>{d.opsCerradas} operaciones cerradas</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+              <div><div className="text-[10px] opacity-70 uppercase tracking-wide">Margen bruto</div><div className="font-extrabold font-mono" style={{ fontSize: 18, marginTop: 2 }}>{fmtUSDk(d.margenBrutoYTD)}</div></div>
+              <div><div className="text-[10px] opacity-70 uppercase tracking-wide">Gastos fijos</div><div className="font-extrabold font-mono" style={{ fontSize: 18, marginTop: 2 }}>{fmtUSDk(d.gastosYTDusd)}</div></div>
+              <div><div className="text-[10px] opacity-70 uppercase tracking-wide">Margen neto</div><div className="font-extrabold font-mono" style={{ fontSize: 18, marginTop: 2 }}>{fmtUSDk(d.margenNetoYTD)}</div></div>
+              <div><div className="text-[10px] opacity-70 uppercase tracking-wide">± Dif. cambio</div><div className="font-extrabold font-mono" style={{ fontSize: 18, marginTop: 2, color: d.difCambioYTD < 0 ? '#FCA5A5' : '#7CF5C4' }}>{d.difCambioYTD < 0 ? '−' : '+'}{fmtUSDk(Math.abs(d.difCambioYTD))}</div></div>
+            </div>
+          </div>
+          <div className="rounded-2xl p-4 flex items-center gap-4" style={{ background: 'rgba(255,255,255,.1)' }}>
+            <div className="relative shrink-0" style={{ width: 108, height: 108 }}>
+              <Donut size={108} stroke={15} track="rgba(255,255,255,.18)" segments={[{ value: d.margenBrutoYTD > 0 ? d.margenBrutoYTD : 0, color: '#7CF5C4' }, { value: d.costosYTD > 0 ? d.costosYTD : 0, color: 'rgba(255,255,255,.55)' }]} />
+              <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="font-extrabold" style={{ fontSize: 21 }}>{Math.round(d.margenBrutoPct)}%</span><span className="text-[8px] opacity-80 uppercase">margen br.</span></div>
+            </div>
+            <div className="text-xs min-w-0">
+              <div className="flex items-center gap-2 mb-2"><span className="shrink-0" style={{ width: 10, height: 10, borderRadius: 3, background: 'rgba(255,255,255,.6)' }} /><span className="opacity-85">Costos</span><b className="ml-auto">{fmtUSDk(d.costosYTD)}</b></div>
+              <div className="flex items-center gap-2 mb-2"><span className="shrink-0" style={{ width: 10, height: 10, borderRadius: 3, background: '#7CF5C4' }} /><span className="opacity-85">Margen</span><b className="ml-auto">{fmtUSDk(d.margenBrutoYTD)}</b></div>
+              <div className="flex items-center gap-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,.2)' }}><span className="opacity-85">Ingresos</span><b className="ml-auto">{fmtUSDk(d.ingresosYTD)}</b></div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── KPIs: 2 col mobile → 3 → 5 ── */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3">
+          {[
+            { l: 'Ingresos YTD', v: fmtUSDk(d.ingresosYTD), icon: '📈', color: C.azul, bar: 100, barC: C.azul },
+            { l: 'Costos YTD', v: fmtUSDk(d.costosYTD), icon: '📉', color: C.violeta, bar: d.ingresosYTD > 0 ? d.costosYTD / d.ingresosYTD * 100 : 0, barC: C.violeta },
+            { l: `IVA a pagar · ${MESES[mes]}`, v: fmtCLP(Math.abs(d.ivaSaldo)), icon: '🧾', color: ivaNeg ? C.verde : C.rojo, sub: ivaNeg ? 'remanente CF' : 'F29 línea 48' },
+            { l: 'Por cobrar', v: fmtUSDk(d.porCobrar), icon: '📥', color: C.teal, bar: agPct(d.agCobrar, 'alDia'), barC: C.teal, sub: `${Math.round(agPct(d.agCobrar, 'alDia'))}% al día` },
+            { l: 'Por pagar', v: fmtUSDk(d.porPagar), icon: '📤', color: C.coral, bar: agPct(d.agPagar, 'alDia'), barC: C.coral, sub: `${Math.round(agPct(d.agPagar, 'alDia'))}% al día` },
+          ].map((k, i) => (
+            <div key={i} className="bg-white border border-gray-100 rounded-2xl p-3.5 shadow-sm">
+              <div className="flex justify-between items-center mb-1.5"><span className="text-[10px] font-bold uppercase tracking-wide text-gray-400 leading-tight">{k.l}</span><span className="text-sm">{k.icon}</span></div>
+              <div className="text-base font-extrabold font-mono" style={{ color: k.color }}>{k.v}</div>
+              {k.bar !== undefined ? <div className="mt-2"><Bar pct={k.bar} color={k.barC!} /></div> : null}
+              {k.sub ? <div className="text-[9px] text-gray-400 mt-1.5 font-semibold">{k.sub}</div> : null}
+            </div>
           ))}
         </div>
-      </div>
 
-      {/* HERO Resultado */}
-      <div className="rounded-3xl p-6 mb-4 text-white grid gap-5" style={{ gridTemplateColumns: '1.3fr 1fr', background: 'linear-gradient(135deg,#1168F8 0%,#052698 100%)', boxShadow: '0 8px 24px rgba(17,104,248,.22)' }}>
-        <div>
-          <div className="text-[10px] font-bold uppercase tracking-wider opacity-75">Resultado del ejercicio · año en curso</div>
-          <div className="font-extrabold font-mono" style={{ fontSize: 40, marginTop: 4 }}>{fmtUSDk(d.resultadoEjercicio)}</div>
-          <div className="flex gap-2 mt-2 flex-wrap">
-            <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: 'rgba(255,255,255,.16)' }}>{d.margenPct >= 0 ? '▲' : '▼'} {Math.abs(d.margenPct).toFixed(1)}% margen</span>
-            <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: 'rgba(255,255,255,.16)' }}>{d.opsCerradas} operaciones cerradas</span>
+        {/* ── Evolución mensual: scroll horizontal en mobile ── */}
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm">
+          <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Evolución mensual · ingresos vs costos · margen neto</span>
+            <div className="flex gap-3 text-[11px] text-gray-500 flex-wrap">
+              <span className="flex items-center gap-1.5"><span style={{ width: 10, height: 10, borderRadius: 3, background: C.azul }} />Ingresos</span>
+              <span className="flex items-center gap-1.5"><span style={{ width: 10, height: 10, borderRadius: 3, background: '#c7d2fe' }} />Costos</span>
+              <span className="flex items-center gap-1.5"><span style={{ width: 14, height: 3, borderRadius: 3, background: C.verde }} />Margen neto</span>
+            </div>
           </div>
-          <div className="flex gap-6 mt-5 flex-wrap">
-            <div><div className="text-[10px] opacity-70 uppercase tracking-wide">Margen bruto</div><div className="font-extrabold font-mono" style={{ fontSize: 19, marginTop: 2 }}>{fmtUSDk(d.margenBrutoYTD)}</div></div>
-            <div><div className="text-[10px] opacity-70 uppercase tracking-wide">Gastos fijos</div><div className="font-extrabold font-mono" style={{ fontSize: 19, marginTop: 2 }}>{fmtUSDk(d.gastosYTDusd)}</div></div>
-            <div><div className="text-[10px] opacity-70 uppercase tracking-wide">Margen neto</div><div className="font-extrabold font-mono" style={{ fontSize: 19, marginTop: 2 }}>{fmtUSDk(d.margenNetoYTD)}</div></div>
-            <div><div className="text-[10px] opacity-70 uppercase tracking-wide">± Dif. cambio</div><div className="font-extrabold font-mono" style={{ fontSize: 19, marginTop: 2, color: d.difCambioYTD < 0 ? '#FCA5A5' : '#7CF5C4' }}>{d.difCambioYTD < 0 ? '−' : '+'}{fmtUSDk(Math.abs(d.difCambioYTD))}</div></div>
-          </div>
+          <div className="overflow-x-auto"><div style={{ minWidth: 520 }}><MiniChart serie={d.serieData} /></div></div>
         </div>
-        <div className="rounded-2xl p-4 flex items-center gap-4" style={{ background: 'rgba(255,255,255,.1)' }}>
-          <div className="relative" style={{ width: 120, height: 120, flexShrink: 0 }}>
-            <Donut size={120} stroke={16} track="rgba(255,255,255,.18)" segments={[{ value: d.margenBrutoYTD > 0 ? d.margenBrutoYTD : 0, color: '#7CF5C4' }, { value: d.costosYTD > 0 ? d.costosYTD : 0, color: 'rgba(255,255,255,.55)' }]} />
-            <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="font-extrabold" style={{ fontSize: 22 }}>{Math.round(d.margenBrutoPct)}%</span><span className="text-[8px] opacity-80 uppercase">margen br.</span></div>
-          </div>
-          <div className="text-xs">
-            <div className="flex items-center gap-2 mb-2"><span style={{ width: 10, height: 10, borderRadius: 3, background: 'rgba(255,255,255,.6)' }} /><span className="opacity-85">Costos</span><b className="ml-auto">{fmtUSDk(d.costosYTD)}</b></div>
-            <div className="flex items-center gap-2 mb-2"><span style={{ width: 10, height: 10, borderRadius: 3, background: '#7CF5C4' }} /><span className="opacity-85">Margen</span><b className="ml-auto">{fmtUSDk(d.margenBrutoYTD)}</b></div>
-            <div className="flex items-center gap-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,.2)' }}><span className="opacity-85">Ingresos</span><b className="ml-auto">{fmtUSDk(d.ingresosYTD)}</b></div>
-          </div>
-        </div>
-      </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-5 gap-3 mb-4">
-        {[
-          { l: 'Ingresos YTD', v: fmtUSDk(d.ingresosYTD), icon: '📈', color: C.azul, bar: 100, barC: C.azul },
-          { l: 'Costos YTD', v: fmtUSDk(d.costosYTD), icon: '📉', color: C.violeta, bar: d.ingresosYTD > 0 ? d.costosYTD / d.ingresosYTD * 100 : 0, barC: C.violeta },
-          { l: `IVA a pagar · ${MESES[mes]}`, v: fmtCLP(Math.abs(d.ivaSaldo)), icon: '🧾', color: ivaNeg ? C.verde : C.rojo, sub: ivaNeg ? 'remanente CF' : 'F29 línea 48' },
-          { l: 'Por cobrar', v: fmtUSDk(d.porCobrar), icon: '📥', color: C.teal, bar: agPct(d.agCobrar, 'alDia'), barC: C.teal, sub: `${Math.round(agPct(d.agCobrar, 'alDia'))}% al día` },
-          { l: 'Por pagar', v: fmtUSDk(d.porPagar), icon: '📤', color: C.coral, bar: agPct(d.agPagar, 'alDia'), barC: C.coral, sub: `${Math.round(agPct(d.agPagar, 'alDia'))}% al día` },
-        ].map((k, i) => (
-          <div key={i} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className="flex justify-between items-center mb-1.5"><span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{k.l}</span><span className="text-sm">{k.icon}</span></div>
-            <div className="text-lg font-extrabold font-mono" style={{ color: k.color }}>{k.v}</div>
-            {k.bar !== undefined ? <div className="mt-2"><Bar pct={k.bar} color={k.barC!} /></div> : null}
-            {k.sub ? <div className="text-[9px] text-gray-400 mt-1.5 font-semibold">{k.sub}</div> : null}
+        {/* ── IVA F29 + Recupero ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">IVA del mes · F29 ({MESES[mes]})</div>
+            <div className="space-y-3">
+              <div><div className="flex justify-between text-[11px] mb-1"><span className="text-gray-500">Débito fiscal (ventas)</span><b className="font-mono">{fmtCLP(d.ivaVentas)}</b></div><Bar pct={100} color={C.ambar} /></div>
+              <div><div className="flex justify-between text-[11px] mb-1"><span className="text-gray-500">Crédito fiscal (compras)</span><b className="font-mono">{fmtCLP(d.ivaCompras)}</b></div><Bar pct={d.ivaVentas > 0 ? d.ivaCompras / d.ivaVentas * 100 : 0} color={C.verde} /></div>
+            </div>
+            <div className={`mt-4 rounded-2xl p-3.5 flex justify-between items-center ${ivaNeg ? 'bg-green-50' : 'bg-red-50'}`}>
+              <div><div className={`text-[10px] font-bold uppercase ${ivaNeg ? 'text-green-700' : 'text-red-700'}`}>{ivaNeg ? 'Remanente crédito fiscal' : 'A pagar al SII'}</div><div className={`text-[9px] mt-0.5 ${ivaNeg ? 'text-green-500' : 'text-red-400'}`}>F29 línea 48</div></div>
+              <div className={`text-xl font-extrabold font-mono ${ivaNeg ? 'text-green-700' : 'text-red-600'}`}>{fmtCLP(Math.abs(d.ivaSaldo))}</div>
+            </div>
           </div>
-        ))}
-      </div>
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">Recupero de gastos (pass-through) · {anio}</div>
+            <div className="flex items-center justify-around text-center mb-2">
+              <div><div className="text-[10px] text-gray-500">Cobrado a clientes</div><div className="font-extrabold font-mono mt-1" style={{ fontSize: 20, color: C.teal }}>{fmtUSDk(d.recCobrado)}</div></div>
+              <div className="text-xl text-gray-300">→</div>
+              <div><div className="text-[10px] text-gray-500">Pagado a proveedores</div><div className="font-extrabold font-mono mt-1" style={{ fontSize: 20, color: C.coral }}>{fmtUSDk(d.recPagado)}</div></div>
+            </div>
+            <div className="mt-3 rounded-2xl p-3.5 flex justify-between items-center" style={{ background: d.markup >= 0 ? '#ecfdf5' : '#fff1f2' }}>
+              <span className="text-[11px] font-bold uppercase" style={{ color: d.markup >= 0 ? C.verde : C.rojo }}>Markup recupero</span>
+              <span className="font-extrabold font-mono" style={{ fontSize: 19, color: d.markup >= 0 ? C.verde : C.rojo }}>{d.markup >= 0 ? '+ ' : '- '}{fmtUSDk(Math.abs(d.markup))}</span>
+            </div>
+            <div className="text-[10px] text-gray-400 mt-2.5 leading-relaxed">Lo que se factura de más sobre lo que se paga a proveedores es ganancia real de gestión.</div>
+          </div>
+        </div>
 
-      {/* Evolución mensual */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm mb-4">
-        <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Evolución mensual · ingresos vs costos · margen neto</span>
-          <div className="flex gap-3 text-[11px] text-gray-500">
-            <span className="flex items-center gap-1.5"><span style={{ width: 10, height: 10, borderRadius: 3, background: C.azul }} />Ingresos</span>
-            <span className="flex items-center gap-1.5"><span style={{ width: 10, height: 10, borderRadius: 3, background: '#c7d2fe' }} />Costos</span>
-            <span className="flex items-center gap-1.5"><span style={{ width: 14, height: 3, borderRadius: 3, background: C.verde }} />Margen neto</span>
-          </div>
-        </div>
-        <MiniChart serie={d.serieData} />
-      </div>
-
-      {/* IVA F29 + Recupero */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">IVA del mes · F29 ({MESES[mes]})</div>
-          <div className="space-y-3">
-            <div><div className="flex justify-between text-[11px] mb-1"><span className="text-gray-500">Débito fiscal (ventas)</span><b className="font-mono">{fmtCLP(d.ivaVentas)}</b></div><Bar pct={100} color={C.ambar} /></div>
-            <div><div className="flex justify-between text-[11px] mb-1"><span className="text-gray-500">Crédito fiscal (compras)</span><b className="font-mono">{fmtCLP(d.ivaCompras)}</b></div><Bar pct={d.ivaVentas > 0 ? d.ivaCompras / d.ivaVentas * 100 : 0} color={C.verde} /></div>
-          </div>
-          <div className={`mt-4 rounded-2xl p-3.5 flex justify-between items-center ${ivaNeg ? 'bg-green-50' : 'bg-red-50'}`}>
-            <div><div className={`text-[10px] font-bold uppercase ${ivaNeg ? 'text-green-700' : 'text-red-700'}`}>{ivaNeg ? 'Remanente crédito fiscal' : 'A pagar al SII'}</div><div className={`text-[9px] mt-0.5 ${ivaNeg ? 'text-green-500' : 'text-red-400'}`}>F29 línea 48</div></div>
-            <div className={`text-xl font-extrabold font-mono ${ivaNeg ? 'text-green-700' : 'text-red-600'}`}>{fmtCLP(Math.abs(d.ivaSaldo))}</div>
-          </div>
-        </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">Recupero de gastos (pass-through) · {anio}</div>
-          <div className="flex items-center justify-around text-center mb-2">
-            <div><div className="text-[10px] text-gray-500">Cobrado a clientes</div><div className="font-extrabold font-mono mt-1" style={{ fontSize: 22, color: C.teal }}>{fmtUSDk(d.recCobrado)}</div></div>
-            <div className="text-xl text-gray-300">→</div>
-            <div><div className="text-[10px] text-gray-500">Pagado a proveedores</div><div className="font-extrabold font-mono mt-1" style={{ fontSize: 22, color: C.coral }}>{fmtUSDk(d.recPagado)}</div></div>
-          </div>
-          <div className="mt-3 rounded-2xl p-3.5 flex justify-between items-center" style={{ background: d.markup >= 0 ? '#ecfdf5' : '#fff1f2' }}>
-            <span className="text-[11px] font-bold uppercase" style={{ color: d.markup >= 0 ? C.verde : C.rojo }}>Markup recupero</span>
-            <span className="font-extrabold font-mono" style={{ fontSize: 20, color: d.markup >= 0 ? C.verde : C.rojo }}>{d.markup >= 0 ? '+ ' : '- '}{fmtUSDk(Math.abs(d.markup))}</span>
-          </div>
-          <div className="text-[10px] text-gray-400 mt-2.5 leading-relaxed">Lo que se factura de más sobre lo que se paga a proveedores es ganancia real de gestión.</div>
-        </div>
-      </div>
-
-      {/* Cobranzas + Pagos */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-          <div className="flex justify-between items-center mb-3"><span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Por cobrar a clientes</span><span className="font-extrabold font-mono" style={{ fontSize: 17, color: C.teal }}>{fmtUSDk(d.porCobrar)}</span></div>
-          <div className="flex rounded-full overflow-hidden mb-2.5" style={{ height: 12 }}>
-            <div style={{ width: `${agPct(d.agCobrar, 'alDia')}%`, background: C.teal }} /><div style={{ width: `${agPct(d.agCobrar, 'd30')}%`, background: C.ambar }} /><div style={{ width: `${agPct(d.agCobrar, 'd60')}%`, background: C.rojo }} />
-          </div>
-          <div className="flex gap-3 text-[10px] text-gray-500 mb-3"><span style={{ color: C.teal }}>● <span className="text-gray-500">Al día {fmtUSDk(d.agCobrar.alDia)}</span></span><span style={{ color: C.ambar }}>● <span className="text-gray-500">1-30d {fmtUSDk(d.agCobrar.d30)}</span></span><span style={{ color: C.rojo }}>● <span className="text-gray-500">+30d {fmtUSDk(d.agCobrar.d60)}</span></span></div>
-          <div className="text-[11px] text-gray-500 mb-1.5">Top deudores</div>
-          {d.topDeudores.length === 0 ? <div className="text-[11px] text-gray-400 py-1">Sin facturas por cobrar</div> : d.topDeudores.map((t: any, i: number) => (
-            <div key={i} className="flex justify-between py-1.5 border-b border-gray-50 last:border-0 text-xs"><span className="text-gray-700 truncate">{t[0]}</span><b className="font-mono">{fmtUSDk(t[1])}</b></div>
-          ))}
-        </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-          <div className="flex justify-between items-center mb-3"><span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Por pagar a proveedores</span><span className="font-extrabold font-mono" style={{ fontSize: 17, color: C.coral }}>{fmtUSDk(d.porPagar)}</span></div>
-          <div className="flex rounded-full overflow-hidden mb-2.5" style={{ height: 12 }}>
-            <div style={{ width: `${agPct(d.agPagar, 'alDia')}%`, background: C.azul }} /><div style={{ width: `${agPct(d.agPagar, 'd30')}%`, background: C.ambar }} /><div style={{ width: `${agPct(d.agPagar, 'd60')}%`, background: C.rojo }} />
-          </div>
-          <div className="flex gap-3 text-[10px] text-gray-500 mb-3"><span style={{ color: C.azul }}>● <span className="text-gray-500">Al día {fmtUSDk(d.agPagar.alDia)}</span></span><span style={{ color: C.ambar }}>● <span className="text-gray-500">1-30d {fmtUSDk(d.agPagar.d30)}</span></span><span style={{ color: C.rojo }}>● <span className="text-gray-500">+30d {fmtUSDk(d.agPagar.d60)}</span></span></div>
-          <div className="rounded-2xl p-3.5 flex justify-between items-center" style={{ background: '#eff6ff' }}>
-            <span className="text-[11px] font-bold uppercase" style={{ color: C.azulOsc }}>Posición neta</span>
-            <span className="font-extrabold font-mono" style={{ fontSize: 17, color: C.azulOsc }}>{d.posNeta >= 0 ? '+ ' : '- '}{fmtUSDk(Math.abs(d.posNeta))}</span>
-          </div>
-          <div className="text-[10px] text-gray-400 mt-2">{d.posNeta >= 0 ? 'Cobramos más de lo que debemos: capital de trabajo a favor.' : 'Debemos más de lo que cobramos: atención al capital de trabajo.'}</div>
-        </div>
-      </div>
-
-      {/* Tesorería + Gastos */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">Tesorería · cuentas propias Puerto NOA</div>
-          <div className="flex gap-2.5 mb-3.5">
-            {[{ f: '🇨🇱', l: 'CLP', v: fmtCLPc(d.cuentasCLP) }, { f: '💵', l: 'USD', v: d.cuentasUSD.toLocaleString('es-CL', { maximumFractionDigits: 0 }) }, { f: '🇦🇷', l: 'ARS', v: `$ ${(d.cuentasARS / 1e6).toLocaleString('es-CL', { maximumFractionDigits: 1 })}M` }].map(r => (
-              <div key={r.l} className="flex-1 rounded-2xl p-3" style={{ background: '#f8fafc' }}><div className="text-[10px] text-gray-500">{r.f} {r.l}</div><div className="font-extrabold font-mono mt-1" style={{ fontSize: 15 }}>{r.v}</div></div>
+        {/* ── Cobranzas + Pagos ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm">
+            <div className="flex justify-between items-center mb-3"><span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Por cobrar a clientes</span><span className="font-extrabold font-mono" style={{ fontSize: 17, color: C.teal }}>{fmtUSDk(d.porCobrar)}</span></div>
+            <div className="flex rounded-full overflow-hidden mb-2.5" style={{ height: 12 }}>
+              <div style={{ width: `${agPct(d.agCobrar, 'alDia')}%`, background: C.teal }} /><div style={{ width: `${agPct(d.agCobrar, 'd30')}%`, background: C.ambar }} /><div style={{ width: `${agPct(d.agCobrar, 'd60')}%`, background: C.rojo }} />
+            </div>
+            <div className="flex gap-3 text-[10px] text-gray-500 mb-3 flex-wrap"><span style={{ color: C.teal }}>● <span className="text-gray-500">Al día {fmtUSDk(d.agCobrar.alDia)}</span></span><span style={{ color: C.ambar }}>● <span className="text-gray-500">1-30d {fmtUSDk(d.agCobrar.d30)}</span></span><span style={{ color: C.rojo }}>● <span className="text-gray-500">+30d {fmtUSDk(d.agCobrar.d60)}</span></span></div>
+            <div className="text-[11px] text-gray-500 mb-1.5">Top deudores</div>
+            {d.topDeudores.length === 0 ? <div className="text-[11px] text-gray-400 py-1">Sin facturas por cobrar</div> : d.topDeudores.map((t: any, i: number) => (
+              <div key={i} className="flex justify-between py-1.5 border-b border-gray-50 last:border-0 text-xs"><span className="text-gray-700 truncate">{t[0]}</span><b className="font-mono shrink-0">{fmtUSDk(t[1])}</b></div>
             ))}
           </div>
-          <div className="rounded-2xl p-3.5 text-white flex justify-between items-center" style={{ background: 'linear-gradient(135deg,#0d9488,#0f766e)' }}>
-            <div><div className="text-[10px] opacity-85 uppercase font-bold">Liquidez consolidada</div><div className="text-[9px] opacity-75">equivalente USD</div></div>
-            <div className="font-extrabold font-mono" style={{ fontSize: 21 }}>{fmtUSDk(d.consolidadoUSD)}</div>
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm">
+            <div className="flex justify-between items-center mb-3"><span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Por pagar a proveedores</span><span className="font-extrabold font-mono" style={{ fontSize: 17, color: C.coral }}>{fmtUSDk(d.porPagar)}</span></div>
+            <div className="flex rounded-full overflow-hidden mb-2.5" style={{ height: 12 }}>
+              <div style={{ width: `${agPct(d.agPagar, 'alDia')}%`, background: C.azul }} /><div style={{ width: `${agPct(d.agPagar, 'd30')}%`, background: C.ambar }} /><div style={{ width: `${agPct(d.agPagar, 'd60')}%`, background: C.rojo }} />
+            </div>
+            <div className="flex gap-3 text-[10px] text-gray-500 mb-3 flex-wrap"><span style={{ color: C.azul }}>● <span className="text-gray-500">Al día {fmtUSDk(d.agPagar.alDia)}</span></span><span style={{ color: C.ambar }}>● <span className="text-gray-500">1-30d {fmtUSDk(d.agPagar.d30)}</span></span><span style={{ color: C.rojo }}>● <span className="text-gray-500">+30d {fmtUSDk(d.agPagar.d60)}</span></span></div>
+            <div className="rounded-2xl p-3.5 flex justify-between items-center" style={{ background: '#eff6ff' }}>
+              <span className="text-[11px] font-bold uppercase" style={{ color: C.azulOsc }}>Posición neta</span>
+              <span className="font-extrabold font-mono" style={{ fontSize: 17, color: C.azulOsc }}>{d.posNeta >= 0 ? '+ ' : '- '}{fmtUSDk(Math.abs(d.posNeta))}</span>
+            </div>
+            <div className="text-[10px] text-gray-400 mt-2">{d.posNeta >= 0 ? 'Cobramos más de lo que debemos: capital de trabajo a favor.' : 'Debemos más de lo que cobramos: atención al capital de trabajo.'}</div>
           </div>
-          <Link href="/fondos" className="flex justify-between items-center mt-3 pt-3 border-t border-dashed border-gray-200 hover:opacity-80">
-            <span className="text-[11px] text-gray-500">🏦 Fondos en custodia (clientes)</span>
-            <span className="font-extrabold font-mono text-gray-700" style={{ fontSize: 15 }}>{fmtUSDk(d.custodiaUSD)}</span>
-          </Link>
         </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-          <div className="flex justify-between items-center mb-3"><span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Gastos fijos del mes</span><span className="font-extrabold font-mono" style={{ fontSize: 16, color: C.ambar }}>{fmtCLPc(d.gastosMes)}</span></div>
-          {d.gastosCats.length === 0 ? <div className="text-xs text-gray-400 py-3 text-center">Sin gastos cargados este mes</div> : d.gastosCats.map((c: any, i: number) => (
-            <div key={i} className="mb-3"><div className="flex justify-between text-[11px] mb-1"><span className="text-gray-700">{c[0]}</span><b className="font-mono text-gray-500">{fmtCLPc(c[1])} · {Math.round(c[1] / d.gastosMes * 100)}%</b></div><Bar pct={c[1] / maxGasto * 100} color={catColors[i % catColors.length]} /></div>
-          ))}
+
+        {/* ── Tesorería + Gastos ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">Tesorería · cuentas propias Puerto NOA</div>
+            <div className="grid grid-cols-3 gap-2.5 mb-3.5">
+              {[{ f: '🇨🇱', l: 'CLP', v: fmtCLPc(d.cuentasCLP) }, { f: '💵', l: 'USD', v: d.cuentasUSD.toLocaleString('es-CL', { maximumFractionDigits: 0 }) }, { f: '🇦🇷', l: 'ARS', v: `$ ${(d.cuentasARS / 1e6).toLocaleString('es-CL', { maximumFractionDigits: 1 })}M` }].map(r => (
+                <div key={r.l} className="rounded-2xl p-3" style={{ background: '#f8fafc' }}><div className="text-[10px] text-gray-500">{r.f} {r.l}</div><div className="font-extrabold font-mono mt-1" style={{ fontSize: 14 }}>{r.v}</div></div>
+              ))}
+            </div>
+            <div className="rounded-2xl p-3.5 text-white flex justify-between items-center" style={{ background: 'linear-gradient(135deg,#0d9488,#0f766e)' }}>
+              <div><div className="text-[10px] opacity-85 uppercase font-bold">Liquidez consolidada</div><div className="text-[9px] opacity-75">equivalente USD</div></div>
+              <div className="font-extrabold font-mono" style={{ fontSize: 20 }}>{fmtUSDk(d.consolidadoUSD)}</div>
+            </div>
+            <Link href="/fondos" className="flex justify-between items-center mt-3 pt-3 border-t border-dashed border-gray-200 hover:opacity-80">
+              <span className="text-[11px] text-gray-500">🏦 Fondos en custodia (clientes)</span>
+              <span className="font-extrabold font-mono text-gray-700" style={{ fontSize: 15 }}>{fmtUSDk(d.custodiaUSD)}</span>
+            </Link>
+          </div>
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm">
+            <div className="flex justify-between items-center mb-3"><span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Gastos fijos del mes</span><span className="font-extrabold font-mono" style={{ fontSize: 16, color: C.ambar }}>{fmtCLPc(d.gastosMes)}</span></div>
+            {d.gastosCats.length === 0 ? <div className="text-xs text-gray-400 py-3 text-center">Sin gastos cargados este mes</div> : d.gastosCats.map((c: any, i: number) => (
+              <div key={i} className="mb-3"><div className="flex justify-between text-[11px] mb-1"><span className="text-gray-700 truncate">{c[0]}</span><b className="font-mono text-gray-500 shrink-0">{fmtCLPc(c[1])} · {Math.round(c[1] / d.gastosMes * 100)}%</b></div><Bar pct={c[1] / maxGasto * 100} color={catColors[i % catColors.length]} /></div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
