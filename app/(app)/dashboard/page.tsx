@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import Image from 'next/image'
 import { cargarPermisos, puede } from '@/lib/permisos'
 
 // ── Marca Puerto NOA ──
@@ -201,172 +202,186 @@ export default function DashboardLogisticoPage() {
   const maxPto = Math.max(1, ...d.puertos.map((x: any) => x[1]))
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">{saludo}{usuario ? `, ${usuario}` : ''} 🚢</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Puerto NOA SpA · Centro de operaciones · {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {[{ l: 'ARS', v: d.tcARS }, { l: 'CLP', v: d.tcCLP }, { l: 'CNY', v: d.tcCNY }].map(t => (
-            <div key={t.l} className={`px-3 py-1.5 rounded-xl border text-xs font-mono ${d.tcOk ? 'bg-white border-gray-200' : 'bg-amber-50 border-amber-200'}`}><span className="text-gray-400 mr-1">{t.l}</span><span className="font-bold text-gray-900">{t.v ? Number(t.v).toLocaleString('es-CL', { maximumFractionDigits: t.l === 'CNY' ? 2 : 0 }) : '—'}</span></div>
-          ))}
+    <div className="min-h-screen bg-gray-50">
+      {/* ── Header con marca Puerto NOA ── */}
+      <div className="text-white" style={{ background: 'linear-gradient(120deg,#052698 0%,#1168F8 62%,#1a74ff 100%)' }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              <Image src="/logo-white.png" alt="Puerto NOA" width={132} height={40} priority style={{ height: 34, width: 'auto' }} className="shrink-0" />
+              <div className="min-w-0">
+                <div className="text-base sm:text-xl font-bold leading-tight truncate">{saludo}{usuario ? `, ${usuario}` : ''}</div>
+                <div className="text-[11px] opacity-75 truncate">Centro de operaciones · {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[{ l: 'ARS', v: d.tcARS }, { l: 'CLP', v: d.tcCLP }, { l: 'CNY', v: d.tcCNY }].map(t => (
+                <div key={t.l} className="px-2.5 py-1 rounded-lg text-[11px] font-mono" style={{ background: 'rgba(255,255,255,.16)' }}>
+                  <span className="opacity-70 mr-1">{t.l}</span><span className="font-bold">{t.v ? Number(t.v).toLocaleString('es-CL', { maximumFractionDigits: t.l === 'CNY' ? 2 : 0 }) : '—'}</span>
+                </div>
+              ))}
+              {!d.tcOk && <span className="text-[10px] px-2 py-1 rounded-lg font-semibold" style={{ background: 'rgba(255,196,84,.28)' }}>TC no actualizado</span>}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* HERO Corredor */}
-      <div className="rounded-3xl p-6 mb-4 text-white" style={{ background: 'linear-gradient(120deg,#052698 0%,#1168F8 60%,#1a74ff 100%)', boxShadow: '0 8px 24px rgba(17,104,248,.22)' }}>
-        <div className="flex justify-between items-start mb-5 flex-wrap gap-2">
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-wider opacity-75">Corredor en tránsito · China → Chile → Paso de Jama → NOA</div>
-            <div className="text-3xl font-extrabold mt-1">{d.total} operacion{d.total !== 1 ? 'es' : ''} activa{d.total !== 1 ? 's' : ''}</div>
+      <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-4">
+        {/* ── Corredor en tránsito ── */}
+        <div className="rounded-2xl p-4 sm:p-6 text-white" style={{ background: 'linear-gradient(120deg,#052698 0%,#1168F8 60%,#1a74ff 100%)', boxShadow: '0 8px 24px rgba(17,104,248,.18)' }}>
+          <div className="flex justify-between items-start mb-4 gap-3 flex-wrap">
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-wider opacity-75">Corredor en tránsito · China → Chile → Jama → NOA</div>
+              <div className="text-2xl sm:text-3xl font-extrabold mt-1">{d.total} operaci{d.total !== 1 ? 'ones' : 'ón'} activa{d.total !== 1 ? 's' : ''}</div>
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              <span className="rounded-full px-3 py-1.5 text-[11px] font-bold whitespace-nowrap" style={{ background: 'rgba(255,255,255,.16)' }}>{d.contenedores} contenedores</span>
+              {d.transitoProm > 0 && <span className="rounded-full px-3 py-1.5 text-[11px] font-bold whitespace-nowrap" style={{ background: 'rgba(255,255,255,.16)' }}>{d.transitoProm} días prom.</span>}
+            </div>
           </div>
-          <div className="flex gap-2">
-            <span className="rounded-full px-3 py-1.5 text-xs font-bold" style={{ background: 'rgba(255,255,255,.16)' }}>📦 {d.contenedores} contenedores</span>
-            {d.transitoProm > 0 && <span className="rounded-full px-3 py-1.5 text-xs font-bold" style={{ background: 'rgba(255,255,255,.16)' }}>⏱ {d.transitoProm} días prom.</span>}
-          </div>
-        </div>
-        <div className="relative">
-          <div className="absolute rounded-full" style={{ top: 24, left: '8%', right: '8%', height: 3, background: 'rgba(255,255,255,.25)' }} />
-          <div className="flex justify-between relative" style={{ zIndex: 1 }}>
+          {/* etapas: scroll horizontal en mobile, distribuido en desktop */}
+          <div className="flex gap-2 overflow-x-auto pb-1 sm:justify-between" style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}>
             {CORREDOR.map(s => {
               const n = d.corr[s.k] || 0
               return (
-                <div key={s.k} className="flex flex-col items-center" style={{ width: '16%' }}>
-                  <div className="rounded-full flex items-center justify-center relative" style={{ width: 48, height: 48, fontSize: 22, background: n > 0 ? 'rgba(255,255,255,.92)' : 'rgba(255,255,255,.2)', boxShadow: n > 0 ? '0 2px 8px rgba(0,0,0,.15)' : 'none' }}>
+                <div key={s.k} className="flex flex-col items-center shrink-0" style={{ minWidth: 54, scrollSnapAlign: 'start' }}>
+                  <div className="rounded-full flex items-center justify-center relative" style={{ width: 46, height: 46, fontSize: 21, background: n > 0 ? 'rgba(255,255,255,.92)' : 'rgba(255,255,255,.18)' }}>
                     {s.emoji}
                     {n > 0 && <span className="absolute font-extrabold flex items-center justify-center" style={{ top: -6, right: -6, background: '#7CF5C4', color: '#053a2c', fontSize: 11, minWidth: 20, height: 20, borderRadius: 999, padding: '0 5px' }}>{n}</span>}
                   </div>
-                  <div className="text-[10px] font-bold mt-2 opacity-90 text-center">{s.label}</div>
+                  <div className="text-[10px] font-bold mt-1.5 opacity-90 text-center whitespace-nowrap">{s.label}</div>
                 </div>
               )
             })}
           </div>
         </div>
-      </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-5 gap-3 mb-4">
-        {[
-          { label: 'En tránsito', val: d.enTransito, sub: d.demoradas ? `${d.demoradas} demoradas` : 'en movimiento', color: C.azul, icon: '🚢', href: '/operaciones' },
-          { label: 'Esperando respuesta', val: d.funnel.enviada, sub: `${fmtUSDk(d.funnel.vEnv)} en juego`, color: C.ambar, icon: '📤', href: '/registro' },
-          { label: 'Conversión', val: `${d.winRate}%`, sub: `${d.ganadas} ganadas · ${d.perdidas} perdidas`, color: C.verde, icon: '🎯', href: '/registro' },
-          { label: 'Custodia (caja)', val: fmtUSDk(d.custodiaUSD), sub: 'caja a rendir', color: C.teal, icon: '🏦', href: '/fondos' },
-          { label: 'Por cobrar', val: fmtUSDk(d.porCobrar), sub: 'facturas emitidas', color: C.violeta, icon: '📄', href: '/facturacion/emitidas' },
-        ].map((k, i) => (
-          <Link key={i} href={k.href} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex justify-between items-center mb-1.5"><span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{k.label}</span><span className="text-sm">{k.icon}</span></div>
-            <div className="text-lg font-extrabold font-mono" style={{ color: k.color }}>{k.val}</div>
-            <div className="text-[9px] text-gray-400 mt-1.5 font-semibold">{k.sub}</div>
-          </Link>
-        ))}
-      </div>
+        {/* ── KPIs: 1 col mobile → 2 → 3 → 5 ── */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3">
+          {[
+            { label: 'En tránsito', val: d.enTransito, sub: d.demoradas ? `${d.demoradas} demoradas` : 'en movimiento', color: C.azul, icon: '🚢', href: '/operaciones' },
+            { label: 'Esperando respuesta', val: d.funnel.enviada, sub: `${fmtUSDk(d.funnel.vEnv)} en juego`, color: C.ambar, icon: '📤', href: '/registro' },
+            { label: 'Conversión', val: `${d.winRate}%`, sub: `${d.ganadas} ganadas · ${d.perdidas} perdidas`, color: C.verde, icon: '🎯', href: '/registro' },
+            { label: 'Custodia (caja)', val: fmtUSDk(d.custodiaUSD), sub: 'caja a rendir', color: C.teal, icon: '🏦', href: '/fondos' },
+            { label: 'Por cobrar', val: fmtUSDk(d.porCobrar), sub: 'facturas emitidas', color: C.violeta, icon: '📄', href: '/facturacion/emitidas' },
+          ].map((k, i) => (
+            <Link key={i} href={k.href} className="bg-white border border-gray-100 rounded-2xl p-3.5 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-center mb-1.5"><span className="text-[10px] font-bold uppercase tracking-wide text-gray-400 leading-tight">{k.label}</span><span className="text-sm">{k.icon}</span></div>
+              <div className="text-lg font-extrabold font-mono" style={{ color: k.color }}>{k.val}</div>
+              <div className="text-[9px] text-gray-400 mt-1 font-semibold">{k.sub}</div>
+            </Link>
+          ))}
+        </div>
 
-      {/* Embudo + Donas */}
-      <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: '1.5fr 1fr 1fr' }}>
-        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-4">Embudo comercial</div>
-          <div className="space-y-3">
-            {fStep.map(s => (
-              <div key={s.label} className="flex items-center gap-3">
-                <div className="w-20 text-[11px] font-semibold text-gray-500 text-right">{s.label}</div>
-                <div className="flex-1 bg-gray-50 rounded-lg h-6 overflow-hidden"><div className="h-6 rounded-lg flex items-center px-2" style={{ width: `${Math.max(10, s.n / maxF * 100)}%`, background: s.color }}><span className="text-white text-xs font-extrabold">{s.n}</span></div></div>
-                <div className="w-16 text-[10px] text-gray-400 font-mono text-right">{s.v > 0 ? fmtUSDk(s.v) : ''}</div>
+        {/* ── Embudo + Donas: apilado en mobile ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm lg:col-span-1">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-4">Embudo comercial</div>
+            <div className="space-y-3">
+              {fStep.map(s => (
+                <div key={s.label} className="flex items-center gap-2.5">
+                  <div className="w-20 text-[11px] font-semibold text-gray-500 text-right shrink-0">{s.label}</div>
+                  <div className="flex-1 bg-gray-50 rounded-lg h-6 overflow-hidden min-w-0"><div className="h-6 rounded-lg flex items-center px-2" style={{ width: `${Math.max(12, s.n / maxF * 100)}%`, background: s.color }}><span className="text-white text-xs font-extrabold">{s.n}</span></div></div>
+                  <div className="w-14 text-[10px] text-gray-400 font-mono text-right shrink-0">{s.v > 0 ? fmtUSDk(s.v) : ''}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:col-span-2">
+            {[
+              { t: 'Por sentido', segs: [{ value: d.impo, color: C.azul }, { value: d.expo, color: C.violeta }], leg: [['Impo', d.impo, C.azul], ['Expo', d.expo, C.violeta]] },
+              { t: 'Por tipo', segs: [{ value: d.propia, color: C.verde }, { value: d.gestion, color: '#94a3b8' }], leg: [['Propia', d.propia, C.verde], ['Gestión', d.gestion, '#94a3b8']] },
+            ].map((dn, i) => (
+              <div key={i} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-2">{dn.t}</div>
+                <div className="flex items-center gap-3">
+                  <div className="relative shrink-0" style={{ width: 76, height: 76 }}>
+                    <Donut segments={dn.segs} size={76} />
+                    <div className="absolute inset-0 flex items-center justify-center"><span className="font-extrabold text-base text-gray-900">{d.total}</span></div>
+                  </div>
+                  <div className="text-xs space-y-1.5 min-w-0">
+                    {dn.leg.map((l: any, j: number) => (
+                      <div key={j} className="flex items-center gap-1.5"><span className="rounded-full shrink-0" style={{ width: 9, height: 9, background: l[2] }} /><span className="text-gray-500">{l[0]}</span><b className="text-gray-900">{l[1]}</b></div>
+                    ))}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         </div>
-        {[
-          { t: 'Por sentido', segs: [{ value: d.impo, color: C.azul }, { value: d.expo, color: C.violeta }], leg: [['Impo', d.impo, C.azul], ['Expo', d.expo, C.violeta]] },
-          { t: 'Por tipo', segs: [{ value: d.propia, color: C.verde }, { value: d.gestion, color: '#94a3b8' }], leg: [['Propia', d.propia, C.verde], ['Gestión', d.gestion, '#94a3b8']] },
-        ].map((dn, i) => (
-          <div key={i} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-2">{dn.t}</div>
-            <div className="flex items-center gap-3">
-              <div className="relative" style={{ width: 84, height: 84 }}>
-                <Donut segments={dn.segs} />
-                <div className="absolute inset-0 flex items-center justify-center"><span className="font-extrabold text-base text-gray-900">{d.total}</span></div>
-              </div>
-              <div className="text-xs space-y-1.5">
-                {dn.leg.map((l: any, j: number) => (
-                  <div key={j} className="flex items-center gap-1.5"><span className="rounded-full" style={{ width: 9, height: 9, background: l[2] }} /><span className="text-gray-500">{l[0]}</span><b className="text-gray-900">{l[1]}</b></div>
-                ))}
-              </div>
+
+        {/* ── Operaciones en curso: 1 col mobile → 2 → 3 ── */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Operaciones en curso</div>
+            <Link href="/operaciones" className="text-[10px] text-[#1168F8] hover:underline">Ver todas →</Link>
+          </div>
+          {d.opsCards.length === 0 ? (
+            <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center text-gray-400 text-sm shadow-sm">Sin operaciones activas</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {d.opsCards.slice(0, 6).map((o: any) => (
+                <Link key={o.id} href="/operaciones" className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex justify-between items-center mb-2"><span className="font-mono font-extrabold text-[#052698] text-sm">{o.num}</span><span className="text-[10px] text-gray-400 font-semibold">{o.dias}d en curso</span></div>
+                  <div className="flex gap-1.5 mb-2 flex-wrap">
+                    {o.sentido && <span className="rounded-full text-[9px] font-extrabold px-2 py-0.5" style={sentPill(o.sentido)}>{o.sentido === 'importacion' ? 'IMPO' : 'EXPO'}</span>}
+                    <span className="rounded-full text-[9px] font-extrabold px-2 py-0.5" style={tipoPill(o.tipo)}>{o.tipo === 'propia' ? 'PROPIA' : 'GESTIÓN'}</span>
+                  </div>
+                  <div className="text-xs text-gray-700 font-medium truncate">{o.cliente}</div>
+                  <div className="text-xs font-bold text-[#052698] mb-2.5 mt-0.5">{o.etapaLabel}</div>
+                  <div className="flex justify-between text-[10px] text-gray-400 mb-1"><span>Avance</span><b className="text-gray-600">{o.avance}%</b></div>
+                  <div className="mb-2"><Bar pct={o.avance} color={C.azul} /></div>
+                  <div className="flex justify-between text-[10px] text-gray-400 mb-1"><span>Gasto vs ppto.</span><b style={{ color: o.sobrecosto ? C.rojo : '#64748b' }}>{fmtUSDk(o.gasto)}/{fmtUSDk(o.presupTerceros)}</b></div>
+                  <div className="mb-2.5"><Bar pct={o.ejecPct} color={o.sobrecosto ? C.rojo : C.verde} /></div>
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-50">
+                    <span className="text-[10px] text-gray-400 truncate">→ {o.hito}</span>
+                    <span className="text-[11px] font-bold font-mono" style={{ color: Math.abs(o.caja) < 0.01 ? '#64748b' : o.caja > 0 ? C.verde : C.rojo }}>{fmtUSDk(o.caja)}</span>
+                  </div>
+                </Link>
+              ))}
             </div>
+          )}
+        </div>
+
+        {/* ── Alertas + Vencimientos: apilado en mobile ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">Alertas operativas</div>
+            {d.alertas.length === 0 ? <div className="flex items-center gap-2 text-green-700 text-xs py-2"><span className="text-lg">✅</span> Todo al día</div> : d.alertas.map((a: any, i: number) => (
+              <Link key={i} href={a[3]} className="flex items-center gap-2 py-2 px-2 rounded-lg mb-1 hover:opacity-80" style={{ background: AL[a[0]][0] }}><span>{a[1]}</span><span className="text-xs font-medium" style={{ color: AL[a[0]][1] }}>{a[2]}</span></Link>
+            ))}
           </div>
-        ))}
-      </div>
-
-      {/* Operaciones en curso */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Operaciones en curso</div>
-        <Link href="/operaciones" className="text-[10px] text-[#1168F8] hover:underline">Ver todas →</Link>
-      </div>
-      {d.opsCards.length === 0 ? (
-        <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center text-gray-400 text-sm shadow-sm mb-4">Sin operaciones activas</div>
-      ) : (
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          {d.opsCards.slice(0, 6).map((o: any) => (
-            <Link key={o.id} href="/operaciones" className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-center mb-2"><span className="font-mono font-extrabold text-[#052698] text-sm">{o.num}</span><span className="text-[10px] text-gray-400 font-semibold">{o.dias}d en curso</span></div>
-              <div className="flex gap-1.5 mb-2">
-                {o.sentido && <span className="rounded-full text-[9px] font-extrabold px-2 py-0.5" style={sentPill(o.sentido)}>{o.sentido === 'importacion' ? 'IMPO' : 'EXPO'}</span>}
-                <span className="rounded-full text-[9px] font-extrabold px-2 py-0.5" style={tipoPill(o.tipo)}>{o.tipo === 'propia' ? 'PROPIA' : 'GESTIÓN'}</span>
-              </div>
-              <div className="text-xs text-gray-700 font-medium truncate">{o.cliente}</div>
-              <div className="text-xs font-bold text-[#052698] mb-2.5 mt-0.5">{o.etapaLabel}</div>
-              <div className="flex justify-between text-[10px] text-gray-400 mb-1"><span>Avance</span><b className="text-gray-600">{o.avance}%</b></div>
-              <div className="mb-2"><Bar pct={o.avance} color={C.azul} /></div>
-              <div className="flex justify-between text-[10px] text-gray-400 mb-1"><span>Gasto vs ppto.</span><b style={{ color: o.sobrecosto ? C.rojo : '#64748b' }}>{fmtUSDk(o.gasto)}/{fmtUSDk(o.presupTerceros)}</b></div>
-              <div className="mb-2.5"><Bar pct={o.ejecPct} color={o.sobrecosto ? C.rojo : C.verde} /></div>
-              <div className="flex justify-between items-center pt-2 border-t border-gray-50">
-                <span className="text-[10px] text-gray-400 truncate">→ {o.hito}</span>
-                <span className="text-[11px] font-bold font-mono" style={{ color: Math.abs(o.caja) < 0.01 ? '#64748b' : o.caja > 0 ? C.verde : C.rojo }}>{fmtUSDk(o.caja)}</span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
-
-      {/* Alertas + Vencimientos */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">Alertas operativas</div>
-          {d.alertas.length === 0 ? <div className="flex items-center gap-2 text-green-700 text-xs py-2"><span className="text-lg">✅</span> Todo al día</div> : d.alertas.map((a: any, i: number) => (
-            <Link key={i} href={a[3]} className="flex items-center gap-2 py-2 px-2 rounded-lg mb-1 hover:opacity-80" style={{ background: AL[a[0]][0] }}><span>{a[1]}</span><span className="text-xs font-medium" style={{ color: AL[a[0]][1] }}>{a[2]}</span></Link>
-          ))}
-        </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">Cotizaciones de proveedor por vencer</div>
-          {d.provVenc.length === 0 ? <div className="text-xs text-gray-400 py-2">Sin vencimientos en 30 días</div> : d.provVenc.map((c: any) => {
-            const dias = Math.ceil((new Date(c.fecha_vencimiento).getTime() - Date.now()) / 86400000)
-            return <div key={c.id} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0"><span className="text-xs text-gray-700 font-medium truncate">{c.proveedor_nombre}</span><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${dias <= 7 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>{dias}d</span></div>
-          })}
-        </div>
-      </div>
-
-      {/* Destinos + Puertos + Tiempos */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">Destinos NOA 🇦🇷</div>
-          {d.destinos.length === 0 ? <div className="text-xs text-gray-400 py-2">Sin datos</div> : d.destinos.map((x: any, i: number) => (
-            <div key={i} className="mb-2.5"><div className="flex justify-between text-[11px] mb-1"><span className="text-gray-700 truncate">{x[0]}</span><b className="font-mono text-gray-500">{x[1]}</b></div><Bar pct={x[1] / maxDest * 100} color={[C.azul, C.teal, C.violeta, C.ambar, C.coral][i] || C.azul} /></div>
-          ))}
-        </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">Puertos de origen 🇨🇳</div>
-          {d.puertos.length === 0 ? <div className="text-xs text-gray-400 py-2">Sin datos</div> : d.puertos.map((x: any, i: number) => (
-            <div key={i} className="mb-2.5"><div className="flex justify-between text-[11px] mb-1"><span className="text-gray-700 truncate">{x[0]}</span><b className="font-mono text-gray-500">{x[1]}</b></div><Bar pct={x[1] / maxPto * 100} color={C.azul} /></div>
-          ))}
-        </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">Tiempos de tránsito</div>
-          <div className="rounded-2xl p-4 text-white text-center mb-3" style={{ background: 'linear-gradient(135deg,#0d9488,#0f766e)' }}>
-            <div className="text-[10px] opacity-85 uppercase font-bold">Promedio China → NOA</div>
-            <div className="text-2xl font-extrabold font-mono mt-0.5">{d.transitoProm > 0 ? `${d.transitoProm} días` : '—'}</div>
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">Cotizaciones de proveedor por vencer</div>
+            {d.provVenc.length === 0 ? <div className="text-xs text-gray-400 py-2">Sin vencimientos en 30 días</div> : d.provVenc.map((c: any) => {
+              const dias = Math.ceil((new Date(c.fecha_vencimiento).getTime() - Date.now()) / 86400000)
+              return <div key={c.id} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0"><span className="text-xs text-gray-700 font-medium truncate">{c.proveedor_nombre}</span><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${dias <= 7 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>{dias}d</span></div>
+            })}
           </div>
-          <div className="text-[11px] text-gray-500 leading-relaxed">{d.transitoProm > 0 ? 'Promedio de operaciones ya cerradas (apertura a cierre).' : 'Se calcula con las operaciones cerradas. Cuando cierres tu primera operación aparece acá.'}</div>
+        </div>
+
+        {/* ── Destinos + Puertos + Tiempos: 1 col mobile → 3 ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">Destinos NOA 🇦🇷</div>
+            {d.destinos.length === 0 ? <div className="text-xs text-gray-400 py-2">Sin datos</div> : d.destinos.map((x: any, i: number) => (
+              <div key={i} className="mb-2.5"><div className="flex justify-between text-[11px] mb-1"><span className="text-gray-700 truncate">{x[0]}</span><b className="font-mono text-gray-500">{x[1]}</b></div><Bar pct={x[1] / maxDest * 100} color={[C.azul, C.teal, C.violeta, C.ambar, C.coral][i] || C.azul} /></div>
+            ))}
+          </div>
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">Puertos de origen 🇨🇳</div>
+            {d.puertos.length === 0 ? <div className="text-xs text-gray-400 py-2">Sin datos</div> : d.puertos.map((x: any, i: number) => (
+              <div key={i} className="mb-2.5"><div className="flex justify-between text-[11px] mb-1"><span className="text-gray-700 truncate">{x[0]}</span><b className="font-mono text-gray-500">{x[1]}</b></div><Bar pct={x[1] / maxPto * 100} color={C.azul} /></div>
+            ))}
+          </div>
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm sm:col-span-2 lg:col-span-1">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-3">Tiempos de tránsito</div>
+            <div className="rounded-2xl p-4 text-white text-center mb-3" style={{ background: 'linear-gradient(135deg,#0d9488,#0f766e)' }}>
+              <div className="text-[10px] opacity-85 uppercase font-bold">Promedio China → NOA</div>
+              <div className="text-2xl font-extrabold font-mono mt-0.5">{d.transitoProm > 0 ? `${d.transitoProm} días` : '—'}</div>
+            </div>
+            <div className="text-[11px] text-gray-500 leading-relaxed">{d.transitoProm > 0 ? 'Promedio de operaciones ya cerradas (apertura a cierre).' : 'Se calcula con las operaciones cerradas. Cuando cierres tu primera operación aparece acá.'}</div>
+          </div>
         </div>
       </div>
     </div>
