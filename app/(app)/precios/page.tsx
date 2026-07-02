@@ -102,6 +102,9 @@ export default function InteligenciaPreciosPage() {
   const [filtMeses, setFiltMeses] = useState(12)
   // Filtro global por tipo de cotización (afecta Evolución y Comparativa)
   const [filtTipo, setFiltTipo] = useState<'todas'|'generica'|'especifica'>('todas')
+  // Ejes P-13: sentido (impo/expo) y origen (recibida/estimada), globales como filtTipo
+  const [filtSentido, setFiltSentido] = useState<'todas'|'importacion'|'exportacion'>('todas')
+  const [filtOrigen, setFiltOrigen] = useState<'todas'|'recibida'|'estimada'>('todas')
   // Filtros finos para rubros del catálogo
   const [filtServicio, setFiltServicio] = useState('')   // servicio_id del catálogo
   const [filtCiudad, setFiltCiudad] = useState('')       // lugar_prestacion_id
@@ -127,7 +130,7 @@ export default function InteligenciaPreciosPage() {
     setLoading(true)
     const [itemsRes, cotsRes, tcRes, svcRes, ciuRes, pchinaRes, pchileRes, utmRes] = await Promise.all([
       supabase.from('cotizaciones_proveedor_v2_items')
-        .select('*, cotizacion:cotizaciones_proveedor_v2(id,proveedor_nombre,fecha,rubro,estado,referencia,tipo,cliente_id,puerto_china_id,puerto_chile_id,tc_snapshot,lugar_prestacion_id,etiqueta_lugar)')
+        .select('*, cotizacion:cotizaciones_proveedor_v2(id,proveedor_nombre,fecha,rubro,estado,referencia,tipo,origen,sentido,cliente_id,puerto_china_id,puerto_chile_id,tc_snapshot,lugar_prestacion_id,etiqueta_lugar)')
         .order('cotizacion_id'),
       supabase.from('cotizaciones_proveedor_v2')
         .select('id,proveedor_nombre,fecha,rubro,estado,referencia')
@@ -209,6 +212,8 @@ export default function InteligenciaPreciosPage() {
       if (filtProvs.length > 0 && !filtProvs.includes(it.cotizacion?.proveedor_nombre)) return false
       if (it.tipo_calculo === 'pct_cif') return false // excluir % del gráfico de valores
       if (filtTipo !== 'todas' && (it.cotizacion?.tipo || 'generica') !== filtTipo) return false
+      if (filtSentido !== 'todas' && it.cotizacion?.sentido !== filtSentido) return false
+      if (filtOrigen !== 'todas' && (it.cotizacion?.origen || 'recibida') !== filtOrigen) return false
       if (esCat) {
         if (filtServicio && it.servicio_id !== filtServicio) return false
         if (filtCiudad && it.cotizacion?.lugar_prestacion_id !== filtCiudad) return false
@@ -297,6 +302,8 @@ export default function InteligenciaPreciosPage() {
       if (it.cotizacion?.rubro !== filtRubro2) return false
       if (it.tipo_calculo === 'pct_cif') return false
       if (filtTipo !== 'todas' && (it.cotizacion?.tipo || 'generica') !== filtTipo) return false
+      if (filtSentido !== 'todas' && it.cotizacion?.sentido !== filtSentido) return false
+      if (filtOrigen !== 'todas' && (it.cotizacion?.origen || 'recibida') !== filtOrigen) return false
       if (esCat) {
         if (filtServicio2 && it.servicio_id !== filtServicio2) return false
         if (filtCiudad2 && it.cotizacion?.lugar_prestacion_id !== filtCiudad2) return false
@@ -460,6 +467,24 @@ export default function InteligenciaPreciosPage() {
                 <option value="todas">Todas</option>
                 <option value="generica">Solo genéricas</option>
                 <option value="especifica">⭐ Solo específicas</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Sentido</label>
+              <select value={filtSentido} onChange={e => setFiltSentido(e.target.value as any)}
+                className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
+                <option value="todas">Todas</option>
+                <option value="importacion">📦 Impo</option>
+                <option value="exportacion">🚢 Expo</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Origen</label>
+              <select value={filtOrigen} onChange={e => setFiltOrigen(e.target.value as any)}
+                className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
+                <option value="todas">Todas</option>
+                <option value="recibida">📨 Recibida</option>
+                <option value="estimada">✏️ Estimada</option>
               </select>
             </div>
             {proveedoresDisp.length > 0 && (
@@ -677,6 +702,24 @@ export default function InteligenciaPreciosPage() {
                 <option value="todas">Todas</option>
                 <option value="generica">Solo genéricas</option>
                 <option value="especifica">⭐ Solo específicas</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Sentido</label>
+              <select value={filtSentido} onChange={e => setFiltSentido(e.target.value as any)}
+                className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
+                <option value="todas">Todas</option>
+                <option value="importacion">📦 Impo</option>
+                <option value="exportacion">🚢 Expo</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Origen</label>
+              <select value={filtOrigen} onChange={e => setFiltOrigen(e.target.value as any)}
+                className="px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-[#1168F8]">
+                <option value="todas">Todas</option>
+                <option value="recibida">📨 Recibida</option>
+                <option value="estimada">✏️ Estimada</option>
               </select>
             </div>
             <div className="ml-auto text-right">
