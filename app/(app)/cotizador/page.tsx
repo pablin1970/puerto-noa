@@ -71,12 +71,6 @@ interface CotProvSel {
   esManual?: boolean
   manualMonto?: number
 }
-// Gastos post-entrega Chile (modo manual, cuando no hay cotización del sistema)
-interface GastoChile {
-  id: string; desc: string; proveedor: string
-  tipoCalc: 'fijo'|'m3'; valor: number; ivaChile: 'exento'|'gravado'
-}
-
 interface CotState {
   cliente: string; cuit: string; email: string; telefono: string
   despachante: string; ivaCondicion: string; validez: string
@@ -101,7 +95,6 @@ interface CotState {
   pctIntlTerr: number   // % internacional del tramo terrestre (hasta el paso) que entra al CIF
   // Bloque 2 - Transporte Chile-NOA
   cotsProvChile: CotProvSel[]
-  gastosChile: GastoChile[]
   // Bloque 0 - Mercadería (proformas del proveedor)
   cotsProvMerc: CotProvSel[]
   // Bloque 5 - Origen / Puesta a FOB (forwarder o agente de origen)
@@ -121,8 +114,6 @@ interface CotState {
   gastosDesp: GastoArg[]
   // Sección B: cotizaciones de proveedores en Argentina (almacén, agente, etc.) — tarjetas con medidor.
   cotsProvArg: CotProvSel[]
-  // rowsE: retirado del flujo (sólo cotizaciones de proveedor). Queda latente para compatibilidad.
-  rowsE: GastoArg[]
   // Bloque 5 - Fee
   feeModo: 'cont'|'pct'
   feeCont: number
@@ -150,7 +141,6 @@ const INIT: CotState = {
   segModoIndep:'pct',segValIndep:0.5,
   pctIntlTerr:60,
   cotsProvChile:[],
-  gastosChile:[],
   cotsProvTransp:[],
   cotsProvMerc:[],
   cotsProvOrigen:[],
@@ -159,7 +149,7 @@ const INIT: CotState = {
   cargaModo:'fijo',cargaValor:0,
   ftCamion:0,nCamiones:1,ftIda:0,ftDev:0,ftRt:0,
   estadiaCargaVal:0,estadiaCargaDias:0,estadiaDescargaVal:0,estadiaDescargaDias:0,
-  rowsE:[],cotsProvArg:[],gastosDesp:[],honTipo:'fijo_usd',honValor:0,honPiso:0,honTecho:0,feeModo:'cont',feeCont:0,feePct:0,
+  cotsProvArg:[],gastosDesp:[],honTipo:'fijo_usd',honValor:0,honPiso:0,honTecho:0,feeModo:'cont',feeCont:0,feePct:0,
   tcClp:950,tcCny:7,regimen:'A',tcTrib:1000,derPct:18,
 }
 
@@ -1484,9 +1474,7 @@ function calcularCambios(orig: CotState | null, act: CotState): {concepto:string
       cmp(`${label} · ${y.desc||x.desc||i+1}`, x.valor, y.valor)
     }
   }
-  diffGastos('Gasto Chile', orig.gastosChile, act.gastosChile)
   diffGastos('Gasto despachante', orig.gastosDesp, act.gastosDesp)
-  diffGastos('Otro gasto Argentina', orig.rowsE, act.rowsE)
   return out
 }
 
