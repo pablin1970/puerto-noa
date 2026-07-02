@@ -45,8 +45,8 @@ export default function AplicacionesPagoTerceroPage() {
       supabase.from('operaciones').select('id,tercero_id,cotizacion:cotizaciones(num,cliente)').order('created_at', { ascending: false }).limit(60),
       (supabase.from('tipos_cambio_eventos') as any).select('fecha,fuente,ars,clp,cny').order('created_at', { ascending: false }).limit(1),
     ])
-    setApts((rRes.data || []).filter((c: any) => c.tipo?.nombre === 'Aplicación de pago de tercero'))
-    setTalonarios((talRes.data || []).filter((t: any) => t.tipo?.nombre === 'Aplicación de pago de tercero' && !t.fiscal))
+    setApts((rRes.data || []).filter((c: any) => c.tipo?.nombre === 'Registración de pagos directos del cliente'))
+    setTalonarios((talRes.data || []).filter((t: any) => t.tipo?.nombre === 'Registración de pagos directos del cliente' && !t.fiscal))
     if (oRes.data) setOperaciones(oRes.data)
     if (tceRes.data?.[0]) {
       const t: any = tceRes.data[0]
@@ -63,7 +63,7 @@ export default function AplicacionesPagoTerceroPage() {
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Aplicación de pago de terceros</h1>
+          <h1 className="text-xl font-bold text-gray-900">Registración de pagos directos del cliente</h1>
           <p className="text-xs text-gray-400 mt-0.5">El cliente pagó directo al proveedor · marca la factura saldada sin mover tus cuentas</p>
         </div>
         <div className="flex gap-2">
@@ -274,7 +274,7 @@ function DetalleAPT({ apt, supabase }: any) {
     <div className="max-w-2xl space-y-4">
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
         <div className="border-b border-gray-100 pb-4 mb-4">
-          <div className="text-[11px] font-bold text-[#1168F8]/60 uppercase tracking-widest">Aplicación de pago de terceros</div>
+          <div className="text-[11px] font-bold text-[#1168F8]/60 uppercase tracking-widest">Registración de pagos directos del cliente</div>
           <div className="text-2xl font-bold font-mono text-gray-900">{apt.numero_formateado}</div>
           <div className="text-xs text-gray-400 mt-1">{apt.fecha}</div>
         </div>
