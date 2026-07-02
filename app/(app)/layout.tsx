@@ -16,7 +16,7 @@ import {
   Receipt, Send, Link2, Repeat, Landmark, DollarSign,
   BookOpen, TrendingDown, TrendingUp,
   Library, UserCog, GitBranch,
-  ChevronLeft, ChevronRight, AlertTriangle, HelpCircle, LogOut,
+  ChevronLeft, ChevronRight, AlertTriangle, HelpCircle, LogOut, Menu,
 } from 'lucide-react'
 
 interface NavItem {
@@ -108,6 +108,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const [tc, setTc] = useState<TCWidget>({ ARS: null, CLP: null, CLPFiscal: null, CNY: null, fecha: '', hora: '', fuente: '' })
   const [modulosNuevosCount, setModulosNuevosCount] = useState(0)
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const supabase = useMemo(() => createClient(), [])
   const bannerTsRef = useRef(0)
 
@@ -230,8 +231,20 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden">
+      {/* TOPBAR MÓVIL (solo < md) */}
+      <div className="md:hidden fixed top-0 inset-x-0 z-40 flex items-center gap-3 px-3 h-12 text-white" style={{ background: 'linear-gradient(90deg, #0a3ab8 0%, #1168F8 100%)' }}>
+        <button onClick={() => setMobileOpen(true)} aria-label="Abrir menú" className="p-1.5 rounded-lg hover:bg-white/10">
+          <Menu size={22} />
+        </button>
+        <Image src="/logo-white.png" alt="Puerto NOA" width={104} height={30} style={{ height: 26, width: 'auto', objectFit: 'contain' }} />
+      </div>
+
+      {/* Fondo oscuro al abrir el menú en móvil */}
+      {mobileOpen && <div className="md:hidden fixed inset-0 z-40 bg-black/50" onClick={() => setMobileOpen(false)} aria-hidden="true" />}
+
       {/* SIDEBAR */}
-      <aside className={`${collapsed ? 'w-14' : 'w-56'} flex-shrink-0 flex flex-col transition-all duration-200`}
+      <aside className={`${collapsed ? 'md:w-14' : 'md:w-56'} w-64 flex-shrink-0 flex flex-col transition-transform duration-200 md:transition-all
+        fixed md:relative inset-y-0 left-0 z-50 md:z-auto ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
         style={{ background: 'linear-gradient(180deg, #0a3ab8 0%, #1168F8 60%, #1a74ff 100%)' }}>
 
         {/* Logo + collapse */}
@@ -314,7 +327,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Nav */}
-        <nav className="flex-1 py-2 overflow-y-auto scrollbar-thin">
+        <nav className="flex-1 py-2 overflow-y-auto scrollbar-thin" onClick={() => setMobileOpen(false)}>
           {NAV.map((item, i) => {
             if (item.section) return (
               <div key={i} className={`${collapsed ? 'hidden' : ''} px-4 pt-3 pb-1 text-[10px] font-semibold text-white/40`}>
@@ -414,7 +427,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* MAIN */}
-      <main className="flex-1 overflow-y-auto bg-gray-50">
+      <main className="flex-1 overflow-y-auto bg-gray-50 pt-12 md:pt-0">
         {children}
       </main>
 
